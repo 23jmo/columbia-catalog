@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+:root {
+  --paper: #f3eee4;
+  --paper-2: #e7dfd0;
+  --ink: #142033;
+  --ink-soft: #3c4a5c;
+  --navy: #16324f;
+  --navy-deep: #0e2238;
+  --gold: #b8892d;
+  --gold-soft: #d7b56a;
+  --brick: #9a3b32;
+  --open: #2f6b4f;
+  --line: rgba(20, 32, 51, 0.12);
+  --card: rgba(255, 252, 246, 0.86);
+  --shadow: 0 10px 30px rgba(20, 32, 51, 0.08);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #10161f;
+    --paper-2: #182130;
+    --ink: #f0e6d4;
+    --ink-soft: #c3b49a;
+    --navy: #d7b56a;
+    --navy-deep: #f3eee4;
+    --gold: #e0b65a;
+    --gold-soft: #c49a3c;
+    --brick: #e07a6d;
+    --open: #7dcaa3;
+    --line: rgba(240, 230, 212, 0.12);
+    --card: rgba(22, 30, 42, 0.88);
+    --shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  }
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-paper-2: var(--paper-2);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-navy: var(--navy);
+  --color-navy-deep: var(--navy-deep);
+  --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
+  --color-brick: var(--brick);
+  --color-open: var(--open);
+  --color-line: var(--line);
+  --font-sans: var(--font-ibm-plex-sans);
+  --font-display: var(--font-fraunces);
+}
+
+html,
+body {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+body {
+  min-height: 100vh;
+  background-image:
+    linear-gradient(180deg, rgba(20, 32, 51, 0.03), transparent 180px),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 31px,
+      rgba(184, 137, 45, 0.05) 31px,
+      rgba(184, 137, 45, 0.05) 32px
+    );
+}
+
+a {
+  color: inherit;
+}
+
+::selection {
+  background: rgba(184, 137, 45, 0.28);
+}
