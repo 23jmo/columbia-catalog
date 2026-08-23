@@ -4,7 +4,7 @@ import { loadSectionDetail } from "@/components/course/load-section-detail";
 import { meetingLines } from "@/components/course/format";
 import { CURRENT_TERM, termLabel } from "@/lib/constants";
 
-import { CourseDrawer } from "@/app/course/[courseId]/course-drawer";
+import { DRAWER_TITLE_ID, DrawerFrame } from "@/app/course/[courseId]/course-drawer";
 import { SectionDetail } from "@/app/course/[courseId]/section-detail";
 
 /**
@@ -40,8 +40,6 @@ interface InterceptedSectionPageProps {
   searchParams: Promise<{ section?: string | string[] }>;
 }
 
-const TITLE_ID = "drawer-section-title";
-
 /** `?section=001&section=002` is not a thing anyone means; take the first. */
 function firstParam(value: string | string[] | undefined): string | null {
   if (Array.isArray(value)) return value[0] ?? null;
@@ -73,13 +71,9 @@ export default async function InterceptedSectionPage({
    */
   if (!course) {
     return (
-      <CourseDrawer
-        titleId={TITLE_ID}
-        code="Not found"
-        href={`/course/${encodeURIComponent(courseId)}`}
-      >
+      <DrawerFrame code="Not found" href={`/course/${encodeURIComponent(courseId)}`}>
         <div className="flex flex-col items-start gap-3">
-          <h1 id={TITLE_ID} className="text-title-2-semibold text-text-primary">
+          <h1 id={DRAWER_TITLE_ID} className="text-title-2-semibold text-text-primary">
             No such course in {termLabel(CURRENT_TERM)}
           </h1>
           <p className="text-body-regular text-text-secondary">
@@ -95,7 +89,7 @@ export default async function InterceptedSectionPage({
             Search the catalog
           </Link>
         </div>
-      </CourseDrawer>
+      </DrawerFrame>
     );
   }
 
@@ -113,13 +107,13 @@ export default async function InterceptedSectionPage({
   if (!data) {
     const code = `${course.subjectCode} ${course.number}`;
     return (
-      <CourseDrawer titleId={TITLE_ID} code={code} href={`/course/${course.courseId}`}>
+      <DrawerFrame code={code} href={`/course/${course.courseId}`}>
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <span className="text-caption-1-semibold tracking-[0.04em] tabular-nums text-accent-600">
               {code}
             </span>
-            <h1 id={TITLE_ID} className="text-title-2-semibold text-text-primary">
+            <h1 id={DRAWER_TITLE_ID} className="text-title-2-semibold text-text-primary">
               {sectionCode ? `No section ${sectionCode}` : "Which section?"}
             </h1>
             <p className="text-body-regular text-text-secondary">
@@ -163,19 +157,18 @@ export default async function InterceptedSectionPage({
             </p>
           )}
         </div>
-      </CourseDrawer>
+      </DrawerFrame>
     );
   }
 
   return (
-    <CourseDrawer
-      titleId={TITLE_ID}
+    <DrawerFrame
       // The rail names the class, not just the course — this drawer is about
       // one section and the header should not imply otherwise.
       code={`${data.code} · ${data.section.sectionCode}`}
       href={`/course/${data.course.courseId}?section=${encodeURIComponent(data.section.sectionCode)}`}
     >
-      <SectionDetail data={data} titleId={TITLE_ID} />
-    </CourseDrawer>
+      <SectionDetail data={data} titleId={DRAWER_TITLE_ID} />
+    </DrawerFrame>
   );
 }

@@ -5,7 +5,7 @@ import { Chip } from "@/components/base/badges/chip";
 import { meetingLines, placeSummary } from "@/components/course/format";
 import type { SectionDetailData } from "@/components/course/load-section-detail";
 import { RegistrationHandoff } from "@/components/course/registration-handoff";
-import { ProvenanceStamp, SeatState } from "@/components/course/seat-state";
+import { SeatState } from "@/components/course/seat-state";
 import { WatchButton } from "@/components/watch/watch-button";
 import { REQUIREMENT_FILTERS } from "@/lib/constants";
 
@@ -109,12 +109,21 @@ export function SectionDetail({ data, titleId = "section-title" }: SectionDetail
           {ownTitle ? (
             <p className="text-body-regular text-text-secondary">
               Part of{" "}
-              <Link
+              {/*
+                A real anchor, not a <Link>. `/course/[courseId]` is an
+                intercepted route, so a client-side navigation to it from inside
+                the overlay would be caught by the drawer slot and answered with
+                the section chooser -- leaving the reader in the drawer they were
+                trying to leave. A document navigation exits the overlay and
+                lands on the standalone course page, which is what "part of" is
+                offering. Same reasoning as the drawer's own "Full page" link.
+              */}
+              <a
                 href={`/course/${course.courseId}`}
                 className="underline decoration-border-table underline-offset-2 transition-colors hover:text-text-primary"
               >
                 {code} {courseTitle}
-              </Link>
+              </a>
             </p>
           ) : null}
 
@@ -166,13 +175,13 @@ export function SectionDetail({ data, titleId = "section-title" }: SectionDetail
           </dl>
 
           {/*
-            Seats for THIS section. `SeatState` carries the directory's own
-            "as of" stamp with the number (spec §3) — a seat count without its
-            provenance is the one thing this surface must never render.
+            Seats for THIS section. `SeatState` ends with the directory's own
+            "as of" stamp (spec §3: a seat number never renders without it), so
+            this must NOT add a second one — two identical timestamps under one
+            number reads as two readings that happen to agree.
           */}
-          <div className="flex flex-col gap-2 border-t border-border-table pt-4">
+          <div className="border-t border-border-table pt-4">
             <SeatState section={section} />
-            <ProvenanceStamp sourceAsOf={section.sourceAsOf} />
           </div>
         </div>
 
@@ -263,13 +272,14 @@ export function SectionDetail({ data, titleId = "section-title" }: SectionDetail
         </section>
       ) : null}
 
-      <Link
+      {/* Also a document navigation — see the note on "Part of" above. */}
+      <a
         href={`/course/${course.courseId}`}
         className="inline-flex items-center gap-1.5 self-start text-body-medium text-text-secondary underline decoration-border-table underline-offset-4 transition-colors outline-none hover:text-text-primary focus-visible:ring-2 focus-visible:ring-border-focus-ring"
       >
         Full course page for {code}
         <RiArrowRightUpLine aria-hidden className="size-4" />
-      </Link>
+      </a>
     </article>
   );
 }

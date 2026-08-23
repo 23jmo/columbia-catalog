@@ -1,4 +1,4 @@
-import { CourseDrawer } from "@/app/course/[courseId]/course-drawer";
+import { DRAWER_TITLE_ID, DrawerFrame } from "@/app/course/[courseId]/course-drawer";
 
 /**
  * The drawer's own loading state.
@@ -9,10 +9,12 @@ import { CourseDrawer } from "@/app/course/[courseId]/course-drawer";
  * rather than a panel sliding in. Next streams this shell immediately and swaps
  * the real content in underneath when it arrives.
  *
- * The shell is the SAME `CourseDrawer` chrome, not a lookalike: the panel that
- * animates in during loading is the panel that stays, so there is no second
- * mount, no re-run of the enter transition, and no visible jump when the
- * content lands. Only the body swaps.
+ * Note what this file does NOT render: the panel. That lives in `layout.tsx`,
+ * one level above the Suspense boundary, so it is already on screen and already
+ * finished animating by the time this appears inside it. Rendering the panel
+ * here as well is what used to play the enter transition twice -- this subtree
+ * is destroyed when the data lands, and anything that animates on mount
+ * animated again on the way in.
  *
  * The skeleton mirrors `SectionDetail`'s real geometry -- eyebrow, heading,
  * instructor line, the facts card, then the sibling-section list -- because a
@@ -32,11 +34,19 @@ function Line({ className }: { className: string }) {
 
 export default function DrawerLoading() {
   return (
-    // `code` is unknown until the record loads; an em dash holds the slot at the
-    // right width instead of collapsing the header rail and then re-expanding.
-    <CourseDrawer code="—" href="#">
+    // An em dash holds the rail's slot at roughly the right width instead of
+    // collapsing it and then re-expanding when the real code arrives.
+    <DrawerFrame code="—" href="#">
       <div className="flex w-full flex-col gap-8" aria-busy="true" aria-live="polite">
-        <span className="sr-only">Loading section details…</span>
+        {/*
+          Carries the id the panel's `aria-labelledby` points at. Every state of
+          this slot owns that id in turn, so the dialog always has a resolvable
+          label -- during loading it is this line, and it is replaced by the real
+          heading without the reference ever dangling.
+        */}
+        <span id={DRAWER_TITLE_ID} className="sr-only">
+          Loading section details…
+        </span>
 
         {/* Eyebrow, heading, instructors — mirrors the header block. */}
         <div className="flex flex-col gap-3">
@@ -61,6 +71,6 @@ export default function DrawerLoading() {
           <Line className="h-10 w-full rounded-lg" />
         </div>
       </div>
-    </CourseDrawer>
+    </DrawerFrame>
   );
 }
