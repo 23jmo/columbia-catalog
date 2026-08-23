@@ -6,16 +6,25 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build:index": "tsx scripts/build-index.ts",
+    "check": "npm run typecheck && npm run lint && npm run test",
+    "seed:meetings": "tsx scripts/enrich-seed-meetings.ts"
   },
   "dependencies": {
     "@internationalized/date": "^3.12.3",
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "@react-three/drei": "^10.7.8",
+    "@react-three/fiber": "^9.7.0",
     "@remixicon/react": "^4.9.0",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.3",
     "@tanstack/react-table": "^8.21.3",
     "@tanstack/react-virtual": "^3.14.10",
+    "@types/three": "^0.185.4",
     "date-fns": "^4.4.0",
     "ics": "^3.12.0",
     "motion": "^13.1.1",
@@ -27,6 +36,7 @@
     "react-dom": "19.2.8",
     "recharts": "^3.10.1",
     "tailwind-merge": "^3.6.0",
+    "three": "^0.185.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {

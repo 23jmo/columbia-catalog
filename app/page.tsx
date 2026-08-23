@@ -1,69 +1,114 @@
-import Image from "next/image";
+/**
+ * Home — "the tab a student leaves open during registration week" (spec §5).
+ *
+ * A two-column workspace:
+ *
+ *   left    the primary plan: the week, credits, conflicts, commute warnings
+ *   right   the agent handoff — the MCP server the student connects to their
+ *           own Claude or ChatGPT. Explicitly NOT a chat panel (spec §16).
+ *
+ * Below `lg` the columns stack, schedule first, because the week is what
+ * someone opens their phone at 2am to check.
+ *
+ * This is a **server component**. The only JavaScript the page ships is the app
+ * shell's four interactive leaves plus the agent column's copy button, so the
+ * whole surface is meaningful markup on first paint — spec §19's budget is not
+ * something to negotiate with later.
+ *
+ * TODO(spec §5): the watchlist rail and the seat-movement feed also belong on
+ * this screen. Both are per-user reads over `watches` / `enrollment_snapshots`,
+ * neither table exists, and neither component is in this lane. They slot into
+ * the grid below as a third column at `xl` without disturbing these two.
+ */
 
-export default function Home() {
+import type { Metadata } from "next";
+import { RiGraduationCapLine } from "@remixicon/react";
+import { Chip } from "@/components/base/badges/chip";
+import { AppShell } from "@/components/shell/app-shell";
+import { PageHeader } from "@/components/shell/page-header";
+import { WeekGrid } from "@/components/schedule";
+import { AgentHandoff } from "@/components/home/agent-handoff";
+import { ScheduleColumn } from "@/components/home/schedule-column";
+import { loadPlanSnapshot } from "@/components/home/load-plan-snapshot";
+import { CURRENT_TERM, buildTerm } from "@/lib/constants";
+import { MCP_PATH, resolveBaseUrl } from "@/lib/mcp/config";
+
+export const metadata: Metadata = {
+  title: "Home · Columbia Catalog",
+  description:
+    "Your Columbia schedule for the term, with conflicts and commute warnings — plus the MCP server that connects the catalog to your own AI assistant.",
+};
+
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const params = await searchParams;
+
+  /**
+   * TODO(auth): no session exists, so nobody has a saved plan and the empty
+   * state is the honest default (spec §15 — reads are free, the account wall
+   * goes up at the first write). `?demo=1` opts into the built-in sample so the
+   * populated screen can still be designed and reviewed; the sample announces
+   * itself in the UI rather than passing as the student's own plan.
+   */
+  const useSamplePlan = params.demo === "1";
+  const termCode = CURRENT_TERM;
+
+  const snapshot = await loadPlanSnapshot({ termCode, useSamplePlan });
+  const term = buildTerm(termCode);
+
+  // Resolved on the server: the client never has to guess our own origin, and
+  // the copy-paste block is correct on localhost and in production alike.
+  const mcpEndpointUrl = `${resolveBaseUrl()}${MCP_PATH}`;
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <AppShell activeNav="home">
+      <div className="mx-auto flex w-full max-w-[1400px] min-w-0 flex-col gap-7">
+        <PageHeader
+          eyebrow="Registration"
+          icon={RiGraduationCapLine}
+          title={term.label}
+          description={
+            <>
+              Seat counts carry the directory&rsquo;s own timestamp, and nothing here ever
+              registers you for anything.
+            </>
+          }
+          badge={
+            <Chip variant="subtle" color={term.isRegisterable ? "lime" : "neutral"}>
+              {term.isRegisterable ? "Registration open" : "Registration closed"}
+            </Chip>
+          }
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+
+        {/*
+          Two columns at `lg`, one below it. The agent column is a fixed 380px
+          rail rather than a fraction: its content is a config block and a tool
+          list, both of which read badly when stretched, while the week wants
+          every pixel it can get.
+        */}
+        <div className="grid min-w-0 grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(340px,380px)]">
+          <ScheduleColumn
+            termCode={termCode}
+            plan={snapshot.plan}
+            analysis={snapshot.analysis}
+            blocks={snapshot.blocks}
+            sectionCount={snapshot.sections.length}
+            isSample={snapshot.isSample}
+            hasDemoMeetingTimes={snapshot.hasDemoMeetingTimes}
+            sampleHref="/?demo=1"
+            // The schedule lane's canvas, injected through the slot it was
+            // designed for. `WeekGrid` has no hooks and no browser APIs, so
+            // holding it does not make this page a client component.
+            weekGrid={WeekGrid}
+            // TODO(auth): isSignedIn={Boolean(session)}.
+          />
+
+          <AgentHandoff mcpEndpointUrl={mcpEndpointUrl} />
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }

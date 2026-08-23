@@ -1,0 +1,17 @@
+{
+  "formatVersion": 1,
+  "version": "07yh5jo",
+  "builtAt": "2026-08-23T07:12:13.769Z",
+  "terms": [
+    "20263",
+    "20271"
+  ],
+  "courseCount": 43,
+  "sectionCount": 112,
+  "lexical": {
+    "url": "/index/catalog-07yh5jo.bin",
+    "bytes": 228408,
+    "gzipBytes": 14862
+  },
+  "embedding": null
+}

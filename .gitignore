@@ -71,3 +71,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.gstack/
+
+# local credentials, never committed
+.secrets/
+
+# supabase cli local state
+supabase/.temp/
+supabase/.branches/

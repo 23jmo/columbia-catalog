@@ -1,0 +1,129 @@
+/**
+ * Campus-card lane — BoardUI tokens → three.js colours.
+ *
+ * WHY read CSS variables at mount instead of hard-coding hex:
+ *
+ *   1. The token set flips wholesale under `.dark` (styles/theme.css), and the
+ *      accent ramp can be re-tinted at runtime by
+ *      `components/application/theme/accent.ts`. A literal in this file would
+ *      be wrong in one theme and stale in both.
+ *   2. AGENTS.md forbids raw hex and `dark:` prefixes for exactly this reason.
+ *      A WebGL canvas cannot use a Tailwind class, so this is the equivalent:
+ *      the token stays the single source of truth, we just resolve it once.
+ *
+ * WHY the 1×1 canvas: `getComputedStyle` hands back the token's *computed*
+ * value, and almost the whole BoardUI palette is Tailwind v4's OKLCH defaults —
+ * `oklch(0.72 0.19 250)`. `THREE.Color.setStyle` only parses hex, `rgb()`,
+ * `hsl()` and named colours (see three/src/math/Color.js), so an OKLCH string
+ * silently warns and leaves the material black. Painting one pixel and reading
+ * it back makes the browser do the colour-space conversion for us, and works
+ * for any CSS colour syntax that ships in the future.
+ */
+
+/** Every token the scene and the flat map need, resolved to `#rrggbb`. */
+export interface CampusPalette {
+  /** Ground plane. */
+  ground: string;
+  /** Road stripes cut into the ground. */
+  road: string;
+  /** Un-targeted buildings. */
+  building: string;
+  /** Landmarks — a half step up from the muted mass so the map stays legible. */
+  landmark: string;
+  /** The building this section actually meets in. */
+  highlight: string;
+  /** The pulsing ring and marker around it. */
+  marker: string;
+  /** Edge lines on the highlighted building. */
+  outline: string;
+}
+
+const TOKEN_BY_ROLE: Record<keyof CampusPalette, string> = {
+  ground: "--color-background-secondary-default",
+  road: "--color-background-full",
+  building: "--color-background-quaternary-default",
+  landmark: "--color-background-tertiary-default",
+  highlight: "--color-accent-500",
+  marker: "--color-accent-400",
+  outline: "--color-border-button-default",
+};
+
+/**
+ * Last-resort values, used only when there is no document to read from (SSR,
+ * jsdom without the stylesheet) so a mis-mounted card renders a grey campus
+ * instead of a black void. Neutral on purpose — never a brand colour, because a
+ * wrong brand colour is more misleading than an obviously placeholder grey.
+ */
+const NEUTRAL_FALLBACK: CampusPalette = {
+  ground: "#f1f1f1",
+  road: "#ffffff",
+  building: "#d4d4d4",
+  landmark: "#e3e3e3",
+  highlight: "#3392ff",
+  marker: "#5aa9ff",
+  outline: "#c8c8c8",
+};
+
+let sharedProbe: CanvasRenderingContext2D | null | undefined;
+
+/** One reusable 1×1 context for the whole app; creating these is not free. */
+function colorProbe(): CanvasRenderingContext2D | null {
+  if (sharedProbe !== undefined) return sharedProbe;
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1;
+    canvas.height = 1;
+    sharedProbe = canvas.getContext("2d", { willReadFrequently: true });
+  } catch {
+    sharedProbe = null;
+  }
+  return sharedProbe;
+}
+
+/** Any CSS colour string → `#rrggbb`, via the browser's own converter. */
+export function cssColorToHex(value: string, fallback: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return fallback;
+  // Already a plain hex — skip the round trip entirely.
+  if (/^#[0-9a-f]{6}$/i.test(trimmed)) return trimmed.toLowerCase();
+
+  const ctx = colorProbe();
+  if (!ctx) return fallback;
+  try {
+    ctx.clearRect(0, 0, 1, 1);
+    // An unparseable value leaves fillStyle untouched, so seed it with a colour
+    // we can detect and treat "unchanged" as failure.
+    ctx.fillStyle = "#000000";
+    ctx.fillStyle = trimmed;
+    ctx.fillRect(0, 0, 1, 1);
+    const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+    if (a === 0) return fallback;
+    return `#${[r, g, b].map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * Resolve the palette against a mounted element, so tokens scoped to a subtree
+ * (a themed section, a preview panel) win over the ones on `:root`.
+ */
+export function readCampusPalette(element: Element | null): CampusPalette {
+  if (typeof window === "undefined" || !element) return NEUTRAL_FALLBACK;
+
+  let computed: CSSStyleDeclaration;
+  try {
+    computed = window.getComputedStyle(element);
+  } catch {
+    return NEUTRAL_FALLBACK;
+  }
+
+  const resolved = {} as CampusPalette;
+  for (const role of Object.keys(TOKEN_BY_ROLE) as (keyof CampusPalette)[]) {
+    const raw = computed.getPropertyValue(TOKEN_BY_ROLE[role]);
+    resolved[role] = cssColorToHex(raw, NEUTRAL_FALLBACK[role]);
+  }
+  return resolved;
+}
+
+export { NEUTRAL_FALLBACK as NEUTRAL_CAMPUS_PALETTE };
