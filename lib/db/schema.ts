@@ -482,6 +482,28 @@ export type AlertSentRow = {
   channel: string;
 };
 
+/**
+ * A pending agent diff (migration 0019). `status` is not writable from any
+ * client — only `resolve_plan_proposal` moves it, which is what makes "agents
+ * propose, they do not act" a database rule rather than a convention.
+ */
+export type PlanProposalRow = {
+  proposal_id: string;
+  user_id: string;
+  plan_id: string;
+  kind: string;
+  section_id: string;
+  course_id: string | null;
+  summary: string;
+  note: string | null;
+  review_url: string;
+  status: string;
+  origin_client_id: string;
+  created_at: string;
+  expires_at: string;
+  resolved_at: string | null;
+};
+
 export type McpTokenRow = {
   token_id: string;
   user_id: string;
@@ -1102,6 +1124,12 @@ export type Database = {
         Update: Partial<McpTokenRow>;
         Relationships: [Rel<["user_id"], "users", ["user_id"]>];
       };
+      plan_proposals: {
+        Row: PlanProposalRow;
+        Insert: PlanProposalRow;
+        Update: Partial<PlanProposalRow>;
+        Relationships: [];
+      };
     };
     Views: {
       course_reputation: { Row: ReputationAggregateRow; Relationships: [] };
@@ -1128,6 +1156,24 @@ export type Database = {
        * (migration 0018). The bulletin only covers CC, SEAS and Barnard; this
        * is how every other school's prose gets found.
        */
+      /**
+       * Pending proposals for the caller, expiring stale ones on the way past
+       * (migration 0019). Reads `auth.uid()` itself, so it returns nothing to
+       * a service-role client.
+       */
+      list_plan_proposals: {
+        Args: Record<string, never>;
+        Returns: PlanProposalRow[];
+      };
+      /**
+       * The only path that moves a proposal out of `pending` — spec §16's
+       * human click. `plan_proposals` has no update policy, so nothing else
+       * can. Returns the row so the caller can apply the diff it describes.
+       */
+      resolve_plan_proposal: {
+        Args: { p_proposal_id: string; p_status: string };
+        Returns: PlanProposalRow[];
+      };
       courses_missing_description: {
         Args: { p_limit?: number };
         Returns: {

@@ -20,13 +20,19 @@
  *
  * The *server* is per request; the *dependencies* are not. The rate limiter and
  * the proposal store must outlive a request or they would meter nothing and
- * remember nothing. They are in-memory today (see the persistence seams in
- * `ratelimit.ts` and `proposals.ts`), which on serverless means per-instance —
- * an under-count, never an over-count, and never a lost security decision.
+ * remember nothing.
+ *
+ * The proposal store is Supabase-backed wherever a database is configured,
+ * because a proposal that does not survive a cold start is a proposal the
+ * student can never accept. The rate limiter is still in-memory and therefore
+ * per-instance — that is an under-count, never an over-count, and never a lost
+ * security decision, which is why it can wait and the proposal store could
+ * not.
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
+import { createServiceRoleClient } from "../db/client";
 import { getCourseReputation, getInstructorReputation } from "../db/reputation";
 
 import {
@@ -40,6 +46,7 @@ import type { McpAuthInfo } from "./auth";
 import { SERVER_NAME, SERVER_TITLE, SERVER_VERSION } from "./config";
 import type { McpDeps, RatingsPort } from "./contracts";
 import { createInMemoryProposalStore } from "./proposals";
+import { createSupabaseProposalStore } from "./proposals-supabase";
 import { createInMemoryRateLimiter } from "./ratelimit";
 import { runTool, TOOLS, type ToolContext } from "./tools";
 
@@ -54,7 +61,30 @@ import { runTool, TOOLS, type ToolContext } from "./tools";
  */
 const ratingsAdapter: RatingsPort = { getCourseReputation, getInstructorReputation };
 
-const proposals = createInMemoryProposalStore();
+/**
+ * Durable when there is a database to be durable in.
+ *
+ * A proposal has to outlive the request that created it by definition — the
+ * whole point is that a human reads it later — so the in-memory store was
+ * never viable in production. On Vercel the agent proposes on one instance and
+ * the student's review link lands on another, and the diff simply is not
+ * there, with no error anywhere to say so.
+ *
+ * The service-role client is right here and the RLS bypass is not a shortcut:
+ * the MCP server authenticates the student against its own OAuth tokens and
+ * holds no Supabase session, so there is no `auth.uid()` for a policy to read.
+ * `createSupabaseProposalStore` scopes every statement by the `userId` the
+ * caller was authenticated as, and `resolve` still goes through an RPC that
+ * reads `auth.uid()` for itself — which is exactly why this store, holding a
+ * service-role client, cannot accept a proposal on the student's behalf.
+ *
+ * With no database configured the in-memory store keeps local development and
+ * the test suite working unchanged.
+ */
+const serviceClient = createServiceRoleClient();
+const proposals = serviceClient
+  ? createSupabaseProposalStore(serviceClient)
+  : createInMemoryProposalStore();
 const rateLimiter = createInMemoryRateLimiter();
 
 /**
