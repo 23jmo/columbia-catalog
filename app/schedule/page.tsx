@@ -16,10 +16,16 @@
  * different problems; commute legs carry the walk *and* the gap so the reader
  * can judge the estimate instead of trusting it.
  *
- * TODO(spec §8): plan tabs (multiple named plans, one primary), the watchlist
- * panel beside the grid, `.ics` export, and registration mode all belong on
- * this screen. `planToIcs` / `icsFilename` already exist in `@/lib/schedule`
- * and need a client entry point; the rest need the plan store and auth.
+ * ── Two modes on one route ──────────────────────────────────────────────────
+ *
+ * `PlanWorkspace` is the real, interactive planner: plan tabs, section list,
+ * custom blocks, `.ics` export, all reading the student's own plans. It is a
+ * client component because it edits a live store.
+ *
+ * `?demo=1` still renders the read-only sample analysis below it. That is not
+ * a leftover — it is the only way to show the analysis rail (which conflicts,
+ * which walks, and why) to someone who has not built a plan yet, and it is
+ * labelled "Sample" so it is never mistaken for the student's own week.
  */
 
 import type { Metadata } from "next";
@@ -34,9 +40,9 @@ import {
 import { AppShell } from "@/components/shell/app-shell";
 import { PageHeader } from "@/components/shell/page-header";
 import { WeekGrid } from "@/components/schedule";
+import { PlanWorkspace } from "@/components/schedule/plan-workspace";
 import { RiCalendarScheduleLine } from "@remixicon/react";
 import { Chip } from "@/components/base/badges/chip";
-import { NoPlanState } from "@/components/home/no-plan-state";
 import { WeekGridSlot } from "@/components/home/week-grid-slot";
 import { loadPlanSnapshot, type PlanSnapshot } from "@/components/home/load-plan-snapshot";
 import {
@@ -97,10 +103,20 @@ export default async function SchedulePage({
           }
         />
 
-        {!snapshot.plan || !snapshot.analysis ? (
-          <NoPlanState termLabel={term.label} sampleHref="/schedule?demo=1" />
-        ) : (
-          <ScheduleWorkspace snapshot={snapshot} analysis={snapshot.analysis} />
+        {/* The planner owns its own state and renders the student's real
+            plans. It shows its own empty state, so there is no server-side
+            "no plan" branch to duplicate here. */}
+        <PlanWorkspace termCode={termCode} />
+
+        {snapshot.plan && snapshot.analysis && snapshot.isSample && (
+          <>
+            <div className="h-px w-full bg-separator-border" />
+            <p className="text-caption-1-regular text-text-tertiary">
+              Below is a sample plan, shown so the analysis rail has something to
+              explain. It is not yours and nothing here is saved.
+            </p>
+            <ScheduleWorkspace snapshot={snapshot} analysis={snapshot.analysis} />
+          </>
         )}
       </div>
     </AppShell>

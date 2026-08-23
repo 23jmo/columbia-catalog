@@ -1187,6 +1187,25 @@ export type Database = {
       // client to drift out of sync with the schema.
       list_user_plans: { Args: { p_term_code?: string | null }; Returns: Json };
       replace_user_plans: { Args: { p_term_code: string; p_plans: Json }; Returns: Json };
+      /**
+       * Historical meeting pattern for sections that have none of their own
+       * (migration 0014). `source_term` always travels with the times — see
+       * lib/db/typical-meetings.ts for why that is not optional.
+       */
+      typical_meetings: {
+        Args: { p_section_ids: string[] };
+        Returns: {
+          section_id: string;
+          source_term: string;
+          source_section: string;
+          weekday: Weekday;
+          start_minute: number;
+          end_minute: number;
+          building_id: string | null;
+          building_name: string | null;
+          room: string | null;
+        }[];
+      };
       /** Aggregate only — no shape of this result can name a watcher (§14). */
       watch_counts: {
         Args: { p_section_ids: string[] };

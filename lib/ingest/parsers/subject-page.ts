@@ -25,8 +25,18 @@
  *       </dl></div></td>
  *     </tr>
  *
- * Meeting times are NOT on this page — Columbia moved day/time/room to Vergil.
- * `meetings` is always `[]` here; the bulletin parser supplies them.
+ * ── Meeting times: present on old pages, absent on new ones ────────────────
+ *
+ * Through Spring 2025 each section also printed:
+ *
+ *     <dt>Day/Time:</dt><dd>TR 11:40am-12:55pm</dd>
+ *     <dt>Location:</dt><dd>417 International Affairs Building</dd>
+ *
+ * From Fall 2025 onward those two rows are gone and the page says so: "Class
+ * meeting days, times and classroom assignments are now only appearing in
+ * Vergil." So this parser reads them when they exist and returns `[]` when they
+ * do not — the same code covers both, and the archive is the only public source
+ * of meeting patterns the catalog has (see .plans/BLOCKERS.md #5).
  */
 
 import { parse, type HTMLElement } from "node-html-parser";
@@ -38,6 +48,7 @@ import {
   buildCourseId,
   buildSectionId,
   cleanText,
+  parseMeetingPattern,
   deriveStatus,
   normalizeLabel,
   parseCourseNumber,
@@ -166,8 +177,12 @@ function parseSectionRow(
     ),
     sourceAsOf: enrollment.sourceAsOf,
     detailUrl: resolveDetailUrl(href, baseUrl),
-    // Columbia serves day/time/room only through Vergil now. See module note.
-    meetings: [],
+    // Empty from Fall 2025 onward, populated for archived terms. Both are
+    // correct answers about the page in front of us.
+    meetings: parseMeetingPattern(
+      fields.get("day/time") ?? fields.get("day time") ?? null,
+      fields.get("location") ?? null,
+    ),
   };
 }
 
