@@ -129,3 +129,42 @@ you asked for, since everything except meeting times is present and correct. The
 schedule UI will be built to render a section with unknown times honestly rather
 than pretending it has them. Say the word on option 1 and it is a crawl-scope
 change plus a fallback query, not a redesign.
+
+---
+
+## 6. Needs you (5 minutes) — Google OAuth credentials for sign-in
+
+All the app-side auth is written and typechecks: `lib/db/auth.ts`,
+`app/auth/callback/route.ts`, `middleware.ts`, `hooks/use-session-account.ts`,
+and the account menu is wired to real sessions. Migration 0005 already creates
+the `users` row from a trigger on `auth.users` and enforces the Columbia domain
+with a check constraint.
+
+The one thing I cannot produce is a Google OAuth client, which needs a Google
+Cloud project you own.
+
+1. Google Cloud Console → APIs & Services → Credentials → **Create OAuth client
+   ID** → *Web application*.
+2. Authorized redirect URI — exactly this, it is Supabase's callback and not
+   ours:
+   ```
+   https://wwqtflgwpukwzfysnncv.supabase.co/auth/v1/callback
+   ```
+3. Supabase Dashboard → Authentication → Providers → **Google** → enable, paste
+   the client ID and secret.
+4. Supabase Dashboard → Authentication → URL Configuration → add redirect URLs:
+   ```
+   http://localhost:3000/auth/callback
+   https://<your-vercel-domain>/auth/callback
+   ```
+
+Until then `isConfigured()` is true but Google is not enabled, so the sign-in
+dialog reports it plainly instead of hanging. **Nothing else is affected** —
+reading is free by design (spec §15), so search, course pages, seat history and
+the campus map all work signed out.
+
+Optional: set `hd` on the Google Workspace side too. I already send
+`hd=columbia.edu` on the authorize URL, but Google treats it as a hint. The
+binding restriction is the `users_columbia_domain` check constraint, and the
+callback signs out a non-Columbia account and says why rather than leaving them
+apparently-signed-in with every write failing.

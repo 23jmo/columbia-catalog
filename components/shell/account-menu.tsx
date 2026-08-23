@@ -25,6 +25,9 @@ import {
   DropdownTrigger,
 } from "@/components/base/dropdown/dropdown";
 import { SocialButton } from "@/components/base/social-button/social-button";
+import { useSessionAccount } from "@/hooks/use-session-account";
+import { isConfigured } from "@/lib/db/client";
+import { signInWithColumbia, signOut } from "@/lib/db/auth";
 import { cx } from "@/utils/cx";
 
 /**
@@ -35,14 +38,13 @@ import { cx } from "@/utils/cx";
  * session check, and never redirects. It is a persistent affordance that says
  * "sign in when you want to save something", and nothing more.
  *
- * TODO(auth): nothing below is wired. When the auth lane lands, Supabase
- * Google SSO restricted to the `columbia.edu` / `barnard.edu` hosted domains
- * (spec §15) replaces `startColumbiaSignIn` and supplies the signed-in
- * account. The seams are:
+ * Wired to Supabase Google SSO, restricted to `columbia.edu` / `barnard.edu`
+ * (spec §15). The session comes from `useSessionAccount()` rather than a prop
+ * so the root layout can stay static — see that hook for why.
  *
- *   - `account`      — pass the signed-in student; `null` renders signed-out.
- *   - `onSignIn`     — replace with `supabase.auth.signInWithOAuth({...})`.
- *   - `onSignOut`    — replace with `supabase.auth.signOut()`.
+ * The `account` / `onSignIn` / `onSignOut` props remain as overrides. They are
+ * what Storybook and the tests drive, and they let a caller render a specific
+ * state without a live session.
  *
  * Deliberately NOT used: `components/application/auth/auth-card.tsx`. That card
  * always renders an email + password form, and this product has exactly one
@@ -75,7 +77,7 @@ const WRITE_ACTIONS = [
 ];
 
 export function AccountMenu({
-  account = null,
+  account: accountOverride,
   onSignIn,
   onSignOut,
   compact = false,
@@ -83,17 +85,38 @@ export function AccountMenu({
 }: AccountMenuProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSignInOpen, setIsSignInOpen] = useState(false);
+  const [signInError, setSignInError] = useState<string | null>(null);
+
+  const session = useSessionAccount();
+  // An explicit prop always wins, including an explicit `null` for "render the
+  // signed-out state" — hence `undefined` rather than `null` as the default.
+  const account = accountOverride !== undefined ? accountOverride : session.account;
 
   const openSignIn = () => {
     setIsMenuOpen(false);
+    setSignInError(null);
     setIsSignInOpen(true);
   };
 
-  // TODO(auth): hand off to Supabase Google SSO. Until then this only closes
-  // the dialog, so nothing in the UI pretends a session exists.
-  const startColumbiaSignIn = () => {
-    onSignIn?.();
-    setIsSignInOpen(false);
+  const startColumbiaSignIn = async () => {
+    if (onSignIn) {
+      onSignIn();
+      setIsSignInOpen(false);
+      return;
+    }
+    // Success navigates away to Google, so the dialog is deliberately left
+    // open: closing it first would flash the menu behind the redirect.
+    const { error } = await signInWithColumbia();
+    if (error) setSignInError(error);
+  };
+
+  const endSession = async () => {
+    setIsMenuOpen(false);
+    if (onSignOut) {
+      onSignOut();
+      return;
+    }
+    await signOut();
   };
 
   const initials = account
@@ -166,12 +189,7 @@ export function AccountMenu({
                 </div>
               </DropdownGroup>
               <DropdownDivider />
-              <DropdownItem
-                onSelect={() => {
-                  setIsMenuOpen(false);
-                  onSignOut?.();
-                }}
-              >
+              <DropdownItem onSelect={() => void endSession()}>
                 <span className="text-body-medium text-text-primary">Sign out</span>
               </DropdownItem>
             </>
@@ -216,7 +234,9 @@ export function AccountMenu({
       <SignInModal
         isOpen={isSignInOpen}
         onClose={() => setIsSignInOpen(false)}
-        onContinue={startColumbiaSignIn}
+        onContinue={() => void startColumbiaSignIn()}
+        error={signInError}
+        isConfigured={isConfigured()}
       />
     </>
   );
@@ -226,10 +246,14 @@ function SignInModal({
   isOpen,
   onClose,
   onContinue,
+  error,
+  isConfigured,
 }: {
   isOpen: boolean;
   onClose: () => void;
   onContinue: () => void;
+  error: string | null;
+  isConfigured: boolean;
 }) {
   return (
     <AriaModalOverlay
@@ -290,17 +314,18 @@ function SignInModal({
             <Divider />
           </div>
 
-          <div className="flex items-start gap-2 rounded-2lg bg-background-secondary-default p-3 dark:bg-background-tertiary-default">
-            <RiInformationLine
-              className="mt-px size-4 shrink-0 text-foreground-icon-tertiary"
-              aria-hidden
-            />
-            <p className="text-caption-1-regular text-text-secondary">
-              {/* TODO(auth): remove once Supabase Google SSO is wired up. */}
-              Authentication is not connected yet. This dialog is the placement and the
-              copy; the button does nothing.
-            </p>
-          </div>
+          {(error || !isConfigured) && (
+            <div className="flex items-start gap-2 rounded-2lg bg-background-secondary-default p-3 dark:bg-background-tertiary-default">
+              <RiInformationLine
+                className="mt-px size-4 shrink-0 text-foreground-icon-tertiary"
+                aria-hidden
+              />
+              <p className="text-caption-1-regular text-text-secondary">
+                {error ??
+                  "Sign-in is not configured on this deployment. Everything readable still works."}
+              </p>
+            </div>
+          )}
 
           <p className="mt-6 text-center text-caption-1-regular text-text-tertiary">
             We never ask for your Vergil or SSOL password, and we never register,
