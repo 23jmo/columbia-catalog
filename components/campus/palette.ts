@@ -26,11 +26,11 @@ export interface CampusPalette {
   ground: string;
   /** Road stripes cut into the ground. */
   road: string;
-  /** Un-targeted buildings. */
+  /** Un-targeted Columbia buildings. */
   building: string;
-  /** Landmarks — a half step up from the muted mass so the map stays legible. */
+  /** Landmarks — the darkest neutral, so they read through the muted mass. */
   landmark: string;
-  /** The surrounding neighbourhood — a step BELOW the muted mass, never above. */
+  /** The surrounding neighbourhood — nearly the ground, so it recedes. */
   context: string;
   /** The building this section actually meets in. */
   highlight: string;
@@ -40,12 +40,29 @@ export interface CampusPalette {
   outline: string;
 }
 
+/**
+ * The scene's depth ordering IS this table, read top to bottom: ground, then
+ * the neighbourhood barely above it, then Columbia's buildings a clear step
+ * darker, then landmarks darkest of all, then the accent for the one building
+ * that matters. Every entry has to keep that ramp monotonic in both themes,
+ * which is why they are all drawn from the same neutral scale rather than
+ * picked for what each token is nominally "for" — a WebGL canvas has no hover
+ * state, so `quaternary-hover` here is simply the name of the darkest neutral
+ * BoardUI ships.
+ *
+ * Getting this wrong is not subtle: with the neighbourhood and the campus one
+ * step apart, the card renders 1,000 identical grey boxes and the reader cannot
+ * tell which of them is Columbia.
+ */
 const TOKEN_BY_ROLE: Record<keyof CampusPalette, string> = {
   ground: "--color-background-secondary-default",
   road: "--color-background-full",
+  // Deliberately the SAME token as the ground: the neighbourhood is relief,
+  // not subject. It reads through shading and its own silhouette, and it never
+  // competes for colour with the buildings that matter.
+  context: "--color-background-secondary-default",
   building: "--color-background-quaternary-default",
-  landmark: "--color-background-tertiary-default",
-  context: "--color-background-secondary-alt",
+  landmark: "--color-background-quaternary-hover",
   highlight: "--color-accent-500",
   marker: "--color-accent-400",
   outline: "--color-border-button-default",
@@ -60,9 +77,9 @@ const TOKEN_BY_ROLE: Record<keyof CampusPalette, string> = {
 const NEUTRAL_FALLBACK: CampusPalette = {
   ground: "#f1f1f1",
   road: "#ffffff",
+  context: "#f7f7f7",
   building: "#d4d4d4",
-  landmark: "#e3e3e3",
-  context: "#e4e4e4",
+  landmark: "#a3a3a3",
   highlight: "#3392ff",
   marker: "#5aa9ff",
   outline: "#c8c8c8",

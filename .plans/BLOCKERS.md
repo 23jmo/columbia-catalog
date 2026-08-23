@@ -58,3 +58,74 @@ Three ways to unblock, in order of preference:
    also unlock `/v1/termcalendars`.
 3. Let a browser worker fetch it — but registrar.columbia.edu almost certainly
    sends no CORS header either, so this likely fails the same way.
+
+---
+
+## 5. BLOCKING (product) — Columbia removed meeting times from the public directory
+
+**Status: confirmed by fetching the pages. This changes what the schedule
+builder can be for the terms you picked.**
+
+Every Fall 2026 subject page and every Fall 2026 section detail page now says:
+
+> NOTE: Students, Instructors, and Staff should use Vergil Course Search …
+> **Class meeting days, times and classroom assignments are now only appearing
+> in Vergil.**
+
+and where the day/time used to be printed there is now a link:
+
+> Day, Time & Location — *View Class Schedule & Location in Vergil*
+
+I found the cutoff by fetching COMS for each term and counting `Day/Time:` rows:
+
+| Term | Public day/time? |
+|---|---|
+| Spring 2024 (20241) | yes |
+| Fall 2024 (20243) | yes |
+| Spring 2025 (20251) | yes — **last term that has them** |
+| Fall 2025 (20253) | no |
+| Spring 2026 (20261) | no |
+| Summer 2026 (20262) | no |
+| **Fall 2026 (20263)** | **no** |
+| **Spring 2027 (20271)** | no (not yet published at all) |
+
+Everything else on the page is intact and ingesting correctly — call number,
+enrollment count, cap, "as of" timestamp, instructor, points, description,
+grading mode, method of instruction, department, division. Seat tracking, seat
+history, alerts, search, and the whole provenance story are unaffected. The
+first real COMS ingest wrote 155 sections with correct seat counts and correct
+`source_as_of` values, and 0 meetings.
+
+**What this breaks (spec §8, §9, §14):** the schedule grid has nothing to place,
+conflict detection has nothing to compare, the campus map has no rooms to route
+between, inter-campus commute warnings cannot fire, and `.ics` export has no
+events. The parser and the `meetings` table are correct and populate fine for
+2025-and-earlier terms — the data simply is not published any more.
+
+Vergil is the only current source and it is behind UNI login. Spec §2 forbids
+storing a Vergil/SAS bearer token, so I have not attempted it.
+
+**Options, in the order I would pick them:**
+
+1. **Historical inference, labelled as such** (my recommendation, and it fits
+   the product's existing discipline). Crawl 20251/20243/20241, and when a
+   course has no current meeting time, show the most recent term it did:
+   *"typically meets TR 11:40–12:55 · from Spring 2025, not confirmed for Fall
+   2026."* Never presented as fact, never used for a hard conflict error — a
+   soft "these usually overlap" warning instead. This is the same rule already
+   applied to seat counts: show the number, always show where it came from.
+   Cost: adds ~900 more subject-term jobs per historical term to the crawl.
+2. **Let the student type it in.** The schedule already supports custom blocks;
+   a section with no known time gets an "add times" affordance. Honest, but it
+   makes the student do the registrar's work.
+3. **Pursue read-only Vergil/CUIT API access** (`vergil_api_spec.md` §7). The
+   correct long-term fix, and it also unblocks item 4 above. Needs a human at
+   Columbia to sponsor it.
+4. **Ship the schedule as course-list-only for current terms** — no grid, no
+   conflicts. Least work, worst product.
+
+**What I am doing meanwhile:** proceeding with the Fall 2026 + Spring 2027 crawl
+you asked for, since everything except meeting times is present and correct. The
+schedule UI will be built to render a section with unknown times honestly rather
+than pretending it has them. Say the word on option 1 and it is a crawl-scope
+change plus a fallback query, not a redesign.

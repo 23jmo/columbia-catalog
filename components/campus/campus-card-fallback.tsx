@@ -18,14 +18,34 @@
  */
 
 import { cx } from "@/utils/cx";
-import { buildingsOnPlane, campusPlane, focusPointFor, roadsOnPlane } from "@/lib/campus";
+import {
+  CAMPUS_VIEW_WIDTH_UNITS,
+  buildingsOnPlane,
+  campusPlane,
+  focusPointFor,
+  roadsOnPlane,
+} from "@/lib/campus";
 import type { CampusPlaneId, CampusRoad } from "@/lib/campus";
 import { buildCampusCaption } from "./caption";
 import type { CampusCardFallbackProps, CampusFallbackReason } from "./contracts";
 
 /** Map viewport, in plane units. 16:10 to match the 3D card's frame exactly. */
 const VIEW_ASPECT = 10 / 16;
-const MAX_VIEW_WIDTH = 16;
+/** Matches the 3D scene exactly — see `CAMPUS_VIEW_WIDTH_UNITS` for why. */
+const MAX_VIEW_WIDTH = CAMPUS_VIEW_WIDTH_UNITS;
+
+/**
+ * Ink scale.
+ *
+ * Everything drawn below is in plane units, which is right for the things that
+ * are actually the size of a thing — a building rect, the ring around the pin.
+ * It is wrong for ink: label type, stroke weights, corner radii are screen
+ * affordances, and expressing them in world units means they shrink whenever
+ * the viewport frames more ground. The sizes were tuned against a 16-unit
+ * frame, so scale them back up to hold their on-screen size now that the map
+ * frames the real survey instead of the old cartoon.
+ */
+const INK = MAX_VIEW_WIDTH / 16;
 
 const REASON_HINT: Record<CampusFallbackReason, string | null> = {
   "reduced-motion": "Flat map — motion reduced",
@@ -164,15 +184,15 @@ export function CampusMiniMap({
           // means a quarter turn. Placed at the near edge of the viewport so
           // they land in the frame whichever way the map is panned.
           const isVertical = road.orientation === "north-south";
-          const x = isVertical ? road.at : view.x + 0.4;
-          const y = isVertical ? view.y + 0.5 : road.at;
+          const x = isVertical ? road.at : view.x + 0.4 * INK;
+          const y = isVertical ? view.y + 0.5 * INK : road.at;
           return (
             <text
               key={`${road.roadId}-label`}
               x={x}
               y={y}
-              dy={isVertical ? 0 : -0.18}
-              fontSize={0.42}
+              dy={isVertical ? 0 : -0.18 * INK}
+              fontSize={0.42 * INK}
               className="fill-text-tertiary"
               style={{ letterSpacing: "0.02em" }}
               transform={isVertical ? `rotate(90 ${x} ${y})` : undefined}
@@ -193,7 +213,7 @@ export function CampusMiniMap({
             y={entry.z - entry.depth / 2}
             width={entry.width}
             height={entry.depth}
-            rx={0.18}
+            rx={0.18 * INK}
             className={cx(
               isPinned
                 ? "fill-accent-500"
@@ -202,7 +222,7 @@ export function CampusMiniMap({
                   : "fill-background-quaternary-default",
               isPinned ? "stroke-accent-600" : "stroke-border-table",
             )}
-            strokeWidth={0.06}
+            strokeWidth={0.06 * INK}
           />
         );
       })}
@@ -216,15 +236,15 @@ export function CampusMiniMap({
         cy={pinned ? pinned.z : focus.z}
         r={pinned ? Math.max(pinned.width, pinned.depth) * 0.9 : 1.5}
         className="fill-none stroke-accent-500"
-        strokeWidth={0.09}
+        strokeWidth={0.09 * INK}
         opacity={pinned ? 0.55 : 0.3}
-        strokeDasharray={pinned ? undefined : "0.4 0.3"}
+        strokeDasharray={pinned ? undefined : `${0.4 * INK} ${0.3 * INK}`}
       />
       {pinned ? (
         <text
           x={pinned.x}
-          y={pinned.z - Math.max(pinned.width, pinned.depth) * 0.9 - 0.28}
-          fontSize={0.48}
+          y={pinned.z - Math.max(pinned.width, pinned.depth) * 0.9 - 0.28 * INK}
+          fontSize={0.48 * INK}
           textAnchor="middle"
           className="fill-text-primary"
           style={{ fontWeight: 600 }}

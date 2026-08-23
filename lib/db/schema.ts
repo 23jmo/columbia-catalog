@@ -1174,8 +1174,11 @@ export type Database = {
           p_url: string;
           p_tier?: CrawlTier;
           p_due_now?: boolean;
+          /** Explicit schedule; wins over `p_due_now` and the tier default. */
+          p_next_fetch_at?: string | null;
         };
-        Returns: string;
+        /** One row. `inserted` distinguishes a create from an update (0010). */
+        Returns: { job_id: string; inserted: boolean }[];
       };
       prune_client_leases: { Args: { p_older_than?: string }; Returns: number };
       // ── Transactional ingest writers (migration 0009) ──────────────────────

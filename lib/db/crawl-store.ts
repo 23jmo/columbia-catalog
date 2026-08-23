@@ -185,16 +185,24 @@ export class SupabaseCrawlJobStore implements CrawlJobStore {
   async upsertJobs(specs: CrawlJobSpec[]): Promise<number> {
     let created = 0;
     for (const spec of specs) {
-      const { error } = await this.db.rpc("upsert_crawl_job", {
+      const { data, error } = await this.db.rpc("upsert_crawl_job", {
         p_kind: spec.kind,
         p_target_key: spec.targetKey,
         p_term_code: spec.termCode,
         p_url: spec.url,
         p_tier: spec.tier,
         p_due_now: spec.resetSchedule ?? false,
+        // The backfill's paced schedule. On a brand-new row this is what makes
+        // a cold catalog arrive as a stream rather than a wave; on an existing
+        // row the function ignores it unless `resetSchedule` asked for a move.
+        p_next_fetch_at: spec.nextFetchAt,
       });
-      if (error) throw new Error(`upsert_crawl_job(${spec.kind}:${spec.targetKey}) failed: ${error.message}`);
-      created += 1;
+      if (error) {
+        throw new Error(`upsert_crawl_job(${spec.kind}:${spec.targetKey}) failed: ${error.message}`);
+      }
+      // Count creates, not calls. Reporting every upsert as "created" would
+      // make a re-run over a warm catalog claim 1,800 new jobs and none exist.
+      if (data?.[0]?.inserted) created += 1;
     }
     return created;
   }

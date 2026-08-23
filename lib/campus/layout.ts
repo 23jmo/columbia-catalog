@@ -120,6 +120,17 @@ export interface CampusPlane {
 /** Metres per plane unit — see the bake script for how this was fitted. */
 export const METRES_PER_CAMPUS_UNIT = generated.metresPerUnit;
 
+/**
+ * How much of a plane both views frame, in plane units — about 680 m, which is
+ * the acropolis plus a block of Morningside on either side.
+ *
+ * Shared, and living here rather than in either renderer, because the card
+ * cross-fades the flat map into the 3D scene: if the two disagreed about scale
+ * the campus would visibly jump at the swap. `lib/campus/layout.ts` is the one
+ * module both of them already import, and it costs the flat map nothing.
+ */
+export const CAMPUS_VIEW_WIDTH_UNITS = 26;
+
 // ---------------------------------------------------------------------------
 // Buildings
 // ---------------------------------------------------------------------------

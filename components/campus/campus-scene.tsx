@@ -47,7 +47,7 @@ import {
   type OrthographicCamera,
 } from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import { buildingsOnPlane, campusPlane, roadsOnPlane } from "@/lib/campus";
+import { CAMPUS_VIEW_WIDTH_UNITS, buildingsOnPlane, campusPlane, roadsOnPlane } from "@/lib/campus";
 import type { CampusLayoutBuilding, CampusPlaneId, CampusRoad } from "@/lib/campus";
 import { buildingGeometry, contextGeometry, mergedGeometry } from "./footprints";
 import type { CampusPalette } from "./palette";
@@ -77,8 +77,17 @@ export interface CampusSceneProps {
   onContextLost?: () => void;
 }
 
-/** World units across the viewport. Chosen so a city block reads at card size. */
-const VIEW_WORLD_WIDTH = 15;
+/**
+ * World units across the viewport, shared with the flat map so the cross-fade
+ * does not change scale.
+ *
+ * The old cartoon framed 15 units, and that was right for it: it drew thirty
+ * buildings and nothing else, so a tighter crop lost nothing. Now that the
+ * neighbourhood is in the scene, framing that tight puts the pin in an
+ * anonymous field of grey blocks with no campus in sight — the survey only pays
+ * off if enough of it is on screen to recognise.
+ */
+const VIEW_WORLD_WIDTH = CAMPUS_VIEW_WIDTH_UNITS;
 /** Isometric-ish view direction. Not a true 2:1 iso — a touch higher reads better. */
 const CAMERA_DIRECTION = { x: 1, y: 0.92, z: 1 };
 const CAMERA_DISTANCE = 40;
@@ -356,11 +365,11 @@ function CampusModel({
           camera looks from, plus a weak fill so the shaded faces stay readable
           in dark mode rather than going to black. The environment map does most
           of the ambient work now, so the old flat ambient is much lower. */}
-      <ProceduralEnvironment intensity={0.62} />
-      <ambientLight intensity={0.5} />
+      <ProceduralEnvironment intensity={0.42} />
+      <ambientLight intensity={0.32} />
       <directionalLight
         position={[-8, 14, 10]}
-        intensity={1.55}
+        intensity={1.15}
         castShadow
         // Tight and square: a shadow camera scaled to the whole plane would
         // spend most of its 1024 texels on empty asphalt and give the campus
@@ -374,7 +383,7 @@ function CampusModel({
         shadow-camera-far={60}
         shadow-normalBias={0.02}
       />
-      <directionalLight position={[10, 6, -8]} intensity={0.45} />
+      <directionalLight position={[10, 6, -8]} intensity={0.3} />
 
       <mesh position={groundCenter} receiveShadow>
         <boxGeometry args={[groundWidth, 0.3, groundDepth]} />
@@ -399,7 +408,11 @@ function CampusModel({
           campus reads as Morningside Heights and not as a diagram, and it must
           never pull the eye off the pin. */}
       {context ? (
-        <mesh geometry={context} receiveShadow castShadow>
+        // Receives shadow but does NOT cast one. A thousand buildings throwing
+        // their own shadows turns the card into visual noise and buries the
+        // campus in it — the neighbourhood is allowed to catch light, not to
+        // draw attention.
+        <mesh geometry={context} receiveShadow>
           <meshStandardMaterial color={palette.context} roughness={1} metalness={0} />
         </mesh>
       ) : null}
