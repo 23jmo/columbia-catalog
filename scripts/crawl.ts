@@ -301,14 +301,35 @@ async function descriptions(): Promise<void> {
   const spacingSeconds = Number(flag("spacing", "1"));
   const startInSeconds = Number(flag("start-in", "30"));
 
-  const { data, error } = await db.rpc("courses_missing_description", { p_limit: limit });
-  if (error) {
-    console.error(`courses_missing_description failed: ${error.message}`);
+  /*
+   * PostgREST caps a single response at 1,000 rows regardless of the SQL
+   * `limit`, and it does so silently — the first version of this command
+   * reported "upserted 1000/1000" and looked finished while 4,400 courses
+   * still had no description. Page through with `range()` instead, and trust
+   * a short page rather than the requested limit to say when we are done.
+   */
+  const PAGE = 1000;
+  const rows: Awaited<ReturnType<typeof fetchPage>> = [];
+
+  async function fetchPage(offset: number) {
+    const { data, error } = await db
+      .rpc("courses_missing_description", { p_limit: limit })
+      .range(offset, offset + PAGE - 1);
+    if (error) throw new Error(`courses_missing_description failed: ${error.message}`);
+    return data ?? [];
+  }
+
+  try {
+    for (let offset = 0; offset < limit; offset += PAGE) {
+      const page = await fetchPage(offset);
+      rows.push(...page);
+      if (page.length < PAGE) break;
+    }
+  } catch (cause) {
+    console.error(cause instanceof Error ? cause.message : String(cause));
     process.exitCode = 1;
     return;
   }
-
-  const rows = data ?? [];
   if (rows.length === 0) {
     console.log("Every course already has a description. Nothing to enqueue.");
     return;

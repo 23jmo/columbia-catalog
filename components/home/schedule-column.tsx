@@ -54,7 +54,7 @@ export interface ScheduleColumnProps {
   isSample?: boolean;
   /** True when meeting times are demo scaffolding, not ingested from the bulletin. */
   hasDemoMeetingTimes?: boolean;
-  /** TODO(auth): the real session. Signed-out is correct today. */
+  /** Whether the reader has an account. Hides the sign-in prompt when true. */
   isSignedIn?: boolean;
   /** Href that switches Home to the sample plan, shown in the empty state. */
   sampleHref?: string;
@@ -152,9 +152,9 @@ export function ScheduleColumn({
 
       {hasDemoMeetingTimes && (
         <p className="text-caption-2-regular text-text-tertiary">
-          {/* TODO(ingest): drop when the bulletin parser fills Section.meetings. */}
-          Meeting times are placeholders — the Directory of Classes does not print them
-          and the Bulletin ingest is not live yet. Seats and instructors above are real.
+          At least one section here has no printed meeting time — the Directory of
+          Classes lists it as to-be-announced or asynchronous — so its block on the
+          grid is a placeholder. Seats and instructors above are real.
         </p>
       )}
 

@@ -69,7 +69,11 @@ export default async function SchedulePage({
 }) {
   const params = await searchParams;
 
-  // TODO(auth) + TODO(db): identical seam to Home — see `loadPlanSnapshot`.
+  /*
+   * `?demo=1` is a fallback, not the default. `loadPlanSnapshot` returns the
+   * reader's own saved plan when they have one; the sample only fills in for a
+   * signed-out visitor who explicitly asked to see the analysis rail working.
+   */
   const useSamplePlan = params.demo === "1";
   const termCode = CURRENT_TERM;
 
@@ -147,7 +151,7 @@ function ScheduleWorkspace({
             <span>
               Sample plan. Courses, sections, call numbers, instructors and seat counts
               are real Fall 2026 records; the plan membership is fabricated so the screen
-              has something to analyse before accounts exist.
+              has something to analyse. Sign in and the planner above saves your own.
             </span>
           </p>
         )}
@@ -158,9 +162,9 @@ function ScheduleWorkspace({
 
         {snapshot.hasDemoMeetingTimes && (
           <p className="text-caption-2-regular text-text-tertiary">
-            {/* TODO(ingest): drop when the bulletin parser fills Section.meetings. */}
-            Meeting times are placeholders. The Directory of Classes does not print them;
-            the Bulletin does, and that parser is not live yet.
+            At least one section here has no printed meeting time — the Directory of
+            Classes lists it as to-be-announced or asynchronous — so its block on the
+            grid is a placeholder.
           </p>
         )}
       </section>

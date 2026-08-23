@@ -10,26 +10,25 @@
  * lane already does and a second implementation would be a second set of
  * answers.
  *
- * ── SEAMS, in the order they will be removed ───────────────────────────────
+ * ── Where the plan comes from ──────────────────────────────────────────────
  *
- * TODO(auth): there is no session, so there is no student and therefore no
- *   saved plan. `resolvePlan` returns `null` by default and the screens render
- *   their signed-out state. Spec §15: read is free, write needs an account.
+ * `getPrimaryPlanForViewer` reads the signed-in student's saved plan straight
+ * from Supabase. `planStore` from `@/lib/schedule` is deliberately NOT used
+ * here — it is localStorage-backed and a server component cannot see it. The
+ * two agree because `lib/db/plan-sync.ts` write-throughs every local edit to
+ * the same rows this reads.
  *
- * TODO(db): once Supabase lands, `resolvePlan` becomes
- *   `getPrimaryPlan(userId, termCode)`. Note that `planStore` from
- *   `@/lib/schedule` is deliberately NOT used here — it is localStorage-backed
- *   and a server component cannot read it. It becomes usable from this seam the
- *   moment its Supabase implementation lands.
+ * A signed-out reader has no plan and gets the signed-out state. That is the
+ * product rule, not a gap: reads are free, a plan belongs to an account.
  *
- * TODO(ingest): the Fall 2026 seed carries real courses, call numbers, seats
- *   and instructors but **no meeting times** — the directory subject pages do
- *   not print them, the bulletin does. `withDemoMeetingsAll` from the schedule
- *   lane fills that gap and is identity on any section that already has real
- *   times, so this line goes quiet on its own when the bulletin parser lands.
+ * TODO(ingest): the directory stopped printing meeting times from Fall 2025
+ * onward (see .plans/BLOCKERS.md item 5). `withDemoMeetingsAll` fills that gap
+ * and is identity on any section that already has real times, so this line
+ * goes quiet on its own for any term whose times we actually hold.
  */
 
 import { CURRENT_TERM } from "@/lib/constants";
+import { getPrimaryPlanForViewer } from "@/lib/db/plan-reads";
 import { getCoursesByIds, getSections } from "@/lib/data/catalog";
 import {
   analyzePlan,
@@ -74,12 +73,22 @@ export interface LoadPlanSnapshotOptions {
 }
 
 /**
- * TODO(db + auth): replace the whole body with
- * `getPrimaryPlan(session.userId, termCode)`.
+ * The student's own plan, or the built-in sample when a caller explicitly
+ * asked for one.
+ *
+ * A real plan always wins. `useSamplePlan` exists so a screen can be designed
+ * and demoed, and showing a fabricated plan over a saved one would be exactly
+ * the "guess presented as fact" the product rules forbid — which is also why
+ * `isSample` travels with the snapshot and every screen has to surface it.
  */
-function resolvePlan(termCode: TermCode, useSamplePlan: boolean): Plan | null {
-  if (!useSamplePlan) return null;
-  return { ...DEMO_PRIMARY_PLAN, termCode };
+async function resolvePlan(
+  termCode: TermCode,
+  useSamplePlan: boolean,
+): Promise<{ plan: Plan | null; isSample: boolean }> {
+  const saved = await getPrimaryPlanForViewer(termCode);
+  if (saved) return { plan: saved, isSample: false };
+  if (!useSamplePlan) return { plan: null, isSample: false };
+  return { plan: { ...DEMO_PRIMARY_PLAN, termCode }, isSample: true };
 }
 
 /** An empty snapshot, for the no-plan and no-sections cases. */
@@ -103,11 +112,11 @@ export async function loadPlanSnapshot(
 ): Promise<PlanSnapshot> {
   const termCode = options.termCode ?? CURRENT_TERM;
   const useSamplePlan = options.useSamplePlan ?? false;
-  const plan = resolvePlan(termCode, useSamplePlan);
+  const { plan, isSample } = await resolvePlan(termCode, useSamplePlan);
 
   if (!plan) return emptySnapshot(termCode, null, false);
   if (plan.sectionIds.length === 0 && plan.customBlocks.length === 0) {
-    return emptySnapshot(termCode, plan, useSamplePlan);
+    return emptySnapshot(termCode, plan, isSample);
   }
 
   const rawSections = await getSections(plan.sectionIds);
@@ -132,7 +141,7 @@ export async function loadPlanSnapshot(
     courses,
     analysis,
     blocks: toWeekGridBlocks(sections, plan, analysis),
-    isSample: useSamplePlan,
+    isSample,
     hasDemoMeetingTimes,
   };
 }

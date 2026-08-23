@@ -16,18 +16,15 @@ import Link from "next/link";
 import {
   RiCalendarScheduleLine,
   RiEyeLine,
-  RiLoginBoxLine,
   RiSearchLine,
 } from "@remixicon/react";
-import { Button, ButtonLink } from "@/components/base/buttons/button";
+import { ButtonLink } from "@/components/base/buttons/button";
+import { SignInPrompt } from "@/components/home/sign-in-prompt";
 import { cx } from "@/utils/cx";
 
 export interface NoPlanStateProps {
   termLabel: string;
-  /**
-   * TODO(auth): pass the real session state. `false` — the default — is
-   * correct today because Supabase SSO is not wired up yet.
-   */
+  /** Whether the reader has an account. Signed-out is the default state. */
   isSignedIn?: boolean;
   /** Link that turns the built-in sample plan on, so the screen can be judged. */
   sampleHref?: string;
@@ -103,20 +100,8 @@ export function NoPlanState({
           <p className="text-caption-1-regular min-w-0 flex-1 text-text-secondary">
             Saving a plan is the first thing here that needs an account. Everything
             else — search, course pages, ratings, seat history — stays free.
-            {/* TODO(auth): drop this sentence once Supabase Google SSO is wired. */}{" "}
-            Sign-in is not connected yet, so this button does nothing.
           </p>
-          <Button
-            variant="secondary"
-            leadingIcon={RiLoginBoxLine}
-            disabled
-            aria-describedby="no-plan-signin-note"
-          >
-            Save a plan
-          </Button>
-          <span id="no-plan-signin-note" className="sr-only">
-            Requires an account. Sign-in is not connected yet.
-          </span>
+          <SignInPrompt />
         </div>
       )}
 
