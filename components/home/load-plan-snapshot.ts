@@ -21,22 +21,40 @@
  * A signed-out reader has no plan and gets the signed-out state. That is the
  * product rule, not a gap: reads are free, a plan belongs to an account.
  *
- * TODO(ingest): the directory stopped printing meeting times from Fall 2025
- * onward (see .plans/BLOCKERS.md item 5). `withDemoMeetingsAll` fills that gap
- * and is identity on any section that already has real times, so this line
- * goes quiet on its own for any term whose times we actually hold.
+ * ── Meeting times, and why some blocks are grey ────────────────────────────
+ *
+ * Columbia stopped printing meeting days and times in the public directory
+ * after Spring 2025 (.plans/BLOCKERS.md item 5), so for Fall 2026 and Spring
+ * 2027 we hold real courses, real seats, real instructors — and zero times.
+ *
+ * This loader used to fill that hole with `withDemoMeetingsAll`, which assigns
+ * each section a slot from Columbia's standard grid. That was defensible while
+ * the plan on screen was always the built-in sample: fabricated times for a
+ * fabricated plan. It stopped being defensible the moment this function
+ * started returning the reader's OWN plan, because a made-up "Mo We 10:10" for
+ * a class they are actually registering for is a lie with consequences.
+ *
+ * So it reads `getTypicalMeetings` instead: the times that same section
+ * genuinely met at in a term we do hold, carrying the term they came from.
+ * They render in the `candidate` tone the grid already reserves for "not
+ * committed", never in `plan` tone, and they are kept out of the `Section`
+ * records entirely — `analyzePlan` never sees them, so no credit total,
+ * conflict or commute warning is ever computed from a guess.
+ *
+ * A section with no history at all contributes no rectangle. An empty row is
+ * honest; an invented one is not.
  */
 
-import { CURRENT_TERM } from "@/lib/constants";
+import { CURRENT_TERM, buildTerm } from "@/lib/constants";
 import { getPrimaryPlanForViewer } from "@/lib/db/plan-reads";
 import { getCoursesByIds, getSections } from "@/lib/data/catalog";
+import { getTypicalMeetings, type TypicalMeetingPattern } from "@/lib/db/typical-meetings";
 import {
   analyzePlan,
   conflictedIds,
   toTimedItems,
   type PlanAnalysisDetail,
 } from "@/lib/schedule";
-import { withDemoMeetingsAll } from "@/lib/schedule/demo-meetings";
 import type { Course, Plan, Section, TermCode } from "@/lib/types";
 import { DEMO_PRIMARY_PLAN } from "@/components/home/demo-state";
 import type { WeekGridBlock } from "@/components/home/week-grid-slot";
@@ -58,8 +76,13 @@ export interface PlanSnapshot {
    * exactly the "guess presented as fact" the product rules forbid.
    */
   isSample: boolean;
-  /** True when meeting times came from the demo filler, not from ingest. */
-  hasDemoMeetingTimes: boolean;
+  /**
+   * Sections in this plan with no published meeting time for this term.
+   * Nonzero is the normal case for Fall 2026 onward — see the header.
+   */
+  unscheduledCount: number;
+  /** Of those, how many we could show a previous term's pattern for. */
+  historicalCount: number;
 }
 
 export interface LoadPlanSnapshotOptions {
@@ -103,7 +126,8 @@ function emptySnapshot(termCode: TermCode, plan: Plan | null, isSample: boolean)
       : null,
     blocks: [],
     isSample,
-    hasDemoMeetingTimes: false,
+    unscheduledCount: 0,
+    historicalCount: 0,
   };
 }
 
@@ -119,9 +143,22 @@ export async function loadPlanSnapshot(
     return emptySnapshot(termCode, plan, isSample);
   }
 
-  const rawSections = await getSections(plan.sectionIds);
-  const sections = withDemoMeetingsAll(rawSections);
-  const hasDemoMeetingTimes = rawSections.some((section) => section.meetings.length === 0);
+  const sections = await getSections(plan.sectionIds);
+  const unscheduled = sections.filter((section) => section.meetings.length === 0);
+
+  /*
+   * Only asked about sections that have no times of their own, and the result
+   * is never merged into a `Section`. Keeping the two apart is what stops a
+   * historical pattern from reaching `analyzePlan` and being counted as a real
+   * clash — spec's rule is that "these usually overlap" is a warning, not the
+   * hard "you cannot be in two places at once".
+   *
+   * Never throws: a missing hint must not take Home down.
+   */
+  const typical =
+    unscheduled.length > 0
+      ? await getTypicalMeetings(unscheduled.map((section) => section.sectionId))
+      : new Map<string, TypicalMeetingPattern>();
 
   const courses = await getCoursesByIds(
     [...new Set(sections.map((section) => section.courseId))],
@@ -140,9 +177,13 @@ export async function loadPlanSnapshot(
     sections,
     courses,
     analysis,
-    blocks: toWeekGridBlocks(sections, plan, analysis),
+    blocks: [
+      ...toWeekGridBlocks(sections, plan, analysis),
+      ...historicalBlocks(typical, sections),
+    ],
     isSample,
-    hasDemoMeetingTimes,
+    unscheduledCount: unscheduled.length,
+    historicalCount: typical.size,
   };
 }
 
@@ -178,4 +219,36 @@ function toWeekGridBlocks(
       tone: conflicted.has(item.id) ? "conflict" : "plan",
     };
   });
+}
+
+/**
+ * Previous terms' patterns as grid rectangles, in the `candidate` tone.
+ *
+ * `candidate` is the tone the grid already means "on screen, not committed" by,
+ * and it carries its own border style and icon rather than relying on colour
+ * (spec §18). Reusing it means a historical block reads as provisional without
+ * inventing a fourth visual language the legend would have to explain.
+ *
+ * The sublabel names the term the times were actually observed in. "usually"
+ * on its own would still leave the reader guessing how old the guess is.
+ */
+function historicalBlocks(
+  typical: Map<string, TypicalMeetingPattern>,
+  sections: readonly Section[],
+): WeekGridBlock[] {
+  const labelBySectionId = new Map(
+    sections.map((section) => [section.sectionId, `${section.courseId} · ${section.sectionCode}`]),
+  );
+
+  return [...typical.values()].flatMap((pattern) =>
+    pattern.meetings.map((meeting, index) => ({
+      blockId: `typical:${pattern.sectionId}:${index}`,
+      label: labelBySectionId.get(pattern.sectionId) ?? pattern.sectionId,
+      sublabel: `${buildTerm(pattern.sourceTerm as TermCode).label} pattern`,
+      weekday: meeting.weekday,
+      startMinute: meeting.startMinute,
+      endMinute: meeting.endMinute,
+      tone: "candidate" as const,
+    })),
+  );
 }

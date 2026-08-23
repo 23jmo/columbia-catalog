@@ -160,11 +160,14 @@ function ScheduleWorkspace({
             honest agenda placeholder takes over — see `week-grid-slot.tsx`. */}
         <WeekGridSlot weekGrid={WeekGrid} blocks={snapshot.blocks} />
 
-        {snapshot.hasDemoMeetingTimes && (
+        {snapshot.unscheduledCount > 0 && (
           <p className="text-caption-2-regular text-text-tertiary">
-            At least one section here has no printed meeting time — the Directory of
-            Classes lists it as to-be-announced or asynchronous — so its block on the
-            grid is a placeholder.
+            {snapshot.unscheduledCount === 1 ? "One section" : `${snapshot.unscheduledCount} sections`}{" "}
+            here {snapshot.unscheduledCount === 1 ? "has" : "have"} no published meeting
+            time for this term — Columbia lists times only in Vergil now.
+            {snapshot.historicalCount > 0
+              ? " The grey blocks are an earlier term's pattern, shown as a guide."
+              : " Nothing is drawn for them, because we have no earlier pattern to go on."}
           </p>
         )}
       </section>

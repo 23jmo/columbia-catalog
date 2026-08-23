@@ -106,7 +106,8 @@ export default async function HomePage({
             blocks={snapshot.blocks}
             sectionCount={snapshot.sections.length}
             isSample={snapshot.isSample}
-            hasDemoMeetingTimes={snapshot.hasDemoMeetingTimes}
+            unscheduledCount={snapshot.unscheduledCount}
+            historicalCount={snapshot.historicalCount}
             sampleHref="/?demo=1"
             isSignedIn={Boolean(account)}
             // The schedule lane's canvas, injected through the slot it was

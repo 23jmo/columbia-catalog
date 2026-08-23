@@ -52,8 +52,10 @@ export interface ScheduleColumnProps {
   weekGrid?: WeekGridSlotComponent;
   /** Marks the plan as the built-in sample rather than a saved one. */
   isSample?: boolean;
-  /** True when meeting times are demo scaffolding, not ingested from the bulletin. */
-  hasDemoMeetingTimes?: boolean;
+  /** Sections in the plan with no published meeting time for this term. */
+  unscheduledCount?: number;
+  /** Of those, how many are drawn from a previous term's pattern. */
+  historicalCount?: number;
   /** Whether the reader has an account. Hides the sign-in prompt when true. */
   isSignedIn?: boolean;
   /** Href that switches Home to the sample plan, shown in the empty state. */
@@ -69,7 +71,8 @@ export function ScheduleColumn({
   sectionCount,
   weekGrid,
   isSample = false,
-  hasDemoMeetingTimes = false,
+  unscheduledCount = 0,
+  historicalCount = 0,
   isSignedIn = false,
   sampleHref,
   className,
@@ -150,11 +153,15 @@ export function ScheduleColumn({
 
       <WeekGridSlot weekGrid={weekGrid} blocks={blocks} />
 
-      {hasDemoMeetingTimes && (
+      {unscheduledCount > 0 && (
         <p className="text-caption-2-regular text-text-tertiary">
-          At least one section here has no printed meeting time — the Directory of
-          Classes lists it as to-be-announced or asynchronous — so its block on the
-          grid is a placeholder. Seats and instructors above are real.
+          {unscheduledCount === 1 ? "One section" : `${unscheduledCount} sections`} here
+          {unscheduledCount === 1 ? " has" : " have"} no published meeting time for this
+          term — Columbia lists times only in Vergil now.
+          {historicalCount > 0
+            ? ` The grey blocks show when ${historicalCount === 1 ? "one of them" : "some of them"} met in an earlier term, which is a guide, not a schedule.`
+            : " Nothing is drawn for them, because we have no earlier pattern to go on."}{" "}
+          Seats and instructors above are real.
         </p>
       )}
 
