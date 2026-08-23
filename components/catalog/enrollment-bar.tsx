@@ -83,7 +83,7 @@ export function EnrollmentBar({
     <div
       className={cx(
         "relative flex h-7 w-full min-w-[9rem] items-center overflow-hidden rounded-md",
-        "bg-background-secondary",
+        "bg-background-secondary-default",
         className,
       )}
       /*

@@ -124,7 +124,7 @@ export function CourseResultRow({
     <article
       className={cx(
         "group/row border-b border-border-table transition-colors duration-100 ease",
-        isExpanded ? "bg-background-secondary/40" : "hover:bg-background-primary-hover",
+        isExpanded ? "bg-background-secondary-default/40" : "hover:bg-background-primary-hover",
       )}
       aria-label={`Result ${position} of ${total}: ${code} ${title}`}
     >

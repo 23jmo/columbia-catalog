@@ -29,7 +29,23 @@ import { DRAWER_TITLE_ID, DrawerFrame } from "@/app/course/[courseId]/course-dra
  */
 
 function Line({ className }: { className: string }) {
-  return <div className={`animate-pulse rounded-md bg-background-secondary ${className}`} />;
+  /*
+   * `bg-background-tertiary-default`, not `bg-background-secondary`.
+   *
+   * There is no `--color-background-secondary` token -- the theme defines only
+   * `-default` and `-hover` -- so that class compiled to no rule at all and
+   * every block here rendered fully transparent. Nine invisible rectangles on
+   * a white panel is a white panel, which is exactly how this read: the drawer
+   * slid in blank and stayed blank until the content landed.
+   *
+   * Tertiary rather than secondary because this panel is `bg-background-full`,
+   * pure white. Secondary is 3% off it; at that distance a skeleton is
+   * indistinguishable from the empty state it exists to prevent. Same tone the
+   * schedule's skeleton uses.
+   */
+  return (
+    <div className={`animate-pulse rounded-md bg-background-tertiary-default ${className}`} />
+  );
 }
 
 export default function DrawerLoading() {
