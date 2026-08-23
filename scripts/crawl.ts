@@ -5,6 +5,7 @@
  *   npx tsx --env-file=.env.local scripts/crawl.ts status
  *   npx tsx --env-file=.env.local scripts/crawl.ts enqueue --terms=20263,20271 --spacing=0.5 --start-in=0
  *   npx tsx --env-file=.env.local scripts/crawl.ts drain --minutes=90
+ *   npx tsx --env-file=.env.local scripts/crawl.ts descriptions --limit=6000
  *
  * ── Why this exists ────────────────────────────────────────────────────────
  *
@@ -38,7 +39,8 @@ import { getCrawlerRuntime } from "@/lib/crawler/contracts";
 import { politeFetch } from "@/lib/crawler/fetcher";
 import { ingestHtml, recordFetchFailure } from "@/lib/crawler/ingest";
 import { requireServiceRoleClient } from "@/lib/db/client";
-import type { CrawlJobKind } from "@/lib/types";
+import type { CrawlJobKind, TermCode } from "@/lib/types";
+import type { CrawlJobSpec } from "@/lib/crawler/contracts";
 import { crawlerBootstrapError, ensureCrawlerRuntime } from "@/lib/db/crawler-runtime";
 
 /** Identity written to `leased_by`, so these leases are distinguishable in SQL. */
@@ -258,6 +260,83 @@ async function drain(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// descriptions
+// ---------------------------------------------------------------------------
+
+/**
+ * Enqueue one `section_detail` job per course that has no description.
+ *
+ * ── Why this is needed at all ──────────────────────────────────────────────
+ *
+ * The bulletin backfill fills descriptions, points and prerequisites — but
+ * `bulletin.columbia.edu` only publishes course listings for Columbia College,
+ * Engineering and Barnard. Law, Business, Nursing, Social Work, Public Health,
+ * SPS, the Arts and GSAPP are not on it in any form; their departments do not
+ * appear in its sitemap. That is ~5,000 courses with a title, a call number and
+ * nothing else — which is most of what a reader wants to know before choosing.
+ *
+ * The section detail page has the description for every one of them. FINC
+ * B8439's page prints "Course Description", "Department", "Grading Mode",
+ * "Method of Instruction", "Type", "Open To" and "Note" — the four section
+ * columns we have never written, plus the course prose the bulletin lane could
+ * not reach.
+ *
+ * ── One job per COURSE, not per section ───────────────────────────────────
+ *
+ * The description belongs to the course, so a second section of the same course
+ * would fetch a page to learn something we already know. Picking one section
+ * per course turns ~17,000 fetches into ~5,000. The section-scoped fields
+ * (component, grading mode, open-to) are then filled for that one section only,
+ * which is honest: we know what that page said, and nothing about its siblings.
+ *
+ * ── Baseline tier ─────────────────────────────────────────────────────────
+ *
+ * Descriptions do not change during registration. These queue behind every seat
+ * refresh by design — `claim_crawl_jobs` orders by tier first, so a backlog of
+ * 5,000 prose fetches can never delay a watched section's seat reading.
+ */
+async function descriptions(): Promise<void> {
+  const db = requireServiceRoleClient();
+  const limit = Number(flag("limit", "6000"));
+  const spacingSeconds = Number(flag("spacing", "1"));
+  const startInSeconds = Number(flag("start-in", "30"));
+
+  const { data, error } = await db.rpc("courses_missing_description", { p_limit: limit });
+  if (error) {
+    console.error(`courses_missing_description failed: ${error.message}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const rows = data ?? [];
+  if (rows.length === 0) {
+    console.log("Every course already has a description. Nothing to enqueue.");
+    return;
+  }
+
+  const runtime = getCrawlerRuntime();
+  const now = Date.now();
+  const specs: CrawlJobSpec[] = rows.map((row, index) => ({
+    kind: "section_detail" as CrawlJobKind,
+    // Section id, so `subjectOfTargetKey` can still find the subject and the
+    // hot-tier escalation keeps working for these rows like any other.
+    targetKey: row.section_id,
+    termCode: row.term_code as TermCode,
+    url: row.detail_url,
+    tier: "baseline" as const,
+    nextFetchAt: new Date(now + (startInSeconds + index * spacingSeconds) * 1000).toISOString(),
+  }));
+
+  console.log(`Enqueuing ${specs.length} section_detail job(s) for courses with no description…`);
+  let created = 0;
+  for (let start = 0; start < specs.length; start += 100) {
+    created += await runtime.jobStore.upsertJobs(specs.slice(start, start + 100));
+    console.log(`  upserted ${Math.min(start + 100, specs.length)}/${specs.length}`);
+  }
+  console.log(`Done. ${created} new job(s) created.`);
+}
+
+// ---------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------
 
@@ -283,8 +362,11 @@ async function main(): Promise<void> {
     case "drain":
       await drain();
       return;
+    case "descriptions":
+      await descriptions();
+      return;
     default:
-      console.error(`Unknown command "${command}". Expected seed | status | enqueue | drain.`);
+      console.error(`Unknown command "${command}". Expected seed | status | enqueue | drain | descriptions.`);
       process.exitCode = 1;
   }
 }

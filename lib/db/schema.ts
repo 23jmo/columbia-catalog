@@ -1123,6 +1123,20 @@ export type Database = {
         Args: { p_section_id: string; p_from?: string | null; p_to?: string | null };
         Returns: EnrollmentSnapshotRow[];
       };
+      /**
+       * One fetchable section detail page per course with no description
+       * (migration 0018). The bulletin only covers CC, SEAS and Barnard; this
+       * is how every other school's prose gets found.
+       */
+      courses_missing_description: {
+        Args: { p_limit?: number };
+        Returns: {
+          course_id: string;
+          section_id: string;
+          term_code: string;
+          detail_url: string;
+        }[];
+      };
       claim_jobs: {
         Args: {
           worker_id: string;
