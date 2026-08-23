@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { Agentation } from "agentation";
+
+import { DrawerMotionDial } from "@/components/dev/drawer-motion-dial";
 import "@/styles/globals.css";
 
 /** BoardUI's sans stack — exposed as `--font-inter` for `styles/theme.css`. */
@@ -59,6 +61,13 @@ export default function RootLayout({
           install (`npm ci --omit=dev`) would not have it.
         */}
         {process.env.NODE_ENV === "development" && <Agentation />}
+        {/*
+          Dev-only dial for the drawer's enter/exit motion. Same build-time
+          guard as above, so it is dropped from the production bundle rather
+          than shipped and hidden. Temporary — see the file's header for how to
+          bake the chosen numbers in and delete it.
+        */}
+        {process.env.NODE_ENV === "development" && <DrawerMotionDial />}
       </body>
     </html>
   );
