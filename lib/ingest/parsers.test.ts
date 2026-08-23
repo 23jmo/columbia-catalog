@@ -291,6 +291,43 @@ describe("parseSectionDetail — COMS W4113 section 001", () => {
       /no recoverable section identity/,
     );
   });
+
+  /*
+   * The key's qualifier is the single school letter; the course's qualifier is
+   * a two-letter code. They are not the same string and not the same length.
+   * Measuring the subject by subtracting the tail therefore ate a letter off
+   * the subject — `20263THTR3147V001` gave `THT3147UN`, an id matching no row,
+   * so `ingest_section_detail` updated nothing and lost the description it had
+   * just parsed, without failing.
+   */
+  it("reads the subject off the front of the key, whatever the qualifiers are", () => {
+    const page = (key: string, number: string, section: string) => `
+      <html><body><table>
+        <tr><th>Number</th><td>${number}</td></tr>
+        <tr><th>Section</th><td>${section}</td></tr>
+        <tr><th>Course Description</th><td><p>Prose.</p></td></tr>
+        <tr><th>Section key</th><td>${key}</td></tr>
+      </table></body></html>`;
+
+    /*
+     * The case that broke: the key's qualifier is `V` and the course-level one
+     * on the live page is `UN`. This fixture carries only what the key and the
+     * number field say, so the qualifier here resolves to `V` — the assertion
+     * that matters is the SUBJECT, which the old arithmetic clipped to `THT`.
+     */
+    const thtr = parseSectionDetail(page("20263THTR3147V001", "V3147", "001"));
+    expect(thtr.courseId.startsWith("THTR3147")).toBe(true);
+    expect(thtr.sectionId).toBe("20263THTR3147V001");
+
+    // Same subject length, qualifier lengths that happen to agree.
+    const arch = parseSectionDetail(page("20263ARCH4441A001", "A4441", "001"));
+    expect(arch.courseId).toBe("ARCH4441A");
+
+    // A different subject length, so the old arithmetic would have been off by
+    // a different amount again.
+    const eeeb = parseSectionDetail(page("20263EEEB2001W001", "W2001", "001"));
+    expect(eeeb.courseId.startsWith("EEEB2001")).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------

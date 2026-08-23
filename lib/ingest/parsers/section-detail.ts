@@ -103,7 +103,7 @@ export function parseSectionDetail(
   const resolvedTerm =
     termCodeFromKey(sectionKey) ?? metaTerm ?? termCode ?? null;
   const resolvedSubject =
-    subjectCodeFromKey(sectionKey, sectionCode, parsedNumber.number, parsedNumber.qualifier) ??
+    subjectCodeFromKey(sectionKey) ??
     subjectCode ??
     null;
 
@@ -239,18 +239,33 @@ function sectionCodeFromKey(sectionKey: string | null): string | null {
   return match ? match[1] : null;
 }
 
-function subjectCodeFromKey(
-  sectionKey: string | null,
-  sectionCode: string,
-  number: number,
-  qualifier: string | null,
-): string | null {
+/**
+ * The subject letters out of a section key, read from the FRONT.
+ *
+ * A key is `<term><SUBJECT><number><qualifier><section>` —
+ * `20263THTR3147V001`. This used to find the subject by measuring the tail:
+ * subtract the section code, the number and the qualifier from the length and
+ * take what is left.
+ *
+ * That is wrong, and wrong in a way that produced a plausible-looking result.
+ * The qualifier in the KEY is the single school letter (`V`), while the
+ * qualifier the rest of the parser carries is the course-level code (`UN`).
+ * They are different lengths, so the tail arithmetic overshot by one and
+ * `20263THTR3147V001` yielded `THT` — a subject that does not exist, in a
+ * course id (`THT3147UN`) that matches no row. `ingest_section_detail` updates
+ * `courses` by id, so every one of those pages ingested "successfully",
+ * updated its section, and silently failed to write the description it had
+ * just parsed. 210 fetches produced 5 descriptions.
+ *
+ * Reading from the front needs no arithmetic: after the five-digit term, the
+ * subject is the leading run of letters, and it ends where the number begins.
+ */
+function subjectCodeFromKey(sectionKey: string | null): string | null {
   if (!sectionKey) return null;
   const term = termCodeFromKey(sectionKey);
   if (!term) return null;
-  const tail = sectionCode.length + String(number).length + (qualifier?.length ?? 0);
-  const subject = sectionKey.slice(term.length, sectionKey.length - tail);
-  return /^[A-Za-z_]{2,6}$/.test(subject) ? subject : null;
+  const match = /^([A-Za-z_]{2,6})\d/.exec(sectionKey.slice(term.length));
+  return match ? match[1] : null;
 }
 
 function safeDetailUrl(
