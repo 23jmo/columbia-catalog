@@ -31,19 +31,52 @@ export type CatalogClient = SupabaseClient<Database>;
 // ---------------------------------------------------------------------------
 // Environment
 // ---------------------------------------------------------------------------
-// Read through a helper rather than destructured at module scope: Next inlines
-// `process.env.NEXT_PUBLIC_*` at build time, and an undefined lookup must be a
-// quiet `undefined` rather than a TypeError in an edge runtime.
 
-function env(name: string): string | undefined {
-  const value = process.env[name];
+/** A blank variable means "not set", not "set to empty string". */
+function present(value: string | undefined): string | undefined {
   return value && value.length > 0 ? value : undefined;
 }
 
-export const SUPABASE_URL = env("NEXT_PUBLIC_SUPABASE_URL");
+/**
+ * Server-only variables, read at call time.
+ *
+ * The computed `process.env[name]` lookup is deliberate here and load-bearing
+ * for rule 2 above: a computed access is exactly what a bundler cannot
+ * statically substitute, so a secret read this way can never be folded into a
+ * client bundle even by accident. The `typeof process` guard keeps the helper
+ * safe to reference from a module that also loads in the browser.
+ */
+function serverEnv(name: string): string | undefined {
+  if (typeof process === "undefined") return undefined;
+  return present(process.env[name]);
+}
+
+/*
+ * The two public variables MUST be written as static member accesses.
+ *
+ * Next replaces `process.env.NEXT_PUBLIC_X` with the literal value at build
+ * time, and it can only do that when the property is syntactically static.
+ * Reading them through a helper defeats the substitution completely: the
+ * server still resolves them from the real environment, the browser bundle
+ * gets nothing at all, and `isConfigured()` then answers `true` on the server
+ * and `false` in the browser.
+ *
+ * That divergence is invisible to the test suite and to any server-rendered
+ * page, and it surfaces as two things at once — a hydration mismatch on every
+ * component whose label depends on the session, and a browser client that is
+ * permanently `null`, so sign-in, watches and alerts never work no matter how
+ * the environment is configured. It cost a debugging session once; the shape
+ * of these two lines is the fix, so do not "tidy" them back into a helper.
+ *
+ * Inlining also removes the `process` reference entirely from client code,
+ * which is strictly safer than a runtime lookup in a runtime that has no
+ * `process` at all.
+ */
+export const SUPABASE_URL = present(process.env.NEXT_PUBLIC_SUPABASE_URL);
 
 export const SUPABASE_PUBLISHABLE_KEY =
-  env("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY") ?? env("NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  present(process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) ??
+  present(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
 /**
  * `true` when the browser/server clients can be constructed. Callers use this
@@ -57,7 +90,7 @@ export function isConfigured(): boolean {
 
 /** `true` when privileged, server-only operations (ingest, alerts) are possible. */
 export function isServiceConfigured(): boolean {
-  return Boolean(SUPABASE_URL && env("SUPABASE_SERVICE_ROLE_KEY"));
+  return Boolean(SUPABASE_URL && serverEnv("SUPABASE_SERVICE_ROLE_KEY"));
 }
 
 /**
@@ -155,7 +188,7 @@ export function createAnonServerClient(): CatalogClient | null {
  * Returns `null` when the service key is absent.
  */
 export function createServiceRoleClient(): CatalogClient | null {
-  const serviceKey = env("SUPABASE_SERVICE_ROLE_KEY");
+  const serviceKey = serverEnv("SUPABASE_SERVICE_ROLE_KEY");
   if (!SUPABASE_URL || !serviceKey) return null;
   return createClient<Database>(SUPABASE_URL, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
