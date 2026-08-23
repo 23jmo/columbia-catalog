@@ -12,11 +12,15 @@
  *   catalog-<version>.bin   the lexical index (versioned, immutable, CDN-safe)
  *   manifest.json           tiny pointer the client fetches first
  *
- * EMBEDDINGS ARE NOT BUILT HERE. No embedding provider is wired up yet, so
- * this script emits a lexical-only artifact and says so. The format, the
- * client loader and the engine already support the semantic block; turning it
- * on means producing one Float32Array per course and calling
- * `buildEmbeddingBlock` — see the `buildEmbeddings` stub at the bottom.
+ * EMBEDDINGS ARE OPTIONAL AND OFF BY DEFAULT. Set EMBEDDING_API_KEY (plus
+ * EMBEDDING_BASE_URL / EMBEDDING_MODEL / EMBEDDING_DIMS to point somewhere
+ * other than OpenAI's 384-dim text-embedding-3-small) and this script builds
+ * the semantic sidecar alongside the lexical block. With no key it emits a
+ * lexical-only artifact and prints why — which is what ships today.
+ *
+ * Note that document vectors alone do not turn semantic search on: the engine
+ * also needs a SYNCHRONOUS query embedder, which means a model running in the
+ * browser. See lib/search/embeddings.ts and .plans/BLOCKERS.md item 12.
  */
 
 import { gzipSync } from "node:zlib";
@@ -30,10 +34,16 @@ import type { CourseWithSections, TermCode } from "@/lib/types";
 import { buildIndex, estimateBlockSizes } from "@/lib/search/build";
 import {
   INDEX_FORMAT_VERSION,
+  buildEmbeddingBlock,
   encodeEmbeddingBlock,
   encodeIndex,
   type EmbeddingBlock,
 } from "@/lib/search/index-format";
+import {
+  embedCourses,
+  isProviderProblem,
+  readEmbeddingProviderFromEnv,
+} from "@/lib/search/embeddings";
 import type { SearchIndexManifest } from "@/lib/search/client";
 
 // ---------------------------------------------------------------------------
@@ -88,16 +98,40 @@ function mergeByCourse(batches: CourseWithSections[][]): CourseWithSections[] {
 }
 
 /**
- * STUB. Returns null until an embedding provider is wired up.
+ * One binary-quantized vector per course, or null when no provider is
+ * configured.
  *
- * To enable semantic search, produce one unit-normalized Float32Array per
- * course — in the SAME order `buildIndex` assigns ordinals, which is courseId
- * ascending — and return `buildEmbeddingBlock(vectors, dims, model, true)`.
- * Nothing else in the pipeline changes.
+ * `ordered` must be the SAME array the lexical build indexed — the embedding
+ * block is positional, so a different order would attach every course's vector
+ * to its neighbour. The caller passes `ordered`, not `courses`, for exactly
+ * this reason.
+ *
+ * `withRescore = true` ships the int8 block the engine uses to re-rank the top
+ * slice in float. It roughly quadruples the sidecar (48 bytes per course
+ * becomes ~430), and it is what makes binary quantization safe: Hamming
+ * distance ranks the whole catalog cheaply and approximately, and the rescore
+ * fixes the ordering where it actually matters.
+ *
+ * A provider failure aborts the build rather than degrading to lexical-only.
+ * Silently shipping an artifact missing the block the operator just asked for
+ * would look like success and be discovered weeks later.
  */
-async function buildEmbeddings(courses: CourseWithSections[]): Promise<EmbeddingBlock | null> {
-  void courses;
-  return null;
+async function buildEmbeddings(ordered: CourseWithSections[]): Promise<EmbeddingBlock | null> {
+  const configured = readEmbeddingProviderFromEnv();
+  if (isProviderProblem(configured)) {
+    console.log(`\n  embeddings     : skipped — ${configured.reason}`);
+    return null;
+  }
+
+  console.log(`\n  embeddings     : ${configured.model} @ ${configured.dims}d`);
+  const vectors = await embedCourses(ordered, configured, {
+    onProgress: (done, total) => {
+      if (done % 1024 === 0 || done === total) {
+        console.log(`    embedded ${done.toLocaleString()} / ${total.toLocaleString()}`);
+      }
+    },
+  });
+  return buildEmbeddingBlock(vectors, configured.dims, configured.model, true);
 }
 
 async function main(): Promise<void> {
@@ -133,7 +167,7 @@ async function main(): Promise<void> {
   writeFileSync(join(outDir, lexicalName), bytes);
 
   // --- embeddings (optional) ----------------------------------------------
-  const embedding = await buildEmbeddings(courses);
+  const embedding = await buildEmbeddings(ordered);
   let embeddingName: string | null = null;
   let embeddingBytes = 0;
   let embeddingGzip = 0;

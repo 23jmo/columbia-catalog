@@ -135,7 +135,7 @@ change plus a fallback query, not a redesign.
 ## 6. Needs you (5 minutes) — Google OAuth credentials for sign-in
 
 All the app-side auth is written and typechecks: `lib/db/auth.ts`,
-`app/auth/callback/route.ts`, `middleware.ts`, `hooks/use-session-account.ts`,
+`app/auth/callback/route.ts`, `proxy.ts`, `hooks/use-session-account.ts`,
 and the account menu is wired to real sessions. Migration 0005 already creates
 the `users` row from a trigger on `auth.users` and enforces the Columbia domain
 with a check constraint.
@@ -225,3 +225,93 @@ course numbers above 9999, which `courses_course_number_check` rejects — takin
 the whole page's ingest down with it. It is a sandbox subject with no real
 classes, so its crawl job is now `enabled = false` rather than failing on every
 sweep. Re-enable it only if the constraint is ever widened.
+
+---
+
+## 10. Fixed, logged for the record — Barnard's bulletin is a different host
+
+Not something you need to do; worth knowing because it silently cost us 53
+departments' worth of course descriptions.
+
+`bulletin.columbia.edu/sitemap.xml` advertises `/barnard-college/…` paths and
+the section root 301s, but every Barnard department page 404s on the Columbia
+host — they are served from `catalog.barnard.edu`. Discovery therefore produced
+53 jobs that looked correct and could never succeed. `catalog.barnard.edu` is
+now on the crawl allowlist (GET-only, https-only and the per-host spacing are
+unchanged; its robots.txt does not disallow the `courses-instruction` tree) and
+the backfill knows which origin a `barnard-college/` path belongs to.
+
+---
+
+## 11. Known gap — sections of one course are not distinguishable
+
+The directory prints one title per *course*, not per *section*. `COMS 6998` has
+24 sections in Fall 2026 and they are 24 different classes ("Advanced Topics in
+…"), but every one of them renders and serialises with the same course title.
+
+We store nothing that tells them apart, so search, the course page, and the MCP
+tools all answer this question uselessly. The per-section title appears on the
+section detail page at `doc.sis.columbia.edu`. The machinery to read it already
+exists — there is a `section_detail` crawl job kind and
+`lib/ingest/parsers/section-detail.ts` — but nothing currently enqueues those
+jobs, and doing so for every section is ~17k additional fetches.
+
+Not blocking, and not yet costed. Flagged because it is the most visible
+remaining wrongness in the catalog data.
+
+---
+
+## 12. Semantic search needs a model in the browser, and I cannot add one
+
+**What is built:** everything except the model. `lib/search/embeddings.ts` turns
+a course into a document and a document into a 384-dim unit vector;
+`buildEmbeddingBlock` quantizes to one bit per dimension plus an int8 rescore
+block; `encodeEmbeddingBlock` writes the sidecar; `SearchClient` downloads it
+after the lexical block and caches it in IndexedDB; `SearchEngine.applySemantic`
+ranks the whole catalog by Hamming distance and rescores the top slice in
+float. 17 tests cover alignment, ordering, width and the retry policy.
+
+**Two separate things are missing, and they need different answers.**
+
+**(a) Document vectors — one environment variable.** `scripts/build-index.ts`
+builds the sidecar as soon as an embedding provider is configured:
+
+```
+EMBEDDING_API_KEY=sk-...
+EMBEDDING_BASE_URL=https://api.openai.com/v1      # default; any OpenAI-shaped API works
+EMBEDDING_MODEL=text-embedding-3-small            # default
+EMBEDDING_DIMS=384                                # default; must be a multiple of 32
+```
+
+~7,900 courses at text-embedding-3-small is well under $1 per rebuild, and the
+index is regenerated a few times a term. There is deliberately no fallback: with
+no key the build prints why and ships lexical-only, because vectors from a
+cheaper stand-in would be worse than no vectors — a wrong neighbour is a wrong
+answer, an absent neighbour is a missing feature.
+
+**(b) Query vectors — BLOCKED, and not by a credential.** `QueryEmbedder` is
+`(query: string) => Float32Array | null`. It is synchronous on purpose: spec §9
+says search never touches the network, and a search that awaited a round trip
+could not return in the same tick as the keystroke. So the query has to be
+embedded locally, which means a model in the browser — `@huggingface/transformers`
+with a quantized `bge-small-en-v1.5` (~30 MB, WASM/WebGPU) is the standard
+choice and matches the 384 dims.
+
+That is an `npm install`, which AGENTS.md forbids me from doing. **This is the
+one place in the whole spec where the build rule and the product requirement
+actually collide**, so it needs your call rather than a workaround:
+
+1. Add the dependency (`npm i @huggingface/transformers`) and I wire the query
+   embedder. ~30 MB extra on first search, cached; lexical results stay instant
+   and semantic ones fuse in when the model finishes loading. This is what the
+   spec describes.
+2. Route queries through a server endpoint. Simplest to build and it breaks the
+   promise the whole search architecture exists to keep — a 40 ms round trip per
+   keystroke is the thing spec §9 rejects Algolia over. I would not.
+3. Ship lexical-only. Perfectly good: BM25 + prefix + trigram fuzzy already
+   handles typos and partial codes, and it is what every screenshot so far
+   shows. Semantic search is an upgrade, not a missing floor.
+
+**Until you pick, (3) is what runs**, and nothing is broken: `hasSemantic`
+returns false, the fusion step is skipped, and the client never downloads a
+sidecar that does not exist.
