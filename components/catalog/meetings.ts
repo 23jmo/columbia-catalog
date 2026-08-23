@@ -1,4 +1,5 @@
-import type { Meeting, Section, Weekday } from "@/lib/types";
+import type { SectionListItem } from "@/lib/catalog-list-types";
+import type { Meeting, Weekday } from "@/lib/types";
 import { ALL_WEEKDAYS, WEEKDAY_SHORT, minutesToLabel } from "@/lib/constants";
 
 /**
@@ -62,13 +63,13 @@ export function formatPattern(pattern: MeetingPattern): string {
  * directory published no times -- callers say so rather than inventing a
  * placeholder, because "time not published" is real information.
  */
-export function formatSectionMeetings(section: Pick<Section, "meetings">): string | null {
+export function formatSectionMeetings(section: Pick<SectionListItem, "meetings">): string | null {
   if (section.meetings.length === 0) return null;
   return toMeetingPatterns(section.meetings).map(formatPattern).join(", ");
 }
 
 /** Distinct instructors across a course's sections, in first-seen order. */
-export function courseInstructors(sections: Pick<Section, "instructors">[]): string[] {
+export function courseInstructors(sections: Pick<SectionListItem, "instructors">[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const section of sections) {

@@ -1,16 +1,8 @@
 import { AppShell } from "@/components/shell/app-shell";
 
 /**
- * The server-render wait for `/search`.
- *
- * This covers exactly one thing: the catalog records being assembled on the
- * server before the screen mounts. It is NOT a search spinner — once the
- * screen is up, queries never wait on anything, so nothing on the typing path
- * ever renders this file.
- *
- * It is drawn as the real layout at rest rather than a generic spinner: same
- * rail, same search field, same row rhythm, so the arriving content lands in
- * place instead of shoving a spinner aside.
+ * Brief shell while the search route hydrates. Catalog data loads client-side
+ * from the index artifact — not from a server `getAllCourses()` call.
  */
 
 const SKELETON_ROWS = 6;
@@ -21,7 +13,7 @@ export default function SearchLoading() {
       <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-5" aria-busy="true">
         <div className="flex flex-col gap-2">
           <h1 className="text-title-1-semibold text-text-primary">Search</h1>
-          <p className="text-body-regular text-text-secondary">Loading this term’s catalog…</p>
+          <p className="text-body-regular text-text-secondary">Opening search…</p>
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[264px_minmax(0,1fr)]">
@@ -46,8 +38,6 @@ export default function SearchLoading() {
                 <li
                   key={index}
                   className="rounded-2lg border border-border-table bg-background-primary-default p-4 shadow-card"
-                  // Rows fade in staggered so the block reads as a list filling
-                  // in, not as one grey slab pulsing.
                   style={{ animationDelay: `${index * 80}ms` }}
                 >
                   <div className="flex items-start justify-between gap-4">
@@ -62,7 +52,7 @@ export default function SearchLoading() {
               ))}
             </ol>
             <p className="sr-only" role="status">
-              Loading course catalog
+              Loading search
             </p>
           </div>
         </div>

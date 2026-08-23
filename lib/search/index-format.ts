@@ -1,3 +1,5 @@
+import type { CourseListItem } from "../catalog-list-types";
+
 /**
  * Columbia Catalog — serialized search index format.
  *
@@ -126,7 +128,7 @@ export const EMBED_MAGIC = 0x45435543;
  * client refuses to decode an artifact whose formatVersion differs and
  * refetches instead of silently mis-reading it.
  */
-export const INDEX_FORMAT_VERSION = 1;
+export const INDEX_FORMAT_VERSION = 2;
 
 // ---------------------------------------------------------------------------
 // Block tags
@@ -157,6 +159,8 @@ export const BLOCK = {
   POSO: tag("POSO"),
   TGRO: tag("TGRO"),
   TGRP: tag("TGRP"),
+  /** UTF-8 JSON: CourseListItem[] in course-ordinal order — row display data. */
+  DISP: tag("DISP"),
   EMBB: tag("EMBB"),
   EMBQ: tag("EMBQ"),
   EMBS: tag("EMBS"),
@@ -375,6 +379,12 @@ export interface SerializedIndex {
 
   trigramOffsets: Uint32Array; // length = TRIGRAM_SPACE + 1
   trigramPostings: Uint8Array;
+
+  /**
+   * Row display projection, one entry per course ordinal (same order as CRSE).
+   * Baked at index build time so `/search` never ships the catalog in RSC.
+   */
+  display: CourseListItem[];
 }
 
 export interface EmbeddingBlock {
@@ -616,6 +626,7 @@ export function encodeIndex(index: SerializedIndex): Uint8Array {
     { tag: BLOCK.POSO, bytes: u32Bytes(index.postingOffsets) },
     { tag: BLOCK.TGRO, bytes: u32Bytes(index.trigramOffsets) },
     { tag: BLOCK.TGRP, bytes: index.trigramPostings },
+    { tag: BLOCK.DISP, bytes: textEncoder.encode(JSON.stringify(index.display)) },
   ]);
 }
 
@@ -624,6 +635,11 @@ export function decodeIndex(buffer: ArrayBuffer): SerializedIndex {
   const meta = JSON.parse(
     textDecoder.decode(requireBlock(blocks, BLOCK.META, "META")),
   ) as IndexMeta;
+
+  const displayBlock = blocks.get(BLOCK.DISP);
+  const display = displayBlock
+    ? (JSON.parse(textDecoder.decode(displayBlock)) as CourseListItem[])
+    : [];
 
   return {
     meta,
@@ -640,6 +656,7 @@ export function decodeIndex(buffer: ArrayBuffer): SerializedIndex {
     postingOffsets: asU32(requireBlock(blocks, BLOCK.POSO, "POSO")),
     trigramOffsets: asU32(requireBlock(blocks, BLOCK.TGRO, "TGRO")),
     trigramPostings: requireBlock(blocks, BLOCK.TGRP, "TGRP"),
+    display,
   };
 }
 

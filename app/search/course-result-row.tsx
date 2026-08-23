@@ -288,7 +288,10 @@ function SectionTableRow({ section, isMatch }: { section: SectionListItem; isMat
 }
 
 /** Sections that satisfied the active filters come first; then section code. */
-function orderSections(sections: SectionListItem[], matchedSectionIds: string[] | null): SectionListItem[] {
+function orderSections(
+  sections: SectionListItem[],
+  matchedSectionIds: string[] | null,
+): SectionListItem[] {
   const matched = matchedSectionIds ? new Set(matchedSectionIds) : null;
   return [...sections].sort((a, b) => {
     if (matched) {

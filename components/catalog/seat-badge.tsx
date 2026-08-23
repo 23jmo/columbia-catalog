@@ -1,6 +1,7 @@
 "use client";
 
-import type { EnrollmentStatusCode, Section } from "@/lib/types";
+import type { SectionListItem } from "@/lib/catalog-list-types";
+import type { EnrollmentStatusCode } from "@/lib/types";
 import { Chip } from "@/components/base/badges/chip";
 import { cx } from "@/utils/cx";
 
@@ -48,7 +49,7 @@ export interface SeatFigures {
   sourceAsOf: string | null;
 }
 
-export function seatFiguresFromSection(section: Section): SeatFigures {
+export function seatFiguresFromSection(section: SectionListItem): SeatFigures {
   return {
     status: section.status,
     enrollmentCount: section.enrollmentCount,
@@ -63,7 +64,7 @@ export function seatFiguresFromSection(section: Section): SeatFigures {
  * shows this: how many sections still have room, and the oldest provenance
  * across them (the weakest link is the honest one to advertise).
  */
-export function aggregateSeatFigures(sections: Section[]): SeatFigures & {
+export function aggregateSeatFigures(sections: SectionListItem[]): SeatFigures & {
   sectionsWithSeats: number;
   sectionCount: number;
 } {

@@ -24,6 +24,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 import { getAllCourses } from "@/lib/data/catalog";
+import { projectCourse } from "@/lib/catalog-list-types";
 import { ACTIVE_TERMS, PERF_BUDGET } from "@/lib/constants";
 import type { CourseWithSections, TermCode } from "@/lib/types";
 import { buildIndex, estimateBlockSizes } from "@/lib/search/build";
@@ -119,7 +120,9 @@ async function main(): Promise<void> {
   }
 
   const buildStarted = Date.now();
-  const index = buildIndex(courses);
+  const ordered = [...courses].sort((a, b) => a.courseId.localeCompare(b.courseId));
+  const index = buildIndex(ordered);
+  index.display = ordered.map(projectCourse);
   const buildMs = Date.now() - buildStarted;
   const bytes = encodeIndex(index);
   const gzipped = gzipSync(bytes, { level: 9 });

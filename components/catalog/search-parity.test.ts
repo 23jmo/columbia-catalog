@@ -23,6 +23,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { createLocalSearchSource, sectionHasOpenSeats } from "@/components/catalog/search-source";
+import { projectCourse } from "@/lib/catalog-list-types";
 import { buildIndex } from "@/lib/search/build";
 import { SearchEngine } from "@/lib/search/engine";
 import { decodeIndex, encodeIndex } from "@/lib/search/index-format";
@@ -31,12 +32,13 @@ import type { CourseWithSections, SearchFilters } from "@/lib/types";
 const catalog = JSON.parse(
   readFileSync("lib/seed/coms-fall2026.json", "utf8"),
 ) as CourseWithSections[];
+const ordered = [...catalog].sort((a, b) => a.courseId.localeCompare(b.courseId));
 
-// Round-trip through the wire format so the engine reads views over a received
-// ArrayBuffer, exactly as it would in the browser.
-const encoded = encodeIndex(
-  buildIndex(catalog, { indexVersion: "parity", builtAt: "2026-01-01T00:00:00.000Z" }),
-);
+const encoded = encodeIndex((() => {
+  const index = buildIndex(ordered, { indexVersion: "parity", builtAt: "2026-01-01T00:00:00.000Z" });
+  index.display = ordered.map(projectCourse);
+  return index;
+})());
 const engine = new SearchEngine(
   decodeIndex(
     encoded.buffer.slice(encoded.byteOffset, encoded.byteOffset + encoded.byteLength) as ArrayBuffer,
@@ -47,16 +49,9 @@ const engine = new SearchEngine(
 // `app/search/search-screen.tsx`). Without this the engine would answer
 // `openSeatsOnly` from whatever was true at build time, so the parity check
 // has to install it the same way the app does, with the same predicate.
-engine.setSeatOverlay(
-  catalog.flatMap((course) =>
-    course.sections.map((section) => ({
-      sectionId: section.sectionId,
-      hasOpenSeats: sectionHasOpenSeats(section),
-    })),
-  ),
-);
+engine.setSeatOverlay(engine.seatOverlayForTerm("20263"));
 
-const localSource = createLocalSearchSource(catalog);
+const localSource = createLocalSearchSource(ordered.map(projectCourse));
 
 const CASES: Array<{ label: string; filters: SearchFilters }> = [
   { label: "single day (the regression)", filters: { q: "", days: ["Tu"] } },

@@ -6,17 +6,10 @@ import type { LoadProgress } from "@/lib/search/client";
 import { cx } from "@/utils/cx";
 
 /**
- * Progressive state for the index download — and ONLY for the index download.
+ * Progressive state for the index download.
  *
- * The distinction this component draws is the whole point: loading the index
- * is a visible, honest cost (a few hundred KB, once, cached in IndexedDB after
- * that), while *typing* has no cost at all and therefore no loading state.
- * This strip sits beside the results, never inside the search box, and it
- * describes an upgrade in flight rather than a blocked interaction — because
- * search is already answering from this page's own records while it runs.
- *
- * Once the engine is live the strip disappears entirely. A permanent "ready"
- * badge would just be noise about plumbing.
+ * Search data lives in the index artifact, not the RSC payload — so this strip
+ * is the honest first-load cost. IndexedDB cache makes repeat visits instant.
  */
 
 export interface IndexStatusProps {
@@ -26,14 +19,13 @@ export interface IndexStatusProps {
 
 const LOADING_STAGES = new Set<LoadProgress["stage"]>([
   "start",
+  "cache-hit",
   "cache-miss",
   "downloading-lexical",
   "revalidating",
 ]);
 
 export function IndexStatus({ progress, isEngineLive }: IndexStatusProps) {
-  // Live engine: nothing to say. A failed *revalidation* also lands here, and
-  // is correctly silent — the reader has working search either way.
   if (isEngineLive) return null;
   if (!progress) return null;
 
@@ -42,8 +34,8 @@ export function IndexStatus({ progress, isEngineLive }: IndexStatusProps) {
       <Strip
         icon={RiWifiOffLine}
         tone="muted"
-        title="The full search index did not download."
-        detail="Search is running against this term's loaded courses, so everything on this page still works. Reload to try the index again."
+        title="The search index did not download."
+        detail="Reload to try again. If this keeps failing, the catalog index may still be building."
       />
     );
   }
@@ -59,9 +51,11 @@ export function IndexStatus({ progress, isEngineLive }: IndexStatusProps) {
       title={
         progress.stage === "revalidating"
           ? "Checking for a newer catalog index…"
-          : "Downloading the full search index…"
+          : progress.stage === "cache-hit"
+            ? "Loading cached catalog index…"
+            : "Downloading the catalog index…"
       }
-      detail="You can search right now — this only makes ranking and typo tolerance better."
+      detail="One-time download — cached on your machine after this. Search opens when it finishes."
       percent={percent}
     />
   );
@@ -88,7 +82,6 @@ function Strip({
           ? "border-border-table bg-background-secondary-default"
           : "border-dashed border-border-button-default bg-background-primary-default",
       )}
-      // Polite: it must never interrupt someone mid-keystroke.
       aria-live="polite"
     >
       <Icon className="mt-0.5 size-4 shrink-0 text-foreground-icon-secondary" aria-hidden />

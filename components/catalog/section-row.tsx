@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { RiCalendarLine, RiTimeLine, RiUserLine } from "@remixicon/react";
-import type { Section } from "@/lib/types";
+import type { SectionListItem } from "@/lib/catalog-list-types";
 import { Button } from "@/components/base/buttons/button";
 import { cx } from "@/utils/cx";
 import { formatSectionMeetings } from "./meetings";
@@ -23,7 +23,7 @@ import { SeatBadge, seatFiguresFromSection } from "./seat-badge";
  */
 
 export interface SectionRowProps {
-  section: Section;
+  section: SectionListItem;
   /** True when this section is one that satisfied an active section filter. */
   isMatch?: boolean;
   /** TODO(schedule): wired by the schedule lane. Writes require an account. */
@@ -62,11 +62,6 @@ export function SectionRow({
           <span className="text-body-semibold text-text-primary">
             Section {section.sectionCode}
           </span>
-          {section.component && (
-            <span className="text-caption-1-regular text-text-secondary">
-              {section.component}
-            </span>
-          )}
           <span
             className="text-caption-1-medium text-text-secondary tabular-nums"
             title="Call number, used to register in Vergil"

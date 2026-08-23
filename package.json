@@ -13,7 +13,8 @@
     "build:index": "tsx scripts/build-index.ts",
     "build:campus": "tsx scripts/build-campus-map.ts",
     "check": "npm run typecheck && npm run lint && npm run test",
-    "seed:meetings": "tsx scripts/enrich-seed-meetings.ts"
+    "seed:meetings": "tsx scripts/enrich-seed-meetings.ts",
+    "profile:search": "tsx scripts/profile-search-load.ts"
   },
   "dependencies": {
     "@internationalized/date": "^3.12.3",

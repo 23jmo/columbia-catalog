@@ -1,35 +1,13 @@
 import type { Course, CourseWithSections, Meeting, Section, TermCode } from "@/lib/types";
 
 /**
- * The *display projection* of the catalog — what the search screen actually
- * needs, and nothing else.
- *
- * ── Why this exists ────────────────────────────────────────────────────────
- *
- * `/search` hands the whole term to the client so that search can run locally
- * with zero network (spec section 19). At Fall 2026's real size that is 4,145
- * courses and 8,014 sections, and shipping the full `CourseWithSections` shape
- * cost ~5.5 MB of RSC payload — 99% of the page. Roughly 1.9 MB of that was
- * fields that nothing on the screen reads, and ~900 KB was keys whose value is
- * `null` on every single section (`component`, `gradingMode`,
- * `methodOfInstruction`, `waitlistCap`, `note`, `openTo` — 0 of 8,014
- * populated), repeated eight thousand times.
- *
- * ── Why these are interfaces the full types SATISFY, not new shapes ────────
+ * Display projection for search rows — baked into the search index DISP block
+ * at build time so `/search` never ships the whole catalog in the RSC payload.
  *
  * Every field here is structurally identical to its counterpart on `Course` /
- * `Section`, so `CourseWithSections` is assignable to `CourseListItem` for
- * free. That direction matters: consumers widen to accept the projection,
- * rather than the seam narrowing what it returns. Existing callers that still
- * hold full records keep working untouched, tests keep passing fixtures, and
- * the only place that has to actually *build* a projection is the one server
- * component that serializes it across the wire.
+ * `Section`, so `CourseWithSections` is assignable via `projectCourse`.
  *
- * ── Adding a field ─────────────────────────────────────────────────────────
- *
- * If a row starts rendering something new, add it here AND to `projectCourse`
- * below. Forgetting the second half is the failure mode, so the projector is
- * in this file rather than beside the page that calls it.
+ * See `lib/search/index-format.ts` (DISP block) and `projectCourse` below.
  */
 
 /** Section fields the results table and the local search source read. */
@@ -57,9 +35,8 @@ export interface CourseListItem {
   subjectCode: string;
   number: number;
   title: string;
-  /** Searched, never displayed in the list. Currently null for every course. */
+  /** Searched, never displayed in the list. */
   description: string | null;
-  /** Searched, never displayed in the list. Currently null for every course. */
   department: string | null;
   pointsMin: number | null;
   pointsMax: number | null;

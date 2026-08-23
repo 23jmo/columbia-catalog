@@ -537,6 +537,7 @@ export function buildIndex(
     postingOffsets: encodedOffsets,
     trigramOffsets: trigramEncoded,
     trigramPostings: trigramWriter.toUint8Array(),
+    display: [],
   };
 
   if (!options.indexVersion) meta.indexVersion = hashIndexContent(index);
@@ -620,5 +621,6 @@ export function estimateBlockSizes(index: SerializedIndex): Record<string, numbe
       index.termIdf.byteLength,
     postings: index.postings.byteLength + index.postingOffsets.byteLength,
     trigrams: index.trigramPostings.byteLength + index.trigramOffsets.byteLength,
+    display: index.display.length > 0 ? JSON.stringify(index.display).length : 0,
   };
 }

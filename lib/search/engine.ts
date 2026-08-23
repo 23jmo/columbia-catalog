@@ -24,7 +24,14 @@
  * runs only on those.
  */
 
-import type { SearchFilters, SearchHit, SearchResult, Weekday } from "../types";
+import type { SearchFilters, SearchHit, SearchResult, TermCode, Weekday } from "../types";
+import type { CourseListItem } from "../catalog-list-types";
+import type { SearchFacets } from "@/components/catalog/search-source";
+import {
+  buildFacetsForTerm,
+  coursesForTerm,
+  seatOverlayEntriesForTerm,
+} from "./display-facets";
 import {
   buildFieldBoostTable,
   CREDITS_QUANT,
@@ -152,6 +159,8 @@ export class SearchEngine {
 
   /** Decoded once at construction — every hit needs its course id. */
   readonly courseIds: string[];
+  private readonly displayByCourseId: Map<string, CourseListItem>;
+  private readonly displayByOrd: CourseListItem[];
   private readonly sectionIdCache: (string | undefined)[];
 
   private readonly maxHits: number;
@@ -244,6 +253,13 @@ export class SearchEngine {
     this.courseIds = new Array<string>(n);
     for (let doc = 0; doc < n; doc++) {
       this.courseIds[doc] = readString(index, index.courses[doc * COURSE_WORDS + CW_COURSE_ID_STR]);
+    }
+
+    this.displayByOrd = index.display;
+    this.displayByCourseId = new Map<string, CourseListItem>();
+    for (let doc = 0; doc < n; doc++) {
+      const item = index.display[doc];
+      if (item) this.displayByCourseId.set(this.courseIds[doc], item);
     }
     this.sectionIdCache = new Array<string | undefined>(this.sectionCount);
 
@@ -433,6 +449,26 @@ export class SearchEngine {
     }
 
     return { hits, total: hitCount, elapsedMs: nowMs() - started };
+  }
+
+  /** Row display record for a hit. From the DISP block baked at index build. */
+  getCourse(courseId: string): CourseListItem | undefined {
+    return this.displayByCourseId.get(courseId);
+  }
+
+  /** Filter menu values for one term. */
+  facetsForTerm(termCode: TermCode): SearchFacets {
+    return buildFacetsForTerm(this.displayByOrd, termCode);
+  }
+
+  /** Courses with at least one section in the term — for empty-state copy. */
+  totalCoursesForTerm(termCode: TermCode): number {
+    return coursesForTerm(this.displayByOrd, termCode).length;
+  }
+
+  /** Initial seat overlay from the index snapshot until live polling lands. */
+  seatOverlayForTerm(termCode: TermCode): SeatOverlayEntry[] {
+    return seatOverlayEntriesForTerm(this.displayByOrd, termCode);
   }
 
   // -------------------------------------------------------------------------

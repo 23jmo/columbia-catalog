@@ -1,17 +1,17 @@
 {
-  "formatVersion": 1,
-  "version": "18oky5g",
-  "builtAt": "2026-08-23T18:57:13.263Z",
+  "formatVersion": 2,
+  "version": "07yh5jo",
+  "builtAt": "2026-08-23T20:10:23.571Z",
   "terms": [
     "20263",
     "20271"
   ],
-  "courseCount": 4595,
-  "sectionCount": 9050,
+  "courseCount": 43,
+  "sectionCount": 112,
   "lexical": {
-    "url": "/index/catalog-18oky5g.bin",
-    "bytes": 2109576,
-    "gzipBytes": 713347
+    "url": "/index/catalog-07yh5jo.bin",
+    "bytes": 275616,
+    "gzipBytes": 20132
   },
   "embedding": null
 }
