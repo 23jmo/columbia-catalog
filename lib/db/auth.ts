@@ -8,8 +8,10 @@
  *
  * ── The domain restriction is enforced three times, on purpose ─────────────
  *
- *   1. `hd=columbia.edu` on the Google authorize URL — a hint, and Google
- *      treats it as one. It filters the account chooser; it does not bind.
+ *   1. `hd=*` on the Google authorize URL — narrows the chooser to Workspace
+ *      accounts, which is as close as one parameter gets when two domains are
+ *      eligible. It does not bind to Columbia or Barnard; see "Why `hd` is `*`"
+ *      below for why naming a domain here locked Barnard out entirely.
  *   2. This file, in `assertColumbiaEmail`, at callback time.
  *   3. `users_columbia_domain`, a check constraint in migration 0005.
  *
@@ -153,7 +155,26 @@ export async function signIn(): Promise<{ error: string | null }> {
       },
     },
   });
-  return { error: error?.message ?? null };
+  return { error: error ? describeSignInError(error.message) : null };
+}
+
+/**
+ * Supabase's OAuth errors are written for whoever wired the project up, not
+ * for the student who pressed the button. The one that actually reaches
+ * production today is "Unsupported provider: provider is not enabled", which
+ * means the Google provider has not been switched on (.plans/BLOCKERS.md item
+ * 6) — a deployment fact the reader can do nothing about and should not have
+ * to decode.
+ *
+ * Anything unrecognised is passed through rather than flattened into a generic
+ * apology: an unfamiliar message is at least a lead, and hiding it would make
+ * the next unanticipated failure invisible.
+ */
+function describeSignInError(message: string): string {
+  if (/provider is not enabled|unsupported provider/i.test(message)) {
+    return "Sign-in is not available on this deployment yet. Everything here is free to read without an account.";
+  }
+  return message;
 }
 
 export async function signOut(): Promise<void> {
