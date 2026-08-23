@@ -378,3 +378,36 @@ zone estimate the moment one exists.
 **Johnathan decides:** whether coarse-but-honest zone walking times are good
 enough for v1 — I think they are — or whether it is worth an afternoon with
 NYC open data to get within-campus walks right.
+
+---
+
+## 4. A quarantine table is sitting in the database (housekeeping, not a blocker)
+
+`meetings_quarantine_0020` holds 2,194 rows and can be dropped once you are
+satisfied with the Fall 2026 / Spring 2027 map.
+
+**Why it exists.** `ingest_bulletin` was filing bulletin meeting patterns under
+the wrong term. It resolved a section on `(course_id, section_code)` alone and
+then took `order by term_code desc limit 1` — the row's own term was never
+consulted. A Bulletin department page mixes terms in one document, so for the
+7,206 course+section keys that exist in more than one term, a Spring listing was
+deleted-and-rewritten onto whichever term sorted highest. The write carried
+building and room, so the campus map pinned rooms classes do not meet in. Fall
+2026 read 603 meetings, 597 with a building — which looked like the crawl
+succeeding.
+
+Caught by the columbia-catalog-46 session, which was working in the campus card
+lane and noticed the numbers were too good. Fixed in `f477af2` / migration 0020,
+which matches on the row's own term and writes nothing at all for a row whose
+term it cannot read.
+
+**Why the rows were kept rather than deleted outright.** They are real patterns
+off a real page — wrong only about which term they belong to. Keeping them means
+a mistake in my cleanup costs a restore instead of another 127 fetches against
+Columbia, which our read-only, rate-limited posture makes expensive.
+
+**To drop it** once the re-drain has refilled the live terms and the map looks
+right: `drop table meetings_quarantine_0020;`
+
+Nothing reads this table. It costs a few hundred KB and will not affect the app
+if left in place indefinitely.
