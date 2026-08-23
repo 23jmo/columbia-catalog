@@ -132,44 +132,44 @@ change plus a fallback query, not a redesign.
 
 ---
 
-## 6. Needs you (5 minutes) — Google OAuth credentials for sign-in
+## 6. RESOLVED — Google SSO is live
 
-All the app-side auth is written and typechecks: `lib/db/auth.ts`,
-`app/auth/callback/route.ts`, `proxy.ts`, `hooks/use-session-account.ts`,
-and the account menu is wired to real sessions. Migration 0005 already creates
-the `users` row from a trigger on `auth.users` and enforces the Columbia domain
-with a check constraint.
+You created the OAuth client and enabled the provider. Verified against the
+live endpoints rather than assumed:
 
-The one thing I cannot produce is a Google OAuth client, which needs a Google
-Cloud project you own.
+- `GET /auth/v1/authorize?provider=google` now returns **302 to Google**. It
+  previously returned `400 "Unsupported provider: provider is not enabled"`.
+- Following that redirect reaches Google's real consent flow
+  (`<title>Sign in - Google Accounts</title>`, `app_domain` = our Supabase
+  project) with **no** `redirect_uri_mismatch` and no `invalid_client`, so the
+  client ID and the registered redirect URI are both correct.
+- `hd=*` and `prompt=select_account` are forwarded intact to Google, which is
+  what keeps Barnard students eligible — see the "Why `hd` is `*`" note in
+  `lib/db/auth.ts`.
+- Production has every Supabase env var the callback route needs.
 
-1. Google Cloud Console → APIs & Services → Credentials → **Create OAuth client
-   ID** → *Web application*.
-2. Authorized redirect URI — exactly this, it is Supabase's callback and not
-   ours:
-   ```
-   https://wwqtflgwpukwzfysnncv.supabase.co/auth/v1/callback
-   ```
-3. Supabase Dashboard → Authentication → Providers → **Google** → enable, paste
-   the client ID and secret.
-4. Supabase Dashboard → Authentication → URL Configuration → add redirect URLs:
-   ```
-   http://localhost:3000/auth/callback
-   https://<your-vercel-domain>/auth/callback
-   ```
+**One setting still worth confirming, because it fails silently.** Supabase
+validates `redirect_to` at CALLBACK time, not at authorize time — I probed it
+with a bogus `redirect_to=https://evil.example.com/steal` and it was echoed
+back unchanged, so the authorize response cannot tell us whether the allowlist
+is right. If `/auth/callback` is not listed, Google will sign the student in
+and Supabase will then bounce them to the Site URL (often `localhost:3000`)
+instead of back to the app. Check:
 
-Until then `isConfigured()` is true but Google is not enabled, so the sign-in
-dialog reports it plainly instead of hanging. **Nothing else is affected** —
-reading is free by design (spec §15), so search, course pages, seat history and
-the campus map all work signed out.
+Supabase Dashboard → Authentication → URL Configuration → Redirect URLs:
 
-Optional: set `hd` on the Google Workspace side too. I already send
-`hd=columbia.edu` on the authorize URL, but Google treats it as a hint. The
-binding restriction is the `users_columbia_domain` check constraint, and the
-callback signs out a non-Columbia account and says why rather than leaving them
-apparently-signed-in with every write failing.
+```
+http://localhost:3000/auth/callback
+https://columbia-catalog.vercel.app/auth/callback
+```
 
----
+and set Site URL to `https://columbia-catalog.vercel.app`.
+
+The end-to-end proof is a real sign-in, which needs your credentials and is
+therefore yours to run: open the deployed app, press "Save a plan", and sign in
+with a columbia.edu or barnard.edu account. A `users` row appearing is the
+confirmation. If anything goes wrong the app now says which stage failed
+rather than failing blank — `?auth_error=` is rendered by `AuthErrorNotice`.
 
 ## 7. Resend: API key + a verified sending domain (seat alerts)
 
