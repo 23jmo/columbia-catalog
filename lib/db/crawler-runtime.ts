@@ -33,7 +33,7 @@ import {
   type ParseContext,
   type ParsedSubjectIndex,
 } from "@/lib/crawler/contracts";
-import type { ParsedBulletinRow, ParsedSectionDetail, ParsedSubjectPage } from "@/lib/types";
+import type { ParsedSectionDetail, ParsedSubjectPage } from "@/lib/types";
 import {
   parseBulletinCourseBlocks,
   parseBulletinDepartment,
@@ -42,6 +42,7 @@ import {
   parseSubjectIndexAvailability,
   parseSubjectPage,
   type ParsedBulletinCourse,
+  type ParsedBulletinRowWithTerm,
 } from "@/lib/ingest";
 import { parseAcademicCalendar } from "@/lib/ingest/parsers/academic-calendar";
 import { isServiceConfigured } from "./client";
@@ -74,10 +75,16 @@ const parsers = {
     return parseSectionDetail(html, undefined, context.termCode ?? undefined);
   },
 
-  parseBulletinPage(html: string, context: ParseContext): ParsedBulletinRow[] {
-    return parseBulletinDepartment(html, {
-      termCode: context.termCode ?? undefined,
-    });
+  parseBulletinPage(html: string): ParsedBulletinRowWithTerm[] {
+    // Deliberately unfiltered. A bulletin_department job has no term — one
+    // fetch of one department page yields every term that page publishes, and
+    // each row carries the term from its own schedule-table header. Filtering
+    // to the job's term would mean re-fetching the same page once per term,
+    // which is extra load on Columbia for strictly less data.
+    //
+    // The term-correctness that matters happens at the write: `ingest_bulletin`
+    // matches (course_id, section_code, term_code) using the row's own term.
+    return parseBulletinDepartment(html, {});
   },
 
   // No term filter: a course description is not a property of a term, and the

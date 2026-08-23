@@ -463,6 +463,29 @@ describe("parseBulletinDepartment — Computer Science", () => {
     expect(subjects).toEqual(new Set(["COMS", "CSEE", "CBMF"]));
   });
 
+  /*
+   * The precondition `ingest_bulletin` now relies on (migration 0020).
+   *
+   * The SQL files each row under the term in the row itself. A row that
+   * carries meetings but no term is unfilable, and the previous SQL's answer
+   * to that — take whichever term sorts highest — is what wrote Spring
+   * listings onto Fall sections. If the bulletin ever changes its schedule
+   * header format, `termCode` goes null across the board and this test fails
+   * loudly, rather than the meetings quietly stopping.
+   */
+  it("tags every row that carries meetings with the term it came from", () => {
+    const withMeetings = rows.filter((row) => row.meetings.length > 0);
+    expect(withMeetings.length).toBeGreaterThan(100);
+    expect(withMeetings.every((row) => row.termCode !== null)).toBe(true);
+  });
+
+  it("spans more than one term in a single department page", () => {
+    // The reason a job-level term filter is the wrong tool: one fetch carries
+    // several terms, and each is worth keeping.
+    const terms = new Set(rows.map((row) => row.termCode));
+    expect(terms.size).toBeGreaterThan(1);
+  });
+
   it("maps bulletin term labels to term codes", () => {
     expect(parseTermLabel("Fall 2026")).toBe("20263");
     expect(parseTermLabel("Spring 2027")).toBe("20271");

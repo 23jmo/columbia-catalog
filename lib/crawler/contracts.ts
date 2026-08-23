@@ -20,12 +20,14 @@
  * redefined.
  */
 
-import type { ParsedBulletinCourse } from "@/lib/ingest/parsers/bulletin";
+import type {
+  ParsedBulletinCourse,
+  ParsedBulletinRowWithTerm,
+} from "@/lib/ingest/parsers/bulletin";
 import type {
   CrawlJob,
   CrawlJobKind,
   CrawlTier,
-  ParsedBulletinRow,
   ParsedSectionDetail,
   ParsedSubjectPage,
   TermCode,
@@ -225,7 +227,17 @@ export interface ParsedAcademicCalendar {
 export interface ParserRegistry {
   parseSubjectPage(html: string, context: ParseContext): ParsedSubjectPage;
   parseSectionDetail(html: string, context: ParseContext): ParsedSectionDetail;
-  parseBulletinPage(html: string, context: ParseContext): ParsedBulletinRow[];
+  /**
+   * Rows carry their OWN term, resolved from each schedule table's
+   * "Fall 2026: COMS W4113" header, because one department page mixes terms.
+   *
+   * Declared as `ParsedBulletinRowWithTerm[]` rather than `ParsedBulletinRow[]`
+   * on purpose. The parser has always returned the term; declaring the narrower
+   * supertype hid it from every downstream reader, and `ingest_bulletin` was
+   * written to guess the term from `order by term_code desc limit 1` as a
+   * result — filing Spring listings onto Fall sections. See migration 0020.
+   */
+  parseBulletinPage(html: string, context: ParseContext): ParsedBulletinRowWithTerm[];
   /**
    * The course prose on the same page. Separate from `parseBulletinPage`
    * because the two are not one-to-one: a course block may have no schedule
@@ -248,7 +260,9 @@ export type IngestPayload =
   | {
       kind: "bulletin_department";
       department: string;
-      rows: ParsedBulletinRow[];
+      // Term-bearing: this is the value that reaches `ingest_bulletin` as
+      // jsonb, and the SQL matches sections on the row's own `termCode`.
+      rows: ParsedBulletinRowWithTerm[];
       courses: ParsedBulletinCourse[];
     }
   | { kind: "subject_index"; index: ParsedSubjectIndex }
