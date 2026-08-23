@@ -1,6 +1,5 @@
 import Link from "next/link";
 import {
-  RiAlertLine,
   RiBookOpenLine,
   RiCalendarCheckLine,
   RiChat3Line,
@@ -15,7 +14,6 @@ import {
   RiShieldCheckLine,
 } from "@remixicon/react";
 
-import { Button } from "@/components/base/buttons/button";
 import { Chip } from "@/components/base/badges/chip";
 import { CampusCard } from "@/components/campus/campus-card";
 import { sectionHasOpenSeats } from "@/components/catalog/search-source";
@@ -28,7 +26,9 @@ import { guessCampusZone, meetingLines, prettyTitle } from "@/components/course/
 import type { CourseDetailData } from "@/components/course/load-course-detail";
 import { EmptyNote, Fact, LanePlaceholder, Panel } from "@/components/course/panel";
 import { RegistrationHandoff } from "@/components/course/registration-handoff";
-import { ReputationBlock, UNREVIEWED_CAVEAT } from "@/components/course/reputation";
+import { AddToScheduleButton } from "@/components/schedule/add-to-schedule-button";
+import { WatchButton } from "@/components/watch/watch-button";
+import { ReputationBlock } from "@/components/course/reputation";
 import { REQUIREMENT_FILTERS, WEEKDAY_LABEL, ZONE_LABEL } from "@/lib/constants";
 import { getAllCourses } from "@/lib/data/catalog";
 import type { ScheduleConflict, Section } from "@/lib/types";
@@ -196,12 +196,6 @@ export async function CourseDetail({
                 <span>{credits}</span>
               </>
             ) : null}
-            {course.department ? (
-              <>
-                <span aria-hidden>·</span>
-                <span className="truncate">{course.department}</span>
-              </>
-            ) : null}
           </div>
 
           <h1
@@ -259,23 +253,25 @@ export async function CourseDetail({
           </div>
         </div>
 
-        {/* Actions. Reads are free; every write needs an account (spec §15). */}
+        {/* Actions. Reads are free; every write needs an account (spec §15).
+            Both target the FIRST section, because that is the one this header
+            is describing — a course-level "add" would have to guess which of
+            24 sections the reader meant, and the per-section controls in the
+            sections panel below are where that choice actually belongs. */}
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            leadingIcon={RiCalendarCheckLine}
-            disabled
-            title="Sign in to save a schedule — accounts are not wired up yet."
-          >
-            Add to schedule
-          </Button>
-          <Button
-            variant="secondary"
-            leadingIcon={RiAlertLine}
-            disabled
-            title="Sign in to watch a section for open seats — accounts are not wired up yet."
-          >
-            Watch for seats
-          </Button>
+          {primarySection ? (
+            <>
+              <AddToScheduleButton
+                sectionId={primarySection.sectionId}
+                sectionCode={primarySection.sectionCode}
+                termCode={primarySection.termCode}
+              />
+              <WatchButton
+                sectionId={primarySection.sectionId}
+                sectionCode={primarySection.sectionCode}
+              />
+            </>
+          ) : null}
           <a
             href="#sections"
             className="inline-flex h-9 items-center gap-1.5 rounded-2lg px-3 text-body-medium text-text-secondary transition-colors outline-none hover:bg-background-primary-hover hover:text-text-primary focus-visible:ring-2 focus-visible:ring-border-focus-ring"
@@ -283,12 +279,6 @@ export async function CourseDetail({
             <RiScales2Line aria-hidden className="size-4" />
             Compare sections
           </a>
-          <p className="text-caption-2-regular text-text-tertiary">
-            {/* TODO(auth/schedule): wire to CourseActions once the auth and
-                plan lanes land. Inert-but-visible is deliberate — hiding the
-                affordance would hide the fact that an account unlocks it. */}
-            Saving and watching need an account. Everything you can read here is free.
-          </p>
         </div>
 
         {/* Eligibility, prerequisites, restrictions. */}
@@ -315,10 +305,6 @@ export async function CourseDetail({
                 {note}
               </p>
             ))}
-            <p className="text-caption-2-regular text-text-tertiary">
-              Restrictions come from the registrar’s own section pages. Columbia enforces
-              them at registration — we only report them.
-            </p>
           </div>
         ) : null}
 
@@ -345,24 +331,14 @@ export async function CourseDetail({
       {/* ------------------------------------------------------------------ */}
       {/* 2. Sections (with compare)                                          */}
       {/* ------------------------------------------------------------------ */}
-      <Panel
-        id="sections"
-        title="Sections"
-        icon={RiGroupLine}
-        description="Pick two or more to line them up on instructor, time, seats and reviews."
-      >
+      <Panel id="sections" title="Sections" icon={RiGroupLine}>
         <SectionsPanel sections={sections} courseCode={code} courseTitle={title} />
       </Panel>
 
       {/* ------------------------------------------------------------------ */}
       {/* 3. Schedule preview                                                 */}
       {/* ------------------------------------------------------------------ */}
-      <Panel
-        id="schedule-preview"
-        title="Schedule preview"
-        icon={RiRoadMapLine}
-        description="Where this course would sit in your week."
-      >
+      <Panel id="schedule-preview" title="Schedule preview" icon={RiRoadMapLine}>
         {integrations.weekGrid ? (
           <integrations.weekGrid blocks={weekGridBlocks(data, integrations)} />
         ) : (
@@ -395,12 +371,7 @@ export async function CourseDetail({
       {/* ------------------------------------------------------------------ */}
       {/* 4. Seat history                                                     */}
       {/* ------------------------------------------------------------------ */}
-      <Panel
-        id="seat-history"
-        title="Seat history"
-        icon={RiLineChartLine}
-        description="How these sections filled, with last year’s offering drawn behind."
-      >
+      <Panel id="seat-history" title="Seat history" icon={RiLineChartLine}>
         {SeatHistory && seatHistory && seatHistory.series.length > 0 ? (
           <SeatHistory
             series={seatHistory.series}
@@ -435,7 +406,6 @@ export async function CourseDetail({
         id="instructors"
         title={instructors.length > 1 ? "Instructors" : "Instructor"}
         icon={RiCompass3Line}
-        description={`Our own aggregation and RateMyProfessor, kept separate on purpose. ${UNREVIEWED_CAVEAT}`}
       >
         <InstructorsPanel
           instructors={instructors}
@@ -446,12 +416,7 @@ export async function CourseDetail({
       {/* ------------------------------------------------------------------ */}
       {/* 6. Reviews                                                          */}
       {/* ------------------------------------------------------------------ */}
-      <Panel
-        id="reviews"
-        title="Reviews"
-        icon={RiChat3Line}
-        description={`Dimensions, not a verdict. Course quality and instructor quality are never averaged together. ${UNREVIEWED_CAVEAT}`}
-      >
+      <Panel id="reviews" title="Reviews" icon={RiChat3Line}>
         <div className="grid gap-3 lg:grid-cols-2">
           {/*
             Both halves come from `loadReputation`, which is wired to the real
@@ -479,12 +444,7 @@ export async function CourseDetail({
       {/* ------------------------------------------------------------------ */}
       {/* 7. Workload and grading signals                                     */}
       {/* ------------------------------------------------------------------ */}
-      <Panel
-        id="workload"
-        title="Workload and grading"
-        icon={RiScales2Line}
-        description="What the registrar states, and what reviewers report."
-      >
+      <Panel id="workload" title="Workload and grading" icon={RiScales2Line}>
         <div className="flex flex-col gap-4">
           <dl className="grid gap-4 sm:grid-cols-3">
             <Fact label="Grading">
@@ -517,12 +477,7 @@ export async function CourseDetail({
       {/* ------------------------------------------------------------------ */}
       {/* 8. Similar and alternative courses                                  */}
       {/* ------------------------------------------------------------------ */}
-      <Panel
-        id="similar"
-        title="Similar courses"
-        icon={RiShieldCheckLine}
-        description="Each one says why it is here — an unexplained recommendation is not worth reading."
-      >
+      <Panel id="similar" title="Similar courses" icon={RiShieldCheckLine}>
         {data.similar.length === 0 ? (
           <EmptyNote>Nothing else in this term’s catalog is a close neighbour.</EmptyNote>
         ) : (
@@ -558,12 +513,7 @@ export async function CourseDetail({
       {/* ------------------------------------------------------------------ */}
       {/* 9. Past-semester offering history                                   */}
       {/* ------------------------------------------------------------------ */}
-      <Panel
-        id="offering-history"
-        title="Offering history"
-        icon={RiHistoryLine}
-        description="Whether this course actually runs, and who ran it."
-      >
+      <Panel id="offering-history" title="Offering history" icon={RiHistoryLine}>
         <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
           <table className="w-full min-w-max border-separate border-spacing-0 text-body-regular">
             <caption className="sr-only">Past terms this course was offered</caption>
@@ -605,22 +555,12 @@ export async function CourseDetail({
             </tbody>
           </table>
         </div>
-        <p className="mt-3 text-caption-2-regular text-text-tertiary">
-          Terms we have not ingested read as “not offered”. As archive crawls land, this
-          table fills in rather than changing shape.
-        </p>
       </Panel>
 
       {/* The last mile. We are a planner: this hands over a call number and a
           deep link and never writes anything to Columbia. */}
       {primarySection ? (
-        <Panel
-          id="register"
-          title="Register"
-          icon={RiCalendarCheckLine}
-          description="Columbia Catalog never registers anyone. This is the handoff."
-          bare
-        >
+        <Panel id="register" title="Register" icon={RiCalendarCheckLine} bare>
           <RegistrationHandoff
             section={primarySection}
             courseCode={code}

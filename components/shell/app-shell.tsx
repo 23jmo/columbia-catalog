@@ -1,12 +1,10 @@
 import type { ReactNode } from "react";
-import { AccountMenu } from "@/components/shell/account-menu";
+import { CatalogSidebar } from "@/components/shell/catalog-sidebar";
 import { MobileNavBar } from "@/components/shell/mobile-nav";
-import { ShellNav, type ShellNavKey } from "@/components/shell/nav";
-import { TermSwitcher } from "@/components/shell/term-switcher";
-import { ShellWordmark } from "@/components/shell/wordmark";
+import type { ShellNavKey } from "@/components/shell/nav";
+import { RefreshWorker } from "@/components/crawler/refresh-worker";
 import { PlanSyncProvider } from "@/components/schedule/plan-sync-provider";
 import { WatchlistProvider } from "@/components/watch/watchlist-provider";
-import { ThemeToggle } from "@/components/application/theme/theme-toggle";
 import { cx } from "@/utils/cx";
 
 /**
@@ -22,14 +20,19 @@ import { cx } from "@/utils/cx";
  * the browser. Only the four genuinely interactive pieces are client
  * components, and they are leaves:
  *
- *   TermSwitcher   (needs open state + storage)
- *   ThemeToggle    (BoardUI, needs the DOM class)
- *   AccountMenu    (needs open state + the Supabase session)
- *   MobileNavBar   (needs drawer state)
+ *   TermSwitcher   (inside CatalogSidebar)
+ *   ThemeToggle    (inside CatalogSidebar)
+ *   AccountMenu    (inside CatalogSidebar)
+ *   CatalogSidebar (collapse state)
+ *   MobileNavBar   (drawer state)
  *
- * Plus `PlanSyncProvider`, which renders nothing at all — it exists only to
- * own the lifecycle of plan write-through sync, which has to start once per
- * browser session and stop cleanly.
+ * Plus two components that render nothing at all. `PlanSyncProvider` owns the
+ * lifecycle of plan write-through sync, which has to start once per browser
+ * session and stop cleanly. `RefreshWorker` is the crawl engine itself (spec
+ * §10 — browsers are the engine, cron is the safety net): on idle it fetches
+ * due directory pages from the visitor's own browser and posts the bytes back.
+ * It belongs here rather than on one route because the whole point is that it
+ * runs wherever a reader happens to be, and it stops itself on page hide.
  *
  * `children` therefore stays a server subtree — a route's async data fetching
  * is not forced into the client by wrapping itself in the shell.
@@ -52,23 +55,14 @@ export function AppShell({ children, activeNav = "home", contentClassName }: App
           signed-in student, and claims anonymous plans on first sign-in. */}
       <PlanSyncProvider />
       <WatchlistProvider />
+      {/* Also renders nothing. Fetches due public directory pages on idle and
+          relays them back — the seat data every other surface reads is kept
+          fresh by the people reading it. Opt-out is honoured three ways; see
+          the component. */}
+      <RefreshWorker />
 
       {/* Desktop rail. `lg` and up only — below that the mobile bar owns nav. */}
-      <aside className="sticky top-0 hidden h-dvh w-[248px] shrink-0 flex-col justify-between gap-4 border-r border-border-table bg-background-secondary-default p-3 lg:flex">
-        <div className="flex min-h-0 flex-col gap-4 overflow-y-auto [scrollbar-width:none]">
-          <ShellWordmark />
-          <TermSwitcher />
-          <ShellNav activeNav={activeNav} />
-        </div>
-
-        <div className="flex shrink-0 flex-col gap-2">
-          <ThemeToggle appearance="sidebar-segmented" />
-          <div className="h-px w-full bg-separator-border" />
-          {/* Reads its own session. Signed-out renders the invitation, not a
-              gate — reads are free (spec §15). */}
-          <AccountMenu />
-        </div>
-      </aside>
+      <CatalogSidebar activeNav={activeNav} flat className="sticky top-0 hidden h-dvh lg:flex" />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <MobileNavBar activeNav={activeNav} />
