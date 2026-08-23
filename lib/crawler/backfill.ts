@@ -371,25 +371,52 @@ export async function discoverSubjectIndex(
  *   Columbia College   /columbia-college/departments-instruction/{dept}/
  *   Engineering        /columbia-engineering/academic-departments-programs/{dept}/
  *
- * TWO ABSENCES, BOTH DELIBERATE:
+ * ONE ABSENCE, DELIBERATE:
  *
  * General Studies publishes policy pages here, not schedules — GS students
- * register for CC and SEAS courses, which the two prefixes above already cover.
+ * register for CC and SEAS courses, which the prefixes above already cover.
+ * Re-checked against the live sitemap: `/general-studies/courses/` pages carry
+ * `courseblock` prose but zero `scheduletbl` tables, so they remain out.
  *
- * Barnard has MOVED to catalog.barnard.edu. `bulletin.columbia.edu/barnard-college/`
- * still 301s there, but the sitemap continues to advertise 53 deep links under
- * `/barnard-college/courses-instruction/{dept}/` that now return 404 — a stale
- * sitemap, not a transient failure. Leaving Barnard in cost 53 guaranteed-404
- * requests per run, which is precisely the burst this crawler is built not to
- * emit. Picking Barnard back up means adding catalog.barnard.edu to
- * `ALLOWED_HOSTS` and confirming the new pages still use CourseLeaf's
- * `scheduletbl` markup, which is a deliberate decision rather than a filter
- * tweak, so it is not made here.
+ * BARNARD HAS SINCE BEEN PICKED BACK UP, and this list is not where it lives.
+ * Barnard moved to catalog.barnard.edu, so its 53 department pages are enqueued
+ * against that host rather than discovered from Columbia's sitemap — which is
+ * why they do not appear under any prefix here. `bulletin.columbia.edu/
+ * barnard-college/courses-instruction/{dept}/` does still 404, so the warning
+ * below the prefixes about Columbia's stale sitemap entries stands; what
+ * changed is that the replacement host is wired up and healthy (200s, CourseLeaf
+ * `scheduletbl` markup intact, Fall 2026 headers present). Do not "restore"
+ * Barnard to this list — that would re-point 53 jobs at the dead host.
  */
 export const BULLETIN_COURSE_PREFIXES: readonly string[] = [
   "/columbia-college/departments-instruction/",
   "/columbia-engineering/academic-departments-programs/",
+  // The Core is not a department, so it sits outside the department prefixes
+  // and was invisible to discovery. Its pages use the same CourseLeaf
+  // `scheduletbl` markup and carry Fall 2026 headers ("Fall 2026: HUMA CC1001",
+  // "Fall 2026: COCI CC1101") — 250 Fall 2026 sections that no department page
+  // lists, because every Columbia College student takes them and no department
+  // owns them. Verified against the live pages before adding.
+  "/columbia-college/core-curriculum/",
 ];
+
+/**
+ * WHAT THIS BULLETIN DOES NOT COVER, so nobody re-hunts it.
+ *
+ * `bulletin.columbia.edu` is the UNDERGRADUATE bulletin. Its sitemap carries
+ * Columbia College, Engineering, Barnard and General Studies — and nothing
+ * else. Law, Business, SIPA, Social Work, Nursing, Journalism and SPS have no
+ * pages here at all, which is why ~3,600 Fall 2026 sections (LAW_, SOCW, NURS,
+ * SIPA, FINC, MGMT, MRKT, JOUR, APAN …) have no meeting times. Those are not a
+ * gap in the crawl; the times are on separate per-school bulletins on other
+ * hosts, each of which would need its own `ALLOWED_HOSTS` entry, its own
+ * markup check, and its own robots review.
+ *
+ * `/general-studies/courses/` was checked and deliberately left out: those
+ * pages carry `courseblock` prose but zero `scheduletbl` tables, so they would
+ * add descriptions and no meetings. Worth revisiting for description coverage,
+ * not for the week grid.
+ */
 
 /**
  * Every bulletin department page, discovered from the sitemap.
