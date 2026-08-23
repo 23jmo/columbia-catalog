@@ -22,6 +22,7 @@ import {
   setAuthGuard,
 } from "./plans";
 import { DEMO_BUILDINGS, findBuilding, zoneOf } from "./buildings";
+import { buildTerm } from "../constants";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -636,5 +637,29 @@ describe("plan store", () => {
       plan({ planId: "b", isPrimary: true }),
     ]);
     expect(healed.filter((p) => p.isPrimary)).toHaveLength(1);
+  });
+});
+
+describe("ics export — estimated term dates", () => {
+  it("puts the caveat inside every event when bounds are estimated", () => {
+    const result = planToIcs({ plan: plan(), sections: [OS] });
+
+    expect(result.termDatesAreAuthoritative).toBe(false);
+    // Once per VEVENT, not once per file: an .ics is read one appointment at a
+    // time, and a note in a calendar-level property is one nobody sees.
+    const occurrences = result.content.split("the first and last day of instruction are").length - 1;
+    expect(occurrences).toBe(result.eventCount);
+  });
+
+  it("stays silent when the term carries real bounds", () => {
+    const result = planToIcs({
+      plan: plan(),
+      sections: [OS],
+      term: { ...buildTerm(TERM), startsOn: "2026-09-08", endsOn: "2026-12-14" },
+    });
+
+    expect(result.termDatesAreAuthoritative).toBe(true);
+    expect(result.content).not.toContain("the first and last day of instruction are");
+    expect(result.content).toContain("UNTIL=20261214T235959");
   });
 });

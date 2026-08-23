@@ -1,15 +1,31 @@
 /**
  * Schedule lane — building → campus-zone reference.
  *
- * Spec §7: "Buildings are geocoded once." Until the ingest lane lands the
- * `buildings` table, commute analysis reads this table instead. Zones are real
- * (which campus a building physically sits on); coordinates are deliberately
- * `null` because we will not invent geocodes — `walkMinutesBetween` degrades to
- * the zone-level estimates in `ZONE_WALK_MINUTES` and refines only when a real
- * lat/lng pair arrives.
+ * Spec §7: "Buildings are geocoded once."
  *
- * TODO(ingest): replace `DEMO_BUILDINGS` with a Supabase read of `buildings`.
- * The rest of this lane only ever sees `Building[]`, so nothing else changes.
+ * ── Why this lives in code and not in a query ─────────────────────────────
+ *
+ * The `buildings` table exists and is populated, but it was seeded *from this
+ * list* — same 60 names, same zones, same null coordinates. Reading it back
+ * would buy no information and cost a great deal: `analyzePlan` and
+ * `walkMinutesBetween` are pure synchronous functions that run in the browser
+ * on every plan edit, and making them async to fetch a list that changes
+ * roughly never is the wrong trade. Columbia does not publish a building
+ * registry, so this is not observed data that could go stale behind us — it is
+ * reference data, and reference data belongs next to the code that reads it.
+ *
+ * The table stays because `meetings.building_id` is a foreign key into it and
+ * because a future geocode pass needs somewhere to write.
+ *
+ * ── The part that is genuinely missing ────────────────────────────────────
+ *
+ * `lat` and `lng` are `null` on every row here, and that is a deliberate
+ * refusal rather than an oversight: coordinates recalled from memory would be
+ * a guess presented as fact. `walkMinutesBetween` therefore degrades to the
+ * zone-level estimates in `ZONE_WALK_MINUTES` — honest, coarse, and correct
+ * about the one thing that matters most (a Morningside → CUIMC hop is not
+ * walkable between classes). It refines automatically the moment a real
+ * lat/lng pair arrives from a real source. See .plans/BLOCKERS.md.
  */
 
 import type { Building, CampusZone } from "../types";

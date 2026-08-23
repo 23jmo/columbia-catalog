@@ -111,10 +111,26 @@ function uid(planId: string, itemId: string, weekday: Weekday, startMinute: numb
   return `${planId}-${itemId}-${weekday}-${startMinute}@columbia-catalog`;
 }
 
+/**
+ * The sentence appended to every exported event when the term's first and last
+ * day of instruction were estimated rather than read from Columbia's calendar.
+ *
+ * An `.ics` leaves our hands and becomes an appointment on someone's phone,
+ * where nothing about this app is visible to qualify it. A recurrence bounded
+ * by a guessed end date will quietly schedule a class into finals week, and the
+ * student has no way to know the dates did not come from the registrar. So the
+ * caveat travels inside the file.
+ */
+export const ESTIMATED_DATES_NOTE =
+  "Note: the first and last day of instruction are estimated from the usual " +
+  "Columbia term shape, not read from the registrar's calendar. Times and days " +
+  "are exact; check the start and end dates against the official calendar.";
+
 function sectionDescription(
   section: Section,
   course: Course | undefined,
   meetingLabel: string,
+  datesAreEstimated: boolean,
 ): string {
   const lines = [
     course ? course.title : courseLabel(section.courseId),
@@ -125,6 +141,7 @@ function sectionDescription(
   if (section.sourceAsOf) lines.push(`Seat data as of ${section.sourceAsOf}`);
   // Deep link only. We never register anyone; this is the page they would open.
   lines.push(vergilSectionUrl(section.termCode, section.callNumber));
+  if (datesAreEstimated) lines.push("", ESTIMATED_DATES_NOTE);
   return lines.join("\n");
 }
 
@@ -162,7 +179,7 @@ export function planEvents(input: PlanIcsInput): EventAttributes[] {
         endOutputType: "local",
         recurrenceRule: weeklyRule(meeting.weekday, bounds.endsOn),
         location: locationOf(meeting.buildingName, meeting.room),
-        description: sectionDescription(section, course, meetingLabel),
+        description: sectionDescription(section, course, meetingLabel, !bounds.isAuthoritative),
         url: vergilSectionUrl(section.termCode, section.callNumber),
         categories: ["Columbia", section.termCode],
         busyStatus: "BUSY",
@@ -187,7 +204,9 @@ export function planEvents(input: PlanIcsInput): EventAttributes[] {
       endInputType: "local",
       endOutputType: "local",
       recurrenceRule: weeklyRule(block.weekday, bounds.endsOn),
-      description: "Personal commitment, planned in Columbia Catalog.",
+      description: bounds.isAuthoritative
+        ? "Personal commitment, planned in Columbia Catalog."
+        : `Personal commitment, planned in Columbia Catalog.\n\n${ESTIMATED_DATES_NOTE}`,
       categories: ["Personal"],
       busyStatus: "BUSY",
       calName: plan.name,

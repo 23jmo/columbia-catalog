@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   RiAddLine,
+  RiCalendarEventLine,
   RiCalendarLine,
   RiDeleteBinLine,
   RiDownloadLine,
@@ -27,6 +28,7 @@ import {
   nextPlanName,
   planToIcs,
   planStore,
+  termBounds,
   type PlanAnalysisDetail,
 } from "@/lib/schedule";
 import { toWeekGridBlocks } from "@/components/schedule/to-blocks";
@@ -257,6 +259,7 @@ export function PlanWorkspace({ termCode = CURRENT_TERM, className }: PlanWorksp
   // ── Render ───────────────────────────────────────────────────────────────
 
   const historicalCount = resolved.typical.size;
+  const { isAuthoritative: termDatesAreAuthoritative } = termBounds(termCode, buildTerm(termCode));
 
   return (
     <div className={cx("flex flex-col gap-5", className)}>
@@ -287,6 +290,27 @@ export function PlanWorkspace({ termCode = CURRENT_TERM, className }: PlanWorksp
             onExport={exportIcs}
             canExport={resolved.sections.some((s) => (s.meetings?.length ?? 0) > 0)}
           />
+
+          {/*
+            The export's dates are estimated, and the file will outlive this
+            screen — it becomes an appointment on a phone where nothing labels
+            it as a guess. Say so before the click, and `planToIcs` repeats it
+            inside every event it writes.
+          */}
+          {!termDatesAreAuthoritative && (
+            <p className="flex items-start gap-2 rounded-2lg bg-background-secondary-default p-3 text-caption-1-regular text-text-secondary">
+              <RiCalendarEventLine
+                className="mt-px size-4 shrink-0 text-foreground-icon-tertiary"
+                aria-hidden
+              />
+              <span>
+                Days and times in the calendar export are exact. Its first and last
+                day of instruction are estimated from the usual Columbia term shape —
+                the registrar does not publish a calendar we can read — so check the
+                start and end dates against the official one.
+              </span>
+            </p>
+          )}
 
           {historicalCount > 0 && (
             <p className="flex items-start gap-2 rounded-2lg bg-background-secondary-default p-3 text-caption-1-regular text-text-secondary">

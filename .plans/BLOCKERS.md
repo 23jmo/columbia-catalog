@@ -334,3 +334,47 @@ actually collide**, so it needs your call rather than a workaround:
 **Until you pick, (3) is what runs**, and nothing is broken: `hasSemantic`
 returns false, the fusion step is skipped, and the client never downloads a
 sidecar that does not exist.
+
+---
+
+## 13. Building coordinates — needs a real geocode source
+
+**What works today.** Commute analysis is live and correct at the level that
+matters. Every meeting's raw location string resolves to one of 60 Columbia
+buildings, each tagged with the campus it physically sits on, and
+`walkMinutesBetween` uses `ZONE_WALK_MINUTES` to answer the question students
+actually get wrong: a 9:10 in Hamilton followed by a 10:10 at CUIMC is not a
+tight connection, it is impossible. That fires correctly.
+
+**What is missing.** `lat` and `lng` are `null` on all 60 rows, in
+`lib/schedule/buildings.ts` and in the `buildings` table alike. So
+within-campus walks are all estimated at the same flat zone rate — Mudd to
+Havemeyer and Mudd to Lerner get the same number, though one is 90 seconds and
+the other is closer to six minutes.
+
+**Why I did not fill them in.** I could produce 60 plausible lat/lng pairs from
+memory. Several would be wrong by a block, and every one of them would render
+as a confident walking time on a student's schedule. That is precisely the
+"guess presented as fact" the product rules forbid, and unlike a missing seat
+count it would not look wrong — it would look authoritative.
+
+**What would resolve it, in order of preference.**
+
+1. Columbia Facilities publishes building footprints; NYC's PLUTO / Building
+   Footprints open data covers Morningside, Manhattanville and Washington
+   Heights with real polygons and centroids. Either gives verifiable
+   coordinates with a citable source.
+2. A one-time geocoding run against a service with a usage licence that permits
+   storing results (Nominatim's does not, without conditions; Google's does,
+   with attribution).
+3. Hand-measure the 60 centroids off a map and record who measured them and
+   when.
+
+Any of the three is a single `update buildings set lat = …, lng = …` plus the
+same numbers in `lib/schedule/buildings.ts`. Nothing else in the schedule lane
+changes: `walkMinutesBetween` already prefers a real coordinate pair over the
+zone estimate the moment one exists.
+
+**Johnathan decides:** whether coarse-but-honest zone walking times are good
+enough for v1 — I think they are — or whether it is worth an afternoon with
+NYC open data to get within-campus walks right.
