@@ -32,7 +32,7 @@ export interface WatchRecord {
 
 export class WatchNotAvailableError extends Error {
   constructor() {
-    super("Sign in with your Columbia account to watch a section.");
+    super("Sign in with your Columbia or Barnard account to watch a section.");
     this.name = "WatchNotAvailableError";
   }
 }

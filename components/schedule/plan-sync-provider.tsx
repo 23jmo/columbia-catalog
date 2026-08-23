@@ -46,7 +46,7 @@ export function PlanSyncProvider({ termCode = CURRENT_TERM }: { termCode?: TermC
     setAuthGuard(() =>
       !isConfigured() || isLoading || account !== null
         ? { allowed: true }
-        : { allowed: false, reason: "Sign in with your Columbia email to save a schedule." },
+        : { allowed: false, reason: "Sign in with your Columbia or Barnard email to save a schedule." },
     );
     return () => setAuthGuard(() => ({ allowed: true }));
   }, [account, isLoading]);

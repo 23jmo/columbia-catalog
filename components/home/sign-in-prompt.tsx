@@ -4,7 +4,7 @@ import { useState } from "react";
 import { RiLoginBoxLine } from "@remixicon/react";
 
 import { Button } from "@/components/base/buttons/button";
-import { signInWithColumbia } from "@/lib/db/auth";
+import { signIn } from "@/lib/db/auth";
 
 /**
  * The write wall, as a working door.
@@ -26,7 +26,7 @@ export function SignInPrompt({ label = "Save a plan" }: { label?: string }) {
   async function start() {
     setError(null);
     setIsPending(true);
-    const result = await signInWithColumbia();
+    const result = await signIn();
     // On success the browser navigates to Google, so this only runs on failure.
     if (result.error) {
       setError(result.error);

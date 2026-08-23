@@ -100,7 +100,7 @@ export function WatchlistRail({ termCode, className }: WatchlistRailProps) {
     return (
       <RailShell className={className}>
         <p className="text-caption-1-regular text-text-secondary">
-          Sign in with your Columbia account to watch sections. We email every watcher the moment a
+          Sign in with your Columbia or Barnard account to watch sections. We email every watcher the moment a
           seat opens — all of them at once, never staggered.
         </p>
       </RailShell>

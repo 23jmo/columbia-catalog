@@ -4,15 +4,20 @@
  * Supabase sends the browser here with a one-time `code`. Exchanging it sets
  * the session cookies; from that point the middleware keeps them fresh.
  *
- * ── Why this rejects non-Columbia accounts here rather than later ──────────
+ * ── Why this rejects ineligible accounts here rather than later ────────────
  *
  * `handle_new_auth_user()` (migration 0005) provisions the `users` row from a
- * trigger on `auth.users`, and `users_columbia_domain` refuses a non-Columbia
- * email. That check is the real boundary and it holds. But it fires inside
- * Supabase Auth, so a student who signed in with a personal Gmail would land
- * back on the site apparently signed in, with every write failing on a foreign
- * key to a row that was never created. Signing them out here and saying why is
- * the difference between a rule and a haunting.
+ * trigger on `auth.users`, and `users_columbia_domain` refuses anything that
+ * is not a columbia.edu or barnard.edu address. That check is the real
+ * boundary and it holds. But it fires inside Supabase Auth, so a student who
+ * signed in with a personal Gmail would land back on the site apparently
+ * signed in, with every write failing on a foreign key to a row that was never
+ * created. Signing them out here and saying why is the difference between a
+ * rule and a haunting.
+ *
+ * Eligible means Columbia OR Barnard, subdomains included. Barnard students
+ * take Columbia courses and register through the same directory; the Google
+ * `hd` hint deliberately names no domain so both reach this check.
  */
 
 import { NextResponse } from "next/server";
@@ -62,7 +67,7 @@ export async function GET(request: Request): Promise<Response> {
 
   if (!isColumbiaEmail(data.user.email)) {
     await client.auth.signOut();
-    return errorRedirect(origin, "not_columbia");
+    return errorRedirect(origin, "ineligible_domain");
   }
 
   return NextResponse.redirect(`${origin}${next}`);

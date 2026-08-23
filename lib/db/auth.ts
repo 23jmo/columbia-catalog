@@ -25,7 +25,12 @@ import type { User } from "@supabase/supabase-js";
 
 import { createServerSupabaseClient, getBrowserClient } from "./client";
 
-/** Subdomains included: cumc.columbia.edu, gsb.columbia.edu, and so on. */
+/**
+ * Columbia and Barnard, subdomains included — cumc.columbia.edu,
+ * gsb.columbia.edu, and so on. This and the `users_columbia_domain` constraint
+ * in migration 0005 are the two places eligibility is actually decided; they
+ * must stay in step.
+ */
 const COLUMBIA_EMAIL = /@([a-z0-9-]+\.)*(columbia|barnard)\.edu$/i;
 
 /** The signed-in student, in the shape the shell renders. */
@@ -89,7 +94,7 @@ export async function getSessionUser(): Promise<SessionAccount | null> {
  */
 export class NotSignedInError extends Error {
   constructor() {
-    super("Sign in with your Columbia account to save this.");
+    super("Sign in with your Columbia or Barnard account to save this.");
     this.name = "NotSignedInError";
   }
 }
@@ -111,8 +116,25 @@ export async function requireSessionUser(): Promise<SessionAccount> {
  * page lands back on that course page, not on the home page. The value is a
  * path from `window.location`, never anything a caller supplies, so it cannot
  * become an open redirect.
+ *
+ * ── Why `hd` is `*` and not a domain ──────────────────────────────────────
+ *
+ * Barnard students take Columbia courses, register through the same directory,
+ * and are exactly who this app is for. `hd: "columbia.edu"` locked every one
+ * of them out — and not softly: `hd` is enforced at Google's end, so a
+ * barnard.edu account was refused before it ever reached us, with a Google
+ * error page and no way to tell what had gone wrong.
+ *
+ * `hd` takes one domain, not a list, so two eligible domains means not naming
+ * one. `*` is the closest honest thing: any Google Workspace account, no
+ * personal Gmail. It narrows the chooser without deciding who is eligible.
+ *
+ * Eligibility is decided in two places that both have to agree, and neither is
+ * this one: `isColumbiaEmail` in the callback, and the `users_columbia_domain`
+ * constraint in the database. `hd` was never a security boundary and treating
+ * it as one is how it ended up excluding half the users instead.
  */
-export async function signInWithColumbia(): Promise<{ error: string | null }> {
+export async function signIn(): Promise<{ error: string | null }> {
   const client = getBrowserClient();
   if (!client) return { error: "Sign-in is not configured." };
 
@@ -122,9 +144,8 @@ export async function signInWithColumbia(): Promise<{ error: string | null }> {
     options: {
       redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
       queryParams: {
-        // Filters Google's account chooser to Columbia accounts. A hint, not a
-        // guarantee — see the header comment.
-        hd: "columbia.edu",
+        // Any Workspace account, no personal Gmail. See the header comment.
+        hd: "*",
         // Without this a student who has already granted consent is bounced
         // straight through the chooser, which makes switching accounts on a
         // shared library machine impossible.

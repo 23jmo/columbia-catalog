@@ -25,9 +25,10 @@ import {
   DropdownTrigger,
 } from "@/components/base/dropdown/dropdown";
 import { SocialButton } from "@/components/base/social-button/social-button";
+import { ChevronUpDownSmall } from "@/components/foundations/icons/chevrons";
 import { useSessionAccount } from "@/hooks/use-session-account";
 import { isConfigured } from "@/lib/db/client";
-import { signInWithColumbia, signOut } from "@/lib/db/auth";
+import { signIn, signOut } from "@/lib/db/auth";
 import { cx } from "@/utils/cx";
 
 /**
@@ -67,6 +68,8 @@ export interface AccountMenuProps {
   onSignOut?: () => void;
   /** Collapse the trigger to an avatar/icon square for narrow bars. */
   compact?: boolean;
+  /** Header row in the sidebar — single-line name, no subtitle. */
+  appearance?: "default" | "sidebar";
   className?: string;
 }
 
@@ -81,6 +84,7 @@ export function AccountMenu({
   onSignIn,
   onSignOut,
   compact = false,
+  appearance = "default",
   className,
 }: AccountMenuProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -106,7 +110,7 @@ export function AccountMenu({
     }
     // Success navigates away to Google, so the dialog is deliberately left
     // open: closing it first would flash the menu behind the redirect.
-    const { error } = await signInWithColumbia();
+    const { error } = await signIn();
     if (error) setSignInError(error);
   };
 
@@ -127,45 +131,70 @@ export function AccountMenu({
         .join("")
     : null;
 
+  const showLabel = !compact;
+  const sidebar = appearance === "sidebar";
+
   return (
     <>
       <Dropdown isOpen={isMenuOpen} onOpenChange={setIsMenuOpen}>
         <DropdownTrigger
           aria-label={account ? `Account: ${account.name}` : "Account — not signed in"}
           className={cx(
-            "flex items-center gap-2 rounded-2lg p-1.5 transition-colors duration-150 ease",
-            "hover:bg-background-secondary-hover",
-            compact ? "size-9 justify-center p-0" : "w-full",
+            "flex min-w-0 items-center gap-2 transition-colors duration-150 ease outline-none",
+            "focus-visible:ring-2 focus-visible:ring-border-focus-ring",
+            sidebar
+              ? cx(
+                  "rounded-full p-1 hover:bg-background-secondary-hover",
+                  compact ? "size-9 justify-center p-0" : "min-w-0 flex-1",
+                )
+              : cx(
+                  "rounded-2lg p-1.5 hover:bg-background-secondary-hover",
+                  compact ? "size-9 justify-center p-0" : "w-full",
+                ),
             className,
           )}
         >
           {account ? (
             <Avatar
-              size="sm"
+              size={sidebar && !compact ? "md" : "sm"}
               src={account.avatarUrl}
               initials={initials ?? undefined}
               alt={account.name}
             />
           ) : (
-            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-background-tertiary-default">
+            <span
+              className={cx(
+                "flex shrink-0 items-center justify-center rounded-full bg-background-tertiary-default",
+                sidebar && !compact ? "size-8" : "size-6",
+              )}
+            >
               <RiLoginBoxLine className="size-4 text-foreground-icon-secondary" aria-hidden />
             </span>
           )}
-          {!compact && (
-            <span className="flex min-w-0 flex-col items-start">
-              <span className="text-body-medium truncate text-text-primary">
-                {account ? account.name : "Not signed in"}
+          {showLabel ? (
+            sidebar ? (
+              <span className="flex min-w-0 flex-1 items-center gap-0.5">
+                <span className="truncate text-body-medium text-text-primary">
+                  {account ? account.name : "Sign in"}
+                </span>
+                <ChevronUpDownSmall className="size-4 shrink-0 text-foreground-icon-tertiary" />
               </span>
-              <span className="text-caption-1-regular truncate text-text-tertiary">
-                {account ? account.email : "Browsing is free"}
+            ) : (
+              <span className="flex min-w-0 flex-col items-start">
+                <span className="text-body-medium truncate text-text-primary">
+                  {account ? account.name : "Not signed in"}
+                </span>
+                <span className="text-caption-1-regular truncate text-text-tertiary">
+                  {account ? account.email : "Browsing is free"}
+                </span>
               </span>
-            </span>
-          )}
+            )
+          ) : null}
         </DropdownTrigger>
 
         <DropdownPopover
           aria-label="Account"
-          placement={compact ? "bottom end" : "top start"}
+          placement={compact ? "bottom end" : sidebar ? "bottom start" : "top start"}
           className="w-[288px]"
         >
           {account ? (

@@ -651,7 +651,7 @@ export async function runTool(
 
   if (tool.scopes.length > 0) {
     if (!context.auth) {
-      return fail("This tool needs a signed-in Columbia account.", {
+      return fail("This tool needs a signed-in Columbia or Barnard account.", {
         requiredScopes: tool.scopes,
         howToFix: "Complete the OAuth flow your MCP client offers for this server.",
       });

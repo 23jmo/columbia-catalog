@@ -27,6 +27,7 @@ import type { Metadata } from "next";
 import { RiGraduationCapLine } from "@remixicon/react";
 import { Chip } from "@/components/base/badges/chip";
 import { AppShell } from "@/components/shell/app-shell";
+import { AuthErrorNotice } from "@/components/shell/auth-error-notice";
 import { PageHeader } from "@/components/shell/page-header";
 import { WeekGrid } from "@/components/schedule";
 import { AgentHandoff } from "@/components/home/agent-handoff";
@@ -75,6 +76,8 @@ export default async function HomePage({
   return (
     <AppShell activeNav="home">
       <div className="mx-auto flex w-full max-w-[1400px] min-w-0 flex-col gap-7">
+        {/* Renders nothing unless /auth/callback bounced someone back here. */}
+        <AuthErrorNotice reason={params.auth_error} />
         <PageHeader
           eyebrow="Registration"
           icon={RiGraduationCapLine}
