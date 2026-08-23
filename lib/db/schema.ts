@@ -221,6 +221,12 @@ export type SectionRow = {
   subject_code: string;
   call_number: string;
   section_code: string;
+  /**
+   * The section's own title from the directory row's <h1>, migration 0017.
+   * Often repeats the course title; stored faithfully either way and
+   * suppressed downstream rather than at ingest.
+   */
+  title: string | null;
   component: string | null;
   method_of_instruction: string | null;
   grading_mode: string | null;
@@ -698,6 +704,7 @@ export function rowToSection(
     termCode: row.term_code,
     callNumber: row.call_number,
     sectionCode: row.section_code,
+    title: row.title,
     component: row.component,
     methodOfInstruction: row.method_of_instruction,
     gradingMode: row.grading_mode,
@@ -727,6 +734,7 @@ export function sectionToRow(section: Section): SectionInsert {
     term_code: section.termCode,
     call_number: section.callNumber,
     section_code: section.sectionCode,
+    title: section.title ?? null,
     component: section.component,
     method_of_instruction: section.methodOfInstruction,
     grading_mode: section.gradingMode,
