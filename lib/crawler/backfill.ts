@@ -31,6 +31,7 @@ import {
   type CrawlJobStore,
   type CrawlerRuntime,
 } from "./contracts";
+import { subjectIndexUrls } from "../ingest/parsers/subject-index";
 import { politeFetch } from "./fetcher";
 import { jitterSeconds, urlForSubjectIndexLetter } from "./scheduler";
 
@@ -139,6 +140,8 @@ export interface BackfillPlan {
   subjectCount: number;
   termCount: number;
   requestsPerSecond: number;
+  /** Subject-term pairs the directory index says do not exist. */
+  skippedUnoffered: number;
 }
 
 /**
@@ -149,6 +152,12 @@ export function buildBackfillPlan(
   subjects: readonly string[],
   options: BackfillOptions,
   now: Date = new Date(),
+  /**
+   * Subject code -> the terms that subject actually offers. When a subject is
+   * absent from the map it is crossed with every requested term, so an
+   * incomplete map degrades to the old behaviour instead of dropping work.
+   */
+  availability?: ReadonlyMap<string, ReadonlySet<TermCode>>,
 ): BackfillPlan {
   const random = seededRandom(options.seed);
 
@@ -161,8 +170,14 @@ export function buildBackfillPlan(
 
   const units: Unit[] = [];
 
+  let skippedUnoffered = 0;
   for (const subject of subjects) {
+    const offered = availability?.get(subject.toUpperCase());
     for (const termCode of options.terms) {
+      if (offered && !offered.has(termCode)) {
+        skippedUnoffered += 1;
+        continue;
+      }
       units.push({
         kind: "subject_term",
         targetKey: subject.toUpperCase(),
@@ -227,6 +242,7 @@ export function buildBackfillPlan(
     subjectCount: subjects.length,
     termCount: options.terms.length,
     requestsPerSecond: spanSeconds > 0 ? specs.length / spanSeconds : 0,
+    skippedUnoffered,
   };
 }
 
@@ -238,11 +254,63 @@ export function buildBackfillPlan(
  * Reads the 26 directory index pages and unions their subject codes. Uses the
  * polite fetcher, so it is serialized and paced like everything else.
  */
-export async function discoverSubjects(
+export interface SubjectDiscovery {
+  subjects: string[];
+  /** Subject code -> terms the directory says it offers. */
+  availability: Map<string, Set<TermCode>>;
+}
+
+/**
+ * Reads the directory subject index and unions its subject codes.
+ *
+ * `sel/subjects.html` carries every subject in one page, so it is tried first
+ * and the 26 per-letter pages are a fallback for the day it is paginated or
+ * dropped — 1 request instead of 26 for identical data. Uses the polite
+ * fetcher, so it is serialized and paced like everything else.
+ */
+export async function discoverSubjectIndex(
   runtime: CrawlerRuntime,
   log: (line: string) => void = console.log,
-): Promise<string[]> {
+): Promise<SubjectDiscovery> {
   const codes = new Set<string>();
+  const availability = new Map<string, Set<TermCode>>();
+
+  const absorb = (url: string, html: string, targetKey: string): number => {
+    const parsed = runtime.parsers.parseSubjectIndex(html, {
+      url,
+      targetKey,
+      termCode: null,
+      fetchedAt: new Date().toISOString(),
+    });
+    for (const subject of parsed.subjects) codes.add(subject.subjectCode.toUpperCase());
+    for (const entry of parsed.availability ?? []) {
+      const code = entry.subjectCode.toUpperCase();
+      const terms = availability.get(code) ?? new Set<TermCode>();
+      for (const label of entry.termLabels) {
+        const termCode = termCodeFromDirectoryLabel(label);
+        // An unrecognized label is dropped rather than guessed. Guessing wrong
+        // would either enqueue a page that cannot exist or, worse, silently
+        // exclude a term the subject really does offer.
+        if (termCode) terms.add(termCode);
+      }
+      if (terms.size > 0) availability.set(code, terms);
+    }
+    return parsed.subjects.length;
+  };
+
+  const [allSubjectsUrl] = subjectIndexUrls();
+  const combined = await politeFetch(allSubjectsUrl);
+  if (combined.ok && combined.html) {
+    const found = absorb(allSubjectsUrl, combined.html, "ALL");
+    if (found > 0) {
+      log(`  sel/subjects.html: ${found} subjects`);
+      return { subjects: [...codes].sort(), availability };
+    }
+    log("  sel/subjects.html carried no subjects — falling back to the letter pages");
+  } else {
+    log(`  ! sel/subjects.html: ${combined.error ?? `HTTP ${combined.status}`}`);
+  }
+
   for (const letter of INDEX_LETTERS) {
     const url = urlForSubjectIndexLetter(letter);
     const outcome = await politeFetch(url);
@@ -251,18 +319,30 @@ export async function discoverSubjects(
       continue;
     }
     try {
-      const parsed = runtime.parsers.parseSubjectIndex(outcome.html, {
-        url,
-        targetKey: letter,
-        termCode: null,
-        fetchedAt: outcome.fetchedAt,
-      });
-      for (const subject of parsed.subjects) codes.add(subject.subjectCode.toUpperCase());
+      absorb(url, outcome.html, letter);
     } catch (cause) {
       log(`  ! ${letter}: parse failed — ${cause instanceof Error ? cause.message : cause}`);
     }
   }
-  return [...codes].sort();
+
+  return { subjects: [...codes].sort(), availability };
+}
+
+/** Back-compat shim: the codes alone, for callers that do not need terms. */
+export async function discoverSubjects(
+  runtime: CrawlerRuntime,
+  log: (line: string) => void = console.log,
+): Promise<string[]> {
+  return (await discoverSubjectIndex(runtime, log)).subjects;
+}
+
+/** "Fall2026" -> "20263". Returns null for anything unrecognized. */
+export function termCodeFromDirectoryLabel(label: string): TermCode | null {
+  const match = /^(Spring|Summer|Fall)\s*([0-9]{4})$/i.exec(label.trim());
+  if (!match) return null;
+  const season = match[1].toLowerCase();
+  const suffix = season === "spring" ? "1" : season === "summer" ? "2" : "3";
+  return `${match[2]}${suffix}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -289,6 +369,7 @@ export async function runBackfill(
   const runtime = deps.runtime ?? tryGetCrawlerRuntime();
 
   let subjects = options.subjects;
+  let availability: Map<string, Set<TermCode>> | undefined;
   if (subjects.length === 0) {
     if (!runtime) {
       throw new Error(
@@ -296,12 +377,14 @@ export async function runBackfill(
           "Pass --subjects=COMS,MATH,... or register the runtime first.",
       );
     }
-    log("Discovering subjects from the directory index (26 pages, paced)…");
-    subjects = await discoverSubjects(runtime, log);
+    log("Discovering subjects from the directory index…");
+    const discovery = await discoverSubjectIndex(runtime, log);
+    subjects = discovery.subjects;
+    availability = discovery.availability;
     log(`  found ${subjects.length} subjects`);
   }
 
-  const plan = buildBackfillPlan(subjects, options, now);
+  const plan = buildBackfillPlan(subjects, options, now, availability);
 
   log("");
   log("Backfill plan");
@@ -311,6 +394,9 @@ export async function runBackfill(
   log(`  jobs            ${plan.specs.length}`);
   for (const [kind, count] of Object.entries(plan.countsByKind)) {
     log(`    ${kind.padEnd(20)} ${count}`);
+  }
+  if (plan.skippedUnoffered > 0) {
+    log(`  skipped         ${plan.skippedUnoffered} subject-term(s) the index says do not exist`);
   }
   log(`  spacing         ${options.spacingSeconds}s (± jitter)`);
   log(`  drains over     ${(plan.spanSeconds / 3600).toFixed(1)}h`);

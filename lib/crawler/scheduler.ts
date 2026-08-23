@@ -339,7 +339,18 @@ export function urlForSubjectTerm(subjectCode: string, termCode: TermCode): stri
   return subjectTermUrl(subjectCode, termCode);
 }
 
-/** Directory subject index is split across `sel/dept-{A..Z}.html`. */
+/**
+ * Directory SUBJECT index, split across `sel/subj-{A..Z}.html`.
+ *
+ * Not `sel/dept-{A..Z}.html`. Both exist and both are tables of name + term
+ * links, which is why the confusion is easy: the directory home page links only
+ * to the `dept-` pages, and that is what the doc-root fixture captures. But
+ * they are different namespaces. The `dept-` pages key on DEPARTMENT codes and
+ * link to `sel/{DEPT}_{Term}.html`; the crawler's unit of work is a SUBJECT and
+ * its URL is `subj/{SUBJ}/_{Term}.html`. Pointing discovery at `dept-` yields
+ * pages with no `subj/` hrefs at all, so `parseSubjectIndex` correctly returns
+ * nothing and the backfill enqueues zero subjects — silently.
+ */
 export function urlForSubjectIndexLetter(letter: string): string {
-  return `${DOC_BASE}/sel/dept-${letter.toUpperCase()}.html`;
+  return `${DOC_BASE}/sel/subj-${letter.toUpperCase()}.html`;
 }

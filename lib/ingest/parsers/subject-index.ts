@@ -88,6 +88,52 @@ export function parseSubjectIndex(html: string): Subject[] {
 }
 
 /**
+ * Which terms each subject actually offers, read from the same rows.
+ *
+ * The Terms cell is the only place the directory states this, and it matters
+ * for pacing: a subject-term page for a term a subject does not offer answers
+ * **200 with an empty listing**, not 404. Crossing every subject with every
+ * requested term would therefore send several hundred requests to Columbia
+ * that are known in advance to carry nothing, and record each one as a
+ * successful ingest of zero records.
+ *
+ * Term labels are returned verbatim ("Fall2026") because that is the form the
+ * directory URLs use; mapping them to term codes is the caller's job.
+ */
+export function parseSubjectIndexAvailability(
+  html: string,
+): { subjectCode: string; termLabels: string[] }[] {
+  const root = parse(html);
+  const byCode = new Map<string, Set<string>>();
+
+  for (const row of collectRows(root)) {
+    const cells = row.querySelectorAll("td");
+    if (cells.length < 2) continue;
+
+    const subjectCode = readSubjectCode(cells.slice(1));
+    if (!subjectCode) continue;
+
+    const labels = byCode.get(subjectCode) ?? new Set<string>();
+    for (const cell of cells.slice(1)) {
+      for (const anchor of cell.querySelectorAll("a")) {
+        const href = anchor.getAttribute("href") ?? "";
+        // Prefer the href over the link text: the text is what renders, but the
+        // href is what the crawler will actually request.
+        const fromHref = /_([A-Za-z]+[0-9]{4})\.html/.exec(href);
+        const label = fromHref ? fromHref[1] : cleanText(anchor.text);
+        if (label) labels.add(label);
+      }
+    }
+    if (labels.size > 0) byCode.set(subjectCode, labels);
+  }
+
+  return [...byCode].map(([subjectCode, labels]) => ({
+    subjectCode,
+    termLabels: [...labels],
+  }));
+}
+
+/**
  * The A–Z index pages the crawler must enqueue to build a full subject list.
  * `sel/subjects.html` alone is sufficient today; the per-letter pages are the
  * fallback if that page is ever paginated or dropped.

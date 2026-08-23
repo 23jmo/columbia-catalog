@@ -180,6 +180,16 @@ export interface ParseContext {
 /** Subject codes and names lifted from a directory `sel/dept-X.html` page. */
 export interface ParsedSubjectIndex {
   subjects: { subjectCode: string; subjectName: string; school: string | null }[];
+  /**
+   * Which terms each subject actually offers, as directory labels
+   * ("Fall2026"). Optional because only the index pages carry it.
+   *
+   * The backfill uses it to avoid enqueueing subject-term pages that cannot
+   * exist. A subject-term page for an unoffered term answers 200 with an empty
+   * listing rather than 404, so without this the crawl spends hundreds of
+   * requests confirming emptiness and records each as a successful ingest.
+   */
+  availability?: { subjectCode: string; termLabels: string[] }[];
 }
 
 /**

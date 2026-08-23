@@ -20,6 +20,7 @@ export {
 
 export {
   parseSubjectIndex,
+  parseSubjectIndexAvailability,
   subjectIndexUrls,
 } from "./parsers/subject-index";
 

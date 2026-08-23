@@ -38,6 +38,7 @@ import {
   parseBulletinDepartment,
   parseSectionDetail,
   parseSubjectIndex,
+  parseSubjectIndexAvailability,
   parseSubjectPage,
 } from "@/lib/ingest";
 import { parseAcademicCalendar } from "@/lib/ingest/parsers/academic-calendar";
@@ -78,7 +79,10 @@ const parsers = {
   },
 
   parseSubjectIndex(html: string): ParsedSubjectIndex {
-    return { subjects: parseSubjectIndex(html) };
+    return {
+      subjects: parseSubjectIndex(html),
+      availability: parseSubjectIndexAvailability(html),
+    };
   },
 
   parseAcademicCalendar(html: string, context: ParseContext) {
