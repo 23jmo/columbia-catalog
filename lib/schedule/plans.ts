@@ -99,6 +99,19 @@ export interface PlanStore {
   upsertBlock(planId: string, block: CustomBlock): Plan;
   removeBlock(planId: string, blockId: string): Plan;
 
+  /**
+   * Replaces every plan in one term with the given list, in a single write.
+   *
+   * This is the sync path, not an editing operation — `lib/db/plan-sync.ts`
+   * calls it to adopt the server's canonical list after a pull or a push. It
+   * bypasses the auth guard for the same reason: it is applying state that the
+   * server has already accepted, not asking to create any.
+   *
+   * Plans in other terms are untouched, so adopting Fall 2026 cannot silently
+   * delete a Spring 2027 draft.
+   */
+  replaceAll(termCode: TermCode, plans: readonly Plan[]): Plan[];
+
   /** Fires after any mutation. Returns an unsubscribe function. */
   subscribe(listener: () => void): () => void;
 }
@@ -257,6 +270,16 @@ export class LocalPlanStore implements PlanStore {
   listPlans(termCode?: TermCode): Plan[] {
     const plans = this.read();
     return termCode ? plans.filter((plan) => plan.termCode === termCode) : [...plans];
+  }
+
+  replaceAll(termCode: TermCode, plans: readonly Plan[]): Plan[] {
+    const others = this.read().filter((plan) => plan.termCode !== termCode);
+    // Term code is forced rather than trusted: a server row is authoritative
+    // about its own term, and a mislabelled plan would vanish from the tab it
+    // was just adopted into.
+    const adopted = plans.map((plan) => ({ ...plan, termCode }));
+    this.write([...others, ...adopted]);
+    return this.listPlans(termCode);
   }
 
   getPlan(planId: string): Plan | null {

@@ -1181,6 +1181,17 @@ export type Database = {
         Returns: { job_id: string; inserted: boolean }[];
       };
       prune_client_leases: { Args: { p_older_than?: string }; Returns: number };
+      // ── Plan sync (migration 0013) ─────────────────────────────────────────
+      // Both return the caller's canonical plan list as JSONB in exactly the
+      // shape lib/types.ts `Plan` declares, so there is no field mapping in the
+      // client to drift out of sync with the schema.
+      list_user_plans: { Args: { p_term_code?: string | null }; Returns: Json };
+      replace_user_plans: { Args: { p_term_code: string; p_plans: Json }; Returns: Json };
+      /** Aggregate only — no shape of this result can name a watcher (§14). */
+      watch_counts: {
+        Args: { p_section_ids: string[] };
+        Returns: { section_id: string; watcher_count: number }[];
+      };
       // ── Transactional ingest writers (migration 0009) ──────────────────────
       // Each takes the parser's own camelCase output as one JSONB document and
       // applies it in a single transaction. See lib/db/catalog-writer.ts.

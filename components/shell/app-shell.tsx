@@ -4,6 +4,7 @@ import { MobileNavBar } from "@/components/shell/mobile-nav";
 import { ShellNav, type ShellNavKey } from "@/components/shell/nav";
 import { TermSwitcher } from "@/components/shell/term-switcher";
 import { ShellWordmark } from "@/components/shell/wordmark";
+import { PlanSyncProvider } from "@/components/schedule/plan-sync-provider";
 import { ThemeToggle } from "@/components/application/theme/theme-toggle";
 import { cx } from "@/utils/cx";
 
@@ -22,8 +23,12 @@ import { cx } from "@/utils/cx";
  *
  *   TermSwitcher   (needs open state + storage)
  *   ThemeToggle    (BoardUI, needs the DOM class)
- *   AccountMenu    (needs open state; TODO(auth) inside)
+ *   AccountMenu    (needs open state + the Supabase session)
  *   MobileNavBar   (needs drawer state)
+ *
+ * Plus `PlanSyncProvider`, which renders nothing at all — it exists only to
+ * own the lifecycle of plan write-through sync, which has to start once per
+ * browser session and stop cleanly.
  *
  * `children` therefore stays a server subtree — a route's async data fetching
  * is not forced into the client by wrapping itself in the shell.
@@ -42,6 +47,10 @@ export interface AppShellProps {
 export function AppShell({ children, activeNav = "home", contentClassName }: AppShellProps) {
   return (
     <div className="flex min-h-dvh w-full bg-background-full">
+      {/* Renders nothing. Keeps localStorage plans and Supabase in step for a
+          signed-in student, and claims anonymous plans on first sign-in. */}
+      <PlanSyncProvider />
+
       {/* Desktop rail. `lg` and up only — below that the mobile bar owns nav. */}
       <aside className="sticky top-0 hidden h-dvh w-[248px] shrink-0 flex-col justify-between gap-4 border-r border-border-table bg-background-secondary-default p-3 lg:flex">
         <div className="flex min-h-0 flex-col gap-4 overflow-y-auto [scrollbar-width:none]">
@@ -53,8 +62,8 @@ export function AppShell({ children, activeNav = "home", contentClassName }: App
         <div className="flex shrink-0 flex-col gap-2">
           <ThemeToggle appearance="sidebar-segmented" />
           <div className="h-px w-full bg-separator-border" />
-          {/* TODO(auth): pass the signed-in student once Supabase SSO lands.
-              Signed-out is the correct default — reads are free (spec §15). */}
+          {/* Reads its own session. Signed-out renders the invitation, not a
+              gate — reads are free (spec §15). */}
           <AccountMenu />
         </div>
       </aside>
