@@ -28,6 +28,7 @@ import { getCrawlerRuntime } from "@/lib/crawler/contracts";
 // this directory answers 503 — the crawler is fully written and structurally
 // unable to run. See lib/db/crawler-runtime.ts.
 import { ensureCrawlerRuntime } from "@/lib/db/crawler-runtime";
+import { triggerAlertSweep } from "@/lib/alerts/trigger";
 import { ingestHtml, recordFetchFailure } from "@/lib/crawler/ingest";
 import {
   clientIpFromHeaders,
@@ -188,6 +189,12 @@ export async function POST(request: Request): Promise<Response> {
     // problem and must not leak internals.
     return NextResponse.json({ error: "ingest failed" }, { status: 500 });
   }
+
+  // A seat can only open when an ingest writes a new reading, so this is the
+  // moment to look. Fired detached and throttled — the visitor's browser is
+  // waiting on this response and must never wait on our mail. See
+  // lib/alerts/trigger.ts for why the sweep no longer rides a timer.
+  triggerAlertSweep({ recordsWritten: result.recordsWritten });
 
   return NextResponse.json(
     { ...result, nextDelayMs: suggestNextDelayMs(1) },

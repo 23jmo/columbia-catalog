@@ -202,19 +202,38 @@ got nothing.
 
 ---
 
-## 8. Vercel plan: cron frequency
+## 8. Vercel plan: cron frequency — RESOLVED IN CODE, still worth knowing
 
-`vercel.json` asks for `/api/alerts/sweep` every 2 minutes and
-`/api/crawl/cron` every 5. **Hobby projects are limited to 2 cron jobs running
-once per day**, and Vercel silently coerces the schedule rather than failing the
-deploy — which would leave alerts arriving up to 24 hours late while everything
-appeared configured.
+**Confirmed by a failed deploy, and Vercel is stricter than I assumed:**
 
-On Hobby the alert path still works, just not on that cadence. Pro is what the
-spec's numbers assume. If the project stays on Hobby, say so and I will move the
-sweep onto the browser-driven path the crawler already uses (spec §10: browsers
-are the engine, cron is the safety net) so alert latency stops depending on the
-plan.
+> Hobby accounts are limited to daily cron jobs. This cron expression
+> (*/5 * * * *) would run more than once per day.
+
+It **rejects the deploy** rather than silently coercing the schedule, which is
+the better failure — nothing shipped looking configured while alerts arrived a
+day late.
+
+**What I changed, so this is not blocking you.** `vercel.json` now asks for two
+daily crons (07:00 and 08:00 UTC), which Hobby accepts. Alert latency no longer
+depends on them: `lib/alerts/trigger.ts` runs the sweep off the **write**
+instead of off a clock. A seat can only open when an ingest records a new
+reading, and every ingest — browser worker or cron — passes through
+`/api/crawl/submit` or `/api/crawl/cron`, so both now fire a throttled,
+detached sweep on the way out. This is spec §10's own principle ("browsers are
+the engine, cron is the safety net") applied to mail.
+
+Practically: alert latency is now one crawl interval, not one cron interval,
+and on Hobby that is *better* than the every-2-minutes cron would have been for
+any section a visitor's browser is refreshing. The daily cron is the floor for
+a catalog nobody is looking at.
+
+Correctness does not depend on the throttle. `runAlertSweep` dedupes in
+`alerts_sent` keyed on the exact transition timestamp, so two concurrent sweeps
+send one email between them. The throttle saves queries.
+
+**Upgrading to Pro is still worth it** for the hourly full-catalog refresh
+(spec §10's own numbers assume it) — but nothing is broken without it, and no
+decision from you is needed to ship.
 
 ---
 

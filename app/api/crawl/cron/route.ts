@@ -18,6 +18,7 @@
 
 import { NextResponse } from "next/server";
 
+import { triggerAlertSweep } from "@/lib/alerts/trigger";
 import { CRON_GRACE_SECONDS, LEASE_SECONDS } from "@/lib/constants";
 import { isCronAuthorized } from "@/lib/cron-auth";
 import { getCrawlerRuntime } from "@/lib/crawler/contracts";
@@ -155,6 +156,10 @@ async function handle(request: Request): Promise<Response> {
 
   try {
     const summary = await runCron();
+    // Same reasoning as the browser submit path: a seat can only open when an
+    // ingest writes, so sweep off the write rather than off a clock. On Vercel
+    // Hobby this is the only thing keeping alert latency below a day.
+    triggerAlertSweep({ recordsWritten: summary.ingested });
     return NextResponse.json(summary, { status: 200, headers: { "cache-control": "no-store" } });
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
