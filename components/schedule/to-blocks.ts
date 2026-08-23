@@ -320,18 +320,25 @@ export function gridBounds(
   startMinute: number = GRID_START_MINUTE,
   endMinute: number = GRID_END_MINUTE,
 ): GridBounds {
-  let start = startMinute;
-  let end = endMinute;
+  // A non-finite bound would propagate straight into a CSS percentage and blank
+  // the canvas, so garbage is replaced with the default rather than clamped.
+  let start = Number.isFinite(startMinute) ? startMinute : GRID_START_MINUTE;
+  let end = Number.isFinite(endMinute) ? endMinute : GRID_END_MINUTE;
 
   for (const block of blocks) {
+    if (!Number.isFinite(block.startMinute) || !Number.isFinite(block.endMinute)) continue;
     if (block.endMinute <= block.startMinute) continue;
     if (block.startMinute < start) start = floorToHour(block.startMinute);
     if (block.endMinute > end) end = ceilToHour(block.endMinute);
   }
 
-  start = Math.max(0, start);
+  // Clamped before the repair below, not after: a start past the end of the day
+  // leaves `start + 60` above the ceiling too, so the repair cannot open the
+  // window and the function returns an inverted one. Reserving the last hour
+  // guarantees there is always somewhere for `end` to land.
+  start = Math.min(Math.max(0, start), MINUTES_PER_DAY - 60);
   end = Math.min(MINUTES_PER_DAY, end);
-  // A caller can hand us an inverted window; one empty hour beats a NaN height.
+  // A caller can still hand us an inverted window; one empty hour beats a NaN height.
   if (end <= start) end = Math.min(MINUTES_PER_DAY, start + 60);
   return { startMinute: start, endMinute: end };
 }
@@ -386,6 +393,11 @@ export function fitGridBounds(
     end = Math.min(outer.endMinute, start + MIN_FIT_SPAN_MINUTES);
     start = Math.max(outer.startMinute, end - MIN_FIT_SPAN_MINUTES);
   }
+
+  // `outer` is already valid, and both moves above only ever pull inward from
+  // it, so this can only fire if a future edit breaks that. Cheap insurance
+  // against handing the renderer a zero or negative height.
+  if (end <= start) return outer;
 
   return { startMinute: start, endMinute: end };
 }

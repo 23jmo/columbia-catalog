@@ -86,19 +86,17 @@ function accessibleName(block: WeekGridBlock): string {
 }
 
 /**
- * How much of its neighbour's lane a block is allowed to borrow.
+ * At or beyond this many lanes a block is too narrow for anything but a name.
  *
- * Splitting a day column into N equal lanes is correct but unreadable once N
- * reaches three: at a 1440px viewport each lane is ~35px, which truncates
- * "COMS 3157 · 001" to "C 4…" and renders the canvas useless exactly where it
- * matters most — a conflict cluster is the thing the student most needs to
- * read. Overlapping the lanes the way a calendar app does buys back the width.
- * Blocks in later lanes paint on top, so the cluster reads as a stack of cards
- * rather than a set of slivers, which also communicates the overlap itself.
+ * At a 1440px viewport a three-lane cluster gives each block ~35px, which is
+ * not enough for a time range or a room on top of the course code. Widening
+ * the lanes into each other was tried and reverted: because the next lane
+ * starts one lane-width over and paints on top, an overlapped block gains no
+ * *visible* width at all — it only loses its ellipsis, since the label lays
+ * out to the borrowed width and is then occluded mid-word. Equal lanes keep
+ * `truncate` clipping at the real boundary; dropping ornamentation is what
+ * actually buys characters back.
  */
-const LANE_OVERLAP = 1.6;
-
-/** At or beyond this many lanes a block is too narrow for anything but a name. */
 const NARROW_LANE_COUNT = 3;
 
 function EventBlock({ block, dense }: { block: PlacedBlock; dense: boolean }) {
@@ -110,11 +108,8 @@ function EventBlock({ block, dense }: { block: PlacedBlock; dense: boolean }) {
   const showSublabel = durationMinutes >= 50 && !narrow && Boolean(block.sublabel);
   const showTime = durationMinutes >= 40 && !narrow;
 
-  // The lane's own share of the column, widened into its neighbours but never
-  // past the column's right edge.
   const laneWidth = 1 / block.laneCount;
   const left = block.lane * laneWidth;
-  const width = Math.min(laneWidth * LANE_OVERLAP, 1 - left);
 
   return (
     <li
@@ -123,8 +118,7 @@ function EventBlock({ block, dense }: { block: PlacedBlock; dense: boolean }) {
         top: `${block.topPercent}%`,
         height: `${block.heightPercent}%`,
         left: `${left * 100}%`,
-        width: `${width * 100}%`,
-        zIndex: block.lane + 1,
+        width: `${laneWidth * 100}%`,
       }}
     >
       <div

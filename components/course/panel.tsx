@@ -64,12 +64,18 @@ export function Panel({
             </span>
           ) : null}
           <div className="min-w-0">
-            <h3
+            {/*
+              `h2`, not `h3`. A Panel is a top-level section of its page, a
+              sibling of the page header rather than a child of anything inside
+              it, so `h3` left the document outline claiming these sections were
+              subordinate to whichever heading happened to precede them.
+            */}
+            <h2
               id={id ? `${id}-heading` : undefined}
               className="text-title-3-semibold -tracking-[0.01em] text-text-primary"
             >
               {title}
-            </h3>
+            </h2>
             {description ? (
               <p className="mt-1 max-w-[62ch] text-caption-1-regular text-pretty text-text-secondary">
                 {description}

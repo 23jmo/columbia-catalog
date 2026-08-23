@@ -472,6 +472,21 @@ describe("fitGridBounds — reclaiming empty canvas", () => {
     expect(bounds.endMinute - bounds.startMinute).toBeGreaterThanOrEqual(6 * 60);
   });
 
+  it("repairs a window whose start sits past the end of the day", () => {
+    // Regression: clamping `start` only at the bottom left `start + 60` above
+    // the ceiling too, so the repair could not open the window and the result
+    // came back inverted — a negative height, which blanks the canvas.
+    const bounds = fitGridBounds([], 25 * 60, 10 * 60);
+    expect(bounds.endMinute).toBeGreaterThan(bounds.startMinute);
+  });
+
+  it("survives non-finite bounds instead of emitting NaN geometry", () => {
+    const bounds = fitGridBounds([], Number.NaN, Number.NaN);
+    expect(Number.isFinite(bounds.startMinute)).toBe(true);
+    expect(Number.isFinite(bounds.endMinute)).toBe(true);
+    expect(bounds.endMinute).toBeGreaterThan(bounds.startMinute);
+  });
+
   it("falls back to the full default canvas when there is nothing to fit", () => {
     expect(fitGridBounds([])).toEqual({
       startMinute: GRID_START_MINUTE,
