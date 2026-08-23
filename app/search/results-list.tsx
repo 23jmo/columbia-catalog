@@ -89,6 +89,9 @@ export function ResultsList({ rows, sectionScoped }: ResultsListProps) {
     overscan: 6,
     scrollMargin,
     getItemKey: (index) => rows[index].course.courseId,
+    // TanStack defaults to flushSync on sync remeasures (row expand). React 19
+    // warns when that fires from ref/measure callbacks during commit.
+    useFlushSync: false,
   });
 
   const items = virtualizer.getVirtualItems();

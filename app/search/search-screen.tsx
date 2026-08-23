@@ -1,16 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { RiEqualizerLine, RiSearchLine } from "@remixicon/react";
 
-import { Button } from "@/components/base/buttons/button";
 import { ActiveFilterChips } from "@/components/catalog/active-filter-chips";
 import {
   describeActiveFilters,
   filtersFromLocation,
   filtersToQueryString,
+  clearTimeStructureFilters,
 } from "@/components/catalog/filter-params";
-import { Filters } from "@/components/catalog/filters";
 import { SearchBar } from "@/components/catalog/search-bar";
 import { PageHeader } from "@/components/shell/page-header";
 import {
@@ -23,7 +21,7 @@ import type { SearchEngine } from "@/lib/search/engine";
 import type { SearchResult, TermCode } from "@/lib/types";
 
 import { EmptyResults } from "./empty-results";
-import { FilterSheet } from "./filter-sheet";
+import { FilterPopover } from "./filter-popover";
 import { IndexStatus } from "./index-status";
 import { ResultsList, type ResultRow } from "./results-list";
 
@@ -47,7 +45,6 @@ const EMPTY_FACETS: SearchFacets = {
 export interface SearchScreenProps {
   initialFilters: CatalogSearchFilters;
   termCode: TermCode;
-  termLabel: string;
 }
 
 function isWorthRendering(previous: LoadProgress | null, next: LoadProgress): boolean {
@@ -57,12 +54,10 @@ function isWorthRendering(previous: LoadProgress | null, next: LoadProgress): bo
   return Math.abs(next.fraction - previous.fraction) >= 0.05;
 }
 
-export function SearchScreen({ initialFilters, termCode, termLabel }: SearchScreenProps) {
+export function SearchScreen({ initialFilters, termCode }: SearchScreenProps) {
   const [filters, setFilters] = useState<CatalogSearchFilters>(initialFilters);
   const [engine, setEngine] = useState<SearchEngine | null>(null);
   const [progress, setProgress] = useState<LoadProgress | null>(null);
-  const [isFilterSheetOpen, setFilterSheetOpen] = useState(false);
-
   useEffect(() => {
     let cancelled = false;
     const lastProgress = { current: null as LoadProgress | null };
@@ -107,6 +102,7 @@ export function SearchScreen({ initialFilters, termCode, termLabel }: SearchScre
   );
 
   const totalCatalogCourses = engine?.totalCoursesForTerm(termCode) ?? 0;
+  const meetingFiltersAvailable = engine?.hasMeetingCoverageForTerm(termCode) ?? false;
   const sectionScoped = hasSectionLevelFilter(effectiveFilters);
 
   const rows = useMemo<ResultRow[]>(() => {
@@ -119,6 +115,18 @@ export function SearchScreen({ initialFilters, termCode, termLabel }: SearchScre
     }
     return out;
   }, [result, engine]);
+
+  useEffect(() => {
+    if (!engine || meetingFiltersAvailable) return;
+    setFilters((current) => {
+      const hasTime =
+        (current.days?.length ?? 0) > 0 ||
+        current.startAfterMinute !== undefined ||
+        current.endBeforeMinute !== undefined;
+      if (!hasTime) return current;
+      return clearTimeStructureFilters(current);
+    });
+  }, [engine, meetingFiltersAvailable]);
 
   useEffect(() => {
     const query = filtersToQueryString(filters);
@@ -156,12 +164,7 @@ export function SearchScreen({ initialFilters, termCode, termLabel }: SearchScre
 
   return (
     <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-6">
-      <PageHeader
-        eyebrow="Catalog"
-        icon={RiSearchLine}
-        title="Search"
-        description={`Every ${termLabel} course, searched on your machine. Results update as you type — nothing is sent anywhere.`}
-      >
+      <PageHeader title="Search">
         <div className="flex items-start gap-2">
           <SearchBar
             query={filters.q ?? ""}
@@ -171,56 +174,34 @@ export function SearchScreen({ initialFilters, termCode, termLabel }: SearchScre
             appearance="hero"
             className="min-w-0 flex-1"
           />
-          <Button
-            className="h-14 shrink-0 lg:hidden"
-            size="medium"
-            variant="secondary"
-            leadingIcon={RiEqualizerLine}
-            onClick={() => setFilterSheetOpen(true)}
-            aria-label="Open filters"
-          >
-            {activeFilterCount > 0 ? `Filters · ${activeFilterCount}` : "Filters"}
-          </Button>
+          <FilterPopover
+            filters={filters}
+            onChange={onFiltersChange}
+            facets={facets}
+            hasNoReviewData
+            meetingFiltersAvailable={meetingFiltersAvailable}
+            activeFilterCount={activeFilterCount}
+          />
         </div>
       </PageHeader>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[264px_minmax(0,1fr)] lg:gap-8">
-        <aside className="hidden lg:block">
-          <div className="sticky top-6 max-h-[calc(100dvh-3rem)] overflow-y-auto pr-1">
-            <Filters
-              filters={filters}
-              onChange={onFiltersChange}
-              facets={facets}
-              hasNoReviewData
-            />
-          </div>
-        </aside>
+      <div className="flex min-w-0 flex-col gap-3">
+        <ActiveFilterChips filters={filters} onChange={onFiltersChange} />
 
-        <div className="flex min-w-0 flex-col gap-3">
-          <ActiveFilterChips filters={filters} onChange={onFiltersChange} />
+        <IndexStatus progress={progress} isEngineLive={engine !== null} />
 
-          <IndexStatus progress={progress} isEngineLive={engine !== null} />
-
-          {!engine ? null : rows.length === 0 ? (
-            <EmptyResults
-              filters={filters}
-              onChange={onFiltersChange}
-              totalCourses={totalCatalogCourses}
-            />
-          ) : (
-            <ResultsList rows={rows} sectionScoped={sectionScoped} />
-          )}
-        </div>
+        {!engine ? null : rows.length === 0 ? (
+          <EmptyResults
+            filters={filters}
+            onChange={onFiltersChange}
+            totalCourses={totalCatalogCourses}
+            meetingFiltersAvailable={meetingFiltersAvailable}
+          />
+        ) : (
+          <ResultsList rows={rows} sectionScoped={sectionScoped} />
+        )}
       </div>
 
-      <FilterSheet isOpen={isFilterSheetOpen} onClose={() => setFilterSheetOpen(false)}>
-        <Filters
-          filters={filters}
-          onChange={onFiltersChange}
-          facets={facets}
-          hasNoReviewData
-        />
-      </FilterSheet>
     </div>
   );
 }

@@ -169,6 +169,157 @@ export async function getCoursesByIds(
 // Sections
 // ---------------------------------------------------------------------------
 
+/**
+ * The qualifier-tolerant course lookup behind `resolveCourse`.
+ *
+ * `/course/COMS4118` must resolve to `COMS4118W`: the registrar's trailing
+ * qualifier letter is plumbing nobody types, and a pasted link is usually
+ * missing it. That used to be answered by scanning the whole term in memory,
+ * which meant the most forgiving path was also the slowest one -- ~3.9s to
+ * recover from a missing letter. Two indexed queries answer it instead.
+ *
+ * Only ever called after an exact `getCourse` has already missed.
+ */
+export async function findCourseByLooseId(
+  wanted: string,
+  termCode: TermCode = CURRENT_TERM,
+): Promise<CourseWithSections | null> {
+  const client = readClient();
+
+  // `_` and `%` are LIKE metacharacters. Real course ids are alphanumeric, so
+  // rather than escape them, anything else declines the pattern query outright
+  // -- matching the old in-memory scan, which could not match them either.
+  if (/^[A-Z0-9]+$/.test(wanted)) {
+    const { data, error } = await client
+      .from("courses")
+      .select(COURSE_WITH_TERM_SECTIONS_SELECT)
+      .eq("sections.term_code", termCode)
+      .like("course_id", `${wanted}_`)
+      .order("course_id", { ascending: true })
+      .overrideTypes<CourseRowWithSections[], { merge: false }>();
+
+    if (error) fail(`findCourseByLooseId(${wanted})`, error);
+
+    // LIKE's `_` matches any single character; the qualifier is specifically an
+    // uppercase letter, so the shape is re-checked here rather than trusted.
+    const qualified = (data ?? []).find((row) =>
+      /^[A-Z]$/.test(String(row.course_id).slice(wanted.length)),
+    );
+    if (qualified) return rowToCourseWithSections(qualified, termCode);
+  }
+
+  // "COMS0004118" / "COMS4118W" -> subject COMS, number 4118.
+  const match = wanted.match(/^([A-Z]+)0*(\d+)[A-Z]?$/);
+  if (!match) return null;
+  const [, subjectCode, number] = match;
+
+  const { data, error } = await client
+    .from("courses")
+    .select(COURSE_WITH_TERM_SECTIONS_SELECT)
+    .eq("sections.term_code", termCode)
+    .eq("subject_code", subjectCode)
+    .eq("course_number", Number(number))
+    .order("course_id", { ascending: true })
+    .limit(1)
+    .overrideTypes<CourseRowWithSections[], { merge: false }>();
+
+  if (error) fail(`findCourseByLooseId(${wanted} numeric)`, error);
+  const row = data?.[0];
+  return row ? rowToCourseWithSections(row, termCode) : null;
+}
+
+/**
+ * The courses that could plausibly be "similar" to one course.
+ *
+ * `buildSimilar` in `components/course/load-course-detail.ts` scores candidates
+ * and keeps only those scoring above zero, and exactly two families ever do:
+ * another course in the SAME SUBJECT, or one sharing the same non-null
+ * DEPARTMENT. So this fetches those two sets instead of the entire term. The
+ * result is not an approximation -- every course this omits would have scored
+ * zero and been filtered out anyway.
+ *
+ * The distinction is worth ~4 seconds. A term is ~4,400 courses and pages out
+ * of PostgREST in five sequential round trips (~8 MB); the largest subject is
+ * 217 courses and the largest department 73, each a single round trip well
+ * under the 1,000-row cap. And 63% of courses carry no department at all, so
+ * most calls here are one query returning a few dozen rows.
+ *
+ * The two sets are fetched concurrently and merged rather than expressed as a
+ * PostgREST `or=(...)`: department values are URL paths, and embedding
+ * arbitrary punctuation into `or`'s comma-separated grammar is a quoting bug
+ * waiting to happen.
+ */
+export async function getSimilarCandidates(
+  subjectCode: string,
+  department: string | null,
+  termCode: TermCode = CURRENT_TERM,
+): Promise<CourseWithSections[]> {
+  const client = readClient();
+
+  const bySubject = client
+    .from("courses")
+    .select(COURSE_WITH_TERM_SECTIONS_SELECT)
+    .eq("sections.term_code", termCode)
+    .eq("subject_code", subjectCode)
+    .overrideTypes<CourseRowWithSections[], { merge: false }>();
+
+  // Skipped entirely when the course has no department — no candidate can match
+  // a null, so the query would be a round trip guaranteed to score nothing.
+  const byDepartment = department
+    ? client
+        .from("courses")
+        .select(COURSE_WITH_TERM_SECTIONS_SELECT)
+        .eq("sections.term_code", termCode)
+        .eq("department", department)
+        .overrideTypes<CourseRowWithSections[], { merge: false }>()
+    : null;
+
+  const [subjectResult, departmentResult] = await Promise.all([bySubject, byDepartment]);
+
+  if (subjectResult.error) fail(`getSimilarCandidates(${subjectCode})`, subjectResult.error);
+  if (departmentResult?.error) {
+    fail(`getSimilarCandidates(department ${department})`, departmentResult.error);
+  }
+
+  // A same-subject course is usually also same-department, so the two sets
+  // overlap heavily; dedupe by id before the caller scores them.
+  const byId = new Map<string, CourseWithSections>();
+  for (const row of [...(subjectResult.data ?? []), ...(departmentResult?.data ?? [])]) {
+    const course = rowToCourseWithSections(row, termCode);
+    byId.set(course.courseId, course);
+  }
+  return [...byId.values()];
+}
+
+/**
+ * One course with its sections across several terms, in a single round trip.
+ *
+ * Offering history asks the same question of eight terms. Asking it as eight
+ * separate `getCourse` calls is eight round trips for rows that live in one
+ * table; this asks once and lets the caller group by `termCode`.
+ *
+ * Note the deliberate lack of a `termCode` argument to `rowToCourseWithSections`
+ * — passing one would filter the sections down to a single term and throw away
+ * the very thing this function exists to fetch.
+ */
+export async function getCourseAcrossTerms(
+  courseId: string,
+  termCodes: TermCode[],
+): Promise<CourseWithSections | null> {
+  const client = readClient();
+
+  const { data, error } = await client
+    .from("courses")
+    .select(COURSE_WITH_TERM_SECTIONS_SELECT)
+    .eq("course_id", courseId)
+    .in("sections.term_code", termCodes)
+    .maybeSingle()
+    .overrideTypes<CourseRowWithSections | null, { merge: false }>();
+
+  if (error) fail(`getCourseAcrossTerms(${courseId})`, error);
+  return data ? rowToCourseWithSections(data) : null;
+}
+
 export async function getSection(sectionId: string): Promise<Section | null> {
   const client = readClient();
 

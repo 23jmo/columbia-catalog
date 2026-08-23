@@ -1,5 +1,7 @@
 "use client";
 
+import { RiInformationLine } from "@remixicon/react";
+
 import { RangeSlider } from "@/components/base/slider/slider";
 import { Switch } from "@/components/base/switch/switch";
 import { COURSE_LEVELS, WEEKDAYS, WEEKDAY_LABEL, WEEKDAY_SHORT, minutesToLabel } from "@/lib/constants";
@@ -28,9 +30,17 @@ export interface TimeFiltersProps {
   /** [min, max] credits actually present in the catalog. */
   creditRange: [number, number];
   activeCount: number;
+  /** False when the loaded index has no meeting days/times to filter on. */
+  meetingFiltersAvailable?: boolean;
 }
 
-export function TimeFilters({ filters, onChange, creditRange, activeCount }: TimeFiltersProps) {
+export function TimeFilters({
+  filters,
+  onChange,
+  creditRange,
+  activeCount,
+  meetingFiltersAvailable = true,
+}: TimeFiltersProps) {
   const selectedDays = filters.days ?? [];
   const windowStart = filters.startAfterMinute ?? DAY_START_MINUTE;
   const windowEnd = filters.endBeforeMinute ?? DAY_END_MINUTE;
@@ -81,6 +91,16 @@ export function TimeFilters({ filters, onChange, creditRange, activeCount }: Tim
 
   return (
     <FilterGroup title="Time and structure" activeCount={activeCount}>
+      {!meetingFiltersAvailable ? (
+        <p className="flex items-start gap-1.5 rounded-2lg border border-dashed border-border-button-default bg-background-secondary-default px-3 py-2 text-caption-1-regular text-text-secondary">
+          <RiInformationLine aria-hidden className="mt-px size-3.5 shrink-0" />
+          <span>
+            Day and time filters are unavailable until the search index includes meeting data.
+            Clear any day or time chips below, or rebuild the index.
+          </span>
+        </p>
+      ) : null}
+
       {/* Days ------------------------------------------------------------- */}
       <div className="flex flex-col gap-2">
         <FilterLabel>Meets on</FilterLabel>
@@ -92,6 +112,7 @@ export function TimeFilters({ filters, onChange, creditRange, activeCount }: Tim
               onToggle={() => toggleDay(day)}
               ariaLabel={WEEKDAY_LABEL[day]}
               className="min-w-10 text-center"
+              disabled={!meetingFiltersAvailable}
             >
               {WEEKDAY_SHORT[day]}
             </TogglePill>
@@ -113,6 +134,7 @@ export function TimeFilters({ filters, onChange, creditRange, activeCount }: Tim
           value={[windowStart, windowEnd]}
           onChange={(v) => setTimeWindow(v as number[])}
           formatValue={(value) => minutesToLabel(value)}
+          isDisabled={!meetingFiltersAvailable}
         />
       </div>
 

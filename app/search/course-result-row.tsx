@@ -18,12 +18,23 @@ import type { CourseListItem, SectionListItem } from "@/lib/catalog-list-types";
 import { cx } from "@/utils/cx";
 
 /**
- * One result: a COURSE that opens into a TABLE of its sections.
+ * A single search result -- the section is the row.
+ *
+ * 3,433 of 4,428 courses (78%) have exactly one section. For those, a course
+ * header that expands is a disclosure that hides nothing: you click, and the
+ * panel contains one row. So a single-section course renders AS its section --
+ * one row, section title leading, clicking it opens the drawer. A course keeps
+ * its own header row only when it has more than one section to group, and that
+ * header is purely a disclosure: it toggles the table, it never navigates.
+ *
+ * Both rules turn out to be the same rule. A row that groups a choice opens
+ * the choice; a row that IS the choice opens the drawer.
  *
  * Spec section 6 keeps the result unit at the course -- students look for
- * "Operating Systems", not "section 002". What changed is the shape underneath:
- * the sections are now a real table with a header row rather than a stack of
- * restated sentences.
+ * "Operating Systems", not "section 002" -- and it still does, because the
+ * multi-section header IS the course. What changed is the shape underneath:
+ * sections are a real table with a header row rather than a stack of restated
+ * sentences, and the 78% case no longer pays for a grouping it does not need.
  *
  * ── When the section IS the class ──────────────────────────────────────────
  *
@@ -94,6 +105,21 @@ export function CourseResultRow({
   const panelId = `sections-${course.courseId}`;
   const sectionCount = sections.length;
 
+  // The whole point of this variant: no disclosure when there is no choice.
+  if (sectionCount === 1) {
+    return (
+      <SoleSectionRow
+        section={sections[0]}
+        code={code}
+        courseTitle={title}
+        isMatch={matched?.has(sections[0].sectionId) ?? false}
+        requirementLabels={requirementLabels}
+        position={position}
+        total={total}
+      />
+    );
+  }
+
   return (
     <article
       className={cx(
@@ -103,16 +129,19 @@ export function CourseResultRow({
       aria-label={`Result ${position} of ${total}: ${code} ${title}`}
     >
       {/* ── Course header ──────────────────────────────────────────────── */}
-      <div className="flex items-start gap-3 px-3 py-2.5">
+      {/*
+        The header is a DISCLOSURE, not a destination.
+
+        It used to link to /course/[id], which opened the drawer -- so clicking a
+        course answered a question nobody asked ("tell me about this course")
+        when the actual question is "which of its sections do I want?". A course
+        is a container; the section is the thing you enrol in, the thing that has
+        a time, a room, an instructor and a seat. So the course row opens the
+        container and the section row opens the drawer.
+      */}
+      <div className="relative flex items-start gap-3 px-3 py-2.5">
         <div className="min-w-0 flex-1">
-          <h2 className="text-body-semibold -tracking-[0.01em] text-text-primary">
-            <Link
-              href={`/course/${course.courseId}`}
-              className="rounded outline-none transition-colors duration-100 ease hover:text-accent-600 focus-visible:ring-2 focus-visible:ring-border-focus-ring"
-            >
-              {title}
-            </Link>
-          </h2>
+          <h2 className="text-body-semibold -tracking-[0.01em] text-text-primary">{title}</h2>
 
           {/*
             Code sits UNDER the title, muted. The directory does it this way and
@@ -148,11 +177,15 @@ export function CourseResultRow({
           onClick={() => setOverride(!isExpanded)}
           aria-expanded={isExpanded}
           aria-controls={panelId}
+          aria-label={`${title} — ${sectionCount} ${sectionCount === 1 ? "section" : "sections"}`}
           className={cx(
             "inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md px-1.5 py-1",
             "text-caption-2-medium text-text-secondary transition-colors",
             "hover:bg-background-primary-hover hover:text-text-primary",
             "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
+            // One control, header-sized hit area: the whole row toggles, while
+            // assistive tech still sees exactly one button with one name.
+            "after:absolute after:inset-0 after:content-['']",
           )}
         >
           <span className="tabular-nums">
@@ -246,18 +279,27 @@ function SectionTableRow({ section, isMatch }: { section: SectionListItem; isMat
               "after:absolute after:inset-0 after:content-['']",
             )}
           >
-            <span className="tabular-nums">{section.sectionCode}</span>
             {/*
-              The section's own title, when it has one, sits INSIDE the link.
-              That is the point: for a container course like COMS6998 "Topics in
-              Computer Science", the section title is the only thing that says
-              which of the 24 unrelated classes this row is, so it belongs in the
-              link's accessible name rather than in a quiet cell elsewhere.
-              Most sections have no title and this renders nothing.
+              The section's own title LEADS, with the code demoted beside it.
+
+              Inside the link on purpose: for a container course the title is the
+              only string that says which class this row is, so it has to be the
+              link's accessible name. And it leads rather than trails because
+              scanning 64 rows of "001 · Swim / 002 · Diving" means reading past
+              an identical prefix 64 times to reach the word that differs. When a
+              section has no title of its own -- most do not -- the code is the
+              identity and stands alone.
             */}
             {sectionTitle ? (
-              <span className="font-normal text-text-secondary"> · {sectionTitle}</span>
-            ) : null}
+              <>
+                <span>{sectionTitle}</span>
+                <span className="ml-1.5 font-normal tabular-nums text-text-tertiary">
+                  {section.sectionCode}
+                </span>
+              </>
+            ) : (
+              <span className="tabular-nums">{section.sectionCode}</span>
+            )}
             <span className="sr-only">
               {instructors ? ` — ${instructors}` : ""}
               {isMatch ? " (matches your search)" : ""}
@@ -309,6 +351,112 @@ function SectionTableRow({ section, isMatch }: { section: SectionListItem; isMat
         />
       </td>
     </tr>
+  );
+}
+
+/**
+ * A course with exactly one section, rendered as that section.
+ *
+ * The headline is whichever string actually names the class: the section's own
+ * title when it has one, the course title otherwise. Everything demoted to the
+ * context line underneath is there to answer "which course is this?" without
+ * competing for the scan.
+ */
+function SoleSectionRow({
+  section,
+  code,
+  courseTitle,
+  isMatch,
+  requirementLabels,
+  position,
+  total,
+}: {
+  section: SectionListItem;
+  code: string;
+  courseTitle: string;
+  isMatch: boolean;
+  requirementLabels: string[];
+  position: number;
+  total: number;
+}) {
+  const ownTitle = section.title ? prettyTitle(section.title) : null;
+  const headline = ownTitle ?? courseTitle;
+  const meeting = formatSectionMeetings(section);
+  const instructors = section.instructors.length > 0 ? section.instructors.join(", ") : null;
+  const credits = formatCredits(section.minUnit, section.maxUnit);
+  const href = `/course/${section.courseId}?section=${encodeURIComponent(section.sectionCode)}`;
+
+  return (
+    <article
+      className={cx(
+        "group/row relative border-b border-border-table transition-colors duration-100 ease",
+        "hover:bg-background-primary-hover",
+        isMatch && "bg-accent-500/[0.07]",
+      )}
+      aria-label={`Result ${position} of ${total}: ${code} ${headline}`}
+    >
+      <div className="flex items-start gap-3 px-3 py-2.5">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-body-semibold -tracking-[0.01em] text-text-primary">
+            <Link
+              href={href}
+              className={cx(
+                "rounded outline-none transition-colors duration-100 ease hover:text-accent-600",
+                "focus-visible:ring-2 focus-visible:ring-border-focus-ring",
+                "after:absolute after:inset-0 after:content-['']",
+              )}
+            >
+              {headline}
+              <span className="sr-only">
+                {ownTitle ? ` — ${courseTitle}` : ""} — section {section.sectionCode}
+                {isMatch ? " (matches your search)" : ""}
+              </span>
+            </Link>
+          </h2>
+
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption-2-regular text-text-tertiary">
+            {/* Only when the headline was the SECTION's name -- otherwise this
+                would print the same string twice in a row. */}
+            {ownTitle ? <span className="truncate">{courseTitle} ·</span> : null}
+            <span className="tabular-nums tracking-[0.04em]">{code}</span>
+            <span className="tabular-nums">· {section.sectionCode}</span>
+            {credits ? <span>· {credits}</span> : null}
+          </div>
+
+          {instructors ? (
+            <p className="mt-0.5 truncate text-caption-1-medium text-text-secondary">{instructors}</p>
+          ) : null}
+          {meeting ? (
+            <p className="mt-0.5 truncate text-caption-2-regular tabular-nums text-text-tertiary">
+              {meeting}
+            </p>
+          ) : null}
+
+          {requirementLabels.length > 0 ? (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {requirementLabels.map((label) => (
+                <Chip key={label} variant="caption" color="soft">
+                  {label}
+                </Chip>
+              ))}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="flex shrink-0 items-center gap-2 pt-0.5">
+          <EnrollmentBar
+            status={section.status}
+            enrollmentCount={section.enrollmentCount}
+            enrollmentCap={section.enrollmentCap}
+            waitlistCount={section.waitlistCount}
+          />
+          <RiArrowRightSLine
+            aria-hidden
+            className="size-4 text-text-tertiary transition-colors group-hover/row:text-text-primary"
+          />
+        </div>
+      </div>
+    </article>
   );
 }
 

@@ -16,9 +16,21 @@
  * overlapping means "these usually clash", which is a warning, not an error.
  */
 
-import type { Weekday } from "@/lib/types";
+import type { CourseWithSections, Meeting, Weekday } from "@/lib/types";
 
 import { getBrowserClient, createAnonServerClient, isConfigured } from "./client";
+
+const RPC_CHUNK = 500;
+
+function typicalToMeeting(meeting: TypicalMeeting): Meeting {
+  return {
+    weekday: meeting.weekday,
+    startMinute: meeting.startMinute,
+    endMinute: meeting.endMinute,
+    buildingName: meeting.buildingName,
+    room: meeting.room,
+  };
+}
 
 export interface TypicalMeeting {
   weekday: Weekday;
@@ -85,4 +97,39 @@ export async function getTypicalMeetings(
     }
   }
   return out;
+}
+
+/**
+ * Deep-clone courses and attach historical meeting patterns on sections that
+ * have none. Used only when building the search index so day/time filters have
+ * something to match — the DISP block still comes from the un-enriched catalog
+ * so the UI never presents a guess as a confirmed time.
+ */
+export async function cloneCoursesWithTypicalMeetings(
+  courses: CourseWithSections[],
+): Promise<{ courses: CourseWithSections[]; enrichedSections: number }> {
+  const cloned = JSON.parse(JSON.stringify(courses)) as CourseWithSections[];
+  const bareIds = cloned.flatMap((course) =>
+    course.sections.filter((section) => section.meetings.length === 0).map((s) => s.sectionId),
+  );
+  if (bareIds.length === 0 || !isConfigured()) {
+    return { courses: cloned, enrichedSections: 0 };
+  }
+
+  let enrichedSections = 0;
+  for (let i = 0; i < bareIds.length; i += RPC_CHUNK) {
+    const patterns = await getTypicalMeetings(bareIds.slice(i, i + RPC_CHUNK));
+    if (patterns.size === 0) continue;
+
+    for (const course of cloned) {
+      for (const section of course.sections) {
+        const pattern = patterns.get(section.sectionId);
+        if (!pattern || section.meetings.length > 0) continue;
+        section.meetings = pattern.meetings.map(typicalToMeeting);
+        enrichedSections++;
+      }
+    }
+  }
+
+  return { courses: cloned, enrichedSections };
 }

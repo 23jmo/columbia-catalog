@@ -101,13 +101,71 @@ export function projectSection(section: Section, courseTitle?: string): SectionL
 /**
  * Whether a section's title says something the course title does not.
  *
- * Compared case- and space-insensitively because the directory is inconsistent
- * about both across rows of the same course.
+ * This is the predicate the whole app asks before printing a section's own
+ * name, so it decides once, for search rows, the drawer heading and the
+ * sections panel alike.
+ *
+ * ── Why equality is not enough ─────────────────────────────────────────────
+ *
+ * The registrar truncates, and it truncates the two fields at DIFFERENT
+ * lengths: section titles are capped at 25 characters and course titles at 40.
+ * So the same name routinely arrives clipped twice over --
+ *
+ *   section "Private Equity and Ventur"   course "Private Equity and Venture Cap"
+ *   section "CONTEMP WESTERN CIVILIZAT"   course "CONTEMP WESTERN CIVILIZATION I"
+ *
+ * -- and a plain inequality test calls those distinct. In Fall 2026 that was
+ * 2,748 of the 5,001 sections we considered "named", 55% of them, and every one
+ * would have led its row with a word broken off mid-syllable. A truncated
+ * repeat of the course title is strictly worse than showing the course title:
+ * it is the same information, damaged.
+ *
+ * So the course title merely STARTING WITH the section title means one name,
+ * not two. The test is deliberately one-directional: a section title that
+ * starts with the course title and continues ("Topics in CS: LLMs" under
+ * "Topics in CS") is the case where the section genuinely says more, and that
+ * must stay distinct.
+ *
+ * ── What this still lets through ───────────────────────────────────────────
+ *
+ * Abbreviated variants, because they are not prefixes of anything:
+ * "PREDICT MODLNG IN FIN & INSRNC" against "PREDICTIVE MODELING IN FINANCE &
+ * INSURAN". Catching those needs fuzzy matching, which would start guessing
+ * about real container courses -- and a wrong guess there hides the actual name
+ * of a class. Known, bounded, and left alone on purpose.
  */
 export function isDistinctSectionTitle(sectionTitle: string | null | undefined, courseTitle?: string): boolean {
   if (!sectionTitle) return false;
   if (courseTitle === undefined) return true;
-  return foldForCompare(sectionTitle) !== foldForCompare(courseTitle);
+
+  const section = foldTitleForCompare(sectionTitle);
+  if (!section) return false;
+
+  const course = foldTitleForCompare(courseTitle);
+  if (section === course) return false;
+
+  // The truncation case, and the "says nothing the course title did not" case,
+  // are the same test.
+  return !course.startsWith(section);
+}
+
+/**
+ * Titles reduced to what they actually SAY, for comparison only.
+ *
+ * Every separator is DELETED rather than collapsed to a space -- letters and
+ * digits only. The directory does not keep punctuation stable between the two
+ * fields, and an apostrophe that survives in one row and becomes a space in the
+ * next splits a word: "The Actuarys Toolkit" against "The Actuary s Toolkit".
+ * Collapsing to a space leaves those unequal; deleting makes them one string.
+ * Measured across Fall 2026 this merges exactly four more titles than the
+ * space-collapsing version, and all four are that same apostrophe -- no title
+ * that means something different is swallowed by it.
+ *
+ * Separate from `foldForCompare`, which feeds `queryTokens` -- query
+ * tokenisation needs its word boundaries and must not drift into this.
+ */
+function foldTitleForCompare(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
 /**

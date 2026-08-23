@@ -167,7 +167,7 @@ export function SeatBadge({ figures, layout = "inline", className }: SeatBadgePr
       {/* Provenance is mandatory and travels with the number, always. */}
       <span
         className={cx(
-          "text-caption-2-regular text-text-tertiary",
+          "text-caption-1-regular text-text-tertiary",
           !sourceAsOf && "italic",
         )}
         title={sourceAsOf ?? undefined}

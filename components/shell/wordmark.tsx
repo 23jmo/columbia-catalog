@@ -25,11 +25,6 @@ export function ShellWordmark({
       </span>
       <span className="flex min-w-0 flex-col">
         <span className="text-body-medium truncate text-text-primary">Columbia Catalog</span>
-        {!compact && (
-          <span className="text-caption-2-regular truncate text-text-tertiary">
-            Course search &amp; planning
-          </span>
-        )}
       </span>
     </Link>
   );

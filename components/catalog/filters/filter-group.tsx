@@ -91,26 +91,34 @@ export function TogglePill({
   children,
   ariaLabel,
   className,
+  disabled,
 }: {
   isSelected: boolean;
   onToggle: () => void;
   children: ReactNode;
   ariaLabel?: string;
   className?: string;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       aria-pressed={isSelected}
       aria-label={ariaLabel}
+      disabled={disabled}
       onClick={onToggle}
       className={cx(
-        "cursor-pointer rounded-lg border px-2.5 py-1 text-body-2-medium",
+        "rounded-lg border px-2.5 py-1 text-body-2-medium",
         "transition-colors duration-150",
         "outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-border-focus-ring",
-        isSelected
-          ? "border-accent-500 bg-accent-500 text-text-white"
-          : "border-border-button-default bg-background-primary-default text-text-secondary hover:border-border-button-hover hover:text-text-primary",
+        disabled
+          ? "cursor-not-allowed border-border-button-default bg-background-primary-disabled text-text-tertiary"
+          : cx(
+              "cursor-pointer",
+              isSelected
+                ? "border-accent-500 bg-accent-500 text-text-white"
+                : "border-border-button-default bg-background-primary-default text-text-secondary hover:border-border-button-hover hover:text-text-primary",
+            ),
         className,
       )}
     >

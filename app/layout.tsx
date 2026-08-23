@@ -1,7 +1,22 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import { Agentation } from "agentation";
 import "@/styles/globals.css";
+
+/** BoardUI's sans stack — exposed as `--font-inter` for `styles/theme.css`. */
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
+
+/** Code blocks — exposed as `--font-mono-source` for `styles/theme.css`. */
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono-source",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Columbia Catalog",
@@ -27,8 +42,11 @@ export default function RootLayout({
   drawer: ReactNode;
 }) {
   return (
-    <html lang="en" className="h-full antialiased">
-      <body className="min-h-full flex flex-col bg-background-full text-text-primary">
+    <html
+      lang="en"
+      className={`${inter.variable} ${jetbrainsMono.variable} h-dvh antialiased`}
+    >
+      <body className="flex min-h-dvh flex-col bg-background-full font-sans text-text-primary">
         {children}
         {drawer}
         {/*

@@ -24,13 +24,5 @@ export function CourseSeatSummary({ sections }: { sections: Section[] }) {
   if (sections.length === 1) return <SeatState section={sections[0]} />;
 
   const figures = aggregateSeatFigures(sections);
-  return (
-    <>
-      <SeatBadge figures={figures} layout="stacked" />
-      <p className="text-caption-1-regular text-text-secondary">
-        Totalled across {sections.length} sections; the stamp above is the oldest reading
-        among them. Per-section seats are listed below.
-      </p>
-    </>
-  );
+  return <SeatBadge figures={figures} layout="stacked" />;
 }

@@ -7,7 +7,12 @@
  * `@/lib/data/catalog`; the seed JSON is never read directly.
  */
 
-import { getAllCourses, getCourse } from "@/lib/data/catalog";
+import {
+  findCourseByLooseId,
+  getCourse,
+  getCourseAcrossTerms,
+  getSimilarCandidates,
+} from "@/lib/data/catalog";
 import { ALL_TERMS, CURRENT_TERM, termLabel } from "@/lib/constants";
 import type { CourseWithSections, Section, TermCode } from "@/lib/types";
 import { creditsLabel } from "./format";
@@ -60,18 +65,14 @@ export async function resolveCourse(
   const exact = await getCourse(wanted, termCode);
   if (exact) return exact;
 
-  const all = await getAllCourses(termCode);
-  const withQualifier = all.find((c) => c.courseId.replace(/[A-Z]$/, "") === wanted);
-  if (withQualifier) return withQualifier;
-
-  // "COMS-4118" / "COMS 4118" already normalised above; try a numeric match.
-  const match = wanted.match(/^([A-Z]+)0*(\d+)[A-Z]?$/);
-  if (match) {
-    const [, subject, number] = match;
-    const numeric = all.find((c) => c.subjectCode === subject && c.number === Number(number));
-    if (numeric) return numeric;
-  }
-  return null;
+  /*
+   * The forgiving path used to page the entire term into memory to find one
+   * course, which made recovering from a missing qualifier letter the slowest
+   * thing the course surface could do -- ~3.9s, versus ~0.3s for a link that
+   * happened to carry the letter. `findCourseByLooseId` does the same two
+   * lookups as indexed queries.
+   */
+  return findCourseByLooseId(wanted, termCode);
 }
 
 function sectionSort(a: Section, b: Section): number {
@@ -90,8 +91,19 @@ function levelBand(number: number): number {
   return Math.floor(number / 1000);
 }
 
-function buildSimilar(course: CourseWithSections, all: CourseWithSections[]): SimilarCourse[] {
-  const scored = all
+/**
+ * `candidates` is deliberately NOT the whole term. Every course that scores
+ * zero here is filtered out anyway, and only same-subject or same-department
+ * courses can score above zero -- so the caller fetches exactly those two sets.
+ * Passing the full catalog would produce the same six results four seconds
+ * later. The scoring below is unchanged and still filters on `score > 0`, so it
+ * stays correct no matter how wide a set it is handed.
+ */
+function buildSimilar(
+  course: CourseWithSections,
+  candidates: CourseWithSections[],
+): SimilarCourse[] {
+  const scored = candidates
     .filter((c) => c.courseId !== course.courseId)
     .map((candidate) => {
       const sameSubject = candidate.subjectCode === course.subjectCode;
@@ -120,7 +132,17 @@ function buildSimilar(course: CourseWithSections, all: CourseWithSections[]): Si
       return { candidate, score, reason };
     })
     .filter((entry) => entry.score > 0)
-    .sort((a, b) => b.score - a.score)
+    /*
+     * The `courseId` tiebreak is load-bearing, not cosmetic. The bottom of this
+     * list is usually a block of candidates tied at exactly 20 ("Same
+     * department"), and a bare `b.score - a.score` leaves their order to the
+     * stable sort -- which means to whatever order the candidates arrived in.
+     * That used to be the database's paging order, so which six of forty tied
+     * courses a student saw was decided by a query plan. Ordering ties by id
+     * makes the list a function of the data alone: same course, same six, every
+     * render, regardless of how the candidates were fetched.
+     */
+    .sort((a, b) => b.score - a.score || a.candidate.courseId.localeCompare(b.candidate.courseId))
     .slice(0, 6);
 
   return scored.map(({ candidate, reason }) => ({
@@ -134,31 +156,45 @@ function buildSimilar(course: CourseWithSections, all: CourseWithSections[]): Si
   }));
 }
 
+/**
+ * Offering history for all eight terms.
+ *
+ * This used to be one `getCourse` per term -- eight round trips asking the same
+ * table the same question with a different `term_code`. It is now one query
+ * that returns every section in any of those terms, grouped by term here. A
+ * term with no sections simply has no group, which is exactly the `offered:
+ * false` the per-term nulls used to produce.
+ */
 async function buildOfferingHistory(courseId: string): Promise<OfferingRecord[]> {
-  const records = await Promise.all(
-    ALL_TERMS.map(async (termCode): Promise<OfferingRecord> => {
-      const found = await getCourse(courseId, termCode);
-      const sections = found?.sections.filter((s) => s.termCode === termCode) ?? [];
-      const enrolled = sections.reduce<number | null>(
-        (sum, s) => (s.enrollmentCount == null ? sum : (sum ?? 0) + s.enrollmentCount),
-        null,
-      );
-      const capacity = sections.reduce<number | null>(
-        (sum, s) => (s.enrollmentCap == null ? sum : (sum ?? 0) + s.enrollmentCap),
-        null,
-      );
-      return {
-        termCode,
-        label: termLabel(termCode),
-        offered: sections.length > 0,
-        sectionCount: sections.length,
-        instructors: distinctInstructors(sections),
-        totalEnrolled: enrolled,
-        totalCapacity: capacity,
-      };
-    }),
-  );
-  return records;
+  const across = await getCourseAcrossTerms(courseId, ALL_TERMS);
+
+  const sectionsByTerm = new Map<TermCode, Section[]>();
+  for (const section of across?.sections ?? []) {
+    const existing = sectionsByTerm.get(section.termCode);
+    if (existing) existing.push(section);
+    else sectionsByTerm.set(section.termCode, [section]);
+  }
+
+  return ALL_TERMS.map((termCode): OfferingRecord => {
+    const sections = sectionsByTerm.get(termCode) ?? [];
+    const enrolled = sections.reduce<number | null>(
+      (sum, s) => (s.enrollmentCount == null ? sum : (sum ?? 0) + s.enrollmentCount),
+      null,
+    );
+    const capacity = sections.reduce<number | null>(
+      (sum, s) => (s.enrollmentCap == null ? sum : (sum ?? 0) + s.enrollmentCap),
+      null,
+    );
+    return {
+      termCode,
+      label: termLabel(termCode),
+      offered: sections.length > 0,
+      sectionCount: sections.length,
+      instructors: distinctInstructors(sections),
+      totalEnrolled: enrolled,
+      totalCapacity: capacity,
+    };
+  });
 }
 
 export async function loadCourseDetail(
@@ -169,8 +205,8 @@ export async function loadCourseDetail(
   if (!course) return null;
 
   const sections = course.sections.filter((s) => s.termCode === termCode).sort(sectionSort);
-  const [all, offeringHistory] = await Promise.all([
-    getAllCourses(termCode),
+  const [candidates, offeringHistory] = await Promise.all([
+    getSimilarCandidates(course.subjectCode, course.department, termCode),
     buildOfferingHistory(course.courseId),
   ]);
 
@@ -182,7 +218,7 @@ export async function loadCourseDetail(
     code: `${course.subjectCode} ${course.number}`,
     credits: creditsLabel(course.pointsMin, course.pointsMax),
     instructors: distinctInstructors(sections),
-    similar: buildSimilar(course, all),
+    similar: buildSimilar(course, candidates),
     offeringHistory,
   };
 }

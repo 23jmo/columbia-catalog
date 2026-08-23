@@ -501,6 +501,21 @@ export class SearchEngine {
     return seatOverlayEntriesForTerm(this.displayByOrd, termCode);
   }
 
+  /** True when day/time filters can match at least one course in the term. */
+  hasMeetingCoverageForTerm(termCode: TermCode): boolean {
+    const termId = this.termIdByCode.get(termCode);
+    if (termId === undefined) return false;
+    const courses = this.index.courses;
+    for (let doc = 0; doc < this.courseCount; doc++) {
+      const base = doc * COURSE_WORDS;
+      const termMask = courses[base + CW_SECTION_COUNT_TERMMASK] >>> 16;
+      if ((termMask & (1 << termId)) === 0) continue;
+      const dayMask = (courses[base + CW_CREDITS_DAYS] >>> 16) & 0xff;
+      if (dayMask !== 0) return true;
+    }
+    return false;
+  }
+
   // -------------------------------------------------------------------------
   // Retrieval
   // -------------------------------------------------------------------------

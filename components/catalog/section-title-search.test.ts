@@ -20,7 +20,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { createLocalSearchSource } from "@/components/catalog/search-source";
-import { projectCourse } from "@/lib/catalog-list-types";
+import { isDistinctSectionTitle, projectCourse } from "@/lib/catalog-list-types";
 import { buildIndex } from "@/lib/search/build";
 import { SearchEngine } from "@/lib/search/engine";
 import { decodeIndex, encodeIndex } from "@/lib/search/index-format";
@@ -154,5 +154,70 @@ describe("section titles are searchable", () => {
   it("ranks a section-title match above a course that only mentions the word", () => {
     const ranked = local.search({ q: "generative" }).hits;
     expect(ranked[0]?.courseId).toBe("COMS6998E");
+  });
+});
+
+/**
+ * The registrar truncates, and it truncates the two title fields at different
+ * lengths — section titles at 25 characters, course titles at 40. So the same
+ * name arrives clipped twice and a naive inequality test calls the two halves
+ * "distinct". In Fall 2026 that was 2,748 of 5,001 sections, 55% of everything
+ * the app considered a named section, and each one would have led its search
+ * row with a word broken off mid-syllable.
+ *
+ * These pin the rule that fixes it, in both directions: a clipped repeat of the
+ * course title is NOT a name, and a section that genuinely says more still is.
+ */
+describe("isDistinctSectionTitle — registrar truncation", () => {
+  it("rejects a section title that is the course title clipped at 25 characters", () => {
+    expect(
+      isDistinctSectionTitle("Private Equity and Ventur", "Private Equity and Venture Cap"),
+    ).toBe(false);
+    expect(
+      isDistinctSectionTitle("CONTEMP WESTERN CIVILIZAT", "CONTEMP WESTERN CIVILIZATION I"),
+    ).toBe(false);
+  });
+
+  it("rejects an exact repeat, the ordinary-course case", () => {
+    expect(isDistinctSectionTitle("Computer Science Theory", "Computer Science Theory")).toBe(
+      false,
+    );
+  });
+
+  it("ignores punctuation the directory does not keep stable between the fields", () => {
+    // The apostrophe survives in one row and becomes a space in the next.
+    expect(isDistinctSectionTitle("The Actuarys Toolkit", "The Actuary s Toolkit")).toBe(false);
+    expect(isDistinctSectionTitle("GLOBAL MASTERS ESSAY I", "Global Master's Essay I")).toBe(
+      false,
+    );
+  });
+
+  it("keeps a section that genuinely names a different class", () => {
+    // The case the whole feature exists for: a container course.
+    expect(
+      isDistinctSectionTitle("PHED: Swim (Beginner)", "PHYSICAL EDUCATION ACTIVITIES"),
+    ).toBe(true);
+    expect(
+      isDistinctSectionTitle("LLM Based Generative AI", "TOPICS IN COMPUTER SCIENCE"),
+    ).toBe(true);
+  });
+
+  it("keeps a section title that EXTENDS the course title", () => {
+    /*
+     * The prefix test has to be one-directional. A section that starts with the
+     * course title and continues is saying more, not saying it shorter — and
+     * merging that would delete the only place the specific class is named.
+     */
+    expect(
+      isDistinctSectionTitle("Topics in CS: LLMs", "Topics in CS"),
+    ).toBe(true);
+  });
+
+  it("treats a missing or empty title as no title at all", () => {
+    expect(isDistinctSectionTitle(null, "Anything")).toBe(false);
+    expect(isDistinctSectionTitle(undefined, "Anything")).toBe(false);
+    expect(isDistinctSectionTitle("   ", "Anything")).toBe(false);
+    // Punctuation-only folds away to nothing, so it names nothing.
+    expect(isDistinctSectionTitle("--", "Anything")).toBe(false);
   });
 });

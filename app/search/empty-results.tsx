@@ -38,12 +38,27 @@ export interface EmptyResultsProps {
   onChange: (next: CatalogSearchFilters) => void;
   /** Catalog size, so "0 of 43" reads differently from "0 of 0". */
   totalCourses: number;
+  meetingFiltersAvailable?: boolean;
 }
 
-export function EmptyResults({ filters, onChange, totalCourses }: EmptyResultsProps) {
+function hasTimeStructureFilter(filters: CatalogSearchFilters): boolean {
+  return Boolean(
+    (filters.days && filters.days.length > 0) ||
+      filters.startAfterMinute !== undefined ||
+      filters.endBeforeMinute !== undefined,
+  );
+}
+
+export function EmptyResults({
+  filters,
+  onChange,
+  totalCourses,
+  meetingFiltersAvailable = true,
+}: EmptyResultsProps) {
   const active = describeActiveFilters(filters, minutesToLabel);
   const query = filters.q?.trim();
   const ratedOnly = filters.includeUnrated === false;
+  const timeFilterBlocked = !meetingFiltersAvailable && hasTimeStructureFilter(filters);
 
   return (
     <div className="flex flex-col items-start gap-4 rounded-2lg border border-border-table bg-background-primary-default p-6 shadow-card">
@@ -62,6 +77,15 @@ export function EmptyResults({ filters, onChange, totalCourses }: EmptyResultsPr
           </p>
         </div>
       </div>
+
+      {timeFilterBlocked ? (
+        <p className="rounded-lg border border-dashed border-border-button-default bg-background-secondary-default px-3 py-2 text-body-regular text-text-secondary">
+          <span className="text-text-primary">Day or time filters</span> are set, but this
+          search index has no meeting schedules to match against — Columbia stopped publishing
+          times in the directory. Clear those filters, or rebuild the index with historical
+          patterns enabled.
+        </p>
+      ) : null}
 
       {ratedOnly ? (
         <p className="rounded-lg border border-dashed border-border-button-default bg-background-secondary-default px-3 py-2 text-body-regular text-text-secondary">

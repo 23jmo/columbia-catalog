@@ -148,3 +148,43 @@ export function readCampusPalette(element: Element | null): CampusPalette {
 }
 
 export { NEUTRAL_FALLBACK as NEUTRAL_CAMPUS_PALETTE };
+
+/**
+ * `#rrggbb` → its three channels, or null for anything this file did not make.
+ * Every value in a `CampusPalette` has already been through `cssColorToHex`, so
+ * in practice this only fails on a caller passing something else.
+ */
+function channels(hex: string): [number, number, number] | null {
+  const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex.trim());
+  if (!match) return null;
+  return [parseInt(match[1], 16), parseInt(match[2], 16), parseInt(match[3], 16)];
+}
+
+/** Rec. 709 relative luminance, 0–1. Good enough to ask "is this theme light?". */
+function luminance(rgb: [number, number, number]): number {
+  return (0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]) / 255;
+}
+
+/**
+ * A shade of `base` pushed AWAY from `ground`, by `amount` of the remaining
+ * range.
+ *
+ * The scene needs roofs to sit a readable step off the walls they cap, and
+ * there is no BoardUI token below `quaternary-hover` to reach for — the neutral
+ * ramp runs out. Darkening would be the obvious move and is exactly wrong in
+ * dark mode, where it walks the roofs into the ground plane and the campus goes
+ * back to being a field of silhouettes. Deriving the direction from the ground
+ * instead keeps the same separation in both themes, and keeps the token as the
+ * source of truth rather than smuggling in a literal.
+ */
+export function shadeAgainst(base: string, ground: string, amount: number): string {
+  const rgb = channels(base);
+  const groundRgb = channels(ground);
+  if (!rgb || !groundRgb) return base;
+
+  const towardWhite = luminance(groundRgb) < 0.5;
+  const shifted = rgb.map((channel) =>
+    Math.round(towardWhite ? channel + (255 - channel) * amount : channel * (1 - amount)),
+  );
+  return `#${shifted.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
+}

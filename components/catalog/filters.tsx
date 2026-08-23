@@ -14,9 +14,8 @@ import { cx } from "@/utils/cx";
  * index. There is no apply button and no pending state anywhere in this tree,
  * because a toggle costs a synchronous pass over an in-memory array.
  *
- * The panel is layout-agnostic. The Search screen renders it in a sticky
- * sidebar on desktop and inside a bottom sheet at phone widths; nothing here
- * knows which.
+ * The panel is layout-agnostic. The Search screen renders it inside a popover;
+ * nothing here knows which shell wraps it.
  */
 
 export interface FiltersProps {
@@ -25,6 +24,8 @@ export interface FiltersProps {
   facets: SearchFacets;
   /** True while the loaded catalog carries no review coverage at all. */
   hasNoReviewData?: boolean;
+  /** False when day/time filters cannot match anything in the loaded index. */
+  meetingFiltersAvailable?: boolean;
   className?: string;
 }
 
@@ -33,6 +34,7 @@ export function Filters({
   onChange,
   facets,
   hasNoReviewData,
+  meetingFiltersAvailable = true,
   className,
 }: FiltersProps) {
   // Per-group active counts, derived from the same descriptors that drive the
@@ -54,6 +56,7 @@ export function Filters({
         onChange={onChange}
         creditRange={facets.creditRange}
         activeCount={counts.time}
+        meetingFiltersAvailable={meetingFiltersAvailable}
       />
       <RequirementFilters
         filters={filters}

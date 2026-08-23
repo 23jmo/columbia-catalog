@@ -24,8 +24,6 @@ export interface ShellNavItem {
   label: string;
   href: string;
   icon: IconComponent;
-  /** Shown under the label on the mobile drawer, where there is room for it. */
-  description: string;
 }
 
 export const SHELL_NAV_ITEMS: ShellNavItem[] = [
@@ -34,28 +32,23 @@ export const SHELL_NAV_ITEMS: ShellNavItem[] = [
     label: "Home",
     href: "/",
     icon: RiHome5Line,
-    description: "Registration dashboard",
   },
   {
     key: "search",
     label: "Search",
     href: "/search",
     icon: RiSearchLine,
-    description: "Instant catalog search",
   },
   {
     key: "schedule",
     label: "Schedule",
     href: "/schedule",
     icon: RiCalendarScheduleLine,
-    description: "Week canvas and plans",
   },
 ];
 
 export interface ShellNavProps {
   activeNav: ShellNavKey;
-  /** `rail` is the desktop sidebar; `drawer` is the wider mobile sheet. */
-  appearance?: "rail" | "drawer";
   /** Fires after a nav item is chosen, so the mobile drawer can close itself. */
   onNavigate?: () => void;
   className?: string;
@@ -65,14 +58,7 @@ export interface ShellNavProps {
  * Plain links, no client state — the active item is passed in by the route so
  * this renders on the server wherever the host component allows it.
  */
-export function ShellNav({
-  activeNav,
-  appearance = "rail",
-  onNavigate,
-  className,
-}: ShellNavProps) {
-  const drawer = appearance === "drawer";
-
+export function ShellNav({ activeNav, onNavigate, className }: ShellNavProps) {
   return (
     <nav aria-label="Primary" className={cx("flex w-full flex-col gap-1", className)}>
       {SHELL_NAV_ITEMS.map((item) => {
@@ -98,25 +84,13 @@ export function ShellNav({
               )}
               aria-hidden
             />
-            <span className="flex min-w-0 flex-col">
-              <span
-                className={cx(
-                  "text-body-medium whitespace-nowrap",
-                  selected ? "text-white" : "text-text-secondary",
-                )}
-              >
-                {item.label}
-              </span>
-              {drawer && (
-                <span
-                  className={cx(
-                    "text-caption-1-regular",
-                    selected ? "text-white/80" : "text-text-tertiary",
-                  )}
-                >
-                  {item.description}
-                </span>
+            <span
+              className={cx(
+                "text-body-medium whitespace-nowrap",
+                selected ? "text-white" : "text-text-secondary",
               )}
+            >
+              {item.label}
             </span>
           </Link>
         );

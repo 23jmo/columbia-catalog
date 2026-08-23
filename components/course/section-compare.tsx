@@ -57,16 +57,7 @@ export function SectionCompare({
     .map((id) => sections.find((s) => s.sectionId === id))
     .filter((s): s is Section => Boolean(s));
 
-  if (chosen.length === 0) {
-    return (
-      <div className={cx("flex flex-col items-start gap-2", className)}>
-        <p className="text-body-regular text-text-secondary">
-          Pick two or more sections above to line them up on instructor, meeting time,
-          seats, and review dimensions.
-        </p>
-      </div>
-    );
-  }
+  if (chosen.length === 0) return null;
 
   const rows: Row[] = [
     {

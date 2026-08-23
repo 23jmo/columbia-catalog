@@ -13,12 +13,19 @@
  * See `scripts/build-campus-map.ts` for where the numbers come from and
  * `./footprints.ts` for how they become geometry.
  *
+ * Two things are NOT surveyed, and are marked as such where they are defined:
+ * the roof profiles in `./roofs.ts` (the survey is LOD 1.5 and does not know
+ * that Low has a dome) and the facade grid in `./facade.ts`.
+ *
  * Performance rules this scene is built around (spec §19 — the drawer's
  * open-time budget is a hard bar, and this card may not touch it):
  *
  *   - Real outlines rule out instancing, so the campus is MERGED instead: one
- *     geometry for the muted mass, one for landmarks, one for the
- *     neighbourhood. Three draw calls, plus the pin, its marker and the ground.
+ *     shell for the muted mass, one for landmarks, one for the neighbourhood,
+ *     each split into walls and roofs so the two can take different materials.
+ *     Six draw calls, plus the pin, its marker and the ground.
+ *   - ONE facade texture, drawn into a canvas once and shared by all three
+ *     wall materials. It tiles in world units, so no mesh needs its own uvs.
  *   - `frameloop="demand"` unless the pulse is actually running. When the card
  *     scrolls out of view or the tab is hidden the parent flips `animate` off
  *     and the renderer goes quiet; orbiting still redraws, because drei's
@@ -49,8 +56,9 @@ import {
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { CAMPUS_VIEW_WIDTH_UNITS, buildingsOnPlane, campusPlane, roadsOnPlane } from "@/lib/campus";
 import type { CampusLayoutBuilding, CampusPlaneId, CampusRoad } from "@/lib/campus";
-import { buildingGeometry, contextGeometry, mergedGeometry } from "./footprints";
-import type { CampusPalette } from "./palette";
+import { buildingGeometry, contextShell, mergedShell, type CampusShell } from "./footprints";
+import { facadeMaps, type FacadeMaps } from "./facade";
+import { shadeAgainst, type CampusPalette } from "./palette";
 
 export interface CampusSceneProps {
   plane: CampusPlaneId;
@@ -117,6 +125,71 @@ function roadBox(road: CampusRoad) {
 function useDisposed<T extends BufferGeometry | null>(geometry: T): T {
   useEffect(() => () => geometry?.dispose(), [geometry]);
   return geometry;
+}
+
+/** The same, for a shell — which is two geometries and so two leaks. */
+function useDisposedShell(shell: CampusShell | null): CampusShell | null {
+  useEffect(
+    () => () => {
+      shell?.walls.dispose();
+      shell?.roofs?.dispose();
+    },
+    [shell],
+  );
+  return shell;
+}
+
+/**
+ * One shell, drawn as its walls and its roofs.
+ *
+ * The split exists so the window grid stops at the eaves: a facade texture is
+ * only meaningful on a vertical surface, and tiling it across a roof — where
+ * its uvs would be a plan projection — looks like a rendering bug rather than
+ * like a building. Roofs get the same colour a step further from the ground and
+ * no map at all.
+ */
+function ShellMeshes({
+  shell,
+  color,
+  ground,
+  roughness,
+  roofContrast,
+  facade,
+  castShadow,
+}: {
+  shell: CampusShell;
+  color: string;
+  ground: string;
+  roughness: number;
+  roofContrast: number;
+  facade: FacadeMaps | null;
+  castShadow: boolean;
+}) {
+  return (
+    <>
+      <mesh geometry={shell.walls} castShadow={castShadow} receiveShadow>
+        <meshStandardMaterial
+          color={color}
+          map={facade?.color ?? null}
+          // Glass reads as glass because it is smoother than the wall around
+          // it, not because it is a different colour — the roughness map is
+          // doing at least as much work here as the colour map is.
+          roughnessMap={facade?.roughness ?? null}
+          roughness={roughness}
+          metalness={0}
+        />
+      </mesh>
+      {shell.roofs ? (
+        <mesh geometry={shell.roofs} castShadow={castShadow} receiveShadow>
+          <meshStandardMaterial
+            color={shadeAgainst(color, ground, roofContrast)}
+            roughness={Math.min(1, roughness + 0.1)}
+            metalness={0}
+          />
+        </mesh>
+      ) : null}
+    </>
+  );
 }
 
 /**
@@ -343,13 +416,16 @@ function CampusModel({
     () => buildingsOnPlane(plane).filter((entry) => entry.buildingId !== pinned?.buildingId),
     [plane, pinned?.buildingId],
   );
-  const muted = useDisposed(
-    useMemo(() => mergedGeometry(onPlane.filter((entry) => !entry.isLandmark)), [onPlane]),
+  const muted = useDisposedShell(
+    useMemo(() => mergedShell(onPlane.filter((entry) => !entry.isLandmark)), [onPlane]),
   );
-  const landmarks = useDisposed(
-    useMemo(() => mergedGeometry(onPlane.filter((entry) => entry.isLandmark)), [onPlane]),
+  const landmarks = useDisposedShell(
+    useMemo(() => mergedShell(onPlane.filter((entry) => entry.isLandmark)), [onPlane]),
   );
-  const context = useDisposed(useMemo(() => contextGeometry(plane), [plane]));
+  const context = useDisposedShell(useMemo(() => contextShell(plane), [plane]));
+  // Built once per chunk and cached there, so this memo is only keeping the
+  // canvas work off re-renders, not owning the texture's lifetime.
+  const facade = useMemo(() => facadeMaps(), []);
 
   const groundWidth = ground.maxX - ground.minX + GROUND_OVERSCAN_UNITS * 2;
   const groundDepth = ground.maxZ - ground.minZ + GROUND_OVERSCAN_UNITS * 2;
@@ -411,22 +487,41 @@ function CampusModel({
         // Receives shadow but does NOT cast one. A thousand buildings throwing
         // their own shadows turns the card into visual noise and buries the
         // campus in it — the neighbourhood is allowed to catch light, not to
-        // draw attention.
-        <mesh geometry={context} receiveShadow>
-          <meshStandardMaterial color={palette.context} roughness={1} metalness={0} />
-        </mesh>
+        // draw attention. Its roofs barely separate from its walls for the same
+        // reason: scenery may have detail, not contrast.
+        <ShellMeshes
+          shell={context}
+          color={palette.context}
+          ground={palette.ground}
+          roughness={1}
+          roofContrast={0.08}
+          facade={facade}
+          castShadow={false}
+        />
       ) : null}
 
       {muted ? (
-        <mesh geometry={muted} castShadow receiveShadow>
-          <meshStandardMaterial color={palette.building} roughness={0.85} metalness={0} />
-        </mesh>
+        <ShellMeshes
+          shell={muted}
+          color={palette.building}
+          ground={palette.ground}
+          roughness={0.85}
+          roofContrast={0.16}
+          facade={facade}
+          castShadow
+        />
       ) : null}
 
       {landmarks ? (
-        <mesh geometry={landmarks} castShadow receiveShadow>
-          <meshStandardMaterial color={palette.landmark} roughness={0.75} metalness={0} />
-        </mesh>
+        <ShellMeshes
+          shell={landmarks}
+          color={palette.landmark}
+          ground={palette.ground}
+          roughness={0.75}
+          roofContrast={0.2}
+          facade={facade}
+          castShadow
+        />
       ) : null}
 
       <PinnedMarker pinned={pinned} focus={focus} palette={palette} animate={animate} />

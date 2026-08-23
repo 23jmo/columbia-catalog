@@ -1,7 +1,7 @@
 {
   "formatVersion": 2,
-  "version": "1rrcp77",
-  "builtAt": "2026-08-23T21:17:31.503Z",
+  "version": "0mdf4yb",
+  "builtAt": "2026-08-23T21:43:54.729Z",
   "terms": [
     "20263",
     "20271"
@@ -9,9 +9,9 @@
   "courseCount": 4878,
   "sectionCount": 9543,
   "lexical": {
-    "url": "/index/catalog-1rrcp77.bin",
-    "bytes": 8299364,
-    "gzipBytes": 1998398
+    "url": "/index/catalog-0mdf4yb.bin",
+    "bytes": 8375872,
+    "gzipBytes": 2050135
   },
   "embedding": null
 }

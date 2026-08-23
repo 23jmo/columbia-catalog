@@ -323,6 +323,17 @@ export function clearAllFilters(filters: CatalogSearchFilters): CatalogSearchFil
   };
 }
 
+/** Drop day-of-week and time-window constraints only. */
+export function clearTimeStructureFilters(
+  filters: CatalogSearchFilters,
+): CatalogSearchFilters {
+  const next = { ...filters };
+  delete next.days;
+  delete next.startAfterMinute;
+  delete next.endBeforeMinute;
+  return next;
+}
+
 /** True when anything beyond the free-text query is narrowing the results. */
 export function hasAnyFilter(filters: CatalogSearchFilters): boolean {
   return describeActiveFilters(filters, () => "").length > 0;

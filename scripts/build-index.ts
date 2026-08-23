@@ -29,6 +29,7 @@ import { join, resolve } from "node:path";
 
 import { getAllCourses } from "@/lib/data/catalog";
 import { projectCourse } from "@/lib/catalog-list-types";
+import { cloneCoursesWithTypicalMeetings } from "@/lib/db/typical-meetings";
 import { ACTIVE_TERMS, PERF_BUDGET } from "@/lib/constants";
 import type { CourseWithSections, TermCode } from "@/lib/types";
 import { buildIndex, estimateBlockSizes } from "@/lib/search/build";
@@ -155,7 +156,15 @@ async function main(): Promise<void> {
 
   const buildStarted = Date.now();
   const ordered = [...courses].sort((a, b) => a.courseId.localeCompare(b.courseId));
-  const index = buildIndex(ordered);
+  const { courses: indexedCourses, enrichedSections } =
+    await cloneCoursesWithTypicalMeetings(ordered);
+  if (enrichedSections > 0) {
+    console.log(
+      `  typical times  : ${enrichedSections.toLocaleString()} sections (historical, search filters only)`,
+    );
+  }
+  const index = buildIndex(indexedCourses);
+  // Display rows keep directory truth — no historical times rendered as current.
   index.display = ordered.map(projectCourse);
   const buildMs = Date.now() - buildStarted;
   const bytes = encodeIndex(index);

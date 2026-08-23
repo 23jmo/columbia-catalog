@@ -147,6 +147,77 @@ export async function getCoursesByIds(
   );
 }
 
+/**
+ * Qualifier-tolerant course lookup — `COMS4118` finding `COMS4118W`.
+ *
+ * Only called once an exact `getCourse` has missed. The seed path keeps the
+ * original in-memory scan because 43 records cost nothing to walk.
+ */
+export async function findCourseByLooseId(
+  wanted: string,
+  termCode: TermCode = CURRENT_TERM,
+): Promise<CourseWithSections | null> {
+  if (isConfigured()) return db.findCourseByLooseId(wanted, termCode);
+
+  const inTerm = SEED.filter((c) => c.sections.some((s) => s.termCode === termCode));
+  const withQualifier = inTerm.find((c) => c.courseId.replace(/[A-Z]$/, "") === wanted);
+  if (withQualifier) return clone(withQualifier);
+
+  const match = wanted.match(/^([A-Z]+)0*(\d+)[A-Z]?$/);
+  if (!match) return null;
+  const [, subjectCode, number] = match;
+  const numeric = inTerm.find(
+    (c) => c.subjectCode === subjectCode && c.number === Number(number),
+  );
+  return numeric ? clone(numeric) : null;
+}
+
+/**
+ * Candidates for the "similar courses" list on the course surface.
+ *
+ * The scorer keeps only same-subject and same-department courses, so those are
+ * the only two sets worth fetching. Doing that turned the course drawer's cold
+ * open from ~3.9s into a couple of small queries: it used to page the entire
+ * term out of the database — ~4,400 courses, ~8 MB — to pick six rows.
+ *
+ * The seed path keeps the old shape because filtering 43 in-memory records is
+ * free; the caller's scorer discards the non-matches either way.
+ */
+export async function getSimilarCandidates(
+  subjectCode: string,
+  department: string | null,
+  termCode: TermCode = CURRENT_TERM,
+): Promise<CourseWithSections[]> {
+  if (isConfigured()) return db.getSimilarCandidates(subjectCode, department, termCode);
+  return clone(
+    SEED.filter(
+      (c) =>
+        c.sections.some((s) => s.termCode === termCode) &&
+        (c.subjectCode === subjectCode ||
+          (department != null && c.department === department)),
+    ),
+  );
+}
+
+/**
+ * One course with its sections across several terms, for offering history.
+ *
+ * Returns every section in any of `termCodes` attached to the single course —
+ * the caller groups them by term. Replaces one `getCourse` call per term.
+ */
+export async function getCourseAcrossTerms(
+  courseId: string,
+  termCodes: TermCode[],
+): Promise<CourseWithSections | null> {
+  if (isConfigured()) return db.getCourseAcrossTerms(courseId, termCodes);
+  const wanted = new Set<TermCode>(termCodes);
+  const found = SEED.find((c) => c.courseId === courseId);
+  if (!found) return null;
+  const sections = found.sections.filter((s) => wanted.has(s.termCode));
+  if (sections.length === 0) return null;
+  return clone({ ...found, sections });
+}
+
 export async function getSection(sectionId: string): Promise<Section | null> {
   if (isConfigured()) return db.getSection(sectionId);
   for (const c of SEED) {

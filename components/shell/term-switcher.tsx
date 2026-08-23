@@ -104,6 +104,8 @@ export interface TermSwitcherProps {
   onTermChange?: (termCode: TermCode) => void;
   /** Icon-only trigger for tight bars. */
   compact?: boolean;
+  /** Pill treatment matching BoardUI sidebar controls. */
+  appearance?: "default" | "sidebar";
   className?: string;
 }
 
@@ -111,6 +113,7 @@ export function TermSwitcher({
   termCode: controlledTerm,
   onTermChange,
   compact = false,
+  appearance = "default",
   className,
 }: TermSwitcherProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -134,9 +137,18 @@ export function TermSwitcher({
       <DropdownTrigger
         aria-label={`Term: ${selectedLabel}. Change term`}
         className={cx(
-          "flex items-center gap-2 rounded-2lg border border-border-button-default bg-background-primary-default p-2 shadow-xs",
-          "transition-colors duration-150 ease hover:bg-background-primary-hover",
-          compact ? "h-9" : "h-9 w-full justify-between",
+          "flex h-9 items-center gap-2 transition-colors duration-150 ease",
+          appearance === "sidebar"
+            ? cx(
+                "rounded-full bg-background-tertiary-default py-2 pl-2 pr-2.5",
+                "hover:bg-background-tertiary-hover/55",
+                compact ? "w-9 justify-center px-2" : "w-full justify-between",
+              )
+            : cx(
+                "rounded-2lg border border-border-button-default bg-background-primary-default p-2 shadow-xs",
+                "hover:bg-background-primary-hover",
+                compact ? "justify-center px-2" : "w-full justify-between",
+              ),
           className,
         )}
       >

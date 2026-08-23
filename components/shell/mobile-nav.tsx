@@ -2,18 +2,14 @@
 
 import { useState } from "react";
 import { RiMenuLine } from "@remixicon/react";
-import {
-  Dialog as AriaDialog,
-  Modal as AriaModal,
-  ModalOverlay as AriaModalOverlay,
-} from "react-aria-components";
+import { Modal as AriaModal, ModalOverlay as AriaModalOverlay } from "react-aria-components";
+
 import { AccountMenu } from "@/components/shell/account-menu";
-import { ShellNav, type ShellNavKey } from "@/components/shell/nav";
+import { CatalogSidebar } from "@/components/shell/catalog-sidebar";
+import type { ShellNavKey } from "@/components/shell/nav";
 import { TermSwitcher } from "@/components/shell/term-switcher";
-import { ThemeToggle } from "@/components/application/theme/theme-toggle";
-import { CloseButton } from "@/components/base/buttons/close-button";
-import { cx } from "@/utils/cx";
 import { ShellWordmark } from "@/components/shell/wordmark";
+import { cx } from "@/utils/cx";
 
 /**
  * The phone/tablet half of the app chrome: a sticky bar plus a slide-in sheet
@@ -25,7 +21,7 @@ export function MobileNavBar({ activeNav }: { activeNav: ShellNavKey }) {
 
   return (
     <>
-      <header className="sticky top-0 z-30 flex h-14 w-full shrink-0 items-center justify-between gap-2 border-b border-border-table bg-background-full px-3 lg:hidden">
+      <header className="sticky top-0 z-30 flex h-14 w-full shrink-0 items-center justify-between gap-2 border-b border-border-table bg-background-full px-3 pt-[env(safe-area-inset-top,0px)] lg:hidden">
         <div className="flex min-w-0 items-center gap-2">
           <button
             type="button"
@@ -61,33 +57,20 @@ export function MobileNavBar({ activeNav }: { activeNav: ShellNavKey }) {
       >
         <AriaModal
           className={cx(
-            "h-full w-[288px] max-w-[86vw] outline-none",
+            "h-full w-[288px] max-w-[86vw] outline-none pl-[env(safe-area-inset-left,0px)]",
             "transition-transform duration-200 ease-out",
             "data-[entering]:-translate-x-full data-[exiting]:-translate-x-full",
           )}
         >
-          <AriaDialog
-            aria-label="Navigation"
-            className="flex h-full w-full flex-col justify-between gap-4 border-r border-border-table bg-background-secondary-default p-3 outline-none"
-          >
-            <div className="flex min-h-0 flex-col gap-4 overflow-y-auto">
-              <div className="flex items-center justify-between gap-2">
-                <ShellWordmark />
-                <CloseButton size="2xs" aria-label="Close navigation" onClick={() => setIsOpen(false)} />
-              </div>
-              <TermSwitcher />
-              <ShellNav
-                activeNav={activeNav}
-                appearance="drawer"
-                onNavigate={() => setIsOpen(false)}
-              />
-            </div>
-
-            <div className="flex shrink-0 flex-col gap-2">
-              <ThemeToggle appearance="sidebar-segmented" />
-              <AccountMenu />
-            </div>
-          </AriaDialog>
+          <CatalogSidebar
+            activeNav={activeNav}
+            mobile
+            flat
+            fluid
+            onClose={() => setIsOpen(false)}
+            onNavigate={() => setIsOpen(false)}
+            className="h-full"
+          />
         </AriaModal>
       </AriaModalOverlay>
     </>

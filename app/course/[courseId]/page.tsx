@@ -5,10 +5,12 @@ import { RiArrowLeftLine } from "@remixicon/react";
 
 import { prettyTitle } from "@/components/course/format";
 import { loadCourseDetail, resolveCourse } from "@/components/course/load-course-detail";
+import { loadSectionDetail } from "@/components/course/load-section-detail";
 import { AppShell } from "@/components/shell/app-shell";
 import { CURRENT_TERM, termLabel } from "@/lib/constants";
 
 import { CourseDetail } from "./course-detail";
+import { SectionDetail } from "./section-detail";
 
 /**
  * The standalone course page — what a cold link, a refresh, or a shared URL
@@ -24,6 +26,13 @@ import { CourseDetail } from "./course-detail";
 
 interface CoursePageProps {
   params: Promise<{ courseId: string }>;
+  searchParams: Promise<{ section?: string | string[] }>;
+}
+
+/** `?section=001&section=002` is not a thing anyone means; take the first. */
+function firstParam(value: string | string[] | undefined): string | null {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
 }
 
 export async function generateMetadata({ params }: CoursePageProps): Promise<Metadata> {
@@ -58,8 +67,47 @@ export async function generateMetadata({ params }: CoursePageProps): Promise<Met
   };
 }
 
-export default async function CoursePage({ params }: CoursePageProps) {
-  const { courseId } = await params;
+export default async function CoursePage({ params, searchParams }: CoursePageProps) {
+  const [{ courseId }, query] = await Promise.all([params, searchParams]);
+  const sectionCode = firstParam(query.section);
+
+  /*
+   * `?section=NNN` makes this URL a SECTION url, and it renders as one.
+   *
+   * The drawer this page backs is section-specific, and its "Full page" link
+   * carries the section along. If this route ignored the parameter, refreshing
+   * the drawer or sharing its link would silently swap a specific class for the
+   * container it is filed under -- which on PHED1001UN means someone sent a
+   * link to "PHED: Swim (Beginner)" and their friend opened "Physical Education
+   * Activities". A URL that names a section shows that section.
+   *
+   * Bare `/course/[courseId]` is still the course: the aggregate view, every
+   * section listed, similar courses, offering history.
+   */
+  if (sectionCode) {
+    const { data, course } = await loadSectionDetail(courseId, sectionCode, CURRENT_TERM);
+    // An unknown section on a known course is a bad URL, not a bad course —
+    // fall through to the course page rather than 404ing the whole thing.
+    if (data) {
+      return (
+        <AppShell activeNav="search">
+          <div className="mx-auto flex w-full max-w-4xl flex-col gap-5">
+            <Link
+              href={`/course/${data.course.courseId}`}
+              className="inline-flex w-fit items-center gap-1.5 rounded-lg px-1.5 py-1 text-caption-1-medium text-text-secondary transition-colors outline-none hover:bg-background-primary-hover hover:text-text-primary focus-visible:ring-2 focus-visible:ring-border-focus-ring"
+            >
+              <RiArrowLeftLine aria-hidden className="size-4" />
+              All sections of {data.code}
+            </Link>
+
+            <SectionDetail data={data} titleId="course-title" />
+          </div>
+        </AppShell>
+      );
+    }
+    if (!course) notFound();
+  }
+
   const data = await loadCourseDetail(courseId, CURRENT_TERM);
   // `resolveCourse` already forgives a missing qualifier letter and spacing;
   // a null here means the course genuinely is not in this term.

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 import { paramsToFilters, type ParamRecord } from "@/components/catalog/filter-params";
 import { AppShell } from "@/components/shell/app-shell";
-import { CURRENT_TERM, termLabel } from "@/lib/constants";
+import { CURRENT_TERM } from "@/lib/constants";
 
 import { SearchScreen } from "./search-screen";
 
@@ -32,11 +32,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 
   return (
     <AppShell activeNav="search">
-      <SearchScreen
-        initialFilters={initialFilters}
-        termCode={termCode}
-        termLabel={termLabel(termCode)}
-      />
+      <SearchScreen initialFilters={initialFilters} termCode={termCode} />
     </AppShell>
   );
 }

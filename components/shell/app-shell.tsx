@@ -61,8 +61,10 @@ export function AppShell({ children, activeNav = "home", contentClassName }: App
           the component. */}
       <RefreshWorker />
 
-      {/* Desktop rail. `lg` and up only — below that the mobile bar owns nav. */}
-      <CatalogSidebar activeNav={activeNav} flat className="sticky top-0 hidden h-dvh lg:flex" />
+      {/* Desktop rail — floating panel with outer breathing room, like BoardUI. */}
+      <div className="sticky top-0 hidden h-dvh shrink-0 p-3 lg:block">
+        <CatalogSidebar activeNav={activeNav} className="h-full" />
+      </div>
 
       <div className="flex min-w-0 flex-1 flex-col">
         <MobileNavBar activeNav={activeNav} />
