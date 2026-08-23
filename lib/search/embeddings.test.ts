@@ -30,7 +30,6 @@ function section(overrides: Partial<Section> & { sectionCode: string }): Section
     courseId: "COMS6998E",
     termCode: "20263",
     callNumber: `1${overrides.sectionCode}`,
-    sectionCode: overrides.sectionCode,
     component: null,
     methodOfInstruction: null,
     gradingMode: null,
@@ -130,12 +129,9 @@ describe("courseEmbeddingText", () => {
             enrollmentCount: 143,
             meetings: [
               {
-                meetingId: "m1",
-                sectionId: "20263COMS6998E001",
-                weekday: "TU",
+                weekday: "Tu",
                 startMinute: 700,
                 endMinute: 775,
-                buildingId: null,
                 buildingName: "Mudd",
                 room: "833",
               },
@@ -304,7 +300,7 @@ describe("createHttpEmbeddingProvider", () => {
 
 describe("readEmbeddingProviderFromEnv", () => {
   it("explains itself rather than throwing when unconfigured", () => {
-    const result = readEmbeddingProviderFromEnv({} as NodeJS.ProcessEnv);
+    const result = readEmbeddingProviderFromEnv({} as unknown as NodeJS.ProcessEnv);
     expect(isProviderProblem(result)).toBe(true);
     if (isProviderProblem(result)) expect(result.reason).toMatch(/EMBEDDING_API_KEY/);
   });
@@ -313,13 +309,13 @@ describe("readEmbeddingProviderFromEnv", () => {
     const result = readEmbeddingProviderFromEnv({
       EMBEDDING_API_KEY: "k",
       EMBEDDING_DIMS: "300",
-    } as NodeJS.ProcessEnv);
+    } as unknown as NodeJS.ProcessEnv);
     expect(isProviderProblem(result)).toBe(true);
     if (isProviderProblem(result)) expect(result.reason).toMatch(/multiple of 32/);
   });
 
   it("defaults to 384 dimensions, which is what the spec asks for", () => {
-    const result = readEmbeddingProviderFromEnv({ EMBEDDING_API_KEY: "k" } as NodeJS.ProcessEnv);
+    const result = readEmbeddingProviderFromEnv({ EMBEDDING_API_KEY: "k" } as unknown as NodeJS.ProcessEnv);
     expect(isProviderProblem(result)).toBe(false);
     if (!isProviderProblem(result)) expect(result.dims).toBe(EMBEDDING_DIMS);
   });
