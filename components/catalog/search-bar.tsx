@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RiCloseLine, RiSearchLine } from "@remixicon/react";
 import { Input } from "@/components/base/input/input";
 import { cx } from "@/utils/cx";
@@ -43,6 +43,23 @@ export function SearchBar({
 }: SearchBarProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const hero = appearance === "hero";
+
+  /*
+   * `elapsedMs` is a measurement, not data — and specifically a measurement of
+   * *this machine*. The server renders this component too, times its own run of
+   * the engine, and bakes that number into the HTML; the browser then re-runs
+   * the engine and measures something different. The two never agree, so the
+   * readout was a guaranteed hydration mismatch on every load of /search.
+   *
+   * The fix is to stop pretending it is server-renderable. `hasMounted` is
+   * false during SSR and during the hydration pass, so the server emits nothing
+   * here and the markup matches; the commit that follows flips it true and the
+   * client fills in a number it actually observed. That is also the only number
+   * the readout was ever meant to report -- keystroke-to-results latency in the
+   * browser (see the note at the top of this file).
+   */
+  const [hasMounted, setHasMounted] = useState(false);
+  useEffect(() => setHasMounted(true), []);
 
   return (
     <div className={cx("flex w-full flex-col gap-1.5", className)}>
@@ -94,7 +111,7 @@ export function SearchBar({
             {resultSummary}
           </span>
         )}
-        {process.env.NODE_ENV !== "production" && elapsedMs !== undefined && (
+        {hasMounted && process.env.NODE_ENV !== "production" && elapsedMs !== undefined && (
           <span
             className="text-caption-2-regular text-text-tertiary tabular-nums"
             title="Local engine time. Budget is 16ms."
