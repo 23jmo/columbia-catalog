@@ -89,7 +89,11 @@ function WatcherCount({ count }: { count: number }) {
   return (
     <span
       className="inline-flex items-center gap-0.5 text-caption-1-medium text-text-tertiary"
-      title={`${count} ${count === 1 ? "person is" : "people are"} watching this section. Everyone is emailed at the same time.`}
+      // "notified", not "emailed": the fairness claim (spec §14 — nobody gets
+      // a head start) holds for the realtime push too, and is true on a
+      // deployment where mail is not switched on. The watchlist rail states
+      // which channels are actually live.
+      title={`${count} ${count === 1 ? "person is" : "people are"} watching this section. Everyone is notified at the same time — nobody gets a head start.`}
     >
       <RiNotification3Fill className="size-3 text-foreground-icon-tertiary" aria-hidden />
       {count}

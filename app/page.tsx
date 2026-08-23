@@ -33,6 +33,7 @@ import { WeekGrid } from "@/components/schedule";
 import { AgentHandoff } from "@/components/home/agent-handoff";
 import { ScheduleColumn } from "@/components/home/schedule-column";
 import { WatchlistRail } from "@/components/watch/watchlist-rail";
+import { isEmailConfigured } from "@/lib/alerts/resend";
 import { loadPlanSnapshot } from "@/components/home/load-plan-snapshot";
 import { CURRENT_TERM, buildTerm } from "@/lib/constants";
 import { getSessionUser } from "@/lib/db/auth";
@@ -72,6 +73,15 @@ export default async function HomePage({
   // Resolved on the server: the client never has to guess our own origin, and
   // the copy-paste block is correct on localhost and in production alike.
   const mcpEndpointUrl = `${resolveBaseUrl()}${MCP_PATH}`;
+
+  /*
+   * Whether a seat opening actually reaches an inbox. Read here rather than in
+   * the rail because it depends on a server secret, and stated in the UI
+   * because "we email every watcher the moment a seat opens" is a promise —
+   * one this deployment cannot keep until Resend is provisioned
+   * (.plans/BLOCKERS.md #2).
+   */
+  const emailAlertsEnabled = isEmailConfigured();
 
   return (
     <AppShell activeNav="home">
@@ -120,7 +130,7 @@ export default async function HomePage({
           />
 
           <div className="flex min-w-0 flex-col gap-5">
-            <WatchlistRail termCode={termCode} />
+            <WatchlistRail termCode={termCode} emailAlertsEnabled={emailAlertsEnabled} />
             {/*
               "connected" is deliberately not derivable here. MCP access tokens
               are stateless and signed rather than stored, which is what lets

@@ -38,6 +38,15 @@ import { cx } from "@/utils/cx";
  */
 
 export interface WatchlistRailProps {
+  /**
+   * Whether a seat opening will actually put mail in an inbox.
+   *
+   * Resolved on the server from `isEmailConfigured()` and passed down, because
+   * this is a client component and the answer depends on a secret. Defaults to
+   * `false`: on a deployment that has not been asked, promising email is the
+   * failure worth avoiding, and under-promising costs a student nothing.
+   */
+  emailAlertsEnabled?: boolean;
   termCode: TermCode;
   className?: string;
 }
@@ -49,7 +58,11 @@ interface Loaded {
 
 const NOTHING: Loaded = { sections: [], courses: new Map() };
 
-export function WatchlistRail({ termCode, className }: WatchlistRailProps) {
+export function WatchlistRail({
+  termCode,
+  emailAlertsEnabled = false,
+  className,
+}: WatchlistRailProps) {
   const { status, watched, seats } = useWatchlist();
   const watchedKey = [...watched].sort().join(",");
 
@@ -100,8 +113,10 @@ export function WatchlistRail({ termCode, className }: WatchlistRailProps) {
     return (
       <RailShell className={className}>
         <p className="text-caption-1-regular text-text-secondary">
-          Sign in with your Columbia or Barnard account to watch sections. We email every watcher the moment a
-          seat opens — all of them at once, never staggered.
+          Sign in with your Columbia or Barnard account to watch sections.{" "}
+          {emailAlertsEnabled
+            ? "We email every watcher the moment a seat opens — all of them at once, never staggered."
+            : "Any tab you have open updates the moment a seat opens. Email alerts are built but not switched on for this deployment yet, so do not rely on an inbox."}
         </p>
       </RailShell>
     );
@@ -111,8 +126,8 @@ export function WatchlistRail({ termCode, className }: WatchlistRailProps) {
     return (
       <RailShell className={className}>
         <p className="text-caption-1-regular text-text-secondary">
-          Nothing watched yet. Open a course and press Watch on a section to be emailed when a seat
-          opens.
+          Nothing watched yet. Open a course and press Watch on a section to{" "}
+          {emailAlertsEnabled ? "be emailed" : "see it turn green here"} when a seat opens.
         </p>
       </RailShell>
     );
