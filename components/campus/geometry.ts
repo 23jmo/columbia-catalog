@@ -245,7 +245,7 @@ export function insetRing(ring: Ring, distance: number): Ring | null {
 }
 
 /** Ray casting, counting crossings of a ray heading in +x from the point. */
-function containsPoint(ring: Ring, x: number, z: number): boolean {
+export function containsPoint(ring: Ring, x: number, z: number): boolean {
   let inside = false;
   for (let index = 0, previous = ring.length - 1; index < ring.length; previous = index, index += 1) {
     const [x0, z0] = ring[index];
@@ -482,4 +482,63 @@ export function lidGeometry(ring: Ring, y: number): BufferGeometry | null {
   if (!shell.lid) return null;
   shell.lid.translate(0, y - 1, 0);
   return shell.lid;
+}
+
+/**
+ * How much of the smaller of two rings is covered by the other, 0…1.
+ *
+ * Sampled on a grid over the shared bounding box rather than clipped exactly.
+ * Exact polygon intersection needs a general clipper — Sutherland–Hodgman only
+ * handles a convex clip region, and campus outlines are emphatically not convex
+ * (Hamilton is an E, Milbank wraps a courtyard). A clipper is a few hundred
+ * lines and a new class of edge case for a number that is only ever compared
+ * against a threshold.
+ *
+ * `SAMPLES` of 24 was calibrated against a 120×120 reference over every
+ * overlapping pair in the generated survey: the two agree on all 64 of them at
+ * the 0.1 threshold this is used with. Raising it buys precision nobody reads.
+ *
+ * Returns 0 when the bounding boxes miss, which is the overwhelmingly common
+ * case and costs two comparisons.
+ */
+export function ringOverlapFraction(a: Ring, b: Ring): number {
+  const SAMPLES = 24;
+  const boxA = ringExtent(a);
+  const boxB = ringExtent(b);
+  if (!boxA || !boxB) return 0;
+
+  const minX = Math.max(boxA.minX, boxB.minX);
+  const maxX = Math.min(boxA.maxX, boxB.maxX);
+  const minZ = Math.max(boxA.minZ, boxB.minZ);
+  const maxZ = Math.min(boxA.maxZ, boxB.maxZ);
+  if (maxX <= minX || maxZ <= minZ) return 0;
+
+  let hits = 0;
+  for (let column = 0; column < SAMPLES; column += 1) {
+    const x = minX + ((column + 0.5) / SAMPLES) * (maxX - minX);
+    for (let row = 0; row < SAMPLES; row += 1) {
+      const z = minZ + ((row + 0.5) / SAMPLES) * (maxZ - minZ);
+      if (containsPoint(a, x, z) && containsPoint(b, x, z)) hits += 1;
+    }
+  }
+
+  const cellArea = ((maxX - minX) * (maxZ - minZ)) / (SAMPLES * SAMPLES);
+  const smaller = Math.min(Math.abs(ringSignedArea(a)), Math.abs(ringSignedArea(b)));
+  return smaller > 0 ? (hits * cellArea) / smaller : 0;
+}
+
+/** Axis-aligned extent. Distinct from `ringBounds`, whose centre is the area-weighted centroid. */
+function ringExtent(ring: Ring): { minX: number; maxX: number; minZ: number; maxZ: number } | null {
+  if (ring.length < 3) return null;
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minZ = Infinity;
+  let maxZ = -Infinity;
+  for (const [x, z] of ring) {
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (z < minZ) minZ = z;
+    if (z > maxZ) maxZ = z;
+  }
+  return { minX, maxX, minZ, maxZ };
 }

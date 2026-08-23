@@ -156,6 +156,7 @@ function ShellMeshes({
   roofContrast,
   facade,
   castShadow,
+  recessed = false,
 }: {
   shell: CampusShell;
   color: string;
@@ -164,6 +165,23 @@ function ShellMeshes({
   roofContrast: number;
   facade: FacadeMaps | null;
   castShadow: boolean;
+  /**
+   * Lose every depth tie against the rest of the scene.
+   *
+   * `footprints.ts` drops the neighbourhood buildings that are really one of
+   * ours surveyed twice, which is most of this problem. What it deliberately
+   * does NOT drop is a genuine neighbour that merely abuts a campus building —
+   * Mudd and Prentis each touch one at a few percent of their area, and those
+   * buildings are real. Where such a pair also happens to share a roof height
+   * to the centimetre, the depth buffer has no basis to order the two lids and
+   * the roof breaks into a speckled patchwork that crawls as the camera moves.
+   *
+   * A polygon offset settles it by rule instead of by rounding: the scenery is
+   * pushed a hair deeper, so campus always wins the tie. Cheaper and more
+   * honest than nudging the survey's heights, which would be inventing data to
+   * work around a renderer detail.
+   */
+  recessed?: boolean;
 }) {
   return (
     <>
@@ -177,6 +195,9 @@ function ShellMeshes({
           roughnessMap={facade?.roughness ?? null}
           roughness={roughness}
           metalness={0}
+          polygonOffset={recessed}
+          polygonOffsetFactor={recessed ? 1 : 0}
+          polygonOffsetUnits={recessed ? 1 : 0}
         />
       </mesh>
       {shell.roofs ? (
@@ -185,6 +206,9 @@ function ShellMeshes({
             color={shadeAgainst(color, ground, roofContrast)}
             roughness={Math.min(1, roughness + 0.1)}
             metalness={0}
+            polygonOffset={recessed}
+            polygonOffsetFactor={recessed ? 1 : 0}
+            polygonOffsetUnits={recessed ? 1 : 0}
           />
         </mesh>
       ) : null}
@@ -497,6 +521,7 @@ function CampusModel({
           roofContrast={0.08}
           facade={facade}
           castShadow={false}
+          recessed
         />
       ) : null}
 

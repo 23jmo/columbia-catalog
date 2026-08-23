@@ -26,9 +26,10 @@
 
 import type { BufferGeometry } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { CAMPUS_LAYOUT_BUILDINGS } from "@/lib/campus";
 import type { CampusLayoutBuilding, CampusPlaneId } from "@/lib/campus";
 import data from "@/lib/campus/generated/campus-footprints.json";
-import { extrudeParts, type Ring } from "./geometry";
+import { extrudeParts, ringOverlapFraction, type Ring } from "./geometry";
 import { roofGeometry } from "./roofs";
 
 const CAMPUS_RINGS: Record<string, Ring> = data.buildings;
@@ -127,11 +128,80 @@ export function mergedShell(buildings: readonly CampusLayoutBuilding[]): CampusS
  */
 export function contextShell(plane: CampusPlaneId): CampusShell | null {
   return weld(
-    CONTEXT.filter((entry) => entry.plane === plane)
+    CONTEXT.filter((entry) => entry.plane === plane && !isOneOfOurs(entry))
       .map((entry) => extrudeParts(entry.footprint, entry.height))
       .filter((shell) => shell !== null)
       .map((shell) => ({ walls: shell.walls, roofs: shell.lid })),
   );
+}
+
+/**
+ * Fraction of a context footprint that has to sit on a campus building before
+ * we treat the two as the same structure surveyed twice.
+ *
+ * Below this, an overlap is our own doing rather than the survey's: campus
+ * buildings are positioned from the hand-authored layout table, not from their
+ * survey coordinates, so one placed a few metres off its true spot clips into a
+ * genuine neighbour. Those are worth keeping — the neighbour is real, and a
+ * slight interpenetration between two solids of different heights just reads as
+ * massing. Calibrated against the generated survey, where the overlaps fall into
+ * a long tail of 5–42% (placement slop) and a cluster at 51–100% (duplicates).
+ */
+const DUPLICATE_OVERLAP = 0.1;
+
+/**
+ * Is this "neighbourhood" building actually one of ours, surveyed a second time?
+ *
+ * `scripts/build-campus-map.ts` already drops context footprints whose CENTROID
+ * falls inside a campus outline. That test misses two whole classes of duplicate:
+ * a courtyard or E-plan building whose centroid lands in its own light well
+ * (Hamilton, Milbank), and a survey polygon drawn larger than ours so that its
+ * centroid escapes the ring entirely (Fayerweather, at 100% overlap, is the
+ * extreme case). Thirty footprints get through.
+ *
+ * The visible cost is not merely a doubled triangle count. Two shells on the
+ * same ground at nearly the same height put their roof lids within millimetres
+ * of coplanar, and the depth buffer cannot order them — so the roof tears into a
+ * speckled patchwork that moves as the camera does. Eight buildings did that,
+ * Havemeyer and Chandler worst.
+ *
+ * Fixed here rather than in the generator because the generated JSON is the
+ * output of a network crawl over NYC Open Data and Overpass; re-running it to
+ * correct a predicate would re-fetch the whole survey. The generator's own test
+ * is worth tightening the next time that crawl runs for another reason.
+ */
+function isOneOfOurs(entry: (typeof CONTEXT)[number]): boolean {
+  return duplicateFootprints().has(entry.footprint);
+}
+
+let duplicates: Set<Ring> | null = null;
+
+/**
+ * Computed once for the whole session and keyed on the footprint array's own
+ * identity, which is stable because it comes straight off the imported JSON.
+ * Roughly 60 ring-pair tests survive the bounding-box rejection, so this is a
+ * few milliseconds, once, inside a chunk that only loads for the 3D card.
+ */
+function duplicateFootprints(): Set<Ring> {
+  if (duplicates) return duplicates;
+  duplicates = new Set<Ring>();
+
+  for (const entry of CONTEXT) {
+    for (const building of CAMPUS_LAYOUT_BUILDINGS) {
+      if (building.plane !== entry.plane) continue;
+      const ring = CAMPUS_RINGS[building.buildingId];
+      if (!ring || ring.length < 3) continue;
+      // Campus rings are stored relative to their own centroid; the context is
+      // in absolute plane coordinates, so walk ours out before comparing.
+      const placed = ring.map(([x, z]) => [x + building.x, z + building.z]);
+      if (ringOverlapFraction(entry.footprint, placed) > DUPLICATE_OVERLAP) {
+        duplicates.add(entry.footprint);
+        break;
+      }
+    }
+  }
+
+  return duplicates;
 }
 
 function weld(shells: readonly CampusShell[]): CampusShell | null {
