@@ -24,7 +24,7 @@
  */
 
 import { gzipSync } from "node:zlib";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 import { getAllCourses } from "@/lib/data/catalog";
@@ -200,6 +200,27 @@ async function main(): Promise<void> {
   };
   writeFileSync(join(outDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
 
+  /*
+   * Drop the artifacts this build superseded.
+   *
+   * Every build writes a content-hashed name, and nothing used to remove the
+   * old one — `public/index` had grown to four `.bin` files and 18.8 MB, all of
+   * which are committed and all of which ship, though the client only ever
+   * fetches the one the manifest names. The hashed name is what makes the file
+   * safe to cache forever; it is also what makes the stale ones invisible.
+   *
+   * Only files this script's own naming scheme could have produced are
+   * considered, and only ones the manifest we just wrote does not reference.
+   */
+  const live = new Set([lexicalName, embedding ? embeddingName : null].filter(Boolean));
+  const stale = readdirSync(outDir).filter(
+    (name) => /^catalog-[a-z0-9]+(\.emb)?\.bin$/.test(name) && !live.has(name),
+  );
+  for (const name of stale) unlinkSync(join(outDir, name));
+  if (stale.length > 0) {
+    console.log(`\nRemoved ${stale.length} superseded artifact(s): ${stale.join(", ")}`);
+  }
+
   // --- report ---------------------------------------------------------------
   console.log(`\nBlock sizes (raw):`);
   const blocks = estimateBlockSizes(index);
@@ -233,11 +254,17 @@ async function main(): Promise<void> {
 
   if (!embedding) {
     console.log(
-      `\nSemantic search DISABLED: no embedding provider is wired up, so no\n` +
+      `\nSemantic search DISABLED: no embedding provider is configured, so no\n` +
         `embedding block was produced. The artifact is a complete, valid\n` +
-        `lexical index — BM25, prefix and fuzzy matching all work. To enable\n` +
-        `semantics later, implement buildEmbeddings() in this script; the\n` +
-        `format, client loader and engine already handle the block.`,
+        `lexical index — BM25, prefix and fuzzy matching all work.\n` +
+        `\n` +
+        `Everything on this side is built: buildEmbeddings() below, the block\n` +
+        `encoder, the client loader and the engine. Set EMBEDDING_API_KEY (and\n` +
+        `EMBEDDING_MODEL / EMBEDDING_BASE_URL if not OpenAI) and this build\n` +
+        `produces the sidecar. Note that DOCUMENT embeddings are only half of\n` +
+        `it: spec §9 forbids search from touching the network, so ranking a\n` +
+        `query against them needs a model running in the browser. See\n` +
+        `.plans/BLOCKERS.md item 12.`,
     );
   }
 
