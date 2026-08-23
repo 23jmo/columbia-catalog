@@ -320,19 +320,50 @@ export function buildMeetings(
 }
 
 /**
+ * Split a repeated directory field into its original entries.
+ *
+ * A section that meets twice a week at different times prints Day/Time and
+ * Location twice, and `readDefinitionList` joins repeats with "; ". Treating
+ * the joined string as one value is not a cosmetic mistake: `parseTimeRange`
+ * splits on the dash and takes the first and last piece, so
+ * "Mo 7:40pm-8:55pm; Mo 2:40pm-3:55pm" became a single meeting starting at
+ * 19:40 and ending at 15:55 — which the `end_minute >= start_minute` check
+ * rejected, failing the ingest of the *entire* subject page. Eleven subjects,
+ * PHYS and ENGL among them, were lost to this.
+ */
+function splitRepeatedField(raw: string | null | undefined): string[] {
+  return cleanText(raw)
+    .split(/\s*;\s*|\n+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+/**
  * Parse a free-form "M W 5:40pm - 6:55pm" pattern where days and times are in
  * a single string, plus an optional separate location line.
+ *
+ * Both arguments may carry several "; "-joined entries — see above. They are
+ * paired positionally, because the directory emits them in matching order:
+ * the second Day/Time belongs to the second Location. Where the counts
+ * disagree the extra pattern gets no location rather than a borrowed one, with
+ * one exception: a single location for several patterns is the same room every
+ * time, which is common and unambiguous.
  */
 export function parseMeetingPattern(
   patternRaw: string | null | undefined,
   locationRaw?: string | null,
 ): Meeting[] {
-  const text = cleanText(patternRaw);
-  if (!text) return [];
-  // Everything up to the first digit is the day block; the rest is the range.
-  const split = /^([^0-9]*?)\s*(\d.*)$/.exec(text);
-  if (!split) return [];
-  return buildMeetings(split[1], split[2], locationRaw);
+  const patterns = splitRepeatedField(patternRaw);
+  if (patterns.length === 0) return [];
+  const locations = splitRepeatedField(locationRaw);
+
+  return patterns.flatMap((pattern, index) => {
+    // Everything up to the first digit is the day block; the rest is the range.
+    const split = /^([^0-9]*?)\s*(\d.*)$/.exec(pattern);
+    if (!split) return [];
+    const location = locations.length === 1 ? locations[0] : (locations[index] ?? null);
+    return buildMeetings(split[1], split[2], location);
+  });
 }
 
 // ---------------------------------------------------------------------------

@@ -16,10 +16,10 @@
  * tick. A cron that runs long is a cron that gets killed mid-write.
  */
 
-import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { CRON_GRACE_SECONDS, LEASE_SECONDS } from "@/lib/constants";
+import { isCronAuthorized } from "@/lib/cron-auth";
 import { getCrawlerRuntime } from "@/lib/crawler/contracts";
 // Side-effect import: binds the Supabase job store, catalog writer and parser
 // registry into the crawler's runtime registry. Without it every handler in
@@ -43,19 +43,6 @@ const CRON_DEADLINE_MS = 45_000;
 const CRON_RESERVE_MS = 8_000;
 /** The identity written to `leased_by` for cron-claimed work. */
 const CRON_WORKER_ID = "vercel-cron";
-
-function authorized(request: Request): boolean {
-  const expected = process.env.CRON_SECRET;
-  if (!expected || expected.length < 16) return false;
-  const header = request.headers.get("authorization") ?? "";
-  const prefix = "Bearer ";
-  if (!header.startsWith(prefix)) return false;
-  const provided = header.slice(prefix.length);
-  const a = Buffer.from(provided);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
-}
 
 interface CronSummary {
   claimed: number;
@@ -150,7 +137,7 @@ async function runCron(): Promise<CronSummary> {
 }
 
 async function handle(request: Request): Promise<Response> {
-  if (!authorized(request)) {
+  if (!isCronAuthorized(request)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   if (process.env.CRAWL_WORKER_DISABLED === "1") {

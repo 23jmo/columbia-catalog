@@ -179,6 +179,51 @@ describe("parseSubjectPageNotes", () => {
   });
 });
 
+describe("parseMeetingPattern — sections that meet more than once", () => {
+  /*
+   * A section with two Day/Time entries has them joined with "; " by
+   * readDefinitionList. Read as one value, parseTimeRange took the start of
+   * the first and the end of the last and produced an inverted range, which
+   * the `end_minute >= start_minute` check rejected — taking the whole subject
+   * page down with it. PHYS 6020 in Spring 2025 is the real case.
+   */
+  it("keeps each entry a separate meeting instead of splicing them", () => {
+    expect(
+      parseMeetingPattern("Mo 7:40pm-8:55pm; Mo 2:40pm-3:55pm", "ONLINE ONLY; ONLINE ONLY"),
+    ).toEqual([
+      { weekday: "Mo", startMinute: 1180, endMinute: 1255, buildingName: "ONLINE ONLY", room: null },
+      { weekday: "Mo", startMinute: 880, endMinute: 955, buildingName: "ONLINE ONLY", room: null },
+    ]);
+  });
+
+  it("pairs each pattern with its own location, positionally", () => {
+    const meetings = parseMeetingPattern(
+      "We 6:10pm-8:00pm; We 8:10pm-9:00pm",
+      "LL013 Barnard Hall; 110 Barnard Hall",
+    );
+    // "LL013" keeps its whole string as the building name: parseLocation only
+    // splits a room off when the leading token is numeric, and a Barnard
+    // lower-level code is not. The pairing is what this test is about, and the
+    // second entry shows it did not borrow the first entry's room.
+    expect(meetings.map((meeting) => [meeting.room, meeting.buildingName])).toEqual([
+      [null, "LL013 Barnard Hall"],
+      ["110", "Barnard Hall"],
+    ]);
+  });
+
+  it("reuses a lone location across every pattern, but never a borrowed one", () => {
+    const shared = parseMeetingPattern("Mo 9:00am-9:50am; We 1:10pm-2:00pm", "301 Pupin Hall");
+    expect(shared.every((meeting) => meeting.room === "301")).toBe(true);
+
+    // Three patterns, two locations: the third gets nothing rather than a guess.
+    const uneven = parseMeetingPattern(
+      "Mo 9:00am-9:50am; We 1:10pm-2:00pm; Fr 3:10pm-4:00pm",
+      "301 Pupin Hall; 428 Pupin Hall",
+    );
+    expect(uneven.map((meeting) => meeting.room)).toEqual(["301", "428", null]);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Section detail page
 // ---------------------------------------------------------------------------

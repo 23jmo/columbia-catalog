@@ -168,3 +168,60 @@ Optional: set `hd` on the Google Workspace side too. I already send
 binding restriction is the `users_columbia_domain` check constraint, and the
 callback signs out a non-Columbia account and says why rather than leaving them
 apparently-signed-in with every write failing.
+
+---
+
+## 7. Resend: API key + a verified sending domain (seat alerts)
+
+**What is blocked:** the seat-opened email, and nothing else. The whole alert
+lane is built and runs end-to-end today — `sections_opened_since` detects the
+transition, `pending_seat_alerts` finds the watchers owed one and dedupes
+against `alerts_sent`, `/api/alerts/sweep` renders and sends, and
+`record_alerts_sent` books it. Only the transport is missing.
+
+Without a key the sweep reports `stoppedBecause: "email_not_configured"`,
+records nothing as sent, and leaves the alerts pending. The first sweep after
+the key lands delivers whatever is still inside the 90-minute window. It fails
+loudly in the summary rather than silently, because a sweep that sends nothing
+and says nothing looks identical to a sweep with nothing to send.
+
+**What I need from you:**
+
+1. resend.com → API Keys → create one with **Sending access**.
+2. Domains → add a domain you control and complete the DNS records. Resend
+   refuses to send from an unverified domain, so this is not optional.
+3. Add both to `.env.local` and to the Vercel project:
+   ```
+   RESEND_API_KEY=re_...
+   ALERT_FROM_EMAIL="Columbia Catalog <alerts@yourdomain.tld>"
+   ```
+
+There is no fallback and deliberately no mock. A stubbed sender that logged to
+the console would let the whole feature pass a smoke test while every watcher
+got nothing.
+
+---
+
+## 8. Vercel plan: cron frequency
+
+`vercel.json` asks for `/api/alerts/sweep` every 2 minutes and
+`/api/crawl/cron` every 5. **Hobby projects are limited to 2 cron jobs running
+once per day**, and Vercel silently coerces the schedule rather than failing the
+deploy — which would leave alerts arriving up to 24 hours late while everything
+appeared configured.
+
+On Hobby the alert path still works, just not on that cadence. Pro is what the
+spec's numbers assume. If the project stays on Hobby, say so and I will move the
+sweep onto the browser-driven path the crawler already uses (spec §10: browsers
+are the engine, cron is the safety net) so alert latency stops depending on the
+plan.
+
+---
+
+## 9. `TEST` subject disabled in the crawl queue
+
+Not a blocker, a note. The registrar publishes a `TEST` subject whose rows carry
+course numbers above 9999, which `courses_course_number_check` rejects — taking
+the whole page's ingest down with it. It is a sandbox subject with no real
+classes, so its crawl job is now `enabled = false` rather than failing on every
+sweep. Re-enable it only if the constraint is ever widened.

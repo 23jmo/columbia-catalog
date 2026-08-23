@@ -5,6 +5,7 @@ import { ShellNav, type ShellNavKey } from "@/components/shell/nav";
 import { TermSwitcher } from "@/components/shell/term-switcher";
 import { ShellWordmark } from "@/components/shell/wordmark";
 import { PlanSyncProvider } from "@/components/schedule/plan-sync-provider";
+import { WatchlistProvider } from "@/components/watch/watchlist-provider";
 import { ThemeToggle } from "@/components/application/theme/theme-toggle";
 import { cx } from "@/utils/cx";
 
@@ -50,6 +51,7 @@ export function AppShell({ children, activeNav = "home", contentClassName }: App
       {/* Renders nothing. Keeps localStorage plans and Supabase in step for a
           signed-in student, and claims anonymous plans on first sign-in. */}
       <PlanSyncProvider />
+      <WatchlistProvider />
 
       {/* Desktop rail. `lg` and up only — below that the mobile bar owns nav. */}
       <aside className="sticky top-0 hidden h-dvh w-[248px] shrink-0 flex-col justify-between gap-4 border-r border-border-table bg-background-secondary-default p-3 lg:flex">

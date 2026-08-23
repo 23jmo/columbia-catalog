@@ -386,7 +386,7 @@ function PlanTabs({
           {plan.name}
         </button>
       ))}
-      <Button size="small" color="secondary" leadingIcon={RiAddLine} onClick={onCreate}>
+      <Button size="small" variant="secondary" leadingIcon={RiAddLine} onClick={onCreate}>
         New plan
       </Button>
     </div>
@@ -433,26 +433,26 @@ function PlanToolbar({
       />
       <Button
         size="small"
-        color="secondary"
+        variant="secondary"
         leadingIcon={isPrimary ? RiStarFill : RiStarLine}
         onClick={onMakePrimary}
         disabled={isPrimary}
       >
         {isPrimary ? "Primary" : "Make primary"}
       </Button>
-      <Button size="small" color="secondary" leadingIcon={RiFileCopyLine} onClick={onDuplicate}>
+      <Button size="small" variant="secondary" leadingIcon={RiFileCopyLine} onClick={onDuplicate}>
         Duplicate
       </Button>
       <Button
         size="small"
-        color="secondary"
+        variant="secondary"
         leadingIcon={RiDownloadLine}
         onClick={onExport}
         disabled={!canExport}
       >
         Export .ics
       </Button>
-      <Button size="small" color="secondary" leadingIcon={RiDeleteBinLine} onClick={onDelete}>
+      <Button size="small" variant="secondary" leadingIcon={RiDeleteBinLine} onClick={onDelete}>
         Delete
       </Button>
     </div>

@@ -4,6 +4,10 @@
     {
       "path": "/api/crawl/cron",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/alerts/sweep",
+      "schedule": "*/2 * * * *"
     }
   ],
   "functions": {
@@ -12,6 +16,9 @@
     },
     "app/api/crawl/submit/route.ts": {
       "maxDuration": 30
+    },
+    "app/api/alerts/sweep/route.ts": {
+      "maxDuration": 60
     }
   }
 }

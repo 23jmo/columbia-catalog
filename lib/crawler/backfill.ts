@@ -52,6 +52,22 @@ export interface BackfillOptions {
   includeSubjectIndex: boolean;
   /** Bulletin department slugs to seed (server-only jobs; no CORS there). */
   bulletinDepartments: string[];
+  /**
+   * Discover the bulletin department pages from the sitemap rather than taking
+   * them on the command line. `--bulletin=auto` sets this.
+   */
+  discoverBulletin: boolean;
+  /**
+   * Seed bulletin jobs and nothing else.
+   *
+   * Without this, an empty `subjects` means "discover every subject from the
+   * directory", which is the right default for a cold catalog and exactly wrong
+   * when the catalog is already warm and only its meeting times are missing: it
+   * would re-enqueue thousands of subject-term pages to fix a hole that none of
+   * them can fill, because the directory does not publish meeting patterns at
+   * all. See `discoverBulletinDepartments`.
+   */
+  onlyBulletin: boolean;
   /** Seed for the shuffle, so a dry run and the real run agree. */
   seed: number;
   /** Batch size for `upsertJobs`. */
@@ -66,6 +82,8 @@ export const DEFAULT_BACKFILL_OPTIONS: BackfillOptions = {
   startInSeconds: 60,
   includeSubjectIndex: true,
   bulletinDepartments: [],
+  discoverBulletin: false,
+  onlyBulletin: false,
   seed: 20263,
   chunkSize: 250,
 };
@@ -91,11 +109,20 @@ export function parseBackfillArgs(argv: readonly string[]): BackfillOptions {
     } else if (arg === "--no-subject-index") {
       options.includeSubjectIndex = false;
     } else if (arg.startsWith("--bulletin=")) {
-      options.bulletinDepartments = arg
-        .slice("--bulletin=".length)
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
+      const value = arg.slice("--bulletin=".length).trim();
+      // "auto" means "ask the sitemap", so a caller never has to paste 128
+      // department slugs — or silently miss the ones added since they last did.
+      if (value === "auto") {
+        options.discoverBulletin = true;
+      } else {
+        options.bulletinDepartments = value
+          .split(",")
+          .map((entry) => entry.trim())
+          .filter(Boolean);
+      }
+    } else if (arg === "--only-bulletin") {
+      options.onlyBulletin = true;
+      options.includeSubjectIndex = false;
     } else if (arg.startsWith("--seed=")) {
       options.seed = Number(arg.slice("--seed=".length)) || DEFAULT_BACKFILL_OPTIONS.seed;
     }
@@ -328,6 +355,92 @@ export async function discoverSubjectIndex(
   return { subjects: [...codes].sort(), availability };
 }
 
+/**
+ * The bulletin sections that publish schedule tables, as URL prefixes.
+ *
+ * WHY A PREFIX LIST AND NOT A CRAWL: the bulletin is a CourseLeaf site whose
+ * 542-page sitemap is mostly prose — admissions policy, degree requirements,
+ * faculty rosters. Only three sections carry `<div class="courseblock">` with a
+ * `desc_sched` table inside, and those are the only pages
+ * `parseBulletinDepartment` has anything to say about. Fetching the other ~400
+ * to discover they are prose would be four hundred requests spent on nothing.
+ *
+ * Each school names its section differently, which is the whole reason this is
+ * a list rather than one pattern:
+ *
+ *   Columbia College   /columbia-college/departments-instruction/{dept}/
+ *   Engineering        /columbia-engineering/academic-departments-programs/{dept}/
+ *   Barnard            /barnard-college/courses-instruction/{dept}/
+ *
+ * General Studies is deliberately absent: its bulletin section is policy pages
+ * only (GS students register for CC and SEAS courses, which the other three
+ * prefixes already cover), so including it would add requests and no meetings.
+ */
+export const BULLETIN_COURSE_PREFIXES: readonly string[] = [
+  "/columbia-college/departments-instruction/",
+  "/columbia-engineering/academic-departments-programs/",
+  "/barnard-college/courses-instruction/",
+];
+
+/**
+ * Every bulletin department page, discovered from the sitemap.
+ *
+ * WHY THE SITEMAP: `robots.txt` disallows `/azindex/`, the one page that lists
+ * every department in a single place, and it advertises `sitemap.xml` in the
+ * same breath. So the sitemap is not merely convenient, it is the route the
+ * site asks crawlers to use. Scraping the A–Z index instead would be a robots
+ * violation for the identical data.
+ *
+ * ONE LEVEL DOWN, NO DEEPER: under the engineering prefix, `{dept}/` is the
+ * department's course list while `{dept}/graduate-programs/` is a degree
+ * requirements page with no schedule table. Depth is what separates them, so
+ * anything nested below the department is dropped.
+ *
+ * Returns paths, not URLs, because that is what `--bulletin=` takes and what
+ * `buildBackfillPlan` joins onto `BULLETIN_BASE`.
+ */
+export async function discoverBulletinDepartments(
+  log: (line: string) => void = console.log,
+): Promise<string[]> {
+  const sitemapUrl = `${BULLETIN_BASE}/sitemap.xml`;
+  const outcome = await politeFetch(sitemapUrl);
+  if (!outcome.ok || !outcome.html) {
+    throw new Error(
+      `Could not read ${sitemapUrl}: ${outcome.error ?? `HTTP ${outcome.status}`}. ` +
+        "Pass --bulletin=<paths> explicitly to skip discovery.",
+    );
+  }
+
+  const departments = new Set<string>();
+  for (const match of outcome.html.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/g)) {
+    let path: string;
+    try {
+      // The sitemap prints http:// while the crawler refuses anything but
+      // https. Parsing and keeping only the path sidesteps the mismatch
+      // instead of string-replacing a scheme.
+      path = new URL(match[1]).pathname;
+    } catch {
+      continue;
+    }
+    if (!path.endsWith("/")) path += "/";
+
+    for (const prefix of BULLETIN_COURSE_PREFIXES) {
+      if (!path.startsWith(prefix) || path === prefix) continue;
+      const rest = path.slice(prefix.length).replace(/\/$/, "");
+      // Exactly one segment: the department itself, not its sub-pages.
+      if (!rest || rest.includes("/")) continue;
+      // Bulletin archives are prior years' catalogs; robots disallows the
+      // top-level /archive/ and the intent plainly extends to these.
+      if (rest === "archive") continue;
+      departments.add(path);
+    }
+  }
+
+  const sorted = [...departments].sort();
+  log(`  sitemap: ${sorted.length} bulletin department pages`);
+  return sorted;
+}
+
 /** Back-compat shim: the codes alone, for callers that do not need terms. */
 export async function discoverSubjects(
   runtime: CrawlerRuntime,
@@ -368,9 +481,20 @@ export async function runBackfill(
   const now = deps.now ?? new Date();
   const runtime = deps.runtime ?? tryGetCrawlerRuntime();
 
+  let bulletinDepartments = options.bulletinDepartments;
+  if (options.discoverBulletin) {
+    log("Discovering bulletin departments from the sitemap…");
+    bulletinDepartments = await discoverBulletinDepartments(log);
+  }
+
   let subjects = options.subjects;
   let availability: Map<string, Set<TermCode>> | undefined;
-  if (subjects.length === 0) {
+  // `--only-bulletin` is the difference between "the catalog is cold" and "the
+  // catalog is warm but has no meeting times". In the second case discovering
+  // subjects would enqueue thousands of directory pages that cannot carry a
+  // meeting pattern, so the discovery is skipped rather than its results
+  // filtered afterwards.
+  if (subjects.length === 0 && !options.onlyBulletin) {
     if (!runtime) {
       throw new Error(
         "No subjects given and no crawler runtime registered to discover them. " +
@@ -384,7 +508,12 @@ export async function runBackfill(
     log(`  found ${subjects.length} subjects`);
   }
 
-  const plan = buildBackfillPlan(subjects, options, now, availability);
+  const plan = buildBackfillPlan(
+    subjects,
+    { ...options, bulletinDepartments },
+    now,
+    availability,
+  );
 
   log("");
   log("Backfill plan");

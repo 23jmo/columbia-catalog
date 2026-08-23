@@ -15,10 +15,12 @@
  * whole surface is meaningful markup on first paint — spec §19's budget is not
  * something to negotiate with later.
  *
- * TODO(spec §5): the watchlist rail and the seat-movement feed also belong on
- * this screen. Both are per-user reads over `watches` / `enrollment_snapshots`,
- * neither table exists, and neither component is in this lane. They slot into
- * the grid below as a third column at `xl` without disturbing these two.
+ * The watchlist rail (spec §5) sits under the agent handoff rather than in a
+ * third column. It is the one part of this screen that cannot be server
+ * rendered — its whole purpose is to be current, and a server-rendered seat
+ * count is a photograph of the moment the request was served. It subscribes to
+ * Postgres realtime and repaints itself; everything around it stays static
+ * markup.
  */
 
 import type { Metadata } from "next";
@@ -29,6 +31,7 @@ import { PageHeader } from "@/components/shell/page-header";
 import { WeekGrid } from "@/components/schedule";
 import { AgentHandoff } from "@/components/home/agent-handoff";
 import { ScheduleColumn } from "@/components/home/schedule-column";
+import { WatchlistRail } from "@/components/watch/watchlist-rail";
 import { loadPlanSnapshot } from "@/components/home/load-plan-snapshot";
 import { CURRENT_TERM, buildTerm } from "@/lib/constants";
 import { MCP_PATH, resolveBaseUrl } from "@/lib/mcp/config";
@@ -106,7 +109,10 @@ export default async function HomePage({
             // TODO(auth): isSignedIn={Boolean(session)}.
           />
 
-          <AgentHandoff mcpEndpointUrl={mcpEndpointUrl} />
+          <div className="flex min-w-0 flex-col gap-5">
+            <WatchlistRail termCode={termCode} />
+            <AgentHandoff mcpEndpointUrl={mcpEndpointUrl} />
+          </div>
         </div>
       </div>
     </AppShell>

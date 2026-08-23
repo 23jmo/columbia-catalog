@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { RiCalendarLine, RiEyeLine, RiTimeLine, RiUserLine } from "@remixicon/react";
+import { RiCalendarLine, RiTimeLine, RiUserLine } from "@remixicon/react";
 import type { Section } from "@/lib/types";
 import { Button } from "@/components/base/buttons/button";
 import { cx } from "@/utils/cx";
 import { formatSectionMeetings } from "./meetings";
+import { WatchButton } from "@/components/watch/watch-button";
 import { SeatBadge, seatFiguresFromSection } from "./seat-badge";
 
 /**
@@ -27,8 +28,6 @@ export interface SectionRowProps {
   isMatch?: boolean;
   /** TODO(schedule): wired by the schedule lane. Writes require an account. */
   onAddToSchedule?: (sectionId: string) => void;
-  /** TODO(alerts): wired by the watchlist lane. Writes require an account. */
-  onWatch?: (sectionId: string) => void;
   className?: string;
 }
 
@@ -36,7 +35,6 @@ export function SectionRow({
   section,
   isMatch = false,
   onAddToSchedule,
-  onWatch,
   className,
 }: SectionRowProps) {
   const meetings = formatSectionMeetings(section);
@@ -106,15 +104,7 @@ export function SectionRow({
           >
             Add
           </Button>
-          <Button
-            size="xs"
-            variant="ghost"
-            iconOnly
-            leadingIcon={RiEyeLine}
-            onClick={() => onWatch?.(section.sectionId)}
-            aria-label={`Watch section ${section.sectionCode} for open seats`}
-            title="Watch for open seats"
-          />
+          <WatchButton sectionId={section.sectionId} sectionCode={section.sectionCode} iconOnly />
         </div>
       </div>
     </div>

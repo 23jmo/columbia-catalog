@@ -7,6 +7,8 @@ import { meetingLines, placeSummary } from "@/components/course/format";
 import { RegistrationHandoff } from "@/components/course/registration-handoff";
 import { SectionCompare } from "@/components/course/section-compare";
 import { ProvenanceStamp, SeatPill } from "@/components/course/seat-state";
+import { WatchButton } from "@/components/watch/watch-button";
+import { useWatchlist } from "@/hooks/use-watchlist";
 import type { Section } from "@/lib/types";
 import { cx } from "@/utils/cx";
 
@@ -33,6 +35,12 @@ export interface SectionsPanelProps {
 export function SectionsPanel({ sections, courseCode, courseTitle }: SectionsPanelProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
+  // Watcher counts for every section on screen, and live seat readings for the
+  // ones this student watches. A course page left open through a registration
+  // window is showing history otherwise — the seat numbers the server rendered
+  // are minutes old by the time anyone acts on them.
+  const { seats } = useWatchlist(sections.map((section) => section.sectionId));
+
   const toggle = (sectionId: string) =>
     setSelectedIds((current) =>
       current.includes(sectionId)
@@ -55,6 +63,21 @@ export function SectionsPanel({ sections, courseCode, courseTitle }: SectionsPan
           const lines = meetingLines(section.meetings);
           const place = placeSummary(section.meetings);
           const isComparing = selectedIds.includes(section.sectionId);
+
+          // A pushed reading replaces the rendered one wholesale, provenance
+          // stamp included — half-updating would put a fresh seat count under
+          // a stale "as of", which is the one combination worse than either.
+          const live = seats.get(section.sectionId);
+          const shown = live
+            ? {
+                ...section,
+                enrollmentCount: live.enrollmentCount,
+                enrollmentCap: live.enrollmentCap,
+                waitlistCount: live.waitlistCount,
+                status: live.status,
+                sourceAsOf: live.sourceAsOf,
+              }
+            : section;
 
           return (
             <li
@@ -115,9 +138,9 @@ export function SectionsPanel({ sections, courseCode, courseTitle }: SectionsPan
                 </div>
 
                 <div className="flex shrink-0 flex-col items-start gap-1.5 sm:items-end">
-                  <SeatPill section={section} />
+                  <SeatPill section={shown} />
                   {/* Every seat number carries the directory's own stamp. */}
-                  <ProvenanceStamp sourceAsOf={section.sourceAsOf} />
+                  <ProvenanceStamp sourceAsOf={shown.sourceAsOf} />
                 </div>
               </div>
 
@@ -127,6 +150,10 @@ export function SectionsPanel({ sections, courseCode, courseTitle }: SectionsPan
                   courseCode={courseCode}
                   courseTitle={courseTitle}
                   variant="inline"
+                />
+                <WatchButton
+                  sectionId={section.sectionId}
+                  sectionCode={section.sectionCode}
                 />
                 <button
                   type="button"
