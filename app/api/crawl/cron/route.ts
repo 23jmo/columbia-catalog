@@ -20,7 +20,12 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { CRON_GRACE_SECONDS, LEASE_SECONDS } from "@/lib/constants";
-import { getCrawlerRuntime, tryGetCrawlerRuntime } from "@/lib/crawler/contracts";
+import { getCrawlerRuntime } from "@/lib/crawler/contracts";
+// Side-effect import: binds the Supabase job store, catalog writer and parser
+// registry into the crawler's runtime registry. Without it every handler in
+// this directory answers 503 — the crawler is fully written and structurally
+// unable to run. See lib/db/crawler-runtime.ts.
+import { crawlerBootstrapError, ensureCrawlerRuntime } from "@/lib/db/crawler-runtime";
 import { politeFetch } from "@/lib/crawler/fetcher";
 import { ingestHtml, recordFetchFailure } from "@/lib/crawler/ingest";
 import { promoteToHot } from "@/lib/crawler/scheduler";
@@ -154,8 +159,11 @@ async function handle(request: Request): Promise<Response> {
       { status: 200 },
     );
   }
-  if (!tryGetCrawlerRuntime()) {
-    return NextResponse.json({ error: "crawler runtime unavailable" }, { status: 503 });
+  if (!ensureCrawlerRuntime()) {
+    return NextResponse.json(
+      { error: "crawler runtime unavailable", reason: crawlerBootstrapError() },
+      { status: 503 },
+    );
   }
 
   try {

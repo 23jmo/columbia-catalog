@@ -182,10 +182,28 @@ export interface ParsedSubjectIndex {
   subjects: { subjectCode: string; subjectName: string; school: string | null }[];
 }
 
-/** Registration milestones lifted from the published academic calendar. */
+/**
+ * Registration milestones lifted from the published academic calendar.
+ *
+ * `endsAt` is not optional decoration: appointments stagger by school and class
+ * year over roughly two weeks (spec §10), so a window is a range, and
+ * `isWindowActive()` in `./scheduler.ts` cannot answer "are we inside a window
+ * right now" from a start instant alone. A milestone with no end is a
+ * point-in-time event — an add/drop deadline, the first day of classes.
+ */
 export interface ParsedAcademicCalendar {
   termCode: TermCode | null;
-  milestones: { kind: string; label: string; occursAt: string }[];
+  milestones: {
+    kind: string;
+    label: string;
+    occursAt: string;
+    /** Closing edge of a window. Absent for point-in-time milestones. */
+    endsAt?: string;
+    /** Which school / class year this window belongs to, when printed. */
+    audience?: string;
+    /** Page the date came from, so a wrong annotation is traceable. */
+    sourceUrl?: string;
+  }[];
 }
 
 /**

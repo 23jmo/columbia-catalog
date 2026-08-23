@@ -8,19 +8,29 @@
  * in 3D. The card imports it through `next/dynamic({ ssr: false })`; nothing
  * here runs on the server.
  *
+ * What this draws is surveyed, not stylised: real building outlines from NYC
+ * Open Data, real roof heights, and the surrounding neighbourhood behind them.
+ * See `scripts/build-campus-map.ts` for where the numbers come from and
+ * `./footprints.ts` for how they become geometry.
+ *
  * Performance rules this scene is built around (spec §19 — the drawer's
  * open-time budget is a hard bar, and this card may not touch it):
  *
- *   - Every un-targeted building is ONE instanced mesh, so the whole campus is
- *     two draw calls (buildings, roads) plus the highlight and its marker.
+ *   - Real outlines rule out instancing, so the campus is MERGED instead: one
+ *     geometry for the muted mass, one for landmarks, one for the
+ *     neighbourhood. Three draw calls, plus the pin, its marker and the ground.
  *   - `frameloop="demand"` unless the pulse is actually running. When the card
  *     scrolls out of view or the tab is hidden the parent flips `animate` off
  *     and the renderer goes quiet; orbiting still redraws, because drei's
  *     controls call `invalidate()` themselves.
+ *   - Shadows are rendered ONCE. Geometry and light are both static, so
+ *     `shadowMap.autoUpdate` is off and a single update is forced whenever the
+ *     plane or the pin changes. Orbiting re-reads the same shadow map.
+ *   - The environment map is generated procedurally from three's own
+ *     `RoomEnvironment`. It is what makes the walls read as surfaces rather
+ *     than as flat fills, and it costs one small render at mount — no HDRI, no
+ *     CDN, no network at all.
  *   - DPR is capped at 1.75. A 3× retina buffer for a 320 px card is pure heat.
- *   - No shadow maps, no post-processing, no loaded assets. The cartoon look
- *     comes from flat-shaded Lambert boxes and a two-light key/fill rig, which
- *     is also the cheapest thing that is not unlit.
  *
  * Colours arrive fully resolved from `palette.ts` — see that file for why the
  * BoardUI tokens cannot be handed to three.js directly.
@@ -29,9 +39,17 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Edges, Instance, Instances, OrbitControls } from "@react-three/drei";
-import type { Mesh, MeshLambertMaterial, OrthographicCamera } from "three";
+import {
+  PMREMGenerator,
+  type BufferGeometry,
+  type Mesh,
+  type MeshStandardMaterial,
+  type OrthographicCamera,
+} from "three";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { buildingsOnPlane, campusPlane, roadsOnPlane } from "@/lib/campus";
 import type { CampusLayoutBuilding, CampusPlaneId, CampusRoad } from "@/lib/campus";
+import { buildingGeometry, contextGeometry, mergedGeometry } from "./footprints";
 import type { CampusPalette } from "./palette";
 
 export interface CampusSceneProps {
@@ -64,6 +82,12 @@ const VIEW_WORLD_WIDTH = 15;
 /** Isometric-ish view direction. Not a true 2:1 iso — a touch higher reads better. */
 const CAMERA_DIRECTION = { x: 1, y: 0.92, z: 1 };
 const CAMERA_DISTANCE = 40;
+/**
+ * How far the asphalt reaches past the plane's own rectangle. The bake carries
+ * the neighbourhood well beyond the campus bounding box, and ground that
+ * stopped at the last Columbia building would leave those blocks hovering.
+ */
+const GROUND_OVERSCAN_UNITS = 20;
 
 function roadBox(road: CampusRoad) {
   const length = road.to - road.from;
@@ -71,6 +95,79 @@ function roadBox(road: CampusRoad) {
   return road.orientation === "north-south"
     ? { position: [road.at, 0, center] as const, scale: [road.width, 1, length] as const }
     : { position: [center, 0, road.at] as const, scale: [length, 1, road.width] as const };
+}
+
+/**
+ * Disposes a geometry when it is replaced or unmounted.
+ *
+ * `useMemo` alone is not enough: three's buffers live on the GPU and React has
+ * no idea they exist, so a plane change would leak a whole campus every time.
+ * Callers keep their own `useMemo` — the dependency list has to be a literal
+ * for the compiler to check it, so it cannot be hidden behind this hook.
+ */
+function useDisposed<T extends BufferGeometry | null>(geometry: T): T {
+  useEffect(() => () => geometry?.dispose(), [geometry]);
+  return geometry;
+}
+
+/**
+ * Three's `RoomEnvironment` rendered to a PMREM cube, assigned as the scene's
+ * environment. This is the single biggest visual difference between "flat
+ * shaded boxes" and "buildings": it gives every wall a soft gradient from the
+ * ambient surround instead of one constant Lambert value per face.
+ *
+ * Installed from `useFrame` rather than an effect for the same reason
+ * `CameraRig` fits the camera there: `scene` and `gl` are renderer state, and
+ * writing to them is a render-loop concern that React's own rules (rightly)
+ * will not let a component do to a hook's return value.
+ */
+function ProceduralEnvironment({ intensity }: { intensity: number }) {
+  const installed = useRef(false);
+  const generated = useRef<{ dispose: () => void } | null>(null);
+
+  useFrame(({ gl, scene }) => {
+    if (installed.current) return;
+    installed.current = true;
+
+    const generator = new PMREMGenerator(gl);
+    const room = new RoomEnvironment();
+    const target = generator.fromScene(room, 0.04);
+    scene.environment = target.texture;
+    scene.environmentIntensity = intensity;
+
+    // The room scene and the generator are both scratch; only the cube texture
+    // outlives this frame.
+    room.traverse((object) => {
+      (object as Mesh).geometry?.dispose?.();
+    });
+    generator.dispose();
+    generated.current = { dispose: () => target.dispose() };
+  });
+
+  useEffect(() => () => generated.current?.dispose(), []);
+
+  return null;
+}
+
+/**
+ * Renders the shadow map once per scene change instead of once per frame.
+ *
+ * Nothing that casts a shadow ever moves — the light is fixed, the buildings
+ * are baked, and the camera orbiting does not change where a shadow falls. So
+ * the map is rebuilt only when the plane or the pin actually changes shape,
+ * and every frame in between reuses it for free.
+ */
+function StaticShadows({ signature }: { signature: string }) {
+  const rendered = useRef<string | null>(null);
+
+  useFrame(({ gl }) => {
+    if (rendered.current === signature) return;
+    rendered.current = signature;
+    gl.shadowMap.autoUpdate = false;
+    gl.shadowMap.needsUpdate = true;
+  });
+
+  return null;
 }
 
 /**
@@ -146,11 +243,17 @@ function PinnedMarker({
   animate: boolean;
 }) {
   const ringRef = useRef<Mesh>(null);
-  const materialRef = useRef<MeshLambertMaterial>(null);
+  const materialRef = useRef<MeshStandardMaterial>(null);
 
   const anchor = pinned ? { x: pinned.x, z: pinned.z } : focus;
   const footprint = pinned ? Math.max(pinned.width, pinned.depth) : 1.6;
   const pinHeight = (pinned?.height ?? 0) + 1.0;
+
+  // Extruded in absolute plane coordinates, so the mesh itself sits at the
+  // origin and the group's translation is only used by the marker.
+  const geometry = useDisposed(
+    useMemo(() => (pinned ? buildingGeometry(pinned) : null), [pinned]),
+  );
 
   useFrame(({ clock }) => {
     if (!animate) return;
@@ -170,34 +273,41 @@ function PinnedMarker({
   });
 
   return (
-    <group position={[anchor.x, 0, anchor.z]}>
-      {pinned ? (
-        <mesh position={[0, pinned.height / 2, 0]} scale={[pinned.width, pinned.height, pinned.depth]}>
-          <boxGeometry args={[1, 1, 1]} />
-          <meshLambertMaterial
+    <>
+      {geometry ? (
+        <mesh geometry={geometry} castShadow receiveShadow>
+          <meshStandardMaterial
             ref={materialRef}
             color={palette.highlight}
             emissive={palette.highlight}
             emissiveIntensity={0.18}
-            flatShading
+            roughness={0.55}
+            metalness={0}
           />
-          <Edges color={palette.outline} threshold={15} />
+          <Edges color={palette.outline} threshold={20} />
         </mesh>
       ) : null}
 
-      {/* Ground halo. `depthWrite={false}` keeps it from z-fighting the ground
-          plane it sits a hair above. */}
-      <mesh ref={ringRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.04, 0]}>
-        <ringGeometry args={[footprint * 0.66, footprint * 0.82, 40]} />
-        <meshBasicMaterial color={palette.marker} transparent opacity={0.5} depthWrite={false} />
-      </mesh>
+      <group position={[anchor.x, 0, anchor.z]}>
+        {/* Ground halo. `depthWrite={false}` keeps it from z-fighting the ground
+            plane it sits a hair above. */}
+        <mesh ref={ringRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.04, 0]}>
+          <ringGeometry args={[footprint * 0.66, footprint * 0.82, 40]} />
+          <meshBasicMaterial color={palette.marker} transparent opacity={0.5} depthWrite={false} />
+        </mesh>
 
-      {/* Downward pin, so the eye lands on the roof rather than the sky. */}
-      <mesh position={[0, pinHeight + 0.45, 0]} rotation={[Math.PI, 0, 0]}>
-        <coneGeometry args={[0.26, 0.66, 6]} />
-        <meshLambertMaterial color={palette.highlight} emissive={palette.highlight} emissiveIntensity={0.3} />
-      </mesh>
-    </group>
+        {/* Downward pin, so the eye lands on the roof rather than the sky. */}
+        <mesh position={[0, pinHeight + 0.45, 0]} rotation={[Math.PI, 0, 0]}>
+          <coneGeometry args={[0.26, 0.66, 6]} />
+          <meshStandardMaterial
+            color={palette.highlight}
+            emissive={palette.highlight}
+            emissiveIntensity={0.35}
+            roughness={0.4}
+          />
+        </mesh>
+      </group>
+    </>
   );
 }
 
@@ -216,13 +326,24 @@ function CampusModel({
 }) {
   const ground = campusPlane(plane);
   const roads = useMemo(() => roadsOnPlane(plane).map(roadBox), [plane]);
-  const muted = useMemo(
+
+  // Split by role rather than coloured per-vertex: two materials is one extra
+  // draw call, and it keeps the palette readable as palette rather than as
+  // colour attributes buried in a buffer.
+  const onPlane = useMemo(
     () => buildingsOnPlane(plane).filter((entry) => entry.buildingId !== pinned?.buildingId),
     [plane, pinned?.buildingId],
   );
+  const muted = useDisposed(
+    useMemo(() => mergedGeometry(onPlane.filter((entry) => !entry.isLandmark)), [onPlane]),
+  );
+  const landmarks = useDisposed(
+    useMemo(() => mergedGeometry(onPlane.filter((entry) => entry.isLandmark)), [onPlane]),
+  );
+  const context = useDisposed(useMemo(() => contextGeometry(plane), [plane]));
 
-  const groundWidth = ground.maxX - ground.minX;
-  const groundDepth = ground.maxZ - ground.minZ;
+  const groundWidth = ground.maxX - ground.minX + GROUND_OVERSCAN_UNITS * 2;
+  const groundDepth = ground.maxZ - ground.minZ + GROUND_OVERSCAN_UNITS * 2;
   const groundCenter: [number, number, number] = [
     (ground.minX + ground.maxX) / 2,
     -0.15,
@@ -233,20 +354,38 @@ function CampusModel({
     <>
       {/* Key light from the south-west, matching the direction the isometric
           camera looks from, plus a weak fill so the shaded faces stay readable
-          in dark mode rather than going to black. */}
-      <ambientLight intensity={1.9} />
-      <directionalLight position={[-8, 14, 10]} intensity={2.1} />
-      <directionalLight position={[10, 6, -8]} intensity={0.7} />
+          in dark mode rather than going to black. The environment map does most
+          of the ambient work now, so the old flat ambient is much lower. */}
+      <ProceduralEnvironment intensity={0.62} />
+      <ambientLight intensity={0.5} />
+      <directionalLight
+        position={[-8, 14, 10]}
+        intensity={1.55}
+        castShadow
+        // Tight and square: a shadow camera scaled to the whole plane would
+        // spend most of its 1024 texels on empty asphalt and give the campus
+        // itself blocky, aliased contact shadows.
+        shadow-mapSize={[1024, 1024]}
+        shadow-camera-left={-22}
+        shadow-camera-right={22}
+        shadow-camera-top={22}
+        shadow-camera-bottom={-22}
+        shadow-camera-near={0.5}
+        shadow-camera-far={60}
+        shadow-normalBias={0.02}
+      />
+      <directionalLight position={[10, 6, -8]} intensity={0.45} />
 
-      <mesh position={groundCenter}>
+      <mesh position={groundCenter} receiveShadow>
         <boxGeometry args={[groundWidth, 0.3, groundDepth]} />
-        <meshLambertMaterial color={palette.ground} />
+        <meshStandardMaterial color={palette.ground} roughness={0.95} metalness={0} />
       </mesh>
 
-      {/* Roads: one instanced mesh, laid a sliver above the ground. */}
+      {/* Roads: one instanced mesh, laid a sliver above the ground. Still boxes,
+          because a street IS a rectangle — nothing was lost to the survey here. */}
       <Instances limit={Math.max(roads.length, 1)} range={roads.length}>
         <boxGeometry args={[1, 1, 1]} />
-        <meshLambertMaterial color={palette.road} />
+        <meshStandardMaterial color={palette.road} roughness={0.9} metalness={0} />
         {roads.map((road, index) => (
           <Instance
             key={index}
@@ -256,21 +395,29 @@ function CampusModel({
         ))}
       </Instances>
 
-      {/* Every un-targeted building: one instanced mesh, per-instance colour. */}
-      <Instances limit={Math.max(muted.length, 1)} range={muted.length}>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshLambertMaterial flatShading />
-        {muted.map((entry) => (
-          <Instance
-            key={entry.buildingId}
-            position={[entry.x, entry.height / 2, entry.z]}
-            scale={[entry.width, entry.height, entry.depth]}
-            color={entry.isLandmark ? palette.landmark : palette.building}
-          />
-        ))}
-      </Instances>
+      {/* The neighbourhood. Drawn first and flattest: it is the reason the
+          campus reads as Morningside Heights and not as a diagram, and it must
+          never pull the eye off the pin. */}
+      {context ? (
+        <mesh geometry={context} receiveShadow castShadow>
+          <meshStandardMaterial color={palette.context} roughness={1} metalness={0} />
+        </mesh>
+      ) : null}
+
+      {muted ? (
+        <mesh geometry={muted} castShadow receiveShadow>
+          <meshStandardMaterial color={palette.building} roughness={0.85} metalness={0} />
+        </mesh>
+      ) : null}
+
+      {landmarks ? (
+        <mesh geometry={landmarks} castShadow receiveShadow>
+          <meshStandardMaterial color={palette.landmark} roughness={0.75} metalness={0} />
+        </mesh>
+      ) : null}
 
       <PinnedMarker pinned={pinned} focus={focus} palette={palette} animate={animate} />
+      <StaticShadows signature={`${plane}:${pinned?.buildingId ?? "none"}`} />
     </>
   );
 }
@@ -288,6 +435,7 @@ export default function CampusScene({
   return (
     <Canvas
       orthographic
+      shadows="soft"
       // Frames are only produced on demand unless the marker is pulsing. This
       // is the single biggest reason the card can sit inside a drawer without
       // costing anything when nobody is looking at it.

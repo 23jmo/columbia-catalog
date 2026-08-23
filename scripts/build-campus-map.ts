@@ -723,7 +723,9 @@ async function main() {
         "are surveyed; see that script for the sources and the join.",
       metresPerUnit: METRES_PER_UNIT,
       gridBearingDegrees: GRID_BEARING_DEGREES,
-      buildings: placed.map(({ footprint: _footprint, ...rest }) => rest),
+      // The rings are deliberately left out here — they go in the other file,
+      // which only the 3D scene imports.
+      buildings: placed.map((building) => ({ ...building, footprint: undefined })),
       planeExtents: planeBounds,
     },
     `${placed.length} placed buildings — imported by lib/campus/layout.ts`,

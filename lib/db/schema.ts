@@ -150,7 +150,7 @@ export type CrawlSubmissionInput = z.infer<typeof crawlSubmissionSchema>;
 // Row types — catalog (0001_catalog.sql)
 // ---------------------------------------------------------------------------
 
-export interface TermRow {
+export type TermRow = {
   term_code: string;
   season: Season;
   year: number;
@@ -163,17 +163,17 @@ export interface TermRow {
   is_archived: boolean;
   created_at: string;
   updated_at: string;
-}
+};
 
-export interface SubjectRow {
+export type SubjectRow = {
   subject_code: string;
   subject_name: string;
   school: string | null;
   created_at: string;
   updated_at: string;
-}
+};
 
-export interface BuildingRow {
+export type BuildingRow = {
   building_id: string;
   name: string;
   lat: number | null;
@@ -181,9 +181,9 @@ export interface BuildingRow {
   campus_zone: CampusZone;
   created_at: string;
   updated_at: string;
-}
+};
 
-export interface InstructorRow {
+export type InstructorRow = {
   instructor_id: string;
   full_name: string;
   /** Generated column: never written. */
@@ -194,9 +194,9 @@ export interface InstructorRow {
   email: string | null;
   created_at: string;
   updated_at: string;
-}
+};
 
-export interface CourseRow {
+export type CourseRow = {
   course_id: string;
   subject_code: string;
   course_number: number;
@@ -211,9 +211,9 @@ export interface CourseRow {
   requirement_flags: Json;
   created_at: string;
   updated_at: string;
-}
+};
 
-export interface SectionRow {
+export type SectionRow = {
   section_id: string;
   course_id: string;
   term_code: string;
@@ -239,9 +239,9 @@ export interface SectionRow {
   open_to: string | null;
   created_at: string;
   updated_at: string;
-}
+};
 
-export interface MeetingRow {
+export type MeetingRow = {
   meeting_id: string;
   section_id: string;
   weekday: Weekday;
@@ -251,13 +251,13 @@ export interface MeetingRow {
   building_name: string | null;
   room: string | null;
   created_at: string;
-}
+};
 
-export interface SectionInstructorRow {
+export type SectionInstructorRow = {
   section_id: string;
   instructor_id: string;
   position: number;
-}
+};
 
 /**
  * The shape a nested PostgREST select produces:
@@ -283,16 +283,16 @@ export interface CourseRowWithSections extends CourseRow {
 // Row types — history (0002_history.sql)
 // ---------------------------------------------------------------------------
 
-export interface EnrollmentSnapshotRow {
+export type EnrollmentSnapshotRow = {
   section_id: string;
   observed_at: string;
   enrollment_count: number;
   enrollment_cap: number | null;
   waitlist_count: number | null;
   status: EnrollmentStatusCode;
-}
+};
 
-export interface RegistrationMilestoneRow {
+export type RegistrationMilestoneRow = {
   milestone_id: string;
   term_code: string;
   kind: RegistrationMilestoneKind;
@@ -303,13 +303,13 @@ export interface RegistrationMilestoneRow {
   source_url: string | null;
   created_at: string;
   updated_at: string;
-}
+};
 
 // ---------------------------------------------------------------------------
 // Row types — crawl (0003_crawl.sql)
 // ---------------------------------------------------------------------------
 
-export interface CrawlJobRow {
+export type CrawlJobRow = {
   job_id: string;
   kind: CrawlJobKind;
   target_key: string;
@@ -328,11 +328,11 @@ export interface CrawlJobRow {
   enabled: boolean;
   created_at: string;
   updated_at: string;
-}
+};
 
 export type IngestRunStatus = "running" | "ok" | "failed" | "quarantined";
 
-export interface IngestRunRow {
+export type IngestRunRow = {
   run_id: string;
   job_id: string | null;
   kind: CrawlJobKind | null;
@@ -347,13 +347,40 @@ export interface IngestRunRow {
   records_seen: number | null;
   previous_records: number | null;
   notes: string | null;
-}
+};
+
+/**
+ * Migration 0007. The shape of the last run that was actually COMMITTED for a
+ * quarantine key — deliberately not the last `ingest_runs` row, which also
+ * records refusals. Ratcheting this down to a rejected parse's output would let
+ * the next equally-broken parse through.
+ */
+export type IngestFingerprintRow = {
+  /** `${kind}:${target_key}:${term_code ?? "-"}`. */
+  ingest_key: string;
+  record_count: number;
+  filled_field_count: number;
+  captured_at: string;
+  updated_at: string;
+};
+
+/**
+ * Migration 0007. Ledger backing the per-client hourly request ceiling
+ * (spec §10). `client_id` is an opaque browser id and must never be a user id:
+ * this table must not become a way to attribute crawl traffic to a person.
+ */
+export type ClientLeaseRow = {
+  lease_id: number;
+  client_id: string;
+  job_count: number;
+  leased_at: string;
+};
 
 // ---------------------------------------------------------------------------
 // Row types — reviews (0004_reviews.sql)
 // ---------------------------------------------------------------------------
 
-export interface ReviewSourceRow {
+export type ReviewSourceRow = {
   source_id: string;
   /** Only ever 'culpa' or 'reddit'. RateMyProfessor is never stored. */
   kind: ReviewSourceKind;
@@ -361,9 +388,9 @@ export interface ReviewSourceRow {
   base_url: string | null;
   license_note: string | null;
   created_at: string;
-}
+};
 
-export interface ReviewRawRow {
+export type ReviewRawRow = {
   review_id: string;
   source_id: string;
   source_review_key: string | null;
@@ -376,9 +403,9 @@ export interface ReviewRawRow {
   url: string;
   fetched_at: string;
   created_at: string;
-}
+};
 
-export interface ReviewDimensionsRow {
+export type ReviewDimensionsRow = {
   review_id: string;
   workload: number | null;
   difficulty: number | null;
@@ -388,22 +415,22 @@ export interface ReviewDimensionsRow {
   would_take_again: boolean | null;
   extracted_at: string;
   model_version: string;
-}
+};
 
 // ---------------------------------------------------------------------------
 // Row types — users (0005_users.sql)
 // ---------------------------------------------------------------------------
 
-export interface UserRow {
+export type UserRow = {
   user_id: string;
   email: string;
   google_sub: string | null;
   display_name: string | null;
   created_at: string;
   updated_at: string;
-}
+};
 
-export interface PlanRow {
+export type PlanRow = {
   plan_id: string;
   user_id: string;
   term_code: string;
@@ -412,16 +439,16 @@ export interface PlanRow {
   share_token: string | null;
   created_at: string;
   updated_at: string;
-}
+};
 
-export interface PlanItemRow {
+export type PlanItemRow = {
   plan_id: string;
   section_id: string;
   position: number;
   added_at: string;
-}
+};
 
-export interface CustomBlockRow {
+export type CustomBlockRow = {
   block_id: string;
   plan_id: string;
   label: string;
@@ -429,17 +456,17 @@ export interface CustomBlockRow {
   start_minute: number;
   end_minute: number;
   created_at: string;
-}
+};
 
-export interface WatchRow {
+export type WatchRow = {
   user_id: string;
   section_id: string;
   created_at: string;
   enrollment_count_at_watch: number | null;
   notify_email: boolean;
-}
+};
 
-export interface AlertSentRow {
+export type AlertSentRow = {
   alert_id: string;
   user_id: string;
   section_id: string;
@@ -447,9 +474,9 @@ export interface AlertSentRow {
   reason: string;
   transition_at: string | null;
   channel: string;
-}
+};
 
-export interface McpTokenRow {
+export type McpTokenRow = {
   token_id: string;
   user_id: string;
   name: string;
@@ -460,7 +487,7 @@ export interface McpTokenRow {
   last_used_at: string | null;
   revoked_at: string | null;
   created_at: string;
-}
+};
 
 // ---------------------------------------------------------------------------
 // Insert shapes
@@ -888,7 +915,15 @@ type Rel<Columns extends string[], Relation extends string, Referenced extends s
   referencedColumns: Referenced;
 };
 
-export interface Database {
+export type Database = {
+  /**
+   * Tells `createClient` which PostgREST dialect to assume, so callers do not
+   * have to write `createClient<Database, { PostgrestVersion: "…" }>`. Verified
+   * against `supabase gen types` output for this project.
+   */
+  __InternalSupabase: {
+    PostgrestVersion: "14.15";
+  };
   public: {
     Tables: {
       terms: { Row: TermRow; Insert: TermInsert; Update: Partial<TermInsert>; Relationships: [] };
@@ -968,6 +1003,19 @@ export interface Database {
         Insert: Partial<IngestRunRow>;
         Update: Partial<IngestRunRow>;
         Relationships: [Rel<["job_id"], "crawl_jobs", ["job_id"]>];
+      };
+      ingest_fingerprints: {
+        Row: IngestFingerprintRow;
+        Insert: Partial<IngestFingerprintRow> & Pick<IngestFingerprintRow, "ingest_key">;
+        Update: Partial<IngestFingerprintRow>;
+        Relationships: [];
+      };
+      client_leases: {
+        Row: ClientLeaseRow;
+        Insert: Pick<ClientLeaseRow, "client_id" | "job_count"> &
+          Partial<Pick<ClientLeaseRow, "leased_at">>;
+        Update: Partial<ClientLeaseRow>;
+        Relationships: [];
       };
       review_sources: {
         Row: ReviewSourceRow;
@@ -1082,9 +1130,73 @@ export interface Database {
           ok: boolean;
           lease_token?: string | null;
           error_text?: string | null;
+          /**
+           * Added in migration 0007. When supplied, `lib/crawler/scheduler.ts`
+           * decides the cadence; when null the SQL function recomputes it, as
+           * it did before. Two authorities on one value is the bug this closes.
+           */
+          p_next_fetch_at?: string | null;
         };
         Returns: CrawlJobRow;
       };
+      /**
+       * Migration 0008. `claim_jobs` filters only by tier and due time; the
+       * `ClaimOptions` contract also carries kind and host predicates, and those
+       * must be applied inside the locking statement — a browser that claimed a
+       * `bulletin_department` job it cannot fetch (no CORS) and released it
+       * would be handed the same job forever.
+       */
+      claim_crawl_jobs: {
+        Args: {
+          p_worker_id: string;
+          p_batch_size?: number;
+          p_min_overdue_seconds?: number;
+          p_include_kinds?: CrawlJobKind[] | null;
+          p_exclude_kinds?: CrawlJobKind[] | null;
+          p_allowed_hosts?: string[] | null;
+          p_lease_seconds?: number | null;
+        };
+        Returns: CrawlJobRow[];
+      };
+      set_crawl_tier: {
+        Args: {
+          p_selectors: { kind: CrawlJobKind; targetKey: string; termCode: TermCode | null }[];
+          p_tier: CrawlTier;
+          p_next_fetch_at: string;
+        };
+        Returns: number;
+      };
+      upsert_crawl_job: {
+        Args: {
+          p_kind: CrawlJobKind;
+          p_target_key: string;
+          p_term_code: string | null;
+          p_url: string;
+          p_tier?: CrawlTier;
+          p_due_now?: boolean;
+        };
+        Returns: string;
+      };
+      prune_client_leases: { Args: { p_older_than?: string }; Returns: number };
+      // ── Transactional ingest writers (migration 0009) ──────────────────────
+      // Each takes the parser's own camelCase output as one JSONB document and
+      // applies it in a single transaction. See lib/db/catalog-writer.ts.
+      ensure_term: { Args: { p_term_code: string }; Returns: string };
+      upsert_instructor: { Args: { p_full_name: string }; Returns: string | null };
+      ingest_subject_page: {
+        Args: { p_payload: unknown; p_observed_at?: string };
+        Returns: number;
+      };
+      ingest_section_detail: {
+        Args: { p_payload: unknown; p_observed_at?: string };
+        Returns: number;
+      };
+      ingest_bulletin: {
+        Args: { p_department: string; p_rows: unknown; p_observed_at?: string };
+        Returns: number;
+      };
+      ingest_subject_index: { Args: { p_payload: unknown }; Returns: number };
+      ingest_academic_calendar: { Args: { p_payload: unknown }; Returns: number };
       release_expired_leases: { Args: Record<string, never>; Returns: number };
       crawl_queue_health: { Args: Record<string, never>; Returns: CrawlQueueHealthRow[] };
       watcher_count: { Args: { section_id: string }; Returns: number };
@@ -1115,14 +1227,36 @@ export interface Database {
         Returns: boolean;
       };
     };
+    /**
+     * Postgres enums, mirrored from the migrations.
+     *
+     * `Enums` and `CompositeTypes` are not optional even though nothing in this
+     * codebase reads them by name: postgrest-js walks the whole schema shape to
+     * infer a query's row type, and a `Database` missing either key fails that
+     * walk and degrades every `.from()` result to `never`. That is what forced
+     * `catalog-queries.ts` to reach for `.overrideTypes<…>()` on every call —
+     * a workaround for a hole in this type, not a deliberate choice.
+     */
+    Enums: {
+      season: Season;
+      campus_zone: CampusZone;
+      enrollment_status: EnrollmentStatusCode;
+      weekday_code: Weekday;
+      crawl_job_kind: CrawlJobKind;
+      crawl_tier: CrawlTier;
+      ingest_status: IngestRunStatus;
+      registration_milestone_kind: RegistrationMilestoneKind;
+      review_source_kind: ReviewSourceKind;
+    };
+    CompositeTypes: Record<string, never>;
   };
-}
+};
 
 // ---------------------------------------------------------------------------
 // Function return shapes
 // ---------------------------------------------------------------------------
 
-export interface ReputationAggregateRow {
+export type ReputationAggregateRow = {
   course_id?: string;
   instructor_id?: string;
   sample_size: number;
@@ -1136,23 +1270,23 @@ export interface ReputationAggregateRow {
   last_posted_at: string | null;
   culpa_count: number;
   reddit_count: number;
-}
+};
 
-export interface CrawlQueueHealthRow {
+export type CrawlQueueHealthRow = {
   tier: CrawlTier;
   total: number;
   due: number;
   overdue_grace: number;
   leased: number;
   failing: number;
-}
+};
 
-export interface WatcherCountRow {
+export type WatcherCountRow = {
   section_id: string;
   watcher_count: number;
-}
+};
 
-export interface SectionOpenedRow {
+export type SectionOpenedRow = {
   section_id: string;
   transition_at: string;
   enrollment_count: number;
@@ -1161,9 +1295,9 @@ export interface SectionOpenedRow {
   status: EnrollmentStatusCode;
   previous_status: EnrollmentStatusCode;
   seats_open: number;
-}
+};
 
-export interface PendingSeatAlertRow {
+export type PendingSeatAlertRow = {
   user_id: string;
   email: string;
   section_id: string;
@@ -1172,21 +1306,21 @@ export interface PendingSeatAlertRow {
   enrollment_cap: number | null;
   seats_open: number;
   watcher_count: number;
-}
+};
 
-export interface WatchStateRow {
+export type WatchStateRow = {
   section_id: string;
   created_at: string;
   watcher_count: number;
   enrollment_count_at_watch: number | null;
   enrollment_count: number | null;
   delta_since_watched: number | null;
-}
+};
 
-export interface SharedPlanRow {
+export type SharedPlanRow = {
   plan_id: string;
   term_code: string;
   name: string;
   created_at: string;
   section_ids: string[];
-}
+};

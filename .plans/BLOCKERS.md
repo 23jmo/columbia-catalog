@@ -33,3 +33,28 @@ unrated" defaulted ON so unreviewed courses never vanish. To turn data on later:
 - CULPA — needs a partnership (spec §12 explicitly prefers this over scraping)
 - Reddit — needs `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` / `REDDIT_USER_AGENT`
 - Claude extraction — needs `ANTHROPIC_API_KEY` (heuristic extractor is default)
+
+### 4. **BLOCKING for spec §10 registration windows** — registrar.columbia.edu returns 403
+`https://registrar.columbia.edu/content/academic-calendar` refuses server-side
+requests (403 from a WAF, with both a polite UA and a browser UA). The SAS API
+alternative `/v1/termcalendars` returns 401 per `vergil_api_spec.md:342`.
+
+Consequence: `registration_milestones` stays empty, so
+  - the seat-history chart renders without its milestone annotations (§13), and
+  - the 30-second registration tier never activates; watched subjects escalate
+    to the 2-minute hot tier instead (§10).
+
+This is the documented degradation path, not a break — refresh slows, it does
+not stop. The parser (`lib/ingest/parsers/academic-calendar.ts`) and the writer
+(`ingest_academic_calendar`) are both built and tested, so the moment a source
+exists it is one job-enqueue away.
+
+Three ways to unblock, in order of preference:
+1. Paste the Fall 2026 / Spring 2027 registration dates and I will seed
+   `registration_milestones` directly. **Deliberately not guessed** — these
+   dates annotate charts and drive crawl escalation, and a fabricated date is
+   worse than an absent one.
+2. Pursue the CUIT read-only OAuth client (`vergil_api_spec.md` §7) which would
+   also unlock `/v1/termcalendars`.
+3. Let a browser worker fetch it — but registrar.columbia.edu almost certainly
+   sends no CORS header either, so this likely fails the same way.

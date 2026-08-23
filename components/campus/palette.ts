@@ -30,6 +30,8 @@ export interface CampusPalette {
   building: string;
   /** Landmarks — a half step up from the muted mass so the map stays legible. */
   landmark: string;
+  /** The surrounding neighbourhood — a step BELOW the muted mass, never above. */
+  context: string;
   /** The building this section actually meets in. */
   highlight: string;
   /** The pulsing ring and marker around it. */
@@ -43,6 +45,7 @@ const TOKEN_BY_ROLE: Record<keyof CampusPalette, string> = {
   road: "--color-background-full",
   building: "--color-background-quaternary-default",
   landmark: "--color-background-tertiary-default",
+  context: "--color-background-secondary-alt",
   highlight: "--color-accent-500",
   marker: "--color-accent-400",
   outline: "--color-border-button-default",
@@ -59,6 +62,7 @@ const NEUTRAL_FALLBACK: CampusPalette = {
   road: "#ffffff",
   building: "#d4d4d4",
   landmark: "#e3e3e3",
+  context: "#e4e4e4",
   highlight: "#3392ff",
   marker: "#5aa9ff",
   outline: "#c8c8c8",

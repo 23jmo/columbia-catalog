@@ -22,7 +22,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { getCrawlerRuntime, tryGetCrawlerRuntime } from "@/lib/crawler/contracts";
+import { getCrawlerRuntime } from "@/lib/crawler/contracts";
+// Side-effect import: binds the Supabase job store, catalog writer and parser
+// registry into the crawler's runtime registry. Without it every handler in
+// this directory answers 503 — the crawler is fully written and structurally
+// unable to run. See lib/db/crawler-runtime.ts.
+import { ensureCrawlerRuntime } from "@/lib/db/crawler-runtime";
 import { ingestHtml, recordFetchFailure } from "@/lib/crawler/ingest";
 import {
   clientIpFromHeaders,
@@ -84,7 +89,7 @@ export async function POST(request: Request): Promise<Response> {
     return NextResponse.json({ error: "ingest unavailable" }, { status: 503 });
   }
 
-  if (!tryGetCrawlerRuntime()) {
+  if (!ensureCrawlerRuntime()) {
     return NextResponse.json({ error: "ingest unavailable" }, { status: 503 });
   }
 
