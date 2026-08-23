@@ -38,15 +38,15 @@ export const courseDetailIntegrations: CourseDetailIntegrations = {
   resolveCampusZone,
 
   /*
-   * No primary plan exists yet: plans require an account (spec §15) and both
-   * the auth and schedule lanes are still landing. `null` is the correct
-   * value — the conflict panel says "no plan to check against" rather than
-   * implying this course is conflict-free.
+   * Deliberately absent from this object rather than set to null.
    *
-   * TODO(schedule/auth): populate from `lib/schedule/plans.ts` once a signed-in
-   * student can have a primary plan.
+   * A plan belongs to whoever is reading, so it cannot live in a module-level
+   * constant shared by every request. `CourseDetail` resolves it per render
+   * with `loadPrimaryPlanSnapshot` and merges it in. Leaving the key out means
+   * a caller that supplies its own `integrations` — the drawer, a test — is not
+   * silently handed someone else's plan, and the panel degrades to "no plan to
+   * check against" rather than implying this course is conflict-free.
    */
-  primaryPlan: null,
 
   /*
    * The charts lane's real Recharts implementation. It draws change-only

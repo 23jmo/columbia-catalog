@@ -4,22 +4,28 @@
  * Spec §8: multiple named plans, exactly one primary. "Plan A", "if I don't get
  * Op Systems", "dream schedule". Primary is what Home renders.
  *
- * ── The Supabase seam ──────────────────────────────────────────────────────
- * Everything below the `PlanStore` interface is a localStorage implementation
- * standing in for the `plans` table. To swap it, implement `PlanStore` against
- * Supabase and change `planStore` to point at it. No caller — not the grid, not
- * the tabs, not the MCP lane — imports anything but the interface, `planStore`,
- * and the pure helpers at the bottom of this file.
+ * ── Local-first, not local-only ────────────────────────────────────────────
+ * This is a localStorage store, and it stays one on purpose. Editing a plan is
+ * a drag-and-tap interaction — the grid has to redraw on the same frame as the
+ * click, which a round trip cannot promise, and the planner has to keep working
+ * on the 1 Train with no signal.
  *
- * TODO(db): replace `LocalPlanStore` with a Supabase-backed store.
+ * Durability is layered on top rather than swapped in underneath:
+ * `lib/db/plan-sync.ts` subscribes to this store and writes through to the
+ * `plans` table for a signed-in student, and claims anonymous plans — the ones
+ * written under `LOCAL_USER_ID` — on first sign-in. `lib/db/plan-reads.ts` is
+ * the server-side counterpart, so Home and /schedule can render the saved plan
+ * before any JavaScript has run.
+ *
+ * The upshot is that this file is still the single writer. Nothing else mutates
+ * a plan, which is what makes one auth guard sufficient.
  *
  * ── Auth ───────────────────────────────────────────────────────────────────
  * Spec §15: writes require an account, reads are free. `setAuthGuard` is the
- * hook point. Until the auth lane lands, the default guard allows writes so the
- * planner is usable signed-out; flipping it to a real session check is a
- * one-function change and every mutation already routes through it.
- *
- * TODO(auth): wire `setAuthGuard` to the Supabase session in the app shell.
+ * hook point, and `components/schedule/plan-sync-provider.tsx` installs the
+ * real Supabase session check into it for the life of the session. See that
+ * file for the two cases it deliberately allows: while the session is still
+ * loading, and when Supabase is not configured at all.
  */
 
 import type { CustomBlock, Plan, TermCode, Weekday } from "../types";
@@ -29,8 +35,9 @@ import { CURRENT_TERM } from "../constants";
 const STORAGE_KEY = "columbia-catalog.plans.v1";
 
 /**
- * Owner id used for plans made before sign-in. Once auth lands these are the
- * rows that get claimed by the real user id on first login.
+ * Owner id used for plans made before sign-in. `lib/db/plan-sync.ts` claims
+ * these rows under the real user id on first login, so a schedule built by a
+ * visitor who then signs in follows them rather than being abandoned.
  */
 export const LOCAL_USER_ID = "local";
 
@@ -46,7 +53,15 @@ export interface AuthGuardResult {
 
 export type AuthGuard = () => AuthGuardResult;
 
-// TODO(auth): default allows local-only writes. Replace with a session check.
+/**
+ * Permissive by default, and deliberately so.
+ *
+ * This module is imported by tests, by the MCP lane and by a server render, none
+ * of which have a session to consult. `PlanSyncProvider` replaces it with the
+ * real check as soon as the browser mounts the shell, and restores this one on
+ * unmount. A default that refused would mean every test had to install a guard
+ * before it could write a plan.
+ */
 let authGuard: AuthGuard = () => ({ allowed: true });
 
 export function setAuthGuard(guard: AuthGuard): void {

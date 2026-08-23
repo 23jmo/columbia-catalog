@@ -35,6 +35,7 @@ import type { ScheduleConflict, Section } from "@/lib/types";
 import { cx } from "@/utils/cx";
 
 import { CourseSeatSummary } from "./course-seat-summary";
+import { loadPrimaryPlanSnapshot } from "@/lib/db/primary-plan-snapshot";
 import { courseDetailIntegrations } from "./integrations";
 import { InstructorsPanel } from "./instructors-panel";
 import { SectionsPanel } from "./sections-panel";
@@ -78,6 +79,23 @@ export async function CourseDetail({
   const title = prettyTitle(course.title);
 
   const primarySection = sections[0] ?? null;
+
+  /*
+   * The reader's own plan, resolved per request (spec §7). `integrations`
+   * wins if a caller supplied one — a test or a story passes a fixed plan and
+   * must not have it replaced by whoever happens to be signed in.
+   *
+   * With no session, no plan, or a failed read this is null and the conflict
+   * panel says it has nothing to check against, which is the honest answer.
+   */
+  const planTermCode = sections[0]?.termCode ?? null;
+  const primaryPlan =
+    integrations.primaryPlan !== undefined
+      ? integrations.primaryPlan
+      : planTermCode
+        ? await loadPrimaryPlanSnapshot(planTermCode)
+        : null;
+  const resolvedIntegrations: CourseDetailIntegrations = { ...integrations, primaryPlan };
   const sectionsWithSeats = sections.filter(sectionHasOpenSeats).length;
   const gradingModes = distinct(sections.map((s) => s.gradingMode));
   const formats = distinct(sections.flatMap((s) => [s.component, s.methodOfInstruction]));
@@ -170,7 +188,7 @@ export async function CourseDetail({
       .map((candidate) => `${candidate.subjectCode} ${candidate.number}`),
   }));
 
-  const conflictReport = evaluateAgainstPrimaryPlan(data, integrations);
+  const conflictReport = evaluateAgainstPrimaryPlan(data, resolvedIntegrations);
 
   return (
     <article
@@ -340,7 +358,7 @@ export async function CourseDetail({
       {/* ------------------------------------------------------------------ */}
       <Panel id="schedule-preview" title="Schedule preview" icon={RiRoadMapLine}>
         {integrations.weekGrid ? (
-          <integrations.weekGrid blocks={weekGridBlocks(data, integrations)} />
+          <integrations.weekGrid blocks={weekGridBlocks(data, resolvedIntegrations)} />
         ) : (
           <LanePlaceholder
             what="The week grid with this course dropped in"
