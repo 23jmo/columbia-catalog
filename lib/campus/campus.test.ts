@@ -61,6 +61,24 @@ const BULLETIN_LOCATIONS: ReadonlyArray<readonly [string, string, string]> = [
   ["312 Mathematics Building", "mathematics", "morningside"],
   ["601 Fairchild Life Sciences Bldg", "fairchild", "morningside"],
   ["601b Fairchild Life Sciences Bldg", "fairchild", "morningside"],
+  // Buildings the Fall 2026 crawl turned up that the table used to miss, in the
+  // spellings the sources actually printed — including the ALL CAPS and the
+  // room codes the Directory glues onto the front.
+  ["Carman Hall", "carman", "morningside"],
+  ["Broadway Residence Hall", "broadway-hall", "morningside"],
+  ["Martin Luther King Building", "mlk", "morningside"],
+  ["80 Claremont Ave", "claremont-80", "morningside"],
+  ["C01 80 Claremont", "claremont-80", "morningside"],
+  ["KRAFT CENTER", "kraft", "morningside"],
+  ["Ren Kraft Center", "kraft", "morningside"],
+  ["5AB KRAFT CENTER", "kraft", "morningside"],
+  ["Watson Hall", "watson", "morningside"],
+  ["Davis International House", "international-house", "morningside"],
+  ["B-100 Heyman Center For Humanities", "heyman", "morningside"],
+  ["Casa Hispanica", "casa-hispanica", "morningside"],
+  ["Casa Hispánica", "casa-hispanica", "morningside"],
+  ["Ll104 R&D Science Center", "altschul", "barnard"],
+  ["Ll227 R&D Science Center", "altschul", "barnard"],
 ];
 
 describe("resolveCampusBuilding — verbatim Bulletin locations", () => {
@@ -143,6 +161,38 @@ describe("resolveCampusZone — abbreviations and bare names", () => {
     expect(resolveCampusBuilding("501")).toBeNull();
     expect(resolveCampusZone("501")).toBe("unknown");
     expect(resolveCampusBuilding("Rm 4")).toBeNull();
+  });
+});
+
+describe("resolveCampusZone — buildings the sources renamed or share", () => {
+  it("follows Barnard's rebrand of Altschul without splitting the building", () => {
+    // Fall 2026 has nineteen meetings in the "R&D Science Center" and none in
+    // Altschul Hall. Both spellings have to land on one entry: two entries
+    // would put two outlines on one footprint, which is the z-fighting the
+    // context de-duplication exists to prevent.
+    expect(resolveCampusBuilding("R&D Science Center")?.buildingId).toBe("altschul");
+    expect(resolveCampusBuilding("Altschul Hall")?.buildingId).toBe("altschul");
+  });
+
+  it("does not let the Science Center steal CUIMC's Vagelos Education Center", () => {
+    // Same donors, two buildings, fifty blocks apart. The longer alias has to
+    // win, or every medical-school meeting pins on Barnard.
+    expect(resolveCampusBuilding("Vagelos Education Center")?.buildingId).toBe("vagelos-education");
+    expect(resolveCampusZone("Vagelos Education Center")).toBe("cuimc");
+  });
+
+  it("sends Riverside Church and the MLK Building to the same doors", () => {
+    // The MLK Building is a floor of classrooms inside the church; the
+    // registrar's own entrance is through it. One pin, two names for it.
+    expect(resolveCampusBuilding("Riverside Church")?.buildingId).toBe("mlk");
+    expect(resolveCampusBuilding("River Side Church")?.buildingId).toBe("mlk");
+  });
+
+  it("will not let a bare 'Broadway' claim the residence hall", () => {
+    // "Broadway" is a street, a subway line and half the addresses on the west
+    // side of campus. Only the full name resolves.
+    expect(resolveCampusBuilding("Broadway")).toBeNull();
+    expect(resolveCampusBuilding("Broadway Residence Hall")?.buildingId).toBe("broadway-hall");
   });
 });
 
@@ -331,8 +381,20 @@ describe("campus layout", () => {
     const broadway = CAMPUS_ROADS.find((road) => road.roadId === "broadway")!;
     const north = CAMPUS_ROADS.find((road) => road.roadId === "w120")!;
     const south = CAMPUS_ROADS.find((road) => road.roadId === "w114")!;
+    // Named, not inferred: a building that lands west of Broadway without being
+    // on this list is a bake that went wrong, and the test should say so.
+    const WEST_OF_BROADWAY = new Set([
+      // 606 W 115th and 612 W 116th: Columbia's, on the west side of the
+      // street, inside the band, and not on the acropolis.
+      "kraft",
+      "casa-hispanica",
+    ]);
     const onTheBlock = buildingsOnPlane("morningside-heights").filter(
-      (entry) => entry.campusZone !== "barnard" && entry.z > north.at && entry.z < south.at,
+      (entry) =>
+        entry.campusZone !== "barnard" &&
+        !WEST_OF_BROADWAY.has(entry.buildingId) &&
+        entry.z > north.at &&
+        entry.z < south.at,
     );
     expect(onTheBlock.length).toBeGreaterThan(15);
     for (const entry of onTheBlock) {

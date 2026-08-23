@@ -155,6 +155,18 @@ const BUILDINGS: Record<PlaneId, BuildingSource[]> = {
     { buildingId: "iab", label: "International Affairs", osmName: "Columbia School of International and Public Affairs", isLandmark: true },
     { buildingId: "knox", label: "Knox Hall", osmName: "Knox Hall" },
     { buildingId: "teachers-college", label: "Teachers College", osmName: "Russell", extra: ["Grace Dodge"] },
+    // --- Where the Core and the language programmes actually meet ------------
+    // Not landmarks, and mostly not what anyone pictures as a classroom, but
+    // between them these carry ~85 Fall 2026 meetings that used to pin nowhere.
+    { buildingId: "carman", label: "Carman Hall", osmName: "Carman Hall" },
+    { buildingId: "broadway-hall", label: "Broadway Residence Hall", osmName: "Broadway Residence Hall" },
+    // The MLK Building is a floor of classrooms inside Riverside Church, so
+    // the church is the outline and the timetable's name is the label.
+    { buildingId: "mlk", label: "Martin Luther King Building", osmName: "Riverside Church" },
+    { buildingId: "kraft", label: "Kraft Center", osmName: "Robert K Kraft Center for Jewish Student Life" },
+    { buildingId: "international-house", label: "International House", osmName: "International House" },
+    { buildingId: "heyman", label: "Heyman Center", osmName: "Heyman Center for the Humanities" },
+    { buildingId: "casa-hispanica", label: "Casa Hispánica", osmName: "Casa Hispánica" },
     // --- Barnard -------------------------------------------------------------
     { buildingId: "milstein", label: "Milstein Center", osmName: "Milstein Center for Teaching and Learning", isLandmark: true },
     { buildingId: "diana", label: "Diana Center", osmName: "The Diana Center", isLandmark: true },
@@ -201,6 +213,14 @@ const HEIGHT_OVERRIDES_FEET: Record<string, { feet: number; why: string }> = {
   kravis: { feet: 180, why: "built 2022, postdates the footprint survey" },
   geffen: { feet: 150, why: "built 2022, postdates the footprint survey" },
   "vagelos-education": { feet: 190, why: "built 2016, postdates the footprint survey" },
+  // Not a bad survey — a clipped one. International House is the northernmost
+  // building the Morningside plane places, and its footprint polygon spans
+  // 40.81352..40.81406, six metres past the plane's 40.814 north edge.
+  // Socrata's within_box wants the whole geometry inside, so the row is
+  // dropped and containment finds nothing. 155.6 ft is that row's own
+  // height_roof, read from a wider slice. Widening the plane bbox would fix it
+  // at the source, at the cost of re-baking the entire neighbourhood.
+  "international-house": { feet: 156, why: "footprint polygon straddles the plane bbox's north edge, so the survey slice drops it" },
 };
 
 /** Below this, a matched height is assumed to be a canopy rather than a roof. */

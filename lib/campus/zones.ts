@@ -66,6 +66,32 @@ const ADDITIONAL_BUILDINGS: Building[] = [
   // says "Not on the map" — honest, and the pin goes nowhere false.
   building("dodge-fitness", "Dodge Physical Fitness Center", "morningside"),
 
+  // Residence halls, which are classroom buildings twice a week: the Core
+  // assigns Lit Hum and CC seminars to lounges in Carman and Broadway, and
+  // between them that is fifty Fall 2026 meetings — more than Mathematics,
+  // Lewisohn and Knox put together.
+  building("carman", "Carman Hall", "morningside"),
+  building("broadway-hall", "Broadway Residence Hall", "morningside"),
+
+  // The registrar's classroom inventory calls this suite the Martin Luther
+  // King Building, at 645 W 120th. You reach it through Riverside Church at
+  // 91 Claremont, and the church is what the survey knows and the map draws —
+  // so the pin is the church and the name is the one on the timetable. Twenty
+  // three of the twenty five meetings up there say "Martin Luther King
+  // Building"; none of them say which door.
+  building("mlk", "Martin Luther King Building", "morningside"),
+
+  building("kraft", "Kraft Center", "morningside"),
+  building("international-house", "International House", "morningside"),
+
+  // Real, sited, and absent from OpenStreetMap, which is the only source of
+  // outlines we have. They resolve to a zone and the card says "Not on the
+  // map" — the same honest degradation as `dodge-fitness` above.
+  building("claremont-80", "80 Claremont Avenue", "morningside"),
+  building("watson", "Watson Hall", "morningside"),
+  building("heyman", "Heyman Center for the Humanities", "morningside"),
+  building("casa-hispanica", "Casa Hispánica", "morningside"),
+
   // Manhattanville. Prentis is at 125th and Broadway — Columbia calls it
   // Manhattanville even though students think of it as "up past the gym".
   building("prentis", "Prentis Hall", "manhattanville"),
@@ -138,6 +164,33 @@ const ALIASES_BY_BUILDING_ID: Record<string, string[]> = {
     "dodge gym",
     "marcellus hartley dodge fitness center",
   ],
+  carman: ["carman hall", "carman"],
+  // No bare "broadway": it is a street, a residence hall and half the
+  // addresses on the west side of campus.
+  "broadway-hall": ["broadway residence hall", "broadway hall"],
+  // "Riverside Church" and "Martin Luther King Building" are the same doors.
+  // Both land here, so the two meetings that name the church pin with the
+  // twenty three that name the classrooms inside it.
+  mlk: [
+    "martin luther king building",
+    "martin luther king",
+    "riverside church",
+    "river side church",
+  ],
+  kraft: [
+    "robert k kraft center for jewish student life",
+    "kraft center for jewish student life",
+    "kraft center",
+  ],
+  "international-house": ["davis international house", "international house"],
+  "claremont-80": ["80 claremont avenue", "80 claremont ave", "80 claremont"],
+  watson: ["watson hall"],
+  // The Bulletin drops the "the"; OSM keeps it.
+  heyman: ["heyman center for the humanities", "heyman center for humanities", "heyman center"],
+  // `normalizeWords` strips the accent to a space, so the accented spelling
+  // compacts to "casahispnica" and the plain one to "casahispanica". Neither
+  // is a typo, and only listing both matches whichever the source prints.
+  "casa-hispanica": ["casa hispanica", "casa hispnica"],
   low: ["low memorial library", "low library", "low plaza", "low rotunda", "low"],
   earl: ["earl hall", "earl"],
   "st-pauls": ["st pauls chapel", "saint pauls chapel", "st pauls"],
@@ -176,7 +229,18 @@ const ALIASES_BY_BUILDING_ID: Record<string, string[]> = {
   "barnard-hall": ["barnard hall", "lefrak gymnasium", "held auditorium"],
   diana: ["diana center", "the diana", "diana"],
   milbank: ["milbank hall", "milbank"],
-  altschul: ["altschul hall", "altschul"],
+  // Barnard rebranded Altschul as the Roy and Diana Vagelos Science Center and
+  // the Bulletin followed: Fall 2026 has nineteen meetings in the "R&D Science
+  // Center" and not one in Altschul Hall. Same building, so same entry —
+  // splitting them would put two outlines on one footprint. The longer alias
+  // beats CUIMC's bare "vagelos", which is the Education Center uptown.
+  altschul: [
+    "roy and diana vagelos science center",
+    "vagelos science center",
+    "r d science center",
+    "altschul hall",
+    "altschul",
+  ],
   milstein: ["milstein center", "milstein teaching and learning center", "milstein"],
   lehman: ["lehman hall", "lehman auditorium"],
   sulzberger: ["sulzberger hall", "sulzberger"],

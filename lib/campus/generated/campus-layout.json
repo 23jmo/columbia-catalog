@@ -301,6 +301,76 @@
       "height": 1.65
     },
     {
+      "buildingId": "carman",
+      "label": "Carman Hall",
+      "plane": "morningside-heights",
+      "x": -2.99,
+      "z": 6.34,
+      "width": 1.77,
+      "depth": 0.68,
+      "height": 1.67
+    },
+    {
+      "buildingId": "broadway-hall",
+      "label": "Broadway Residence Hall",
+      "plane": "morningside-heights",
+      "x": -3.7,
+      "z": 9,
+      "width": 1.46,
+      "depth": 2.34,
+      "height": 1.81
+    },
+    {
+      "buildingId": "mlk",
+      "label": "Martin Luther King Building",
+      "plane": "morningside-heights",
+      "x": -11.16,
+      "z": -15.53,
+      "width": 2.24,
+      "depth": 3.65,
+      "height": 4.54
+    },
+    {
+      "buildingId": "kraft",
+      "label": "Kraft Center",
+      "plane": "morningside-heights",
+      "x": -8.06,
+      "z": 4.95,
+      "width": 0.57,
+      "depth": 1.17,
+      "height": 1
+    },
+    {
+      "buildingId": "international-house",
+      "label": "International House",
+      "plane": "morningside-heights",
+      "x": -10.65,
+      "z": -24.68,
+      "width": 2.09,
+      "depth": 1.62,
+      "height": 1.83
+    },
+    {
+      "buildingId": "heyman",
+      "label": "Heyman Center",
+      "plane": "morningside-heights",
+      "x": 9.89,
+      "z": -5,
+      "width": 0.79,
+      "depth": 0.53,
+      "height": 2.61
+    },
+    {
+      "buildingId": "casa-hispanica",
+      "label": "Casa Hispánica",
+      "plane": "morningside-heights",
+      "x": -9.09,
+      "z": 1.78,
+      "width": 0.3,
+      "depth": 0.98,
+      "height": 0.8
+    },
+    {
       "buildingId": "milstein",
       "label": "Milstein Center",
       "plane": "morningside-heights",
@@ -551,10 +621,10 @@
   ],
   "planeExtents": {
     "morningside-heights": {
-      "minX": -10.62,
-      "maxX": 8.94,
-      "minZ": -17.54,
-      "maxZ": 6.77
+      "minX": -11.85,
+      "maxX": 10.28,
+      "minZ": -25.45,
+      "maxZ": 9.79
     },
     "manhattanville": {
       "minX": -7.17,
