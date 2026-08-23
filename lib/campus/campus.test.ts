@@ -92,6 +92,38 @@ describe("resolveCampusZone — abbreviations and bare names", () => {
     expect(resolveCampusBuilding("Room 501 Diana Center")?.buildingId).toBe("diana");
   });
 
+  it("peels a LETTERED room code the Bulletin glued onto the front", () => {
+    // Real Fall 2026 values. `LEADING_ROOM` cannot touch these — it only peels
+    // digits — so before the fallback every one of them lost its pin.
+    expect(resolveCampusBuilding("Cin Alfred Lerner Hall")?.buildingId).toBe("lerner");
+    expect(resolveCampusBuilding("Ubg Dodge Fitness Center")?.buildingId).toBe("dodge-fitness");
+    // The gym must never be confused with Dodge Hall on the quad.
+    expect(resolveCampusBuilding("Dodge Fitness Center")?.buildingId).toBe("dodge-fitness");
+    expect(resolveCampusBuilding("Dodge Hall")?.buildingId).toBe("dodge");
+    expect(resolveCampusBuilding("501 Dodge Building")?.buildingId).toBe("dodge");
+    expect(resolveCampusBuilding("Ll013 Barnard Hall")?.buildingId).toBe("barnard-hall");
+    expect(resolveCampusBuilding("Ll002 Milstein Center")?.buildingId).toBe("milstein");
+    expect(resolveCampusBuilding("Ll200 Diana Center")?.buildingId).toBe("diana");
+  });
+
+  it("does not eat a first word that is part of the building's real name", () => {
+    // The whole trap: the Bulletin prints "Cin Alfred Lerner Hall" and "Ext
+    // Schermerhorn Hall" in identical shape and case, but only the first has a
+    // room on the front. Nothing may strip a leading word while the full string
+    // still resolves on its own.
+    expect(resolveCampusBuilding("Low Memorial Library")?.buildingId).toBe("low");
+    expect(resolveCampusBuilding("Kent Hall")?.buildingId).toBe("kent");
+    expect(resolveCampusBuilding("Uris Hall")?.buildingId).toBe("uris");
+    expect(resolveCampusBuilding("Knox Hall")?.buildingId).toBe("knox");
+  });
+
+  it("still refuses a name it cannot place, rather than guessing off the front", () => {
+    // Dropping the leading token must not turn an unknown building into a
+    // confident wrong pin — a wrong room on the map is worse than no map.
+    expect(resolveCampusBuilding("Zzz Qqq Nonexistent Pavilion")).toBeNull();
+    expect(resolveCampusBuilding("Ll104")).toBeNull();
+  });
+
   it("is case- and punctuation-insensitive", () => {
     expect(resolveCampusBuilding("417 MATHEMATICS BUILDING")?.buildingId).toBe("mathematics");
     expect(resolveCampusBuilding("st. paul's chapel")?.buildingId).toBe("st-pauls");

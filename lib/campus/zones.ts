@@ -57,6 +57,14 @@ const ADDITIONAL_BUILDINGS: Building[] = [
   building("st-pauls", "St. Paul's Chapel", "morningside"),
   building("buell", "Buell Hall", "morningside"),
   building("teachers-college", "Teachers College", "morningside"),
+  // Dodge PHYSICAL FITNESS Center — the gym under the north end of campus, and
+  // emphatically not Dodge Hall, which is the arts building on the quad two
+  // hundred metres away. Without its own entry the gym's ~90 Bulletin meetings
+  // score against the bare "dodge" alias and pin on the wrong building, which
+  // is worse than not drawing them: the reader is told a confident wrong room.
+  // It has no surveyed footprint yet, so it resolves to a zone and the card
+  // says "Not on the map" — honest, and the pin goes nowhere false.
+  building("dodge-fitness", "Dodge Physical Fitness Center", "morningside"),
 
   // Manhattanville. Prentis is at 125th and Broadway — Columbia calls it
   // Manhattanville even though students think of it as "up past the gym".
@@ -122,6 +130,14 @@ const ALIASES_BY_BUILDING_ID: Record<string, string[]> = {
   lewisohn: ["lewisohn hall", "lewisohn"],
   journalism: ["journalism building", "journalism hall", "journalism", "pulitzer hall"],
   dodge: ["dodge hall", "dodge"],
+  // Longer than the bare "dodge" alias, and `aliasScore` prefers the longest
+  // match, so "Dodge Fitness Center" lands here rather than on the arts building.
+  "dodge-fitness": [
+    "dodge physical fitness center",
+    "dodge fitness center",
+    "dodge gym",
+    "marcellus hartley dodge fitness center",
+  ],
   low: ["low memorial library", "low library", "low plaza", "low rotunda", "low"],
   earl: ["earl hall", "earl"],
   "st-pauls": ["st pauls chapel", "saint pauls chapel", "st pauls"],
@@ -414,7 +430,39 @@ export function resolveCampusBuilding(
 
   const cleaned = cleanLocation(words);
   if (!cleaned) return null;
-  return bestMatch(compact(cleaned));
+  const tidied = bestMatch(compact(cleaned));
+  if (tidied) return tidied;
+
+  return bestMatch(compact(withoutLeadingCode(cleaned)));
+}
+
+/**
+ * The name minus its first word, for the case where that word is a room the
+ * Bulletin glued onto the front of the building.
+ *
+ * `LEADING_ROOM` already peels a NUMERIC room ("309 Havemeyer Hall"). What it
+ * cannot peel is the lettered kind — "Cin Alfred Lerner Hall", "Ubg Dodge
+ * Fitness Center", "Ar4 Dodge Fitness Center", "Ll104 R&D Science Center" —
+ * because no pattern distinguishes those from a building whose real name starts
+ * with a short word. The Bulletin prints "Cin Alfred Lerner Hall" and "Ext
+ * Schermerhorn Hall" in identical shape and identical case, and only one of
+ * them has a room on the front; "Ext Schermerhorn Hall" IS the building.
+ *
+ * So this does not try to recognise a room code. It asks a different question —
+ * does the rest of the string name a building we know? — and is reached only
+ * after the whole string has already failed to. "Ext Schermerhorn Hall" matches
+ * on the first attempt and never arrives here. A guess is only ever accepted
+ * because it resolved, which makes the building table, not a regex, the thing
+ * deciding what counts as a room code.
+ *
+ * The length guard is what stops this from eating a real first word: room codes
+ * are terse, and no building in the table is identified by dropping five or more
+ * characters off its front.
+ */
+function withoutLeadingCode(words: string): string {
+  const boundary = words.indexOf(" ");
+  if (boundary < 0 || boundary > 5) return "";
+  return words.slice(boundary + 1);
 }
 
 /**
