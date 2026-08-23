@@ -19,16 +19,17 @@
  * These are the smallest surfaces that make the tools correct — not mirrors of
  * another lane's internal model.
  *
- * NOTE on imports: this directory uses relative imports rather than the `@/`
- * alias because the vitest run has no path-alias resolver configured and the
- * alias would make `lib/mcp/mcp.test.ts` unrunnable.
+ * NOTE on imports: the library half of this directory uses relative imports.
+ * The `@/` alias resolves fine under both tsc and vitest, so this is a
+ * convention rather than a constraint — these modules are meant to be liftable
+ * into a standalone MCP server process, and relative imports come along.
  */
 
 import type {
   CommuteLeg,
   CourseWithSections,
   CustomBlock,
-  EnrollmentSnapshot,
+  EnrollmentStatusCode,
   Plan,
   ReputationSummary,
   ScheduleConflict,
@@ -110,9 +111,27 @@ export interface RatingsPort {
 // 5. Seat history — database lane (lib/db/**)
 // ---------------------------------------------------------------------------
 
+/**
+ * One change in the seat history.
+ *
+ * Declared here rather than reusing `EnrollmentSnapshot` from lib/types
+ * because that type has a non-null `enrollmentCap`, and the directory really
+ * does print a count with no cap. Coercing those rows to a number would invent
+ * a capacity; dropping them would put a hole in a chart that is supposed to be
+ * every reading we hold. The cap is nullable because the source is.
+ */
+export interface SeatHistoryPoint {
+  sectionId: string;
+  observedAt: string;
+  enrollmentCount: number;
+  enrollmentCap: number | null;
+  waitlistCount: number | null;
+  status: EnrollmentStatusCode;
+}
+
 export interface SeatHistoryPort {
   /** Chronological, oldest first. Empty is a legitimate answer. */
-  getSeatHistory(sectionId: string, sinceIso?: string): Promise<EnrollmentSnapshot[]>;
+  getSeatHistory(sectionId: string, sinceIso?: string): Promise<SeatHistoryPoint[]>;
 }
 
 // ---------------------------------------------------------------------------

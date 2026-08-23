@@ -17,13 +17,12 @@
  *      (see `PERF_BUDGET.searchMs`).
  */
 
+import type { CourseListItem, SectionListItem } from "@/lib/catalog-list-types";
 import type {
-  CourseWithSections,
   ReputationSummary,
   SearchFilters,
   SearchHit,
   SearchResult,
-  Section,
   Weekday,
 } from "@/lib/types";
 import { REQUIREMENT_FILTERS } from "@/lib/constants";
@@ -89,7 +88,7 @@ export interface SearchSource {
   search(filters: SearchFilters): SearchResult;
 
   /** Course record behind a hit, sections attached. Synchronous lookup. */
-  getCourse(courseId: string): CourseWithSections | undefined;
+  getCourse(courseId: string): CourseListItem | undefined;
 
   /** Reputation for a course, or null when it has no review coverage. */
   getReputation(courseId: string): ReputationSummary | null;
@@ -117,7 +116,7 @@ export function hasSectionLevelFilter(filters: SearchFilters): boolean {
 }
 
 /** A section has seats when the directory says open and count is under cap. */
-export function sectionHasOpenSeats(section: Section): boolean {
+export function sectionHasOpenSeats(section: SectionListItem): boolean {
   if (section.status === "full" || section.status === "closed") return false;
   if (section.enrollmentCount === null || section.enrollmentCap === null) {
     return section.status === "open";
@@ -130,7 +129,7 @@ export function sectionHasOpenSeats(section: Section): boolean {
 /* -------------------------------------------------------------------------- */
 
 interface IndexedCourse {
-  course: CourseWithSections;
+  course: CourseListItem;
   /** Lowercased searchable blob. */
   haystack: string;
   /** `coms4118` -- code with no separators, for exact/prefix code matching. */
@@ -153,7 +152,7 @@ function stripSeparators(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-function buildIndexedCourse(course: CourseWithSections): IndexedCourse {
+function buildIndexedCourse(course: CourseListItem): IndexedCourse {
   const instructors = [...new Set(course.sections.flatMap((s) => s.instructors))];
   const parts = [
     course.courseId,
@@ -182,7 +181,7 @@ function buildIndexedCourse(course: CourseWithSections): IndexedCourse {
   };
 }
 
-function meetingMatchesDays(section: Section, days: Weekday[]): boolean {
+function meetingMatchesDays(section: SectionListItem, days: Weekday[]): boolean {
   const wanted = new Set(days);
   // CONTAINMENT semantics: every meeting must fall on a selected day, so the
   // section fits entirely inside the days the student has free.
@@ -202,7 +201,7 @@ function meetingMatchesDays(section: Section, days: Weekday[]): boolean {
 }
 
 function meetingsWithinWindow(
-  section: Section,
+  section: SectionListItem,
   startAfterMinute: number | undefined,
   endBeforeMinute: number | undefined,
 ): boolean {
@@ -217,7 +216,7 @@ function meetingsWithinWindow(
   });
 }
 
-function sectionMatches(section: Section, filters: SearchFilters): boolean {
+function sectionMatches(section: SectionListItem, filters: SearchFilters): boolean {
   if (filters.termCode && section.termCode !== filters.termCode) return false;
   if (filters.openSeatsOnly && !sectionHasOpenSeats(section)) return false;
   if (filters.days && filters.days.length > 0 && !meetingMatchesDays(section, filters.days)) {
@@ -301,7 +300,7 @@ function localReputation(courseId: string): ReputationSummary | null {
 }
 
 /** Build the in-memory source. O(n) over the catalog, done once. */
-export function createLocalSearchSource(courses: CourseWithSections[]): SearchSource {
+export function createLocalSearchSource(courses: CourseListItem[]): SearchSource {
   const indexed = courses.map(buildIndexedCourse);
   const byId = new Map<string, IndexedCourse>(indexed.map((c) => [c.course.courseId, c]));
 

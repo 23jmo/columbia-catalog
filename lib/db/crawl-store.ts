@@ -121,6 +121,10 @@ export class SupabaseCrawlJobStore implements CrawlJobStore {
     const rows = (data ?? []) as CrawlJobRow[];
     const jobs = rows.map(rowToLeasedCrawlJob);
     for (const job of jobs) rememberLeaseToken(job);
+    // Destructure-to-omit: the lease token is held in `rememberLeaseToken`
+    // above and must not travel out with the job, or a caller could renew a
+    // lease it never claimed. The binding is unused on purpose.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     return jobs.map(({ leaseToken: _leaseToken, ...job }) => job);
   }
 

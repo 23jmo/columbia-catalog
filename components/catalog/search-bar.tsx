@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import { RiCloseLine, RiSearchLine } from "@remixicon/react";
 import { Input } from "@/components/base/input/input";
+import { useHasMounted } from "@/hooks/use-has-mounted";
 import { cx } from "@/utils/cx";
 
 /**
@@ -58,8 +59,7 @@ export function SearchBar({
    * the readout was ever meant to report -- keystroke-to-results latency in the
    * browser (see the note at the top of this file).
    */
-  const [hasMounted, setHasMounted] = useState(false);
-  useEffect(() => setHasMounted(true), []);
+  const hasMounted = useHasMounted();
 
   return (
     <div className={cx("flex w-full flex-col gap-1.5", className)}>

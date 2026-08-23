@@ -23,7 +23,7 @@
  */
 
 import { createEvents, type EventAttributes } from "ics";
-import type { Course, CustomBlock, Plan, Section, Term, TermCode, Weekday } from "../types";
+import type { Course, Plan, Section, Term, TermCode, Weekday } from "../types";
 import { WEEKDAY_LABEL, minutesToLabel, vergilSectionUrl } from "../constants";
 import { courseLabel, sectionLabel } from "./timeline";
 import { parseCalendarDate, termBounds } from "./term-dates";

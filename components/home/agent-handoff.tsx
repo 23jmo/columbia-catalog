@@ -38,6 +38,7 @@
 
 import {
   RiArrowDownSLine,
+  RiArrowRightSLine,
   RiCheckboxCircleLine,
   RiFlashlightLine,
   RiLockLine,
@@ -48,11 +49,12 @@ import {
   RiShieldKeyholeLine,
 } from "@remixicon/react";
 import type { ComponentType, ReactNode } from "react";
+import Link from "next/link";
 import { Chip } from "@/components/base/badges/chip";
 import { Divider } from "@/components/base/divider/divider";
 import { CopyField } from "@/components/home/copy-field";
 import { SCOPES, SCOPE_DESCRIPTIONS } from "@/lib/mcp/auth";
-import { SERVER_NAME } from "@/lib/mcp/config";
+import { SERVER_NAME, SETUP_PATH } from "@/lib/mcp/config";
 import { cx } from "@/utils/cx";
 
 type IconComponent = ComponentType<{
@@ -61,15 +63,20 @@ type IconComponent = ComponentType<{
 }>;
 
 /**
- * `signed-out` is the default and the truth today: OAuth needs an account and
- * there is no account system yet.
+ * `signed-out` — nobody is signed in to this browser. Catalog tools still work.
+ * `not-connected` — signed in; no agent is known to hold a token.
+ * `connected` — an agent is known to hold one.
+ *
+ * `connected` is not currently reachable, and that is a property of the design
+ * rather than an omission: MCP access tokens are signed and stateless, which is
+ * what lets the endpoint serve any instance, and the price is that the server
+ * keeps no list of who holds one.
  */
 export type AgentConnectionState = "signed-out" | "not-connected" | "connected";
 
 export interface AgentHandoffProps {
   /** Absolute URL of the MCP endpoint, resolved server-side. */
   mcpEndpointUrl: string;
-  /** TODO(auth) / TODO(mcp): pass the real state once OAuth is live. */
   connectionState?: AgentConnectionState;
   /** Name of the client currently holding a token, when one does. */
   connectedClientName?: string | null;
@@ -156,7 +163,7 @@ const CONNECTION_COPY: Record<
     chipLabel: "Not connected",
     chipColor: "neutral",
     headline: "Connect without an account",
-    body: "Catalog, reputation and analysis tools need no sign-in at all. The tools that read your own plans do, and that is the only part waiting on an account.",
+    body: "Catalog, reputation and analysis tools need no sign-in at all. Your client will open a browser tab to sign in the first time it reaches for one of your own plans.",
   },
 };
 
@@ -319,7 +326,7 @@ export function AgentHandoff({
         </Disclosure>
 
         {/* The affordance stays visible and explains itself, rather than
-            disappearing while auth is unfinished (spec §15, AGENTS.md). */}
+            disappearing while the visitor is signed out (spec §15, AGENTS.md). */}
         {connectionState === "signed-out" && (
           <div className="flex items-start gap-2 border-t border-separator-border pt-3">
             <RiShieldKeyholeLine
@@ -327,24 +334,36 @@ export function AgentHandoff({
               aria-hidden
             />
             <p className="text-caption-1-regular text-text-secondary">
-              {/* TODO(auth): remove once Supabase Google SSO is wired, and
-                  TODO(mcp): swap `connectionState` for the live token state. */}
-              Sign-in is not connected in this build, so{" "}
-              <code className="font-mono text-text-primary">schedule:read</code> and{" "}
-              <code className="font-mono text-text-primary">schedule:write</code> cannot
-              be granted yet. The catalog and analysis tools above do not depend on it.
+              You are not signed in here, which changes nothing about the catalog and
+              analysis tools above. Granting{" "}
+              <code className="font-mono text-text-primary">schedule:read</code> or{" "}
+              <code className="font-mono text-text-primary">schedule:write</code> means
+              signing in with your Columbia or Barnard Google account — in a browser tab
+              your client opens, never by pasting a token into a config file.
             </p>
           </div>
         )}
       </div>
 
-      <p className="text-caption-2-regular flex items-start gap-1.5 text-text-tertiary">
-        <RiFlashlightLine className="mt-px size-3.5 shrink-0" aria-hidden />
-        <span>
-          We are read-only toward Columbia. No tool here registers, drops, or waitlists
-          anyone, and we never ask for a Vergil or SSOL password.
-        </span>
-      </p>
+      <div className="flex flex-col gap-2">
+        <p className="text-caption-2-regular flex items-start gap-1.5 text-text-tertiary">
+          <RiFlashlightLine className="mt-px size-3.5 shrink-0" aria-hidden />
+          <span>
+            We are read-only toward Columbia. No tool here registers, drops, or waitlists
+            anyone, and we never ask for a Vergil or SSOL password.
+          </span>
+        </p>
+        {/* The same URL both OAuth discovery documents advertise as this
+            server's documentation, so the page a client sends a student to is
+            reachable from the product too. */}
+        <Link
+          href={SETUP_PATH}
+          className="text-caption-1-medium inline-flex w-fit items-center gap-1 rounded-2lg text-text-secondary underline decoration-separator-border underline-offset-4 outline-none hover:text-text-primary focus-visible:ring-2 focus-visible:ring-border-focus-ring"
+        >
+          Full setup guide
+          <RiArrowRightSLine className="size-3.5 shrink-0" aria-hidden />
+        </Link>
+      </div>
     </section>
   );
 }

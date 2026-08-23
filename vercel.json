@@ -10,6 +10,28 @@
       "schedule": "*/2 * * * *"
     }
   ],
+  "rewrites": [
+    {
+      "source": "/.well-known/oauth-protected-resource/api/mcp",
+      "destination": "/api/mcp/oauth/.well-known/oauth-protected-resource"
+    },
+    {
+      "source": "/.well-known/oauth-protected-resource",
+      "destination": "/api/mcp/oauth/.well-known/oauth-protected-resource"
+    },
+    {
+      "source": "/.well-known/oauth-authorization-server/api/mcp/oauth",
+      "destination": "/api/mcp/oauth/.well-known/oauth-authorization-server"
+    },
+    {
+      "source": "/.well-known/oauth-authorization-server",
+      "destination": "/api/mcp/oauth/.well-known/oauth-authorization-server"
+    },
+    {
+      "source": "/.well-known/openid-configuration",
+      "destination": "/api/mcp/oauth/.well-known/openid-configuration"
+    }
+  ],
   "functions": {
     "app/api/crawl/cron/route.ts": {
       "maxDuration": 60
@@ -18,6 +40,9 @@
       "maxDuration": 30
     },
     "app/api/alerts/sweep/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/mcp/route.ts": {
       "maxDuration": 60
     }
   }

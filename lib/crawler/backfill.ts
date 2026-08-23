@@ -370,16 +370,25 @@ export async function discoverSubjectIndex(
  *
  *   Columbia College   /columbia-college/departments-instruction/{dept}/
  *   Engineering        /columbia-engineering/academic-departments-programs/{dept}/
- *   Barnard            /barnard-college/courses-instruction/{dept}/
  *
- * General Studies is deliberately absent: its bulletin section is policy pages
- * only (GS students register for CC and SEAS courses, which the other three
- * prefixes already cover), so including it would add requests and no meetings.
+ * TWO ABSENCES, BOTH DELIBERATE:
+ *
+ * General Studies publishes policy pages here, not schedules — GS students
+ * register for CC and SEAS courses, which the two prefixes above already cover.
+ *
+ * Barnard has MOVED to catalog.barnard.edu. `bulletin.columbia.edu/barnard-college/`
+ * still 301s there, but the sitemap continues to advertise 53 deep links under
+ * `/barnard-college/courses-instruction/{dept}/` that now return 404 — a stale
+ * sitemap, not a transient failure. Leaving Barnard in cost 53 guaranteed-404
+ * requests per run, which is precisely the burst this crawler is built not to
+ * emit. Picking Barnard back up means adding catalog.barnard.edu to
+ * `ALLOWED_HOSTS` and confirming the new pages still use CourseLeaf's
+ * `scheduletbl` markup, which is a deliberate decision rather than a filter
+ * tweak, so it is not made here.
  */
 export const BULLETIN_COURSE_PREFIXES: readonly string[] = [
   "/columbia-college/departments-instruction/",
   "/columbia-engineering/academic-departments-programs/",
-  "/barnard-college/courses-instruction/",
 ];
 
 /**

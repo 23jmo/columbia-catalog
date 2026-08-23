@@ -21,7 +21,8 @@ import {
 } from "@/components/catalog/search-source";
 import { loadSearchIndex, type LoadProgress } from "@/lib/search/client";
 import type { SearchEngine } from "@/lib/search/engine";
-import type { CourseWithSections, SearchResult, TermCode } from "@/lib/types";
+import type { CourseListItem } from "@/lib/catalog-list-types";
+import type { SearchResult, TermCode } from "@/lib/types";
 
 import { EmptyResults } from "./empty-results";
 import { FilterSheet } from "./filter-sheet";
@@ -57,8 +58,8 @@ import { ResultsList, type ResultRow } from "./results-list";
 type QueryRunner = (filters: CatalogSearchFilters) => SearchResult;
 
 export interface SearchScreenProps {
-  /** Course records for the term, from the catalog read seam. */
-  catalog: CourseWithSections[];
+  /** Projected course records for the term — see lib/catalog-list-types. */
+  catalog: CourseListItem[];
   initialFilters: CatalogSearchFilters;
   termCode: TermCode;
   termLabel: string;
@@ -92,7 +93,7 @@ export function SearchScreen({
   const localSource = useMemo(() => createLocalSearchSource(catalog), [catalog]);
 
   const coursesById = useMemo(() => {
-    const map = new Map<string, CourseWithSections>();
+    const map = new Map<string, CourseListItem>();
     for (const course of catalog) map.set(course.courseId, course);
     return map;
   }, [catalog]);

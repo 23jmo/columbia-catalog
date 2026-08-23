@@ -31,8 +31,12 @@ const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export interface CourseDrawerProps {
-  /** Element id of the course title inside `children`, for `aria-labelledby`. */
-  titleId: string;
+  /**
+   * Element id of the course title inside `children`, for `aria-labelledby`.
+   * Omitted by the loading skeleton, which has no title to point at yet and
+   * falls back to a static `aria-label`.
+   */
+  titleId?: string;
   /** Course code, shown in the drawer's own header rail. */
   code: string;
   /** Canonical standalone URL, for "open as a page". */
@@ -108,12 +112,16 @@ export function CourseDrawer({ titleId, code, href, children }: CourseDrawerProp
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        aria-label={titleId ? undefined : "Course details"}
         tabIndex={-1}
         className={cx(
           "relative flex h-dvh w-full max-w-2xl flex-col outline-none",
           "border-l border-border-table bg-background-full shadow-xl",
-          "transition-transform duration-200 ease-out",
-          isVisible ? "translate-x-0" : "translate-x-4",
+          // A real slide off the right edge. This was `translate-x-4` -- a 16px
+          // nudge, which reads as a flicker rather than a panel arriving, and
+          // is why the overlay felt like a new screen rather than a side panel.
+          "transition-transform duration-300 ease-out will-change-transform",
+          isVisible ? "translate-x-0" : "translate-x-full",
         )}
       >
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border-table bg-background-primary-default px-4 py-3">

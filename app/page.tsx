@@ -34,6 +34,7 @@ import { ScheduleColumn } from "@/components/home/schedule-column";
 import { WatchlistRail } from "@/components/watch/watchlist-rail";
 import { loadPlanSnapshot } from "@/components/home/load-plan-snapshot";
 import { CURRENT_TERM, buildTerm } from "@/lib/constants";
+import { getSessionUser } from "@/lib/db/auth";
 import { MCP_PATH, resolveBaseUrl } from "@/lib/mcp/config";
 
 export const metadata: Metadata = {
@@ -50,12 +51,17 @@ export default async function HomePage({
   const params = await searchParams;
 
   /**
-   * TODO(auth): no session exists, so nobody has a saved plan and the empty
-   * state is the honest default (spec §15 — reads are free, the account wall
-   * goes up at the first write). `?demo=1` opts into the built-in sample so the
-   * populated screen can still be designed and reviewed; the sample announces
-   * itself in the UI rather than passing as the student's own plan.
+   * Reads are free and the account wall goes up at the first write (spec §15),
+   * so this page renders for a signed-out visitor without complaint. The
+   * session is read anyway because two pieces of copy below are *about* the
+   * account — whether a plan can be saved, and whether an agent can be granted
+   * the scopes that read one — and both would be lying if they guessed.
+   *
+   * `?demo=1` opts into the built-in sample so the populated screen can still
+   * be reviewed; the sample announces itself in the UI rather than passing as
+   * the student's own plan.
    */
+  const account = await getSessionUser();
   const useSamplePlan = params.demo === "1";
   const termCode = CURRENT_TERM;
 
@@ -102,16 +108,27 @@ export default async function HomePage({
             isSample={snapshot.isSample}
             hasDemoMeetingTimes={snapshot.hasDemoMeetingTimes}
             sampleHref="/?demo=1"
+            isSignedIn={Boolean(account)}
             // The schedule lane's canvas, injected through the slot it was
             // designed for. `WeekGrid` has no hooks and no browser APIs, so
             // holding it does not make this page a client component.
             weekGrid={WeekGrid}
-            // TODO(auth): isSignedIn={Boolean(session)}.
           />
 
           <div className="flex min-w-0 flex-col gap-5">
             <WatchlistRail termCode={termCode} />
-            <AgentHandoff mcpEndpointUrl={mcpEndpointUrl} />
+            {/*
+              "connected" is deliberately not derivable here. MCP access tokens
+              are stateless and signed rather than stored, which is what lets
+              the endpoint work across serverless instances — the cost is that
+              the server genuinely cannot say whether a client is holding a live
+              one. Claiming it could would be the sort of confident-and-wrong
+              status this whole app is trying not to ship.
+            */}
+            <AgentHandoff
+              mcpEndpointUrl={mcpEndpointUrl}
+              connectionState={account ? "not-connected" : "signed-out"}
+            />
           </div>
         </div>
       </div>
