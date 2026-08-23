@@ -17,7 +17,11 @@
  *      (see `PERF_BUDGET.searchMs`).
  */
 
-import type { CourseListItem, SectionListItem } from "@/lib/catalog-list-types";
+import {
+  sectionsNamedByQuery,
+  type CourseListItem,
+  type SectionListItem,
+} from "@/lib/catalog-list-types";
 import type {
   ReputationSummary,
   SearchFilters,
@@ -81,9 +85,12 @@ export interface SearchSource {
    *  - requirement keys OR within a curriculum group, AND across groups
    *  - `includeUnrated` defaults to TRUE: a course with no review coverage is
    *    never silently dropped by a reputation slider (spec section 6)
-   *  - `matchedSectionIds` is `null` when no section-level filter (days, time
-   *    window, instructor, open seats) is active, and the list of surviving
-   *    section ids when one is
+   *  - `matchedSectionIds` names the sections to surface, or is `null` when the
+   *    course row is the whole answer. It is populated in two cases: a
+   *    section-level filter (days, time window, instructor, open seats) is
+   *    active, in which case it is every surviving section; or the free text
+   *    named some sections by their own title and not others, in which case it
+   *    is the ones it named
    */
   search(filters: SearchFilters): SearchResult;
 
@@ -135,6 +142,15 @@ interface IndexedCourse {
   /** `coms4118` -- code with no separators, for exact/prefix code matching. */
   codeKey: string;
   titleLower: string;
+  /**
+   * Normalized titles of the sections that carry one of their own, deduped.
+   *
+   * This is what makes "computation and the brain" findable. That string is not
+   * in the course record anywhere -- the course is COMS6998 "TOPICS IN COMPUTER
+   * SCIENCE", and so are its other 23 sections, which are 23 unrelated classes.
+   * Without this the only searchable text for all 24 is the same seven words.
+   */
+  sectionTitlesLower: string[];
   instructorsLower: string[];
   creditsMin: number | null;
   creditsMax: number | null;
@@ -154,12 +170,19 @@ function stripSeparators(value: string): string {
 
 function buildIndexedCourse(course: CourseListItem): IndexedCourse {
   const instructors = [...new Set(course.sections.flatMap((s) => s.instructors))];
+  const sectionTitles = [
+    ...new Set(course.sections.map((s) => s.title?.trim()).filter((t): t is string => Boolean(t))),
+  ];
   const parts = [
     course.courseId,
     `${course.subjectCode} ${course.number}`,
     course.subjectCode,
     String(course.number),
     course.title,
+    // Section titles are part of the course's searchable text, not a separate
+    // document: a hit still resolves to the course row, which then expands to
+    // point at the section that actually matched.
+    sectionTitles.join("   "),
     course.description ?? "",
     course.department ?? "",
     instructors.join(" "),
@@ -175,6 +198,7 @@ function buildIndexedCourse(course: CourseListItem): IndexedCourse {
     haystack: normalize(parts.join("   ")),
     codeKey: stripSeparators(`${course.subjectCode}${course.number}`),
     titleLower: normalize(course.title),
+    sectionTitlesLower: sectionTitles.map(normalize),
     instructorsLower: instructors.map(normalize),
     creditsMin: course.pointsMin,
     creditsMax: course.pointsMax,
@@ -278,6 +302,15 @@ function scoreQuery(indexed: IndexedCourse, tokens: string[], rawQuery: string):
     if (indexed.titleLower === token) score += 300;
     else if (indexed.titleLower.startsWith(token)) score += 120;
     else if (indexed.titleLower.includes(token)) score += 60;
+    /*
+     * Between a course-title substring (60) and a body hit (5).
+     *
+     * A section title is a real title -- it is the name of the class you would
+     * actually enroll in -- so it has to outrank a passing mention in a course
+     * description. It stays under the course title because when both match, the
+     * course is the more complete answer.
+     */
+    if (indexed.sectionTitlesLower.some((t) => t.includes(token))) score += 45;
     if (indexed.instructorsLower.some((n) => n.includes(token))) score += 25;
     score += 5;
   }
@@ -402,10 +435,20 @@ export function createLocalSearchSource(courses: CourseListItem[]): SearchSource
       const score = scoreQuery(item, tokens, rawQuery);
       if (score === 0) continue;
 
+      /*
+       * A section-level filter surfaces every surviving section. Otherwise the
+       * free text can still single out sections by name -- see
+       * `sectionsNamedByQuery` for why that is not the same as "every section
+       * whose title contains a token".
+       */
+      const namedByText = sectionScoped ? null : sectionsNamedByQuery(matching, tokens);
+
       hits.push({
         courseId: course.courseId,
         score,
-        matchedSectionIds: sectionScoped ? matching.map((s) => s.sectionId) : null,
+        matchedSectionIds: sectionScoped
+          ? matching.map((s) => s.sectionId)
+          : (namedByText?.map((s) => s.sectionId) ?? null),
       });
     }
 

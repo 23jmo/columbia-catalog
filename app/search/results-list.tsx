@@ -107,7 +107,7 @@ export function ResultsList({ rows, sectionScoped }: ResultsListProps) {
               <CourseResultRow
                 course={row.course}
                 matchedSectionIds={row.matchedSectionIds}
-                defaultExpanded={sectionScoped}
+                defaultExpanded={sectionScoped || row.matchedSectionIds !== null}
                 position={index + 1}
                 total={rows.length}
               />
@@ -141,10 +141,15 @@ export function ResultsList({ rows, sectionScoped }: ResultsListProps) {
                 <CourseResultRow
                   course={row.course}
                   matchedSectionIds={row.matchedSectionIds}
-                  // When a section filter is on, the matching sections are the
-                  // answer — hiding them behind a collapsed row would make the
-                  // filter look broken (spec §6).
-                  defaultExpanded={sectionScoped}
+                  /*
+                   * Open when THIS row has sections to show, rather than on the
+                   * global flag. Identical behaviour under a section filter
+                   * (every row is scoped then), but it also opens the one row
+                   * whose section the query named by title -- which is the
+                   * whole point of surfacing sections: hiding the answer behind
+                   * a collapsed row makes the search look like it missed.
+                   */
+                  defaultExpanded={sectionScoped || row.matchedSectionIds !== null}
                   position={item.index + 1}
                   total={rows.length}
                 />

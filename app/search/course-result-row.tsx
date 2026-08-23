@@ -25,6 +25,16 @@ import { cx } from "@/utils/cx";
  * the sections are now a real table with a header row rather than a stack of
  * restated sentences.
  *
+ * ── When the section IS the class ──────────────────────────────────────────
+ *
+ * "Course" and "class" come apart on container courses. COMS6998 is one course
+ * called "Topics in Computer Science" with 24 sections that are 24 different
+ * classes -- "LLM Based Generative AI", "Computation and the Brain". Those
+ * names live on the section, so when a section has its own title the table
+ * prints it next to the section code, and a query that named it arrives with
+ * that section already in `matchedSectionIds`: the row opens with the right
+ * one highlighted instead of making the reader open 24 and read.
+ *
  * ── Why a table and not cards ──────────────────────────────────────────────
  *
  * Choosing between sections is a column-wise comparison, not a row-wise read.
@@ -113,13 +123,14 @@ export function CourseResultRow({
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption-2-regular text-text-tertiary">
             <span className="tabular-nums tracking-[0.04em]">{code}</span>
             {credits ? <span>· {credits}</span> : null}
-            {instructors.length > 0 ? (
-              <span className="truncate">
-                · {instructors.slice(0, 2).join(", ")}
-                {instructors.length > 2 ? ` +${instructors.length - 2}` : ""}
-              </span>
-            ) : null}
           </div>
+
+          {instructors.length > 0 ? (
+            <p className="mt-0.5 truncate text-caption-1-medium text-text-secondary">
+              {instructors.slice(0, 2).join(", ")}
+              {instructors.length > 2 ? ` +${instructors.length - 2}` : ""}
+            </p>
+          ) : null}
 
           {requirementLabels.length > 0 ? (
             <div className="mt-1.5 flex flex-wrap gap-1">
@@ -189,6 +200,7 @@ export function CourseResultRow({
 
 function SectionTableRow({ section, isMatch }: { section: SectionListItem; isMatch: boolean }) {
   const meeting = formatSectionMeetings(section);
+  const sectionTitle = section.title ? prettyTitle(section.title) : null;
   const instructors = section.instructors.length > 0 ? section.instructors.join(", ") : null;
   const credits = formatCredits(section.minUnit, section.maxUnit);
 
@@ -212,7 +224,9 @@ function SectionTableRow({ section, isMatch }: { section: SectionListItem; isMat
         "group/section relative border-t border-border-table/60 align-middle",
         "transition-colors duration-100 ease hover:bg-background-primary-hover",
         // The match highlight is a left rule plus a tint, never a tint alone --
-        // a background wash is exactly the cue that vanishes in greyscale.
+        // a background wash is exactly the cue that vanishes in greyscale. It
+        // now also fires when the QUERY named this section by title, not only
+        // when a filter selected it.
         isMatch && "bg-accent-500/[0.07]",
       )}
     >
@@ -226,16 +240,27 @@ function SectionTableRow({ section, isMatch }: { section: SectionListItem; isMat
           <Link
             href={href}
             className={cx(
-              "text-caption-1-medium tabular-nums text-text-primary",
+              "text-caption-1-medium text-text-primary",
               "rounded outline-none transition-colors duration-100 ease hover:text-accent-600",
               "focus-visible:ring-2 focus-visible:ring-border-focus-ring",
               "after:absolute after:inset-0 after:content-['']",
             )}
           >
-            {section.sectionCode}
+            <span className="tabular-nums">{section.sectionCode}</span>
+            {/*
+              The section's own title, when it has one, sits INSIDE the link.
+              That is the point: for a container course like COMS6998 "Topics in
+              Computer Science", the section title is the only thing that says
+              which of the 24 unrelated classes this row is, so it belongs in the
+              link's accessible name rather than in a quiet cell elsewhere.
+              Most sections have no title and this renders nothing.
+            */}
+            {sectionTitle ? (
+              <span className="font-normal text-text-secondary"> · {sectionTitle}</span>
+            ) : null}
             <span className="sr-only">
               {instructors ? ` — ${instructors}` : ""}
-              {isMatch ? " (matches your filters)" : ""}
+              {isMatch ? " (matches your search)" : ""}
             </span>
           </Link>
         </span>
@@ -251,7 +276,7 @@ function SectionTableRow({ section, isMatch }: { section: SectionListItem; isMat
 
       <td className="min-w-0 py-1.5 pr-3">
         <div className="flex min-w-0 flex-col">
-          <span className="truncate text-caption-2-regular text-text-secondary">
+          <span className="truncate text-caption-1-medium text-text-primary">
             {instructors ?? "Instructor TBA"}
           </span>
           {/*

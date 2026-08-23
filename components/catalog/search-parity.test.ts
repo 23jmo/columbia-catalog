@@ -22,7 +22,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { createLocalSearchSource, sectionHasOpenSeats } from "@/components/catalog/search-source";
+import { createLocalSearchSource } from "@/components/catalog/search-source";
 import { projectCourse } from "@/lib/catalog-list-types";
 import { buildIndex } from "@/lib/search/build";
 import { SearchEngine } from "@/lib/search/engine";

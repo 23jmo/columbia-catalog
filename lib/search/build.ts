@@ -232,6 +232,30 @@ export function buildIndex(
       const termId = termCodes.intern(section.termCode);
       if (termId < 16) termMask |= 1 << termId;
 
+      /*
+       * A section's own title is indexed as TITLE text on the course.
+       *
+       * It is genuinely a title -- on a container course like COMS6998 "Topics
+       * in Computer Science" it is the only string that names the class you
+       * would actually take -- so weighting it as body text would bury the one
+       * field that distinguishes 24 otherwise identical sections.
+       *
+       * FIELD_TITLE rather than a field of its own because the field mask is a
+       * full four bits (index-format.ts) and `postTfMask` packs it as
+       * `tf << 4 | mask`: a fifth field is a format change, not a flag. The
+       * cost of sharing is that FULL_TITLE_BOOST can fire on a section title,
+       * which is the behaviour we want anyway.
+       *
+       * This has to stay in step with `buildIndexedCourse` in
+       * components/catalog/search-source.ts -- search-parity.test.ts asserts
+       * the two paths return the same courses, so a token that reaches one
+       * index and not the other is a result that appears and then vanishes
+       * mid-session when the engine takes over from the local source.
+       */
+      if (section.title) {
+        for (const token of tokenize(section.title)) add(token, FIELD_TITLE);
+      }
+
       const instrStart = sectionInstructorPool.length;
       let instrCount = 0;
       for (const name of section.instructors) {

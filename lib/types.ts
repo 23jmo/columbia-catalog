@@ -122,6 +122,25 @@ export interface Section {
   callNumber: string;
   /** Zero-padded section, e.g. "001". */
   sectionCode: string;
+  /**
+   * The section's OWN title, when it has one distinct from the course's.
+   *
+   * Columbia prints it as the `<h1>` inside `div.course-details` on each row of
+   * a subject index page. Container courses are why it matters: PHED1001UN is
+   * "PHYSICAL EDUCATION ACTIVITIES" across all 64 of its sections, which are
+   * "PHED: Swim (Beginner)", "PHED: Diving", "PHED: Walk to Run" and 26 more.
+   * COMS6998E is "TOPICS IN COMPUTER SCIENCE" over 20 unrelated seminars.
+   *
+   * Stored RAW, including when it merely repeats the course title -- which it
+   * does on an ordinary course, where every row carries the course's own name.
+   * The "is this worth showing" judgement lives downstream in
+   * `isDistinctSectionTitle`, so the record stays faithful to the page and one
+   * predicate decides for every surface.
+   *
+   * Optional rather than `| null` so nothing that builds a `Section` today has
+   * to change.
+   */
+  title?: string | null;
   component: string | null;
   methodOfInstruction: string | null;
   gradingMode: string | null;

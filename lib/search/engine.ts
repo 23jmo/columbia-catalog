@@ -25,7 +25,11 @@
  */
 
 import type { SearchFilters, SearchHit, SearchResult, TermCode, Weekday } from "../types";
-import type { CourseListItem } from "../catalog-list-types";
+import {
+  queryTokens,
+  sectionsNamedByQuery,
+  type CourseListItem,
+} from "../catalog-list-types";
 import type { SearchFacets } from "@/components/catalog/search-source";
 import {
   buildFacetsForTerm,
@@ -365,6 +369,16 @@ export class SearchEngine {
 
     const plan = this.planFilters(filters);
     const parsed = filters.q ? parseQuery(filters.q) : EMPTY_QUERY;
+    /*
+     * Raw whitespace tokens, NOT `parsed` -- deliberately.
+     *
+     * `parseQuery` stems and expands into fuzzy variants, which is right for
+     * retrieval and wrong here: this decides which section row to open, and it
+     * has to reach exactly the same answer as the local source, which folds and
+     * splits the raw string. Sharing `queryTokens` is what makes the expanded
+     * row stop changing when the engine takes over mid-session.
+     */
+    const namingTokens = plan.reportSections ? [] : queryTokens(filters.q ?? "");
 
     // --- lexical retrieval --------------------------------------------------
     let requiredMask = 0;
@@ -444,6 +458,22 @@ export class SearchEngine {
         for (let k = 0; k < matched; k++) {
           matchedSectionIds[k] = this.sectionId(this.matchedSections[k]);
         }
+      } else if (namingTokens.length > 0) {
+        /*
+         * No section filter, but the query may still have named a section by
+         * its own title -- "computation and the brain" is one of COMS6998's 24
+         * sections, not a course. Surfacing it is the difference between the
+         * answer being visible and it being hidden inside a collapsed row.
+         *
+         * Read off the DISP record rather than the posting lists: section
+         * titles are indexed as course-level TITLE tokens, so the postings can
+         * say the course matched but not which section did.
+         */
+        const named = sectionsNamedByQuery(
+          this.displayByOrd[doc]?.sections ?? [],
+          namingTokens,
+        );
+        if (named) matchedSectionIds = named.map((section) => section.sectionId);
       }
       hits[i] = { courseId: this.courseIds[doc], score: hitScore[slot], matchedSectionIds };
     }

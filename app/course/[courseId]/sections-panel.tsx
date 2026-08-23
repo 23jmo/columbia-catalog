@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { RiScales3Line } from "@remixicon/react";
 
-import { meetingLines, placeSummary } from "@/components/course/format";
+import { meetingLines, placeSummary, prettyTitle } from "@/components/course/format";
 import { RegistrationHandoff } from "@/components/course/registration-handoff";
 import { SectionCompare } from "@/components/course/section-compare";
 import { ProvenanceStamp, SeatPill } from "@/components/course/seat-state";
 import { WatchButton } from "@/components/watch/watch-button";
 import { useWatchlist } from "@/hooks/use-watchlist";
+import { isDistinctSectionTitle } from "@/lib/catalog-list-types";
 import type { Section } from "@/lib/types";
 import { cx } from "@/utils/cx";
 
@@ -63,6 +64,16 @@ export function SectionsPanel({ sections, courseCode, courseTitle }: SectionsPan
           const lines = meetingLines(section.meetings);
           const place = placeSummary(section.meetings);
           const isComparing = selectedIds.includes(section.sectionId);
+          /*
+           * `Section` here is the raw DB record, not the display projection, so
+           * `title` still carries the directory's per-row <h1> verbatim -- which
+           * for an ordinary course is the course title again, already rendered
+           * at the top of this page. Only a title that says something the course
+           * title does not is worth printing.
+           */
+          const ownTitle = isDistinctSectionTitle(section.title, courseTitle)
+            ? prettyTitle(section.title!)
+            : null;
 
           // A pushed reading replaces the rendered one wholesale, provenance
           // stamp included — half-updating would put a fresh seat count under
@@ -95,6 +106,14 @@ export function SectionsPanel({ sections, courseCode, courseTitle }: SectionsPan
                     <span className="text-body-semibold text-text-primary">
                       Section {section.sectionCode}
                     </span>
+                    {/*
+                      On a container course this is the actual name of the class
+                      -- COMS6998's sections are 24 unrelated courses sharing one
+                      catalog entry -- so it reads as a name, not as metadata.
+                    */}
+                    {ownTitle ? (
+                      <span className="text-body-regular text-text-primary">{ownTitle}</span>
+                    ) : null}
                     {section.component ? (
                       <span className="text-caption-1-regular text-text-secondary">
                         {section.component}
