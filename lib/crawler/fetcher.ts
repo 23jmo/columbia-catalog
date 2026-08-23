@@ -23,14 +23,32 @@ import { BULLETIN_BASE, DOC_BASE } from "@/lib/constants";
 // Policy constants
 // ---------------------------------------------------------------------------
 
+/**
+ * Barnard's half of the bulletin is served from its own host.
+ *
+ * `bulletin.columbia.edu/sitemap.xml` advertises `/barnard-college/...` paths,
+ * the section root 301s here, and the department pages 404 on the Columbia
+ * host — so reaching Barnard's course prose means reaching this origin. Its
+ * robots.txt disallows /archive/, /admin/ and friends; the
+ * /barnard-college/courses-instruction/ tree we read is not among them.
+ *
+ * Everything else about the policy is unchanged: GET only, https only, no
+ * credentials, and the same per-host spacing.
+ */
+export const BARNARD_CATALOG_HOST = "catalog.barnard.edu";
+
 /** The only hosts this crawler may ever contact. */
 export const ALLOWED_HOSTS: readonly string[] = [
   new URL(DOC_BASE).host,
   new URL(BULLETIN_BASE).host,
+  BARNARD_CATALOG_HOST,
 ];
 
 /** Hosts served without CORS headers — server-side fetch only. */
-export const SERVER_ONLY_HOSTS: readonly string[] = [new URL(BULLETIN_BASE).host];
+export const SERVER_ONLY_HOSTS: readonly string[] = [
+  new URL(BULLETIN_BASE).host,
+  BARNARD_CATALOG_HOST,
+];
 
 /** Non-production environments we must never crawl. */
 export const FORBIDDEN_HOST_PREFIXES: readonly string[] = [

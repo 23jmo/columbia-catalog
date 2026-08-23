@@ -35,11 +35,13 @@ import {
 } from "@/lib/crawler/contracts";
 import type { ParsedBulletinRow, ParsedSectionDetail, ParsedSubjectPage } from "@/lib/types";
 import {
+  parseBulletinCourseBlocks,
   parseBulletinDepartment,
   parseSectionDetail,
   parseSubjectIndex,
   parseSubjectIndexAvailability,
   parseSubjectPage,
+  type ParsedBulletinCourse,
 } from "@/lib/ingest";
 import { parseAcademicCalendar } from "@/lib/ingest/parsers/academic-calendar";
 import { isServiceConfigured } from "./client";
@@ -76,6 +78,13 @@ const parsers = {
     return parseBulletinDepartment(html, {
       termCode: context.termCode ?? undefined,
     });
+  },
+
+  // No term filter: a course description is not a property of a term, and the
+  // block for a course that is not offered this year is still the description
+  // we want.
+  parseBulletinCourses(html: string): ParsedBulletinCourse[] {
+    return parseBulletinCourseBlocks(html);
   },
 
   parseSubjectIndex(html: string): ParsedSubjectIndex {

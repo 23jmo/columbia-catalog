@@ -25,9 +25,11 @@ export {
 } from "./parsers/subject-index";
 
 export {
+  parseBulletinCourseBlocks,
   parseBulletinDepartment,
   parseTermLabel,
   type BulletinParseOptions,
+  type ParsedBulletinCourse,
   type ParsedBulletinRowWithTerm,
 } from "./parsers/bulletin";
 

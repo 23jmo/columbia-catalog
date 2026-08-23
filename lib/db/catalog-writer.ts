@@ -41,6 +41,7 @@ type IngestFunction =
   | "ingest_subject_page"
   | "ingest_section_detail"
   | "ingest_bulletin"
+  | "ingest_bulletin_courses"
   | "ingest_subject_index"
   | "ingest_academic_calendar";
 
@@ -70,12 +71,23 @@ export class SupabaseCatalogWriter implements CatalogWriter {
           p_observed_at: observedAt,
         });
 
-      case "bulletin_department":
-        return this.call("ingest_bulletin", {
+      case "bulletin_department": {
+        // One page, two writes: the schedule tables fill meetings on sections
+        // the directory already gave us, and the course blocks fill the prose
+        // the directory never publishes at all. Both are counted, because both
+        // are records this fetch committed.
+        const meetings = await this.call("ingest_bulletin", {
           p_department: payload.department,
           p_rows: payload.rows,
           p_observed_at: observedAt,
         });
+        const courses = await this.call("ingest_bulletin_courses", {
+          p_department: payload.department,
+          p_courses: payload.courses,
+          p_observed_at: observedAt,
+        });
+        return meetings + courses;
+      }
 
       case "subject_index":
         return this.call("ingest_subject_index", { p_payload: payload.index });

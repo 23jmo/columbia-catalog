@@ -57,6 +57,7 @@ export function parseForJob(
         kind: "bulletin_department",
         department: job.targetKey,
         rows: runtime.parsers.parseBulletinPage(html, context),
+        courses: runtime.parsers.parseBulletinCourses(html, context),
       };
     case "subject_index":
       return { kind: "subject_index", index: runtime.parsers.parseSubjectIndex(html, context) };

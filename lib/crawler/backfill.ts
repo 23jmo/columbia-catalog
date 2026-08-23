@@ -230,7 +230,7 @@ export function buildBackfillPlan(
       kind: "bulletin_department",
       targetKey: department,
       termCode: null,
-      url: `${BULLETIN_BASE}/${department.replace(/^\/+/, "")}`,
+      url: bulletinDepartmentUrl(department),
     });
   }
 
@@ -408,6 +408,25 @@ export const BULLETIN_COURSE_PREFIXES: readonly string[] = [
  * Returns paths, not URLs, because that is what `--bulletin=` takes and what
  * `buildBackfillPlan` joins onto `BULLETIN_BASE`.
  */
+/**
+ * Barnard's bulletin is a different site.
+ *
+ * `bulletin.columbia.edu/sitemap.xml` lists `/barnard-college/...` paths, and
+ * the section root 301s to `catalog.barnard.edu` — but the department pages
+ * themselves 404 on the Columbia host. Discovery therefore hands back paths
+ * that look right and are unfetchable, which is how 53 Barnard departments sat
+ * in the queue failing quietly.
+ *
+ * The path is the same on both hosts; only the origin differs.
+ */
+const BARNARD_CATALOG_BASE = "https://catalog.barnard.edu";
+
+export function bulletinDepartmentUrl(department: string): string {
+  const path = department.replace(/^\/+/, "");
+  const base = path.startsWith("barnard-college/") ? BARNARD_CATALOG_BASE : BULLETIN_BASE;
+  return `${base}/${path}`;
+}
+
 export async function discoverBulletinDepartments(
   log: (line: string) => void = console.log,
 ): Promise<string[]> {

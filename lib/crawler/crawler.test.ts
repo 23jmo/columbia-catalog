@@ -208,6 +208,7 @@ function makeRuntime(
       throw new Error("not used");
     },
     parseBulletinPage: () => [],
+    parseBulletinCourses: () => [],
     parseSubjectIndex: () => ({ subjects: [] }),
     parseAcademicCalendar: () => ({ termCode: null, milestones: [] }),
   } as unknown as ParserRegistry;

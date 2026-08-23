@@ -16,6 +16,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
+  parseBulletinCourseBlocks,
   parseBulletinDepartment,
   parseTermLabel,
 } from "./parsers/bulletin";
@@ -708,5 +709,62 @@ describe("shouldQuarantine", () => {
     expect(
       shouldQuarantine(countSectionRecords(sections), countSectionRecords(emptied)).quarantine,
     ).toBe(true);
+  });
+});
+
+describe("parseBulletinCourseBlocks — the prose the directory never publishes", () => {
+  const courses = parseBulletinCourseBlocks(BULLETIN_HTML);
+  const byId = new Map(courses.map((course) => [course.courseCode, course]));
+
+  it("reads a block wrapped in div.courseblock", () => {
+    const course = byId.get("COMS3998W");
+    expect(course).toBeDefined();
+    expect(course?.pointsMin).toBe(1);
+    expect(course?.pointsMax).toBe(3);
+    expect(course?.description).toMatch(/^Independent project involving laboratory work/);
+    expect(course?.prerequisiteText).toMatch(/^Prerequisites: Approval by a faculty member/);
+  });
+
+  /*
+   * The same page uses a second layout a few hundred bytes away: a bare
+   * `<p class="courseblocktitle">` whose description paragraphs are flat
+   * siblings rather than children. A parser that only walked `div.courseblock`
+   * would return this course with a title and nothing else — and would look
+   * like it had worked.
+   */
+  it("reads a bare title whose description follows as siblings", () => {
+    const course = byId.get("COMS4901W");
+    expect(course?.description).toMatch(/^A second-level independent project/);
+    expect(course?.prerequisiteText).toMatch(/^Prerequisites: Approval by a faculty member/);
+  });
+
+  it("keeps the prerequisite sentence out of the description", () => {
+    for (const course of courses) {
+      if (!course.description || !course.prerequisiteText) continue;
+      expect(course.description).not.toContain(course.prerequisiteText);
+    }
+  });
+
+  it("emits course ids in the same canonical form as the directory", () => {
+    // "COMS W4113" and "COMS E4115" are different courses; the qualifier is
+    // part of the identity, not decoration.
+    const codes = courses.map((course) => course.courseCode);
+    expect(codes).toContain("COMS4111W");
+    expect(codes.every((code) => /^[A-Z]{2,5}\d{1,4}[A-Z]?$/.test(code))).toBe(true);
+  });
+
+  it("reports unknown credits as null rather than zero", () => {
+    // parsePoints returns null for "Variable"; a course with no readable point
+    // value must not claim to be worth 0 credits.
+    for (const course of courses) {
+      if (course.pointsMin === null) continue;
+      expect(course.pointsMax).not.toBeNull();
+      expect(course.pointsMax!).toBeGreaterThanOrEqual(course.pointsMin);
+    }
+  });
+
+  it("covers most of the department", () => {
+    expect(courses.length).toBeGreaterThan(100);
+    expect(courses.filter((course) => course.description).length).toBeGreaterThan(90);
   });
 });

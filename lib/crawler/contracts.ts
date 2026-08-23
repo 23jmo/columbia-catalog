@@ -20,6 +20,7 @@
  * redefined.
  */
 
+import type { ParsedBulletinCourse } from "@/lib/ingest/parsers/bulletin";
 import type {
   CrawlJob,
   CrawlJobKind,
@@ -225,6 +226,13 @@ export interface ParserRegistry {
   parseSubjectPage(html: string, context: ParseContext): ParsedSubjectPage;
   parseSectionDetail(html: string, context: ParseContext): ParsedSectionDetail;
   parseBulletinPage(html: string, context: ParseContext): ParsedBulletinRow[];
+  /**
+   * The course prose on the same page. Separate from `parseBulletinPage`
+   * because the two are not one-to-one: a course block may have no schedule
+   * table (not offered this year) and is still worth reading, while a schedule
+   * table may belong to a cross-listed code with no block of its own.
+   */
+  parseBulletinCourses(html: string, context: ParseContext): ParsedBulletinCourse[];
   parseSubjectIndex(html: string, context: ParseContext): ParsedSubjectIndex;
   parseAcademicCalendar(html: string, context: ParseContext): ParsedAcademicCalendar;
 }
@@ -237,7 +245,12 @@ export interface ParserRegistry {
 export type IngestPayload =
   | { kind: "subject_term"; page: ParsedSubjectPage }
   | { kind: "section_detail"; detail: ParsedSectionDetail }
-  | { kind: "bulletin_department"; department: string; rows: ParsedBulletinRow[] }
+  | {
+      kind: "bulletin_department";
+      department: string;
+      rows: ParsedBulletinRow[];
+      courses: ParsedBulletinCourse[];
+    }
   | { kind: "subject_index"; index: ParsedSubjectIndex }
   | { kind: "academic_calendar"; calendar: ParsedAcademicCalendar };
 

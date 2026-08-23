@@ -1228,6 +1228,10 @@ export type Database = {
         Args: { p_department: string; p_rows: unknown; p_observed_at?: string };
         Returns: number;
       };
+      ingest_bulletin_courses: {
+        Args: { p_department: string; p_courses: unknown; p_observed_at?: string };
+        Returns: number;
+      };
       ingest_subject_index: { Args: { p_payload: unknown }; Returns: number };
       ingest_academic_calendar: { Args: { p_payload: unknown }; Returns: number };
       release_expired_leases: { Args: Record<string, never>; Returns: number };
