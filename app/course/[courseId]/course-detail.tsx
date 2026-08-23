@@ -115,6 +115,39 @@ export async function CourseDetail({
         })
       : null;
 
+  /*
+   * Two summaries, fetched apart and rendered apart (spec §12). The instructor
+   * half is keyed to the FIRST instructor because that is who the subtitle
+   * names — attributing an aggregate to a person the reader cannot see would
+   * be worse than showing one professor's.
+   */
+  const reputation = integrations.loadReputation
+    ? await integrations.loadReputation({
+        courseId: course.courseId,
+        instructorName: data.instructors[0] ?? null,
+      })
+    : null;
+
+  /*
+   * The instructor panel shows a card per instructor, so it needs a summary
+   * per instructor rather than the single one the Reviews panel renders. One
+   * `loadReputation` call each, in parallel — a course has a handful of
+   * instructors, not hundreds.
+   */
+  const reputationByInstructor = integrations.loadReputation
+    ? Object.fromEntries(
+        await Promise.all(
+          data.instructors.map(async (name) => {
+            const bundle = await integrations.loadReputation!({
+              courseId: course.courseId,
+              instructorName: name,
+            });
+            return [name, bundle.instructor] as const;
+          }),
+        ),
+      )
+    : undefined;
+
   const meetingBuildingNames = distinct(
     sections.flatMap((section) => section.meetings.map((meeting) => meeting.buildingName)),
   ).filter((name): name is string => Boolean(name));
@@ -404,7 +437,10 @@ export async function CourseDetail({
         icon={RiCompass3Line}
         description={`Our own aggregation and RateMyProfessor, kept separate on purpose. ${UNREVIEWED_CAVEAT}`}
       >
-        <InstructorsPanel instructors={instructors} />
+        <InstructorsPanel
+          instructors={instructors}
+          reputationByInstructor={reputationByInstructor}
+        />
       </Panel>
 
       {/* ------------------------------------------------------------------ */}
@@ -417,22 +453,25 @@ export async function CourseDetail({
         description={`Dimensions, not a verdict. Course quality and instructor quality are never averaged together. ${UNREVIEWED_CAVEAT}`}
       >
         <div className="grid gap-3 lg:grid-cols-2">
-          {/* TODO(reviews): both summaries come from lib/reviews/aggregate.ts
-              via `CourseDetailIntegrations.loadReputation`. Null today, which
-              renders the honest "no reviews matched" state. */}
+          {/*
+            Both halves come from `loadReputation`, which is wired to the real
+            aggregator. They are null today because no reviews have been
+            ingested — the same null a genuinely unreviewed course returns,
+            and `ReputationBlock` renders it as "no reviews matched" either way.
+          */}
           <ReputationBlock
             title="Course experience"
             subtitle="Aggregated across everyone who has taught this course."
-            summary={null}
+            summary={reputation?.course ?? null}
           />
           <ReputationBlock
             title="Instructor quality"
             subtitle={
-              data.instructors.length > 0
-                ? `Aggregated across every course ${data.instructors[0]} has taught.`
+              reputation?.instructorName
+                ? `Aggregated across every course ${reputation.instructorName} has taught.`
                 : "Aggregated per instructor."
             }
-            summary={null}
+            summary={reputation?.instructor ?? null}
           />
         </div>
       </Panel>

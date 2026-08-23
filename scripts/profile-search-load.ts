@@ -73,8 +73,8 @@ async function main(): Promise<void> {
   const engineStart = performance.now();
   const engine = new SearchEngine(decoded);
   engine.setSeatOverlay(engine.seatOverlayForTerm(term));
-  const searchMs = performance.now() - engineStart;
   const result = engine.search({ termCode: term });
+  const engineMs = performance.now() - engineStart;
 
   console.log(`\nCatalog: ${catalog.length.toLocaleString()} courses`);
   console.log("\nOLD path (server RSC — removed):");
@@ -84,6 +84,7 @@ async function main(): Promise<void> {
   console.log(`  artifact raw:          ${(encoded.byteLength / 1024 / 1024).toFixed(2)} MB`);
   console.log(`  artifact gzip:         ${(gzipped.byteLength / 1024 / 1024).toFixed(2)} MB (cached in IndexedDB)`);
   console.log(`  decode + engine init:  ${decodeMs.toFixed(0)} ms`);
+  console.log(`  first search (cold):   ${engineMs.toFixed(0)} ms (index build + seat overlay)`);
   console.log(`  search():              ${result.elapsedMs.toFixed(1)} ms (${result.total} hits)`);
   console.log("\nServer /search page now skips getAllCourses — expect ~instant TTFB + index download client-side.\n");
 }

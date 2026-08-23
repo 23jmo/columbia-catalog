@@ -64,6 +64,52 @@ export async function getSeatHistory(sectionId: string): Promise<SeatSnapshot[]>
 }
 
 /**
+ * Change history for several sections at once, oldest first.
+ *
+ * The chart draws one line per section of a course, and a course can have
+ * twenty. Calling `getSeatHistory` in a loop would be twenty round trips for
+ * one page render, so this is a single `in` query grouped afterwards.
+ *
+ * The cap is per section and per read: `MAX_HISTORY_POINTS * sectionIds.length`
+ * would let one very busy course pull tens of thousands of rows, so the limit
+ * is applied per section after grouping. Rows arrive newest-first for that
+ * reason — the truncation has to keep the *recent* end of a long history, and
+ * a chart that silently dropped the last week to keep the first would be worse
+ * than one that showed a shorter window.
+ */
+export async function getSeatHistoryForSections(
+  sectionIds: string[],
+): Promise<Map<string, SeatSnapshot[]>> {
+  const grouped = new Map<string, SeatSnapshot[]>();
+  if (sectionIds.length === 0) return grouped;
+
+  const db = readClient();
+  if (!db) return grouped;
+
+  const { data, error } = await db
+    .from("enrollment_snapshots")
+    .select("section_id, observed_at, enrollment_count, enrollment_cap, waitlist_count, status")
+    .in("section_id", sectionIds)
+    .order("observed_at", { ascending: false })
+    .limit(MAX_HISTORY_POINTS * Math.min(sectionIds.length, 40));
+
+  if (error) throw new Error(`getSeatHistoryForSections failed: ${error.message}`);
+
+  for (const row of data ?? []) {
+    const bucket = grouped.get(row.section_id);
+    if (bucket) {
+      if (bucket.length < MAX_HISTORY_POINTS) bucket.push(toSnapshot(row));
+    } else {
+      grouped.set(row.section_id, [toSnapshot(row)]);
+    }
+  }
+
+  // Back to oldest-first, which is the order a chart draws in.
+  for (const bucket of grouped.values()) bucket.reverse();
+  return grouped;
+}
+
+/**
  * The most recent movements across a set of sections, newest first — the Home
  * feed in spec §5.
  *

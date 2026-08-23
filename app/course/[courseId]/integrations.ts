@@ -14,6 +14,8 @@ import type { CourseDetailIntegrations } from "@/components/course/contracts";
 import { evaluateCandidateLocally } from "@/components/course/plan-conflicts";
 import { WeekGrid } from "@/components/schedule/week-grid";
 import { resolveCampusZone } from "@/lib/campus";
+import { loadCourseSeatHistory } from "@/lib/db/course-history";
+import { getCourseReputation, getInstructorReputation } from "@/lib/db/reputation";
 
 export const courseDetailIntegrations: CourseDetailIntegrations = {
   /*
@@ -62,16 +64,41 @@ export const courseDetailIntegrations: CourseDetailIntegrations = {
   weekGrid: WeekGrid,
 
   /*
-   * STILL UNWIRED — and each is blocked on DATA, not on a missing module.
+   * Real, now that the crawler has run. Draws one line per section that has
+   * readings, plus the prior-term ghost line spec §13 asks for — a Fall 2026
+   * line alone says "37 of 60"; the Fall 2025 line behind it says whether 37
+   * at this date is early-and-calm or late-and-nearly-gone.
    *
-   * TODO(ingest): `loadSeatHistory` needs `enrollment_snapshots` to have rows.
-   *   The crawler writes them, but nothing has crawled yet, so every course
-   *   would return an empty series. The chart renders its designed "nothing
-   *   has moved yet" state rather than an empty axis, which is the truth.
-   * TODO(reviews): `loadReputation` ← lib/reviews/aggregate.ts, once review
-   *   ingest populates course and instructor summaries. Course and instructor
-   *   stay SEPARATE — never averaged (spec §12).
+   * Sections with no readings yet contribute no line rather than a flat
+   * nothing, and `registration_milestones` is still empty (see
+   * .plans/BLOCKERS.md #4 — the registrar 403s server-side requests), so the
+   * chart draws without vertical annotations. That is the documented
+   * degradation, not a failure.
+   */
+  loadSeatHistory: loadCourseSeatHistory,
+
+  /*
+   * Real pipeline, and today it returns null for both halves — because there
+   * are no reviews, not because nothing is wired. That distinction is the
+   * whole point of connecting it now: the panel renders the same honest "no
+   * reviews matched" state it would render for a genuinely unreviewed course,
+   * and the day CULPA or Reddit ingest lands, the page fills in with no code
+   * change.
    *
+   * Course and instructor are fetched by two functions with no shared path and
+   * are handed back apart. They are never averaged (spec §12) — a beloved
+   * professor teaching a punishing course is two facts, and one number would
+   * destroy both.
+   */
+  async loadReputation({ courseId, instructorName }) {
+    const [course, instructor] = await Promise.all([
+      getCourseReputation(courseId),
+      instructorName ? getInstructorReputation(instructorName) : Promise.resolve(null),
+    ]);
+    return { course, instructor, instructorName };
+  },
+
+  /*
    * `lookupRmp` is intentionally absent rather than TODO: RMP is read live in
    * the browser through `/api/rmp/[instructor]`, so it is wired inside the
    * client instructor panel where the fetch belongs, never injected from the

@@ -3,7 +3,7 @@
 import { useCallback } from "react";
 
 import { InstructorCard } from "@/components/course/instructor-profile";
-import type { RmpSnapshot } from "@/lib/types";
+import type { ReputationSummary, RmpSnapshot } from "@/lib/types";
 
 /**
  * The instructor block.
@@ -22,9 +22,19 @@ import type { RmpSnapshot } from "@/lib/types";
 export interface InstructorsPanelProps {
   /** Instructor name → the section codes they teach on this course. */
   instructors: { name: string; sectionCodes: string[]; alsoTeaches: string[] }[];
+  /**
+   * Our own CULPA/Reddit aggregate, keyed by instructor name and resolved on
+   * the server. Never combined with the RMP figures rendered beside it, and
+   * absent for an instructor nobody has reviewed — which is every instructor
+   * today, and renders as the "no reviews matched" copy.
+   */
+  reputationByInstructor?: Record<string, ReputationSummary | null>;
 }
 
-export function InstructorsPanel({ instructors }: InstructorsPanelProps) {
+export function InstructorsPanel({
+  instructors,
+  reputationByInstructor,
+}: InstructorsPanelProps) {
   /**
    * Live lookup. Returns null for "no usable RMP data", which the block
    * renders as a calm no-data state with a link out — never as an error.
@@ -56,10 +66,7 @@ export function InstructorsPanel({ instructors }: InstructorsPanelProps) {
           name={instructor.name}
           sectionCodes={instructor.sectionCodes}
           alsoTeaches={instructor.alsoTeaches}
-          // TODO(reviews): supply the instructor summary from lib/reviews once
-          // review ingest lands. Null renders the "no reviews matched" copy,
-          // which is the truth today.
-          reputation={null}
+          reputation={reputationByInstructor?.[instructor.name] ?? null}
           lookupRmp={lookupRmp}
         />
       ))}
