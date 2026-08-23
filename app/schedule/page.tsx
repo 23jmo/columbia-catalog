@@ -53,6 +53,8 @@ import {
   ZONE_LABEL,
   buildTerm,
 } from "@/lib/constants";
+import { listPendingProposalsForViewer } from "@/lib/db/proposal-reads";
+import { ProposalReview } from "@/components/schedule/proposal-review";
 import { partitionConflicts, type PlanAnalysisDetail } from "@/lib/schedule";
 import { cx } from "@/utils/cx";
 
@@ -77,7 +79,10 @@ export default async function SchedulePage({
   const useSamplePlan = params.demo === "1";
   const termCode = CURRENT_TERM;
 
-  const snapshot = await loadPlanSnapshot({ termCode, useSamplePlan });
+  const [snapshot, proposals] = await Promise.all([
+    loadPlanSnapshot({ termCode, useSamplePlan }),
+    listPendingProposalsForViewer(),
+  ]);
   const term = buildTerm(termCode);
 
   return (
@@ -106,6 +111,12 @@ export default async function SchedulePage({
             )
           }
         />
+
+        {/* Spec §16: the review step. An agent's `add_section` lands here as a
+            card, and the accept button is the only thing in the system that can
+            turn it into a change. Renders nothing when there is nothing pending,
+            which is the usual case. */}
+        <ProposalReview proposals={proposals} />
 
         {/* The planner owns its own state and renders the student's real
             plans. It shows its own empty state, so there is no server-side
