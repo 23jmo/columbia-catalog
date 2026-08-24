@@ -6,6 +6,8 @@
  * the cron grace window, and the per-client hourly cap.
  */
 
+import { readFileSync } from "node:fs";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -197,8 +199,9 @@ function makeStore(options: {
 function makeRuntime(
   store: CrawlJobStore,
   overrides: { page?: ParsedSubjectPage; parseThrows?: boolean; writer?: CatalogWriter } = {},
-): { runtime: CrawlerRuntime; written: ParsedSubjectPage[] } {
+): { runtime: CrawlerRuntime; written: ParsedSubjectPage[]; withdrawn: string[] } {
   const written: ParsedSubjectPage[] = [];
+  const withdrawn: string[] = [];
   const parsers = {
     parseSubjectPage: () => {
       if (overrides.parseThrows) throw new Error("selector no longer matches");
@@ -221,9 +224,13 @@ function makeRuntime(
       }
       return 0;
     },
+    async markSectionWithdrawn(sectionId) {
+      withdrawn.push(sectionId);
+      return 1;
+    },
   };
 
-  return { runtime: { jobStore: store, parsers, writer }, written };
+  return { runtime: { jobStore: store, parsers, writer }, written, withdrawn };
 }
 
 afterEach(() => {
@@ -651,7 +658,7 @@ describe("ingest pipeline", () => {
       previousFingerprint: { recordCount: 138, filledFieldCount: 5_000, capturedAt: NOW.toISOString() },
     });
     const applyIngest = vi.fn(async () => 1);
-    const { runtime } = makeRuntime(store, { page: makePage(2), writer: { applyIngest } });
+    const { runtime } = makeRuntime(store, { page: makePage(2), writer: { applyIngest, markSectionWithdrawn: vi.fn(async () => 1) } });
 
     const result = await ingestHtml(
       { job: makeJob(), html, fetchedAt: NOW.toISOString(), source: "browser" },
@@ -666,10 +673,110 @@ describe("ingest pipeline", () => {
     expect(state.fingerprints.size).toBe(0);
   });
 
+  /*
+   * A section Columbia has pulled.
+   *
+   * The Directory does not 404 — it serves HTTP 200 and a ~474 byte "Section
+   * Removed" page, which clears the plausibility floor and then fails to
+   * parse. That combination produced a job that failed, backed off, and
+   * retried a permanently unchanging page forever, while the section itself
+   * stayed in the catalog and kept rendering.
+   */
+  describe("withdrawn sections", () => {
+    /*
+     * The REAL page, captured from the Directory, not a hand-written stand-in.
+     * The first draft of this test used an inline string and every assertion
+     * failed for one reason: it was under MIN_PLAUSIBLE_HTML_CHARS, so it was
+     * rejected as a truncated response and never reached the branch at all.
+     * The genuine tombstone is 474 bytes — comfortably over the floor, which
+     * is precisely why this bug existed in production instead of being caught
+     * by the short-response guard.
+     */
+    const TOMBSTONE = readFileSync(
+      new URL("../ingest/__fixtures__/doc-section-removed.html", import.meta.url),
+      "utf8",
+    );
+    const detailJob = () =>
+      makeJob({
+        jobId: "job-withdrawn",
+        kind: "section_detail",
+        targetKey: "20251GNPH8090PD01",
+        termCode: "20251",
+        url: "https://doc.sis.columbia.edu/subj/GNPH/P8090-20251-D01/",
+      });
+
+    it("marks the section withdrawn and closes the job as done, not failed", async () => {
+      const { store, state } = makeStore();
+      const { runtime, withdrawn } = makeRuntime(store);
+
+      const result = await ingestHtml(
+        { job: detailJob(), html: TOMBSTONE, fetchedAt: NOW.toISOString(), source: "cron" },
+        { runtime, now: NOW },
+      );
+
+      expect(withdrawn).toEqual(["20251GNPH8090PD01"]);
+      expect(state.runs[0].status).toBe("ok");
+      expect(state.runs[0].notes).toMatch(/no longer publishes/);
+      // The whole point: OK, so the job stops backing off exponentially
+      // against a page whose answer will never change.
+      expect(state.outcomes[0].ok).toBe(true);
+      expect(result.quarantined).toBe(false);
+    });
+
+    it("re-reads at the ordinary cadence rather than being disabled", async () => {
+      const { store, state } = makeStore();
+      const { runtime } = makeRuntime(store);
+
+      await ingestHtml(
+        { job: detailJob(), html: TOMBSTONE, fetchedAt: NOW.toISOString(), source: "cron" },
+        { runtime, now: NOW, random: () => 0.5 },
+      );
+
+      // Weekly, per KIND_CADENCE_MULTIPLIER — far enough out to be harmless,
+      // near enough that a restored section is noticed rather than never.
+      const waitSeconds =
+        (Date.parse(state.outcomes[0].nextFetchAt) - NOW.getTime()) / 1000;
+      expect(waitSeconds).toBeCloseTo(CADENCE_SECONDS.baseline * 24 * 7, 6);
+    });
+
+    it("does not overwrite the fingerprint of the real page it replaces", async () => {
+      const { store, state } = makeStore();
+      const { runtime } = makeRuntime(store);
+
+      await ingestHtml(
+        { job: detailJob(), html: TOMBSTONE, fetchedAt: NOW.toISOString(), source: "cron" },
+        { runtime, now: NOW },
+      );
+
+      /*
+       * A tombstone carries zero records. Fingerprinting it would give the
+       * quarantine guard a baseline of nothing, so a section coming back would
+       * read as a suspicious jump and be REFUSED — the guard would block the
+       * recovery it exists to protect.
+       */
+      expect(state.fingerprints.size).toBe(0);
+    });
+
+    it("leaves other job kinds alone even on an identical body", async () => {
+      const { store, state } = makeStore();
+      const { runtime, withdrawn } = makeRuntime(store);
+
+      // Same bytes, a subject_term job: nothing is withdrawn, and it fails to
+      // parse as it always would. The branch keys on kind, not on text alone.
+      await ingestHtml(
+        { job: makeJob(), html: TOMBSTONE, fetchedAt: NOW.toISOString(), source: "cron" },
+        { runtime, now: NOW },
+      );
+
+      expect(withdrawn).toEqual([]);
+      expect(state.outcomes[0].ok).toBe(true);
+    });
+  });
+
   it("records a parse failure without writing", async () => {
     const { store, state } = makeStore();
     const applyIngest = vi.fn(async () => 1);
-    const { runtime } = makeRuntime(store, { parseThrows: true, writer: { applyIngest } });
+    const { runtime } = makeRuntime(store, { parseThrows: true, writer: { applyIngest, markSectionWithdrawn: vi.fn(async () => 1) } });
 
     const result = await ingestHtml(
       { job: makeJob(), html, fetchedAt: NOW.toISOString(), source: "cron" },

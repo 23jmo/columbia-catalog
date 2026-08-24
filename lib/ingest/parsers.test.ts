@@ -20,7 +20,7 @@ import {
   parseBulletinDepartment,
   parseTermLabel,
 } from "./parsers/bulletin";
-import { parseSectionDetail } from "./parsers/section-detail";
+import { isSectionTombstone, parseSectionDetail } from "./parsers/section-detail";
 import { parseSubjectIndex } from "./parsers/subject-index";
 import { parseSubjectPage, parseSubjectPageNotes } from "./parsers/subject-page";
 import {
@@ -290,6 +290,49 @@ describe("parseSectionDetail — COMS W4113 section 001", () => {
     expect(() => parseSectionDetail("<html><body></body></html>")).toThrow(
       /no recoverable section identity/,
     );
+  });
+
+  /*
+   * A withdrawn section is served as HTTP 200 with a 474-byte "Section
+   * Removed" page. To `parseSectionDetail` that is indistinguishable from a
+   * page it could not understand, so the crawler recorded a parse error and
+   * retried forever a page whose answer will never change. These pin the
+   * predicate that tells the two apart — including, importantly, that it does
+   * NOT fire on a real section page.
+   */
+  describe("withdrawn sections", () => {
+    const tombstone = fixture("doc-section-removed.html");
+
+    it("recognises the tombstone Columbia actually serves", () => {
+      expect(isSectionTombstone(tombstone)).toBe(true);
+    });
+
+    it("still cannot be parsed as a section — the predicate is the only guard", () => {
+      expect(() => parseSectionDetail(tombstone)).toThrow(
+        /no recoverable section identity/,
+      );
+    });
+
+    it("does not fire on a real section page", () => {
+      expect(isSectionTombstone(SECTION_HTML)).toBe(false);
+    });
+
+    it("does not fire on an empty or truncated response", () => {
+      expect(isSectionTombstone("")).toBe(false);
+      expect(isSectionTombstone("<html><body></body></html>")).toBe(false);
+    });
+
+    /*
+     * Title and heading are two renderings of one fact. Either alone must be
+     * enough, so a template tweak to one cannot turn a definitive answer back
+     * into an infinite retry.
+     */
+    it("matches on the title alone and on the heading alone", () => {
+      expect(isSectionTombstone("<title>Section Removed</title>")).toBe(true);
+      expect(
+        isSectionTombstone("<h1>Section removed from the Directory of Classes</h1>"),
+      ).toBe(true);
+    });
   });
 
   /*

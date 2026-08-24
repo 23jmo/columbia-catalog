@@ -1,17 +1,17 @@
 {
   "formatVersion": 2,
-  "version": "0mdf4yb",
-  "builtAt": "2026-08-23T21:43:54.729Z",
+  "version": "1msjb9b",
+  "builtAt": "2026-08-24T03:01:49.490Z",
   "terms": [
     "20263",
     "20271"
   ],
   "courseCount": 4878,
-  "sectionCount": 9543,
+  "sectionCount": 9576,
   "lexical": {
-    "url": "/index/catalog-0mdf4yb.bin",
-    "bytes": 8375872,
-    "gzipBytes": 2050135
+    "url": "/index/catalog-1msjb9b.bin",
+    "bytes": 10456720,
+    "gzipBytes": 2890558
   },
   "embedding": null
 }

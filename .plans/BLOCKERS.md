@@ -414,38 +414,115 @@ if left in place indefinitely.
 
 ---
 
-## 14. Removed sections are retried forever and still render (do after the drain)
+## 14. Removed sections — crawler half FIXED, presentation half blocked
 
-The Directory serves a TOMBSTONE, not a 404, when a section is pulled:
-HTTP 200, ~474 bytes, body text "Section removed from the Directory of
-Classes". Example: https://doc.sis.columbia.edu/subj/GNPH/P8090-20251-D01/
+**Status: the retry loop is fixed and shipped. The rendering is not, and the
+reason is a file I am not allowed to touch.**
 
-`parseSectionDetail` correctly refuses to invent an identity from it and
-throws, which the crawler records as `parse failed: section-detail: page
-carries no recoverable section identity`. Two consequences, both wrong:
+The Directory serves a TOMBSTONE, not a 404, when a section is pulled: HTTP
+200, 474 bytes, "Section removed from the Directory of Classes". Example:
+https://doc.sis.columbia.edu/subj/GNPH/P8090-20251-D01/
 
-1. The job retries on exponential backoff forever. The answer is definitive —
-   the section is gone — so it should stop, not slow down.
-2. The section stays in `sections` and keeps rendering. A student can still
-   find it, open it, and add it to a plan.
+At 474 bytes it clears `MIN_PLAUSIBLE_HTML_CHARS` (200), so it was never
+caught as a truncated response — it went to `parseSectionDetail`, which
+correctly refused to invent an identity and threw. That produced a parse
+error, exponential backoff, and a job retrying forever a page whose answer
+will never change.
 
-**Impact today is nil**: 8 jobs, all in archived terms (20243 ×1, 20251 ×7),
-none in 20263/20271. It becomes user-visible the moment Fall 2026 registration
-opens and a real section is pulled — which is exactly when it matters most and
-when nobody will be reading crawl logs.
+### What is fixed
 
-**Why it is not fixed yet.** The description drain is currently streaming
-~4,000 jobs through `parseSectionDetail`. Editing that parser mid-drain risks
-a run where some pages are parsed by the old code and some by the new, which
-is worse than the bug. It is a 20-minute change once the queue is quiet.
+- `isSectionTombstone` (lib/ingest/parsers/section-detail.ts) recognises the
+  page. A predicate rather than a parser return value: a tombstone is not a
+  section with fields missing, it is a different document that happens to live
+  at a section's URL. Matches title OR heading, so a template tweak to one
+  cannot silently restore the infinite retry. No size gate — a cap between the
+  474-byte tombstone and a 4.4KB section page has no margin, and its failure
+  mode is silent.
+- Migration 0024 adds `sections.withdrawn_at` and `mark_section_withdrawn`,
+  which is idempotent and does NOT re-stamp an already-marked section (the
+  value that matters is when it was FIRST seen gone).
+- `ingestHtml` marks the section and completes the job **ok**, then waits out
+  the ordinary weekly section-detail cadence. Deliberately not disabled:
+  disabling assumes a withdrawal is permanent, and a weekly re-read of a
+  handful of pages is the only way we would learn a section came back. The
+  ingest fingerprint is deliberately NOT written — a tombstone has zero
+  records, and fingerprinting it would make the section's return look like a
+  suspicious jump and be refused by the quarantine guard.
+- Verified live: all 8 known tombstones now report `withdrawn 5 / failed 0`
+  instead of 5 failures; 0 jobs still carry the parse error; sections carry
+  `withdrawn_at`; `consecutive_failures` reset to 0 and next fetch is 7–8 days
+  out, jittered.
 
-**The fix.** Recognise the tombstone in `parseSectionDetail` and return a
-distinct outcome rather than throwing — the page IS parseable, it just says
-"gone". Then the ingest path can mark the section withdrawn (a
-`withdrawn_at timestamptz` on `sections`, kept rather than deleted so a
-watcher's row does not vanish under them) and `complete_job` can close the job
-out as done instead of failed. The catalog and search reads filter on
-`withdrawn_at is null`; the course page shows the section struck through with
-its provenance stamp, which is more honest than silently dropping a section a
-student may have been watching.
+### What is NOT fixed — and why
 
+**Withdrawn sections still render.** Nothing filters on `withdrawn_at`, so a
+section Columbia has pulled still appears in the catalog and in search, and a
+student can still add it to a plan.
+
+The blocked step is small and specific: the domain `Section` type in
+`lib/types.ts` has no `withdrawnAt` field, and **AGENTS.md forbids modifying
+`lib/types.ts`**. Without it the UI cannot tell a withdrawn section from a
+live one, so it can only show it as live (a lie) or drop it silently (which
+takes a watcher's section away with no explanation).
+
+Filtering was deliberately NOT half-applied. Sections are read through
+PostgREST embeds (`sections(...)`), so filtering means
+`.is("sections.withdrawn_at", null)` on each parent query — and filtering some
+paths but not others is worse than filtering none, because the same section
+then appears on one screen and not another.
+
+**Impact today is nil**: 8 withdrawn sections, all in archived terms (20243
+×1, 20251 ×7), **0 in 20263/20271**. It becomes user-visible the first time a
+Fall 2026 section is pulled.
+
+**To finish** (needs someone who may edit `lib/types.ts`):
+1. Add `withdrawnAt: string | null` to `Section` in `lib/types.ts`.
+2. Map it in `rowToSection` (`lib/db/schema.ts` — the row type already carries
+   `withdrawn_at`, added in the same commit as migration 0024).
+3. Filter search and the catalog list on it; on the course page render the
+   section struck through with its provenance stamp, so a watcher sees what
+   happened rather than finding an empty space.
+
+
+## 15. Subjects with no page for a term retry forever (same shape as #14)
+
+196 `subject_term` jobs across 115 distinct subject codes return HTTP 404 and
+back off exponentially — forever. ANAA, ARAR, AEME, ADVR, AERO, AMHS, AMPO,
+ARCT and ~107 others, most in both crawled terms.
+
+These are not broken. The Directory's root index lists every subject code that
+has *ever* run; a subject that offers nothing in Fall 2026 simply has no page
+for Fall 2026. The 404 is a correct, definitive, permanent answer.
+
+It is the same mistake #14 was: a definitive answer handled as a transient
+failure. The fetcher already knows 404 is non-retryable at the HTTP layer
+(`isRetryable` excludes it), but `recordFetchFailure` then treats it like any
+other fault and schedules a retry. Capped at the 6h backoff ceiling, that is
+~800 wasted requests/day at Columbia's expense, and it keeps the failure
+metrics permanently noisy — which is how a real failure gets missed.
+
+**Not fixed here because the right fix is not obvious.** A subject genuinely
+can start offering classes in a term it did not before, so "404 once, never
+ask again" is wrong. What is needed is a distinct outcome — "correctly absent"
+— that schedules a slow re-check (monthly?) instead of a failure backoff, and
+that does not count as a failure in the tally. That is a design decision about
+the crawl contract, not a bug fix, and #14's cadence work is the natural place
+to build it on.
+
+**Note the ordering trap**: `recordFetchFailure` receives an `error` STRING
+(`scripts/crawl.ts` passes `HTTP ${outcome.status}`), not the status code.
+Sniffing "404" out of that string would work today and break the first time
+the message is reworded. The status needs to be passed properly.
+
+## 16. Search index is at 91.9% of its size budget
+
+The rebuild after descriptions completed came in at 2.76 MB gzip against spec
+§19's 3.00 MB ceiling — 249 KB of headroom, 4,878 courses / 9,576 sections.
+
+Descriptions are what grew it (the `display` block is now 67% of the raw
+artifact). Nothing is wrong today, but the margin is thin enough that it is
+worth knowing before anyone adds a field to the projected course shape: the
+next meaningful addition to `projectCourse` is likely to blow the budget.
+
+If it does, the display block is the place to look first — it is the largest
+block by a wide margin and the least information-dense.

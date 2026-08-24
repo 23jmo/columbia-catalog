@@ -243,6 +243,15 @@ export type SectionRow = {
   detail_url: string | null;
   note: string | null;
   open_to: string | null;
+  /**
+   * When Columbia stopped publishing this section (migration 0024). NULL means
+   * still published — and for almost every row it means the question has never
+   * been asked, not that we checked and it was fine.
+   *
+   * Not yet surfaced on the domain `Section` type, so no read filters on it.
+   * See .plans/BLOCKERS.md item 14.
+   */
+  withdrawn_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -584,7 +593,11 @@ export type CourseInsert = Omit<CourseRow, "created_at" | "updated_at" | "requir
 
 export type SectionInsert = Omit<
   SectionRow,
-  "subject_code" | "created_at" | "updated_at"
+  // `withdrawn_at` joins the server-managed columns: it is set only by
+  // `mark_section_withdrawn`, never as part of writing a section. An ingest
+  // that could clear it would un-withdraw a section every time Columbia's
+  // subject page still listed a row it had already pulled.
+  "subject_code" | "created_at" | "updated_at" | "withdrawn_at"
 > &
   Partial<Pick<SectionRow, "subject_code" | "created_at" | "updated_at">>;
 
@@ -1229,6 +1242,17 @@ export type Database = {
       resolve_plan_proposal: {
         Args: { p_proposal_id: string; p_status: string };
         Returns: PlanProposalRow[];
+      };
+      /**
+       * Added in migration 0024. Stamps a section Columbia has stopped
+       * publishing. Returns the number of rows actually changed: 0 is a
+       * normal answer, not an error — it means the section was already marked,
+       * or we never carried a row for it (a section can be pulled between the
+       * subject page listing it and the detail crawl reaching it).
+       */
+      mark_section_withdrawn: {
+        Args: { p_section_id: string; p_at?: string };
+        Returns: number;
       };
       courses_missing_description: {
         Args: { p_limit?: number };

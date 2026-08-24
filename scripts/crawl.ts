@@ -37,7 +37,7 @@ import { ALL_TERMS, LEASE_SECONDS } from "@/lib/constants";
 import { parseBackfillArgs, runBackfill } from "@/lib/crawler/backfill";
 import { getCrawlerRuntime } from "@/lib/crawler/contracts";
 import { politeFetch } from "@/lib/crawler/fetcher";
-import { ingestHtml, recordFetchFailure } from "@/lib/crawler/ingest";
+import { ingestHtml, isWithdrawnReason, recordFetchFailure } from "@/lib/crawler/ingest";
 import { requireServiceRoleClient } from "@/lib/db/client";
 import type { CrawlJobKind, TermCode } from "@/lib/types";
 import type { CrawlJobSpec } from "@/lib/crawler/contracts";
@@ -171,6 +171,8 @@ interface DrainTally {
   claimed: number;
   ingested: number;
   quarantined: number;
+  /** Sections Columbia has stopped publishing. Not failures. */
+  withdrawn: number;
   failed: number;
   records: number;
 }
@@ -184,7 +186,14 @@ async function drain(): Promise<void> {
 
   const deadline = Date.now() + minutes * 60_000;
   const { jobStore } = getCrawlerRuntime();
-  const tally: DrainTally = { claimed: 0, ingested: 0, quarantined: 0, failed: 0, records: 0 };
+  const tally: DrainTally = {
+    claimed: 0,
+    ingested: 0,
+    quarantined: 0,
+    withdrawn: 0,
+    failed: 0,
+    records: 0,
+  };
   const startedAt = Date.now();
 
   console.log(
@@ -234,6 +243,13 @@ async function drain(): Promise<void> {
       if (result.quarantined) {
         tally.quarantined += 1;
         console.log(`  ⚠ ${job.kind}/${job.targetKey} quarantined — ${result.reason ?? "?"}`);
+      } else if (isWithdrawnReason(result.reason)) {
+        // A withdrawal travels on the same `reason` channel as a fault because
+        // `IngestRunResult` has no success flag. It is not a failure: the page
+        // was read, understood, and acted on. Counting it as one would put a ✗
+        // next to the exact outcome this branch exists to produce.
+        tally.withdrawn += 1;
+        console.log(`  ⊘ ${job.kind}/${job.targetKey} — ${result.reason}`);
       } else if (result.reason) {
         tally.failed += 1;
         console.log(`  ✗ ${job.kind}/${job.targetKey} — ${result.reason}`);
@@ -256,6 +272,9 @@ async function drain(): Promise<void> {
   console.log(`  ingested       ${tally.ingested}`);
   console.log(`  records        ${tally.records}`);
   console.log(`  quarantined    ${tally.quarantined}`);
+  if (tally.withdrawn > 0) {
+    console.log(`  withdrawn      ${tally.withdrawn}`);
+  }
   console.log(`  failed         ${tally.failed}`);
 }
 
