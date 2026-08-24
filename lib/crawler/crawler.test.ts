@@ -269,6 +269,49 @@ describe("cadence jitter", () => {
     expect(jitterSeconds(100, () => 0.5)).toBeCloseTo(100, 6);
   });
 
+  /**
+   * The load bug this guards against did not look like a bug. Every kind
+   * defaulted to `baseline`, baseline means hourly, and 5,433 section-detail
+   * jobs re-fetched unchanged pages every hour without a single error. These
+   * assert the multiplier both applies and knows when not to.
+   */
+  const midpoint = () => 0.5;
+  const secondsUntil = (iso: string) => (Date.parse(iso) - NOW.getTime()) / 1000;
+
+  it("stretches section detail to weekly while leaving the seat refresh hourly", () => {
+    const detail = secondsUntil(
+      computeNextFetchAt("baseline", NOW, midpoint, "section_detail"),
+    );
+    const seats = secondsUntil(
+      computeNextFetchAt("baseline", NOW, midpoint, "subject_term"),
+    );
+    expect(seats).toBeCloseTo(CADENCE_SECONDS.baseline, 6);
+    expect(detail).toBeCloseTo(CADENCE_SECONDS.baseline * 24 * 7, 6);
+  });
+
+  it("never stretches a promoted job — escalation must still mean sooner", () => {
+    for (const tier of ["hot", "registration"] as CrawlTier[]) {
+      const promoted = secondsUntil(
+        computeNextFetchAt(tier, NOW, midpoint, "section_detail"),
+      );
+      expect(promoted).toBeCloseTo(CADENCE_SECONDS[tier], 6);
+      // The point of the guard: promoting must not schedule further out than
+      // leaving the job at baseline would have.
+      expect(promoted).toBeLessThan(
+        secondsUntil(computeNextFetchAt("baseline", NOW, midpoint, "section_detail")),
+      );
+    }
+  });
+
+  it("omitting the kind changes nothing, so existing callers are unaffected", () => {
+    for (const tier of tiers) {
+      expect(secondsUntil(computeNextFetchAt(tier, NOW, midpoint))).toBeCloseTo(
+        CADENCE_SECONDS[tier],
+        6,
+      );
+    }
+  });
+
   it("backs off exponentially, clamped, and never faster than the tier cadence", () => {
     const first = (Date.parse(computeBackoffFetchAt("hot", 1, NOW, () => 0.5)) - NOW.getTime()) / 1000;
     const fourth = (Date.parse(computeBackoffFetchAt("hot", 4, NOW, () => 0.5)) - NOW.getTime()) / 1000;

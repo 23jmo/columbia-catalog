@@ -188,7 +188,7 @@ export async function ingestHtml(
   await runtime.jobStore.completeJob({
     jobId: job.jobId,
     ok: true,
-    nextFetchAt: computeNextFetchAt(job.tier, now, options.random),
+    nextFetchAt: computeNextFetchAt(job.tier, now, options.random, job.kind),
     lastOkAt: input.fetchedAt,
   });
 

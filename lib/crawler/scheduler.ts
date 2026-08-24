@@ -32,6 +32,50 @@ export const FAILURE_BACKOFF_MAX_SECONDS = 6 * 60 * 60;
 /** Failures beyond this contribute no further doubling (guards overflow). */
 export const FAILURE_BACKOFF_MAX_DOUBLINGS = 12;
 
+/**
+ * How much longer than its tier's cadence a given job kind should wait.
+ *
+ * ── Why cadence cannot be a function of tier alone ─────────────────────────
+ *
+ * `CADENCE_SECONDS` is keyed by tier, and a tier answers "how urgent is this
+ * subject right now?" — watched, registering, or neither. It says nothing
+ * about *what page* is being fetched, and those are independent questions. A
+ * seat count on a subject page is worth re-reading every hour because it
+ * changes every hour. A course description on a section-detail page is worth
+ * re-reading roughly never: the title, the points, and the prose are set when
+ * the term is published and then sit still.
+ *
+ * Every kind landed in `baseline` because that is the enum's default, and
+ * baseline means hourly. Nobody chose hourly for section detail — it was
+ * inherited. The result was 5,433 jobs re-fetching pages that had not changed,
+ * on top of the 1,156 that genuinely needed to, which put steady state over
+ * seven times the ~900 requests/hour spec §10 budgets for a full refresh.
+ * That is not an error anyone would see: the crawler reports success, the data
+ * is correct, and the entire cost is borne by Columbia's servers.
+ *
+ * A multiplier rather than a second cadence table because the tier's answer is
+ * still the right starting point — a watched subject should get its detail
+ * pages sooner than an unwatched one, just not hourly.
+ */
+export const KIND_CADENCE_MULTIPLIER: Record<CrawlJobKind, number> = {
+  /** The seat-count refresh. This is the cadence the tier interval is for. */
+  subject_term: 1,
+  /** Descriptions and prerequisites; seat counts here are already covered by
+   *  the subject page, which is fetched hourly and is authoritative. Weekly. */
+  section_detail: 24 * 7,
+  /** Bulletin meeting times — spec §10 budgets these weekly by name. */
+  bulletin_department: 24 * 7,
+  /** The subject list changes when a term is published, not within one. */
+  subject_index: 24 * 7,
+  /**
+   * Daily, not weekly, and the difference matters: these are the registration
+   * windows that decide when subjects escalate to the 30s tier. A week-stale
+   * calendar means finding out a window opened after it opened, which is the
+   * one moment the whole tier system exists to be ready for.
+   */
+  academic_calendar: 24,
+};
+
 /** Randomness source, injectable so tests can pin the jitter. */
 export type RandomSource = () => number;
 
@@ -58,9 +102,27 @@ export function computeNextFetchAt(
   tier: CrawlTier,
   now: Date,
   random: RandomSource = defaultRandom,
+  kind?: CrawlJobKind,
 ): string {
-  const seconds = jitterSeconds(CADENCE_SECONDS[tier], random);
+  const seconds = jitterSeconds(CADENCE_SECONDS[tier] * kindMultiplier(tier, kind), random);
   return new Date(now.getTime() + seconds * 1000).toISOString();
+}
+
+/**
+ * The multiplier only applies at baseline, and that restriction is the whole
+ * safety argument for this feature.
+ *
+ * Promotion to `hot` or `registration` is someone saying "I need this page
+ * now" — a student is watching it, or registration is open. Stretching that
+ * by a factor of 168 would silently convert an escalation into a longer wait
+ * than the job had before it was promoted, which is worse than not promoting
+ * at all. Nothing promotes a non-`subject_term` job today, so this branch is
+ * currently unreachable; it exists so that the day something does, the
+ * escalation still means what it says.
+ */
+function kindMultiplier(tier: CrawlTier, kind: CrawlJobKind | undefined): number {
+  if (kind === undefined || tier !== "baseline") return 1;
+  return KIND_CADENCE_MULTIPLIER[kind];
 }
 
 /**
