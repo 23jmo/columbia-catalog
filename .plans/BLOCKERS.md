@@ -514,6 +514,25 @@ to build it on.
 Sniffing "404" out of that string would work today and break the first time
 the message is reworded. The status needs to be passed properly.
 
+**And the reason that is not merely plumbing.** `recordFetchFailure` has three
+callers. Two — `app/api/crawl/cron/route.ts` and `scripts/crawl.ts` — hold a
+real `politeFetch` outcome and can pass a status we observed ourselves. The
+third is `app/api/crawl/submit/route.ts`, where the fetch happened in a
+student's browser and `SubmissionSchema` carries only `{ok, html, error}` —
+**no status field at all**.
+
+So the fix cannot just be "add `status` to the schema". A client-reported 404
+is a claim, not an observation, and this codebase already draws that line
+explicitly ("Provenance travels with the data, so it must not be
+client-controlled"). Honouring one would let any browser mark a subject
+permanently absent for every user.
+
+Which means the real decision is: does a browser-sourced 404 count at all? The
+defensible answer is probably no — treat client failures as transient as they
+are today, and let only the cron and the operator script record "correctly
+absent". That is a small asymmetry with a good reason, and it should be
+written down rather than discovered later.
+
 ## 16. Search index is at 91.9% of its size budget
 
 The rebuild after descriptions completed came in at 2.76 MB gzip against spec
