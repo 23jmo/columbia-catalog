@@ -264,6 +264,27 @@ function buildWeekLoad(sections: Section[]): { samples: LoadSample[]; peak: Inst
  * `slugOrName` accepts either, so `/instructor/adam-h-cannon` and a programmatic
  * call with the printed name both work.
  */
+/**
+ * Is this `department` value fit to show a reader?
+ *
+ * The bulletin ingest does not always land a department NAME in this field —
+ * on some course rows it carries the bulletin's own URL path, e.g.
+ * "/columbia-college/departments-instruction/cognitive-science/". Those sort
+ * before every real name ("/" precedes letters), so taking `departments[0]`
+ * blind put a raw URL under the instructor's name where their department
+ * belongs, and named the wrong department while doing it.
+ *
+ * We do not try to prettify the slug back into a name: the path is attached to
+ * the course, not the person, so a COMS instructor was being labelled
+ * "Cognitive Science". Dropping the value and falling back to the subject is
+ * the honest read — better to say less than to say something wrong.
+ */
+function isDepartmentName(value: string | null): value is string {
+  if (!value) return false;
+  const trimmed = value.trim();
+  return trimmed.length > 0 && !trimmed.includes("/");
+}
+
 export async function loadInstructorProfile(
   slugOrName: string,
   termCode: TermCode = CURRENT_TERM,
@@ -415,7 +436,9 @@ export async function loadInstructorProfile(
     termCode,
     termLabel: termLabel(termCode),
     subjects: [...new Set(courseRefs.map((c) => c.subjectCode))].sort(),
-    departments: [...new Set(courseRefs.map((c) => c.department).filter((d): d is string => !!d))].sort(),
+    departments: [
+      ...new Set(courseRefs.map((c) => c.department).filter(isDepartmentName)),
+    ].sort(),
     courses: courseRefs,
     courseCount: courseRefs.length,
     sectionCount: sections.length,

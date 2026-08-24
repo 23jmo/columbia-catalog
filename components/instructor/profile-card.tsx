@@ -70,7 +70,16 @@ export function InstructorProfileCard({
 
   const accent = accentForSubject(data.subjects[0] ?? data.name);
   const asOf = provenanceLabel(data.seatsAsOf);
-  const handle = data.departments[0] ?? data.subjects.join(" · ") ?? "Columbia";
+  /*
+   * The department name, or nothing.
+   *
+   * This used to fall back to the subject codes, which reads as "COMS" sitting
+   * immediately left of a badge that also reads "COMS" — the same four letters
+   * twice, dressed differently. The badge already carries the subject, so when
+   * the bulletin has not given us a real department name the honest layout is
+   * one line shorter, not one line padded.
+   */
+  const handle = data.departments[0] ?? null;
 
   return (
     <section
@@ -94,7 +103,9 @@ export function InstructorProfileCard({
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <h1 className="text-title-2-medium truncate text-text-primary">{data.name}</h1>
             <div className="flex min-w-0 items-center gap-1.5">
-              <p className="text-headline-medium truncate text-text-secondary">{handle}</p>
+              {handle ? (
+                <p className="text-headline-medium truncate text-text-secondary">{handle}</p>
+              ) : null}
               {data.subjects.map((subject) => (
                 <span
                   key={subject}
