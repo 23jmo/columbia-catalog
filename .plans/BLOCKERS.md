@@ -327,6 +327,31 @@ was a single opaque reason for two different causes, so the sweep now reports
 variable name. `/api/alerts/sweep` returns the whole summary, so the answer to
 "why is no mail going out" is in the cron response rather than in a code read.
 
+### Verify it in one command, before a seat ever opens
+
+```
+npx tsx --env-file=.env.local scripts/verify-email.ts you@example.com
+```
+
+Sends one message through the same renderer and the same `sendEmailBatch` the
+sweep uses, describing an obviously fake `TEST 0000` section. Exits 0 only if
+Resend returned an id. It exists because the failure mode otherwise is quiet:
+a wrong key produces `email_not_configured`-shaped silence that is
+indistinguishable from a term in which no seat happened to open, so the first
+thing to discover it would be a missed alert.
+
+**The request itself is already proven.** Running that script with a
+deliberately invalid key returns:
+
+```
+Rejected: HTTP 401: {"statusCode":401,"name":"validation_error",
+                     "message":"API key is invalid"}
+```
+
+Resend *answered*. The endpoint, the bearer header, the JSON batch body and
+the response parsing are all correct — the only thing between here and working
+alerts is a key that is not fake.
+
 **Everything up to the transport is verified.** `runAlertSweep` has nine tests
 covering the invariant that matters — an alert is recorded as sent if and only
 if it was delivered, so an unconfigured transport can never silently consume a
