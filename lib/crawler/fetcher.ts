@@ -74,6 +74,14 @@ export const CRAWLER_USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) " +
   "Chrome/140.0.0.0 Safari/537.36 ColumbiaCatalog/1.0 (+https://columbia-catalog.vercel.app/about)";
 
+/**
+ * The default gap between two requests to the same host: 1.2–3.5s, so a
+ * serialized drain runs at roughly 0.4 req/s toward doc.sis.
+ *
+ * These are the numbers every scheduled crawl uses, and they are deliberately
+ * slow. Politeness is a property of this module rather than a discipline each
+ * caller has to remember, so a new consumer is polite by not doing anything.
+ */
 export const MIN_HOST_GAP_MS = 1_200;
 export const MAX_HOST_GAP_MS = 3_500;
 export const REQUEST_TIMEOUT_MS = 20_000;
@@ -175,8 +183,46 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * The gap bounds actually in force, after environment overrides.
+ *
+ * `CRAWL_MIN_HOST_GAP_MS` / `CRAWL_MAX_HOST_GAP_MS` exist for one job: the
+ * one-shot backfill in `scripts/crawl.ts`, run by hand from a laptop to fill a
+ * term the scheduled crawl was never pointed at. At the default rate that is
+ * hours of wall clock for a few thousand pages, and an operator watching it
+ * run is in a position to judge the load that an unattended cron is not.
+ *
+ * The defaults are unchanged, so nothing that does not set these variables
+ * gets faster — in particular the Vercel cron, which has no reason to.
+ *
+ * A floor of 100ms is enforced rather than trusted to the caller. This crawler
+ * points at a university's student information system, not a CDN, and the
+ * difference between "faster" and "a problem for someone else" is exactly the
+ * kind of judgement a number in an environment variable should not be able to
+ * get catastrophically wrong. Read per call so a long drain can be re-paced by
+ * restarting it, and so tests can vary it without module reloading.
+ */
+const ABSOLUTE_FLOOR_MS = 100;
+
+function envGapMs(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return Math.max(ABSOLUTE_FLOOR_MS, parsed);
+}
+
+export function hostGapBoundsMs(): { min: number; max: number } {
+  const min = envGapMs("CRAWL_MIN_HOST_GAP_MS", MIN_HOST_GAP_MS);
+  const max = envGapMs("CRAWL_MAX_HOST_GAP_MS", MAX_HOST_GAP_MS);
+  // A max below the min would make the range negative and the gap shrink
+  // below the floor; clamp rather than reject, so a typo slows down.
+  return { min, max: Math.max(min, max) };
+}
+
 export function randomHostGapMs(random: RandomSource = defaultRandom): number {
-  return Math.round(MIN_HOST_GAP_MS + random() * (MAX_HOST_GAP_MS - MIN_HOST_GAP_MS));
+  const { min, max } = hostGapBoundsMs();
+  return Math.round(min + random() * (max - min));
 }
 
 /**
