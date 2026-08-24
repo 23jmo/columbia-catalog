@@ -89,14 +89,64 @@ function fail(context: string, error: { message: string } | null): never {
 // ---------------------------------------------------------------------------
 
 /**
+ * How long a loaded catalog is reused before it is fetched again.
+ *
+ * The catalog is refreshed by the nightly crawl (`vercel.json` crons it at
+ * 07:00), so it is effectively static within a day and minutes of staleness
+ * cost a reader nothing. Anything that must observe a write immediately should
+ * query the row it wrote, not the whole term.
+ */
+const CATALOG_TTL_MS = 5 * 60 * 1000;
+
+const catalogCache = new Map<TermCode, { expires: number; courses: Promise<CourseWithSections[]> }>();
+
+/**
  * Every course in a term, sections attached. Used to build the search index, so
  * it pages until exhausted rather than silently truncating at PostgREST's
  * 1000-row default — a truncated index is a search engine that quietly cannot
  * find half the catalog.
+ *
+ * WHY this memoises, and why the cache holds the PROMISE rather than the result:
+ *
+ * This is a whole-collection read — 4,400 courses over five paged round trips,
+ * around 8 MB and five seconds — and callers reach for it per item. Rendering
+ * one instructor's profile downloads the entire term to find the sections one
+ * person teaches, and the instructor route prerenders four thousand of those.
+ * Uncached that is ~40,000 full-catalog queries in a single build, nine build
+ * workers deep; Postgres cancels them on `statement_timeout` long before the
+ * build finishes, which is exactly how it used to fail.
+ *
+ * Caching the promise rather than the resolved array is what collapses the
+ * concurrent callers: `generateMetadata` and the page body both ask during the
+ * same render, and both must await the SAME in-flight request rather than
+ * starting a second one. A rejected promise is evicted so a transient failure
+ * is retried instead of being served as a cached error for the whole TTL.
+ *
+ * This is a per-process cache, so it is bounded by the process: nine build
+ * workers hold at most nine copies, and a serverless instance holds one for as
+ * long as it stays warm. That is the right shape for data this size — a shared
+ * cache would need eviction and invalidation that a daily-refreshed catalog
+ * does not earn.
  */
 export async function getAllCourses(
   termCode: TermCode = CURRENT_TERM,
 ): Promise<CourseWithSections[]> {
+  const cached = catalogCache.get(termCode);
+  if (cached && cached.expires > Date.now()) return cached.courses;
+
+  const inFlight = fetchAllCourses(termCode);
+  catalogCache.set(termCode, { expires: Date.now() + CATALOG_TTL_MS, courses: inFlight });
+  // A failed fetch must not be served for the rest of the TTL. Only drop the
+  // entry if it is still the one this call installed, so a retry that has
+  // already replaced it is not evicted by an older rejection.
+  inFlight.catch(() => {
+    if (catalogCache.get(termCode)?.courses === inFlight) catalogCache.delete(termCode);
+  });
+  return inFlight;
+}
+
+/** Uncached read. See `getAllCourses` for why callers must not use this. */
+async function fetchAllCourses(termCode: TermCode): Promise<CourseWithSections[]> {
   const client = readClient();
   const courses: CourseWithSections[] = [];
 

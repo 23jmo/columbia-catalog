@@ -55,9 +55,16 @@ import { listInstructors, loadInstructorProfile } from "@/lib/data/instructors";
  * ratings each. CULPA is the only source that would move that number, and it is
  * being pursued as a partnership rather than a scrape.
  *
- * `generateStaticParams` prerenders the term's instructors. The set is small
- * (tens per subject) and entirely derived from data we already hold, so this
- * costs nothing and makes a pasted link render instantly.
+ * `generateStaticParams` prerenders the term's instructors — about four
+ * thousand of them, not the "tens per subject" this comment used to claim.
+ * That claim was true against the COMS seed and quietly stopped being true when
+ * the database grew to the full catalog, at which point the build began dying
+ * on a Postgres `statement_timeout`: every one of those pages calls
+ * `loadInstructorProfile`, which reads the WHOLE term to find one person's
+ * sections. `getAllCourses` now memoises per process, which is what makes
+ * prerendering a set this size cost one catalog read per build worker instead
+ * of one per page. Keep that in mind before adding another per-item caller of a
+ * whole-collection read.
  */
 
 interface InstructorPageProps {
