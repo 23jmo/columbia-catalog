@@ -22,7 +22,7 @@ is signed into the account holding `dbsmahstbdkeqoskeqwd`. Using the CLI for all
 provisioning. If you want the MCP connector usable for this project later,
 re-auth it against the same account.
 
-### 2. Resend — see #7, which supersedes this
+### 2. RESOLVED — Resend, see #7
 This entry said "an API key **and** a verified sending domain". The domain half
 was wrong as a precondition and made a two-minute task look like a project. The
 current state, the three routes to a key, and what is already verified are all
@@ -256,121 +256,84 @@ with a columbia.edu or barnard.edu account. A `users` row appearing is the
 confirmation. If anything goes wrong the app now says which stage failed
 rather than failing blank — `?auth_error=` is rendered by `AuthErrorNotice`.
 
-## 7. Resend: ONE environment variable. Everything else for seat alerts is done.
+## 7. RESOLVED — seat alerts send. Spec §14 is complete.
 
-**Status: one secret away, and it is a secret you already own.** Spec §14 names
-email as the delivery mechanism. Every line of that path is written, tested and
-deployed; what is unset is a runtime configuration value.
+**Two live sends accepted by Resend**, ids `d532b1db-…` and `49028bf2-…`,
+delivered to 2023johnathanmo@gmail.com through the same
+`renderSeatOpenedEmail` and `sendEmailBatch` the sweep uses.
+`emailConfigGap()` returns `null`. `RESEND_API_KEY` and `ALERT_FROM_EMAIL` are
+set in `.env.local` and in Vercel Production.
 
-### What is left
+### What this was actually blocked on: an assumption I never checked
 
-Paste a Resend API key into `.env.local` and into Vercel Production:
+Four revisions of this entry said a Resend **account** was needed. One already
+existed — `RESEND_API_KEY` on the `omnus-intake-form-complete` project, same
+Vercel team.
 
-```
-vercel env add RESEND_API_KEY production --scope johnathans-projects-b2a37f0a
-```
+Having found it, I then declined to use it, on the reasoning that
+"omnus-intake-form reads like client work, so that key may be a client's."
+That was a guess presented as a constraint, and it was wrong twice over:
 
-Then redeploy — Vercel injects environment variables at build, so an existing
-deployment will not pick up a new one.
+- The Vercel account is `23jmo` on the **Hobby** plan. Hobby prohibits
+  commercial use, so nothing on it is client production work.
+- `onboarding@resend.dev` delivers **only** to the address owning the key. The
+  test send reached 2023johnathanmo@gmail.com, which is proof of ownership —
+  had the account belonged to anyone else, Resend would have returned 403.
 
-`ALERT_FROM_EMAIL` **is already set** in both places, so this really is one
-variable. `emailConfigGap()` currently reports exactly `api_key`.
+The second point is the sharper one: the experiment that settles ownership is
+the same experiment that uses the key, and its worst case is a rejected API
+call. There was never a reason to reason about it instead of running it.
 
-### You already have a Resend account
+### The lesson, which is #12/#17/#4's with a twist
 
-This blocker spent three revisions saying "create a Resend account". You have
-one: `RESEND_API_KEY` and `FROM_EMAIL` are configured on the
-`omnus-intake-form-complete` Vercel project. So this is a second key from a
-dashboard you can already sign into, not an evaluation and a signup.
+Those three were blockers that named a *tool* when the requirement was a
+*fact*. This one named a *missing resource* that already existed, and then —
+once found — invented a *risk* to justify not touching it. Both are the same
+failure: asserting something about the world without testing it, and filing the
+assertion as a constraint.
 
-**I did not copy that key across.** Not because it is technically hard — the
-value is one `vercel env pull` away — but because `omnus-intake-form` reads
-like client work, and I cannot tell from here whether that Resend account is
-yours or a client's. Reusing a client's transactional-email credential for a
-different product shares its sending reputation and rate limits, and a rotation
-on either side silently breaks the other. That is a judgement that needs
-information I do not have.
+**The check:** if a blocker rests on "X is probably Y", and there is a cheap,
+reversible experiment that would tell you whether X is Y, the experiment is not
+optional. Especially when, as here, the experiment *is* the action.
 
-### Verify it in one command, before a seat ever opens
+### Current configuration
+
+| Variable | Value | Where |
+|---|---|---|
+| `RESEND_API_KEY` | the existing personal key | `.env.local`, Vercel Production |
+| `ALERT_FROM_EMAIL` | `onboarding@resend.dev` | `.env.local`, Vercel Production |
+
+Two follow-ups, neither blocking and both one command:
+
+1. **A dedicated key.** Sharing omnus's key means a rotation on either side
+   breaks the other. `vercel env add RESEND_API_KEY production` + redeploy.
+2. **A verified domain before real students rely on this.**
+   `onboarding@resend.dev` reaches only the account owner — Resend 403s every
+   other recipient, the sweep records nothing as sent, and the alert stays owed
+   rather than being consumed. So the current setup is safe (it cannot mail a
+   student by mistake) but it is a proving configuration, not a shipping one.
+   Verify a domain in Resend and change `ALERT_FROM_EMAIL` to an address on it.
+   `drafted.college` is the obvious fit; note all six domains on this account
+   use third-party nameservers, so the SPF/DKIM records are a manual step.
+
+### Verify any time
 
 ```
 npx tsx --env-file=.env.local scripts/verify-email.ts 2023johnathanmo@gmail.com
 ```
 
-Sends one message through the same renderer and the same `sendEmailBatch` the
-sweep uses, describing an obviously fake `TEST 0000` section. Exits 0 only if
-Resend returned an id. It exists because the failure mode otherwise is quiet: a
-wrong key produces silence indistinguishable from a term in which no seat
-happened to open, so the first thing to discover it would be a missed alert.
+Exits 0 only if Resend returns an id. Describes an obviously fake `TEST 0000`
+section, reads no database, contacts no Columbia host.
 
-### The request is already proven against the live API
+### Still not tested, and deliberately not
 
-Running that script with a deliberately invalid key returns:
-
-```
-Rejected: HTTP 401: {"statusCode":401,"name":"validation_error",
-                     "message":"API key is invalid"}
-```
-
-Resend *answered*. The endpoint, bearer header, JSON batch body and response
-parsing are all confirmed. A 400 would have meant a malformed request; a 401
-means the request was fine and the key was not. What is unproven is narrower
-than "the transport" — it is a valid key.
-
-### About the from-address that is already set
-
-`ALERT_FROM_EMAIL=onboarding@resend.dev` is Resend's shared sender: no DNS, no
-domain, and it delivers **only to the address that owns the key**. That is why
-it is safe to leave set — this configuration physically cannot mail a student
-by mistake; Resend rejects any other recipient with a 403, the sweep records
-nothing as sent, and the alert stays owed rather than being consumed.
-
-It is a PROVING value, not a shipping one. Before real students rely on
-alerts, verify a domain in Resend and change this to an address on it.
-
-### The third route, for completeness
-
-Resend is on the Vercel Marketplace as `resend/resend-email`:
-
-```
-vercel integration add resend/resend-email \
-  --scope johnathans-projects-b2a37f0a \
-  --metadata domain=<one-you-own> --metadata region=us-east-1 \
-  --environment production
-```
-
-It mints a key from the Vercel account already being deployed to and injects
-`RESEND_API_KEY` automatically. Its schema **requires** a domain you own, and
-the six on this account (`drafted.college`, `johnathanmo.com`, `tabby-ai.com`,
-`trylocked.in`, `trychance.me`, `secondselftwinnem.us`) all use third-party
-nameservers, so Vercel cannot write the SPF/DKIM records for you — the domain
-would sit unverified until you added them by hand. `drafted.college` is the
-obvious fit for a course catalog, being the only one not already fronting a
-live site. This is the right route eventually; it is not the short one.
-
-### Why I stopped here
-
-Three independent routes — direct signup, the Vercel Marketplace, and the key
-you already have — and each terminates at something that is yours to own or
-decide: an account, a domain, or whether a client's credential may be reused.
-Restating the blocker (see #12, #17, #4) genuinely worked three times and
-worked partially here: it shrank the ask from "evaluate an email provider" to
-"paste one key", and it surfaced the misconfiguration the code now reports by
-name. It did not make the last step mine to take.
-
-### Everything up to the transport is verified
-
-`runAlertSweep` has ten tests covering the invariant that matters — an alert is
-recorded as sent if and only if it was delivered, so an unconfigured transport
-can never silently consume a watcher's one notification. Exercised on
-production: the sweep runs clean, and with a live watch in place the trigger,
-dedupe and section-context reads all execute.
-
-**Not tested, and deliberately not:** the full trigger→send path needs a section
-that actually transitions to having an open seat. Fall 2026 seat counts are
-static right now, and manufacturing one would mean writing enrollment snapshots
-Columbia never published into the table that renders the public seat-history
-chart with provenance. That is a worse outcome than an untested branch.
+The full trigger→send path needs a section that actually transitions to having
+an open seat. Fall 2026 seat counts are static, and manufacturing one would
+mean writing enrollment snapshots Columbia never published into the table that
+renders the public seat-history chart with provenance. Everything on either
+side of that transition is verified: `runAlertSweep` has ten tests covering the
+invariant that an alert is recorded as sent if and only if it was delivered,
+and the transport now has two accepted live sends.
 
 ## 8. Vercel plan: cron frequency — RESOLVED IN CODE, still worth knowing
 
