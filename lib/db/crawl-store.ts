@@ -39,6 +39,7 @@ import type { CrawlJob, CrawlJobKind, CrawlTier, TermCode } from "@/lib/types";
 
 import { requireServiceRoleClient, type CatalogClient } from "./client";
 import { rowToCrawlJob, rowToLeasedCrawlJob, type CrawlJobRow, type LeasedCrawlJob } from "./schema";
+import type { RegistrationWindow } from "@/lib/crawler/scheduler";
 
 /**
  * Lease tokens are credentials, not catalog data, so `CrawlJob` does not carry
@@ -347,4 +348,51 @@ function splitIngestKey(ingestKey: string): [CrawlJobKind, string, TermCode | nu
   const targetKey = ingestKey.slice(firstColon + 1, lastColon);
   const term = ingestKey.slice(lastColon + 1);
   return [kind, targetKey, term === "-" ? null : term];
+}
+
+
+/**
+ * Registration windows that are open right now, for the tier escalation in
+ * `promoteToHot`.
+ *
+ * Filtered in SQL rather than in the caller so that "now" is the database's
+ * clock — the same reason `claimDueJobs` converts its cutoff to a relative
+ * grace window. A serverless function whose clock has drifted would otherwise
+ * decide on its own whether a window is open, and the whole point of the
+ * registration tier is to be right at the moment a window opens.
+ *
+ * `ends_at not null` is the definition of a window: a milestone with only a
+ * start is a point in time and cannot contain the present. The partial index
+ * `idx_milestones_window` exists for exactly this read.
+ *
+ * Returns an empty list on any failure. An unreachable calendar means subjects
+ * escalate to the hot tier instead of the registration tier — slower refresh,
+ * not a stopped one.
+ */
+export async function loadActiveRegistrationWindows(
+  db?: CatalogClient,
+): Promise<RegistrationWindow[]> {
+  const client = db ?? requireServiceRoleClient();
+
+  const { data, error } = await client
+    .from("registration_milestones")
+    .select("term_code, label, occurs_at, ends_at")
+    .not("ends_at", "is", null)
+    .lte("occurs_at", "now()")
+    .gt("ends_at", "now()");
+
+  if (error || !data) return [];
+
+  return data.flatMap((row) =>
+    row.ends_at
+      ? [
+          {
+            termCode: row.term_code as TermCode,
+            label: row.label,
+            opensAt: row.occurs_at,
+            closesAt: row.ends_at,
+          },
+        ]
+      : [],
+  );
 }

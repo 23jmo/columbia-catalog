@@ -30,6 +30,7 @@ import { crawlerBootstrapError, ensureCrawlerRuntime } from "@/lib/db/crawler-ru
 import { politeFetch } from "@/lib/crawler/fetcher";
 import { ingestHtml, recordFetchFailure } from "@/lib/crawler/ingest";
 import { promoteToHot } from "@/lib/crawler/scheduler";
+import { loadActiveRegistrationWindows } from "@/lib/db/crawl-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -75,7 +76,15 @@ async function runCron(): Promise<CronSummary> {
   if (watches) {
     try {
       const watched = await watches.watchedSectionIds();
-      const promoted = await promoteToHot(watched, { store: jobStore });
+      // Without these a watched subject can only reach the 2-minute hot tier.
+      // The 30-second registration tier is the one the whole scheme exists for
+      // — a seat that opens during an appointment window is gone in under a
+      // minute — and it activates only when the term is inside a live window.
+      const windows = await loadActiveRegistrationWindows();
+      const promoted = await promoteToHot(watched, {
+        store: jobStore,
+        registrationWindows: windows,
+      });
       summary.promotedSubjectTerms = promoted.promoted.length;
     } catch {
       // Tier maintenance is best-effort; refreshing data matters more.

@@ -80,11 +80,13 @@ against a real January 19 (a dropped first Tuesday).
 
 **Still open, smaller:**
 
-- The 30-second registration tier reads `RegistrationWindow[]`, and nothing yet
-  loads those from `registration_milestones` into the scheduler — the windows
-  exist in the database but the escalation path is not wired to them. Watched
-  subjects run on the 2-minute hot tier meanwhile, the same documented
-  degradation as before, now for a narrower reason.
+- ~~The 30-second registration tier is not wired to the windows.~~ **Done.**
+  `loadActiveRegistrationWindows` reads them and `/api/crawl/cron` passes them
+  to `promoteToHot`. The window test runs in SQL so "now" is the database's
+  clock, not a serverless function's — that distinction only matters on a
+  drifted host and only at the moment a window opens, which is the one moment
+  the tier exists for. Dormant today at 0 watches, since only watched subjects
+  escalate; the first Fall 2026 window it can act on opens 2026-08-25.
 - `components/schedule/calendar-week-preview.tsx` still builds a synthetic term
   internally, so its "first week of term" sample is picked from the fallback
   shape. Left alone deliberately: it is consumed from `components/course/`,
