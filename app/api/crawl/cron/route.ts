@@ -28,7 +28,7 @@ import { getCrawlerRuntime } from "@/lib/crawler/contracts";
 // unable to run. See lib/db/crawler-runtime.ts.
 import { crawlerBootstrapError, ensureCrawlerRuntime } from "@/lib/db/crawler-runtime";
 import { politeFetch } from "@/lib/crawler/fetcher";
-import { ingestHtml, recordFetchFailure } from "@/lib/crawler/ingest";
+import { ingestHtml, isAbsentReason, recordFetchFailure } from "@/lib/crawler/ingest";
 import { promoteToHot } from "@/lib/crawler/scheduler";
 import { loadActiveRegistrationWindows } from "@/lib/db/crawl-store";
 
@@ -50,6 +50,16 @@ interface CronSummary {
   claimed: number;
   ingested: number;
   quarantined: number;
+  /**
+   * Subjects that publish nothing for the term. A correct answer, counted
+   * apart from `failed` because it is the single most common outcome of a
+   * sweep — 11 of 18 in one production run — and folding it into failures
+   * makes every healthy run look like an outage. `recordFetchFailure` already
+   * treats these as successes when scheduling the next fetch, for the reason
+   * it states there: a permanently noisy failure metric is how a real failure
+   * gets missed.
+   */
+  notPublished: number;
   failed: number;
   promotedSubjectTerms: number;
   elapsedMs: number;
@@ -62,6 +72,7 @@ async function runCron(): Promise<CronSummary> {
     claimed: 0,
     ingested: 0,
     quarantined: 0,
+    notPublished: 0,
     failed: 0,
     promotedSubjectTerms: 0,
     elapsedMs: 0,
@@ -124,10 +135,14 @@ async function runCron(): Promise<CronSummary> {
       if (!outcome.ok || !outcome.html) {
         // Our own fetch, so our own status: a 404 on a subject-term page is a
         // correct answer (the subject offers nothing this term), not a fault.
-        await recordFetchFailure(job, outcome.error ?? `HTTP ${outcome.status}`, "cron", {
-          status: outcome.status,
-        });
-        summary.failed += 1;
+        const failure = await recordFetchFailure(
+          job,
+          outcome.error ?? `HTTP ${outcome.status}`,
+          "cron",
+          { status: outcome.status },
+        );
+        if (isAbsentReason(failure.reason)) summary.notPublished += 1;
+        else summary.failed += 1;
         continue;
       }
 
@@ -139,6 +154,7 @@ async function runCron(): Promise<CronSummary> {
       });
       if (result.quarantined) summary.quarantined += 1;
       else if (result.recordsWritten > 0 || !result.reason) summary.ingested += 1;
+      else if (isAbsentReason(result.reason)) summary.notPublished += 1;
       else summary.failed += 1;
     }
 
@@ -156,7 +172,14 @@ async function handle(request: Request): Promise<Response> {
   }
   if (process.env.CRAWL_WORKER_DISABLED === "1") {
     return NextResponse.json(
-      { claimed: 0, ingested: 0, quarantined: 0, failed: 0, stoppedBecause: "disabled" },
+      {
+        claimed: 0,
+        ingested: 0,
+        quarantined: 0,
+        notPublished: 0,
+        failed: 0,
+        stoppedBecause: "disabled",
+      },
       { status: 200 },
     );
   }
