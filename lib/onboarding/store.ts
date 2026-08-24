@@ -1,0 +1,124 @@
+/**
+ * The onboarding state, held in a module-level store rather than component state.
+ *
+ * ── Why this is not `useState` in the wizard ────────────────────────────────
+ *
+ * The state has to come out of `localStorage`, and `localStorage` does not
+ * exist on the server. The obvious shape — `useState(emptyGuestState)` plus an
+ * effect that reads storage and calls `setState` — renders the empty state,
+ * commits it, and only then swaps in the student's answers. React's
+ * `react-hooks/set-state-in-effect` rule refuses that on purpose: it is a
+ * guaranteed second render pass on the first screen a student ever sees, and
+ * on a slow phone it is visible as a flash of "let's start with your degree"
+ * over the step they had actually reached.
+ *
+ * `useSyncExternalStore` is the primitive built for exactly this. React reads
+ * `getServerSnapshot` for the server render and the hydration pass, then reads
+ * `getSnapshot` immediately afterwards and re-renders if they differ — the same
+ * two passes, but as one atomic hydration rather than a state update chasing a
+ * commit. `lib/watchlist/store.ts` and `lib/bookmarks/store.ts` are the same
+ * shape for the same reason; this follows them so there is one pattern in the
+ * codebase and not three.
+ *
+ * ── Persistence lives here, not in an effect ────────────────────────────────
+ *
+ * Every mutation goes through `updateOnboardingState`, so writing to storage on
+ * the way out is one line in one place and cannot be forgotten by a new caller.
+ * It also removes the ordering hazard the effect version had: a persistence
+ * effect that fires before the hydration effect overwrites a returning
+ * student's answers with an empty state, and the only thing preventing that was
+ * an `isHydrated` flag that had to be remembered.
+ */
+
+import {
+  clearGuestState,
+  emptyGuestState,
+  readGuestState,
+  writeGuestState,
+  type GuestOnboardingState,
+} from "./state";
+
+export interface OnboardingSnapshot {
+  state: GuestOnboardingState;
+  /**
+   * False until storage has been consulted. The wizard uses it to hold the
+   * sign-in migration back — flushing before hydration would flush an empty
+   * state over a student's real one.
+   */
+  isHydrated: boolean;
+}
+
+/**
+ * One frozen object returned to every server render and to the hydration pass.
+ * `useSyncExternalStore` compares snapshots by identity, so building a fresh
+ * one per call would re-render forever.
+ */
+const SERVER_SNAPSHOT: OnboardingSnapshot = Object.freeze({
+  state: emptyGuestState(),
+  isHydrated: false,
+});
+
+let snapshot: OnboardingSnapshot = SERVER_SNAPSHOT;
+const listeners = new Set<() => void>();
+
+/**
+ * Set once the guest state has been written to the database. After that point
+ * the local copy is a duplicate of server-side truth, and rewriting it on every
+ * subsequent keystroke would resurrect the key `clearGuestState` just removed —
+ * which the next visit would then migrate a second time.
+ */
+let hasMigrated = false;
+
+function emit(next: OnboardingSnapshot): void {
+  snapshot = next;
+  if (!hasMigrated && next.isHydrated) writeGuestState(next.state);
+  for (const listener of listeners) listener();
+}
+
+export function subscribeOnboarding(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+export function getOnboardingSnapshot(): OnboardingSnapshot {
+  return snapshot;
+}
+
+export function getOnboardingServerSnapshot(): OnboardingSnapshot {
+  return SERVER_SNAPSHOT;
+}
+
+/**
+ * Reads storage once per page load. Idempotent, so every mounted consumer can
+ * call it from its own effect without racing.
+ *
+ * A missing or unrecognised stored value is not a failure — `deserialize`
+ * returns null for anything it does not recognise (see the versioned-key note
+ * in `state.ts`) and onboarding simply starts at step one.
+ */
+export function ensureOnboardingHydrated(): void {
+  if (snapshot.isHydrated) return;
+  const stored = readGuestState();
+  emit({ state: stored ?? emptyGuestState(), isHydrated: true });
+}
+
+/** The only way to change the state. Persists as a side effect of the write. */
+export function updateOnboardingState(
+  updater: (current: GuestOnboardingState) => GuestOnboardingState,
+): void {
+  const next = updater(snapshot.state);
+  if (next === snapshot.state) return;
+  emit({ state: next, isHydrated: snapshot.isHydrated });
+}
+
+/**
+ * Called only after the server has confirmed the flush. Drops the browser copy
+ * and stops persisting; the state object itself stays on screen, because the
+ * student is still looking at the summary built from it.
+ */
+export function markOnboardingMigrated(): void {
+  hasMigrated = true;
+  clearGuestState();
+}
