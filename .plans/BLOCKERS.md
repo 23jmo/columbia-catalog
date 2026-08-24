@@ -328,60 +328,88 @@ course title, rather than being dropped at ingest: the directory's own SHOUTED
 abbreviations ("ADV TPCS COMPETITIVE PROG") are ugly but real, and normalising
 them at write time would be inventing data.
 
-## 12. Semantic search needs a model in the browser, and I cannot add one
+## 12. RESOLVED — Semantic search ships, with no model and no credential
 
-**What is built:** everything except the model. `lib/search/embeddings.ts` turns
-a course into a document and a document into a 384-dim unit vector;
-`buildEmbeddingBlock` quantizes to one bit per dimension plus an int8 rescore
-block; `encodeEmbeddingBlock` writes the sidecar; `SearchClient` downloads it
-after the lexical block and caches it in IndexedDB; `SearchEngine.applySemantic`
-ranks the whole catalog by Hamming distance and rescores the top slice in
-float. 17 tests cover alignment, ordering, width and the retry policy.
+**Status: semantic search is on by default. No dependency was added, no API key
+is required, and the artifact is inside spec §19's budget for the first time.**
 
-**Two separate things are missing, and they need different answers.**
+This was recorded as the one place where AGENTS.md rule 2 (no `npm install`) and
+the product requirement genuinely collided. It did not. The collision came from
+an assumption in how the problem was stated, not from the problem.
 
-**(a) Document vectors — one environment variable.** `scripts/build-index.ts`
-builds the sidecar as soon as an embedding provider is configured:
+### The assumption that was wrong
 
-```
-EMBEDDING_API_KEY=sk-...
-EMBEDDING_BASE_URL=https://api.openai.com/v1      # default; any OpenAI-shaped API works
-EMBEDDING_MODEL=text-embedding-3-small            # default
-EMBEDDING_DIMS=384                                # default; must be a multiple of 32
-```
+`QueryEmbedder` is `(query: string) => Float32Array | null` — synchronous,
+because spec §9 says search never touches the network. That was read as "the
+query must be embedded by a model, therefore a model must run in the browser,
+therefore `@huggingface/transformers` (~30 MB), therefore an npm install".
 
-~7,900 courses at text-embedding-3-small is well under $1 per rebuild, and the
-index is regenerated a few times a term. There is deliberately no fallback: with
-no key the build prints why and ships lexical-only, because vectors from a
-cheaper stand-in would be worse than no vectors — a wrong neighbour is a wrong
-answer, an absent neighbour is a missing feature.
+The middle step does not follow. A model is one way to place a query in the
+embedding space, and it is only necessary if the space is otherwise opaque to
+us. It is not: we ship a fully labelled sample of it. Every course's vector is
+in the sidecar, and the inverted index says exactly which courses contain any
+given term. So a term's position is recoverable as the TF-IDF-weighted centroid
+of the documents containing it, and a query's is the sum of its terms':
 
-**(b) Query vectors — BLOCKED, and not by a credential.** `QueryEmbedder` is
-`(query: string) => Float32Array | null`. It is synchronous on purpose: spec §9
-says search never touches the network, and a search that awaited a round trip
-could not return in the same tick as the keystroke. So the query has to be
-embedded locally, which means a model in the browser — `@huggingface/transformers`
-with a quantized `bge-small-en-v1.5` (~30 MB, WASM/WebGPU) is the standard
-choice and matches the 384 dims.
+    v(query) = normalize( Σ_terms idf(t) · Σ_docs(t) w(t,d) · v(d) )
 
-That is an `npm install`, which AGENTS.md forbids me from doing. **This is the
-one place in the whole spec where the build rule and the product requirement
-actually collide**, so it needs your call rather than a workaround:
+That is `createFoldInQueryEmbedder` (lib/search/query-embedder.ts). It is
+synchronous, offline, allocates one vector per keystroke, and adds nothing to
+the download — it reads postings the client already holds for lexical search.
 
-1. Add the dependency (`npm i @huggingface/transformers`) and I wire the query
-   embedder. ~30 MB extra on first search, cached; lexical results stay instant
-   and semantic ones fuse in when the model finishes loading. This is what the
-   spec describes.
-2. Route queries through a server endpoint. Simplest to build and it breaks the
-   promise the whole search architecture exists to keep — a 40 ms round trip per
-   keystroke is the thing spec §9 rejects Algolia over. I would not.
-3. Ship lexical-only. Perfectly good: BM25 + prefix + trigram fuzzy already
-   handles typos and partial codes, and it is what every screenshot so far
-   shows. Semantic search is an upgrade, not a missing floor.
+It is also **provider-agnostic**: the derivation never mentions where document
+vectors came from, so it works unchanged in an LSA space, an OpenAI space, or
+anything `IndexEmbeddingInfo.model` may name later.
 
-**Until you pick, (3) is what runs**, and nothing is broken: `hasSemantic`
-returns false, the fusion step is skipped, and the client never downloads a
-sidecar that does not exist.
+### And document vectors no longer need a credential either
+
+`lib/search/lsa.ts` builds them by factoring the catalog's own text —
+randomized truncated SVD of the TF-IDF term-document matrix, ~250 lines of
+arithmetic, no imports beyond our own tokenizer. On the real catalog: 8,746
+terms over 4,878 courses, **4.3 seconds**.
+
+`readEmbeddingProviderFromEnv` still wins when `EMBEDDING_API_KEY` is set, and
+a hosted encoder is genuinely better on paraphrase and on world knowledge the
+catalog never states. But LSA is not a placeholder — co-occurrence across 4,878
+course descriptions is exactly the signal that separates "machine learning"
+from "medieval history", which is what ranking step 3 is for.
+
+### What the measurements said
+
+Eight representative queries, top-10, against the real catalog:
+
+- **Semantic fusion moves 18/71 positions (25%) versus lexical-only.** The
+  signal is doing work, not decorating.
+- **The int8 rescore block moves 7% of positions and costs 1.4 MB gzipped.**
+  That is the entire spec §19 budget spent on a refinement nobody would notice,
+  so it is now off by default (`EMBEDDING_RESCORE=1` restores it). Binary-only
+  agreed with rescore on 66/71 top-10 slots.
+- Artifact: lexical 2.76 MB + sidecar 223 KB = **2.97 MB against a 3.00 MB
+  budget.** Note the caveat from item 10: Vercel's edge gzip runs ~57 KB worse
+  than `gzipSync`, so on the wire this is roughly at the line rather than
+  26 KB under it.
+
+### The real ceiling, stated honestly
+
+A term the catalog never uses has no documents to average, so it contributes
+nothing, and a query made entirely of such terms returns null and search stays
+lexical-only. A sentence encoder could place an unseen word from its own
+pretraining; this cannot. That is a genuine gap versus option (1) in the
+original write-up — and it is still the correct failure, because inventing a
+direction for a word the corpus has never seen returns confident neighbours of
+nothing.
+
+Semantic fusion also **re-ranks lexical candidates rather than retrieving new
+ones** — a pre-existing decision in `SearchEngine.applySemantic` ("keeps recall
+predictable and the filter pass bounded"), left untouched. It means the classic
+synonymy win is bounded by lexical recall: fusion can promote the right course
+among the candidates, but cannot surface one that shares no query term. Lifting
+that is a real change to the engine's cost model and was out of scope here.
+
+Covered by 12 tests across `lib/search/lsa.test.ts` (topic separation,
+determinism, degenerate corpora) and `lib/search/query-embedder.test.ts`
+(fold-in geometry, unknown-term null, block/index mismatch, re-ranking, and
+that an exact lexical match still wins outright).
 
 ---
 
@@ -475,7 +503,7 @@ if left in place indefinitely.
 
 ---
 
-## 14. Removed sections — FIXED except for one cosmetic touch
+## 14. Removed sections — FIXED (the remainder is not a spec item)
 
 **Status: the retry loop is fixed, and withdrawn sections no longer appear
 anywhere. What is left is presentation only: they vanish silently rather than
@@ -548,6 +576,12 @@ sections. Pinned by four mapper tests in `lib/db/schema.test.ts`.
 **A withdrawn section disappears silently rather than being shown struck
 through.** For a student who was watching it, that is an empty space where a
 section used to be, with no explanation.
+
+**This is not a spec item.** The spec never mentions withdrawn, removed, or
+cancelled sections anywhere — the struck-through treatment was my own idea
+about what would be kinder, not a requirement anyone wrote down. What the spec
+does imply (never show stale data as live, never retry a settled answer
+forever) is done. Listing this as an open spec gap overstated it.
 
 The blocked step is small and specific: the domain `Section` type in
 `lib/types.ts` has no `withdrawnAt` field, and **AGENTS.md rule 1 forbids

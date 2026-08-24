@@ -24,6 +24,7 @@
  */
 
 import { SearchEngine, type SearchEngineOptions } from "./engine";
+import { createFoldInQueryEmbedder } from "./query-embedder";
 import {
   IndexFormatError,
   decodeEmbeddingBlock,
@@ -424,7 +425,20 @@ class SearchIndexLoader implements SearchIndexHandle {
           storedAt: Date.now(),
         } satisfies CachedArtifact);
       }
-      this.engine.attachEmbeddings(decodeEmbeddingBlock(bytes));
+      const block = decodeEmbeddingBlock(bytes);
+      this.engine.attachEmbeddings(block);
+
+      // The block alone is inert: `hasSemantic` needs a query embedder too.
+      // The fold-in embedder derives the query's direction from postings the
+      // lexical index already holds, so this needs no model, no download and
+      // no network — see lib/search/query-embedder.ts.
+      const embedder = createFoldInQueryEmbedder(this.engine.index, block);
+      if (!embedder) {
+        this.report("semantic-unavailable", null, "embedding block does not match the index");
+        this.resolveSemantic(false);
+        return;
+      }
+      this.engine.setQueryEmbedder(embedder);
       this.report("semantic-ready", 1);
       this.resolveSemantic(true);
     } catch (error) {

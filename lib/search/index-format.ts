@@ -107,11 +107,10 @@ import type { CourseListItem } from "../catalog-list-types";
  *       top ~200 Hamming hits in (near) float precision.
  * EMBS  OPTIONAL per-doc dequantization scale for EMBQ (f32, docCount).
  *
- * No embedding provider is wired up yet, so the build script emits no
- * embedding artifact and the engine runs lexical-only. Adding embeddings
- * later means producing a Float32Array per course and calling
- * `buildEmbeddingBlock` — no change to the lexical format, the engine's
- * fusion step, or the client loader.
+ * EMBQ/EMBS are OFF by default. On the real catalog they cost 1.4 MB gzipped
+ * and move 7% of top-10 positions, which spends the whole spec §19 budget on
+ * a refinement nobody would notice; EMBEDDING_RESCORE=1 turns them back on.
+ * The binary block alone is 48 bytes per course and carries the signal.
  */
 
 // ---------------------------------------------------------------------------

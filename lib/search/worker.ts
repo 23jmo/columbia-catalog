@@ -25,6 +25,7 @@ import type { SearchFilters, SearchResult } from "../types";
 import type { IndexMeta } from "./index-format";
 import { decodeEmbeddingBlock } from "./index-format";
 import { SearchEngine, type ReputationOverlayEntry, type SeatOverlayEntry, type SearchEngineOptions } from "./engine";
+import { createFoldInQueryEmbedder } from "./query-embedder";
 import { engineFromBytes, loadSearchIndex, type LoadProgress } from "./client";
 
 // ---------------------------------------------------------------------------
@@ -131,7 +132,12 @@ export function installSearchWorker(scope: WorkerScope): void {
         const active = requireEngine(request.id);
         if (!active) return;
         try {
-          active.attachEmbeddings(decodeEmbeddingBlock(request.bytes));
+          const block = decodeEmbeddingBlock(request.bytes);
+          active.attachEmbeddings(block);
+          // Same pairing as the main-thread client: the block is only half of
+          // `hasSemantic`. Attaching one without the other leaves the sidecar
+          // downloaded, decoded, and never consulted.
+          active.setQueryEmbedder(createFoldInQueryEmbedder(active.index, block));
           scope.postMessage({ kind: "ok", id: request.id });
         } catch (error) {
           fail(request.id, error);

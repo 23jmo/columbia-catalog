@@ -12,15 +12,22 @@
  *   catalog-<version>.bin   the lexical index (versioned, immutable, CDN-safe)
  *   manifest.json           tiny pointer the client fetches first
  *
- * EMBEDDINGS ARE OPTIONAL AND OFF BY DEFAULT. Set EMBEDDING_API_KEY (plus
- * EMBEDDING_BASE_URL / EMBEDDING_MODEL / EMBEDDING_DIMS to point somewhere
- * other than OpenAI's 384-dim text-embedding-3-small) and this script builds
- * the semantic sidecar alongside the lexical block. With no key it emits a
- * lexical-only artifact and prints why — which is what ships today.
+ *   catalog-<version>.emb.bin  the semantic sidecar (separate, lazy download)
  *
- * Note that document vectors alone do not turn semantic search on: the engine
- * also needs a SYNCHRONOUS query embedder, which means a model running in the
- * browser. See lib/search/embeddings.ts and .plans/BLOCKERS.md item 12.
+ * EMBEDDINGS ALWAYS SHIP. There are two sources and the difference is only
+ * which space the vectors live in:
+ *
+ *   - Default: `buildLsaVectors` factors the catalog's own text (lib/search/
+ *     lsa.ts). No credential, no dependency, no network.
+ *   - Set EMBEDDING_API_KEY (plus EMBEDDING_BASE_URL / EMBEDDING_MODEL /
+ *     EMBEDDING_DIMS for anything other than OpenAI's 384-dim
+ *     text-embedding-3-small) and a hosted encoder is used instead. Better
+ *     vectors; a bill and a key to rotate.
+ *
+ * Nothing downstream distinguishes them. The query side folds a query into
+ * whatever space the block was built in, using the postings the lexical index
+ * already ships — see lib/search/query-embedder.ts. That is what makes the
+ * choice of provider a pure quality knob rather than a feature flag.
  */
 
 import { gzipSync } from "node:zlib";
@@ -40,8 +47,12 @@ import {
   encodeIndex,
   type EmbeddingBlock,
 } from "@/lib/search/index-format";
+import { buildLsaVectors } from "@/lib/search/lsa";
 import {
+  courseEmbeddingText,
   embedCourses,
+  EMBEDDING_DIMS,
+  MIN_EMBEDDABLE_CHARS,
   isProviderProblem,
   readEmbeddingProviderFromEnv,
 } from "@/lib/search/embeddings";
@@ -107,21 +118,61 @@ function mergeByCourse(batches: CourseWithSections[][]): CourseWithSections[] {
  * to its neighbour. The caller passes `ordered`, not `courses`, for exactly
  * this reason.
  *
- * `withRescore = true` ships the int8 block the engine uses to re-rank the top
- * slice in float. It roughly quadruples the sidecar (48 bytes per course
- * becomes ~430), and it is what makes binary quantization safe: Hamming
- * distance ranks the whole catalog cheaply and approximately, and the rescore
- * fixes the ordering where it actually matters.
+ * `withRescore` ships the int8 block the engine uses to re-rank the top slice
+ * in float. It is OFF by default, which is a measurement rather than a
+ * preference: on the real catalog it costs 1.4 MB gzipped — pushing the
+ * artifact 47% over spec §19's budget — and moves 7% of top-10 positions
+ * (93% agreement with binary-only across eight representative queries). The
+ * semantic signal itself moves 38% of positions relative to lexical-only, so
+ * the fusion is worth shipping and the extra precision is not. Set
+ * EMBEDDING_RESCORE=1 to include it anyway.
  *
  * A provider failure aborts the build rather than degrading to lexical-only.
  * Silently shipping an artifact missing the block the operator just asked for
  * would look like success and be discovered weeks later.
  */
+/** Opt-in: see `buildEmbeddings` on why the default is off. */
+function wantsRescore(): boolean {
+  const raw = process.env.EMBEDDING_RESCORE;
+  return raw === "1" || raw === "true";
+}
+
+/**
+ * The no-credential path, and the one that actually ships.
+ *
+ * `buildLsaVectors` factors the catalog's own text rather than calling a
+ * hosted encoder, so semantic search works out of the box instead of waiting
+ * on an API key that may never be set. The vectors are weaker than a
+ * transformer's — see lib/search/lsa.ts on exactly how — but the alternative
+ * on offer is no semantic signal at all.
+ *
+ * Courses whose text is too thin to mean anything are handed to the SVD as
+ * empty documents, which produces the zero vector: it quantizes to an
+ * all-zero code and never wins a neighbour search. That is the right answer
+ * for a course we know nothing about beyond its number, and it matches what
+ * `embedCourses` does on the hosted path.
+ */
+function buildLsaEmbeddings(ordered: CourseWithSections[]): EmbeddingBlock {
+  const documents = ordered.map((course) => {
+    const text = courseEmbeddingText(course);
+    return text.length < MIN_EMBEDDABLE_CHARS ? "" : text;
+  });
+
+  const result = buildLsaVectors(documents, {
+    dims: EMBEDDING_DIMS,
+    onProgress: (stage) => console.log(`    lsa: ${stage}`),
+  });
+  console.log(
+    `  embeddings     : ${result.model} — ${result.vocabularySize.toLocaleString()} terms`,
+  );
+  return buildEmbeddingBlock(result.vectors, EMBEDDING_DIMS, result.model, wantsRescore());
+}
+
 async function buildEmbeddings(ordered: CourseWithSections[]): Promise<EmbeddingBlock | null> {
   const configured = readEmbeddingProviderFromEnv();
   if (isProviderProblem(configured)) {
-    console.log(`\n  embeddings     : skipped — ${configured.reason}`);
-    return null;
+    console.log(`\n  embeddings     : ${configured.reason}; using local LSA`);
+    return buildLsaEmbeddings(ordered);
   }
 
   console.log(`\n  embeddings     : ${configured.model} @ ${configured.dims}d`);
@@ -132,7 +183,7 @@ async function buildEmbeddings(ordered: CourseWithSections[]): Promise<Embedding
       }
     },
   });
-  return buildEmbeddingBlock(vectors, configured.dims, configured.model, true);
+  return buildEmbeddingBlock(vectors, configured.dims, configured.model, wantsRescore());
 }
 
 async function main(): Promise<void> {
