@@ -60,6 +60,24 @@ const CUMULATIVE_BY_DESIGN: Record<string, string> = {
     "ENGL UN2000 is the first of the ten, not an eleventh course alongside them.",
 };
 
+/**
+ * Courses deliberately listed in two closed groups at once, with the reason.
+ *
+ * Same shape and same rule as `CUMULATIVE_BY_DESIGN`: an entry costs a
+ * sentence, because the default answer is that this is a bug.
+ *
+ * Checked against the live Bulletin on 2026-08-24.
+ */
+const DOUBLE_COUNTED_BY_DESIGN: Record<string, string> = {
+  "cc-major-computer-science:MATH UN2015":
+    'The department publishes an explicit permission: "Math 2015 Linear Algebra and ' +
+    'Probability may simultaneously satisfy both linear algebra and probability ' +
+    'requirements". It is the one course in the major allowed to do so.',
+  "seas-major-computer-science:MATH UN2015":
+    "The same published permission, and the same two groups — SEAS and CC share the " +
+    "department's mathematics requirement verbatim.",
+};
+
 /** Courses a group requires by name — what a student must hold to satisfy it. */
 function namedCourses(group: RequirementGroup): string[] {
   const rule = group.rule;
@@ -149,6 +167,112 @@ describe("no requirement is satisfied by another requirement's coursework", () =
 
   it("gives a reason for every allowlisted group", () => {
     for (const [key, reason] of Object.entries(CUMULATIVE_BY_DESIGN)) {
+      expect(reason.length, `${key} needs a real justification`).toBeGreaterThan(40);
+    }
+  });
+});
+
+/* ==========================================================================
+ * The same bug, one rule kind over
+ * ========================================================================== */
+
+/**
+ * No course may sit in two closed groups of the same program.
+ *
+ * ── Why the test above could not catch this ────────────────────────────────
+ *
+ * Found 2026-08-24 in `cc-major-biology`, immediately after the check above
+ * was written and passed. The Bulletin asks for two core courses from one list
+ * and "two ADDITIONAL courses" from another, and seven courses appear on both
+ * lists. A student holding exactly two of those seven scored 2/2 on each and
+ * was told both requirements were finished, having taken half the coursework.
+ *
+ * The check above screens open-ended groups — `n_matching` and
+ * `points_matching` — because those are the ones that absorb by subject and
+ * level. This failure is between two CLOSED `n_of` rules, so there is no
+ * open-ended group involved and nothing for it to report. Worse, exclusivity
+ * is opt-in through `excludeGroups`, which lives on a *selector*; a closed
+ * `n_of` names its courses outright and therefore has no way to express "but
+ * not the ones that group already used" even when the author wants to.
+ *
+ * ── Structural, not evaluative ─────────────────────────────────────────────
+ *
+ * This one reads the program files rather than running a student through them,
+ * because the defect is present whether or not anybody happens to hold the
+ * shared course. `crossCountedCourseIds` already reports cross-counting at
+ * audit time, but that fires only for a student who actually triggers it, and
+ * it tells them after the fact rather than stopping the file being written.
+ *
+ * Two hits across fifteen programs, both allowlisted above, both cases where
+ * the department publishes the permission in writing. That the signal is this
+ * quiet is the argument for keeping it: a third hit means somebody has made
+ * biology's mistake again.
+ */
+describe("no course sits in two closed groups of one program", () => {
+  /** Everything a closed rule could count. Selector-based rules return null. */
+  function closedOptions(group: RequirementGroup): string[] | null {
+    const rule = group.rule;
+    if (rule.kind === "all_of" || rule.kind === "n_of") return rule.courses;
+    // Every branch, not just the first: a course in ANY branch is countable.
+    if (rule.kind === "sequence_choice") return rule.sequences.flatMap((seq) => seq.courses);
+    return null;
+  }
+
+  for (const program of AUTHORED_PROGRAMS) {
+    it(`${program.id}: every named course belongs to one group`, () => {
+      const groupsByCourse = new Map<string, string[]>();
+      for (const group of program.groups) {
+        const options = closedOptions(group);
+        if (!options) continue;
+        // Deduplicated per group: a course listed twice inside ONE rule is a
+        // different (and harmless) sort of untidiness.
+        for (const course of new Set(options)) {
+          groupsByCourse.set(course, [...(groupsByCourse.get(course) ?? []), group.id]);
+        }
+      }
+
+      const doubleCounted = [...groupsByCourse.entries()]
+        .filter(([, groupIds]) => groupIds.length > 1)
+        .filter(([course]) => !(`${program.id}:${course}` in DOUBLE_COUNTED_BY_DESIGN))
+        .map(
+          ([course, groupIds]) =>
+            `${course} is countable by ${groupIds.join(" and ")} — one course, two ` +
+            "requirements, and nothing stops a student satisfying both with it",
+        );
+
+      expect(doubleCounted).toEqual([]);
+    });
+  }
+
+  it("every allowlisted double-count still exists, and still doubles", () => {
+    for (const key of Object.keys(DOUBLE_COUNTED_BY_DESIGN)) {
+      const separator = key.indexOf(":");
+      const programId = key.slice(0, separator);
+      const course = key.slice(separator + 1);
+
+      const program = AUTHORED_PROGRAMS.find((candidate) => candidate.id === programId);
+      expect(program, `allowlist names an unknown program: ${programId}`).toBeDefined();
+
+      const holders = program!.groups.filter((group) => {
+        const rule = group.rule;
+        if (rule.kind === "all_of" || rule.kind === "n_of") return rule.courses.includes(course);
+        if (rule.kind === "sequence_choice") {
+          return rule.sequences.some((seq) => seq.courses.includes(course));
+        }
+        return false;
+      });
+
+      // An entry that no longer describes a real overlap is a door left open
+      // for the next edit to walk through unnoticed.
+      expect(
+        holders.length,
+        `${key} is allowlisted but ${course} is now in ${holders.length} closed group(s)`,
+      ).toBeGreaterThan(1);
+    }
+  });
+
+  it("gives a reason for every allowlisted double-count", () => {
+    for (const [key, reason] of Object.entries(DOUBLE_COUNTED_BY_DESIGN)) {
       expect(reason.length, `${key} needs a real justification`).toBeGreaterThan(40);
     }
   });
