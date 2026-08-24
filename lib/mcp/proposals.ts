@@ -27,7 +27,16 @@
 
 import { PROPOSAL_REVIEW_PATH } from "./config";
 
-export type ProposalKind = "add_section" | "remove_section";
+export type ProposalKind =
+  | "add_section"
+  | "remove_section"
+  | "add_bookmark"
+  | "remove_bookmark";
+
+/** True for the kinds that target a plan and therefore carry a `planId`. */
+export function isPlanKind(kind: ProposalKind): boolean {
+  return kind === "add_section" || kind === "remove_section";
+}
 
 export type ProposalStatus = "pending" | "accepted" | "rejected" | "expired";
 
@@ -35,7 +44,8 @@ export interface Proposal {
   proposalId: string;
   /** Owner. Every read is scoped by this — a proposal is never cross-visible. */
   userId: string;
-  planId: string;
+  /** Null for bookmark proposals — they have no plan. See `isPlanKind`. */
+  planId: string | null;
   kind: ProposalKind;
   sectionId: string;
   courseId: string | null;
@@ -54,7 +64,7 @@ export interface Proposal {
 
 export interface CreateProposalInput {
   userId: string;
-  planId: string;
+  planId: string | null;
   kind: ProposalKind;
   sectionId: string;
   courseId: string | null;

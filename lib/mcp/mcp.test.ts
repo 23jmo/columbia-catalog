@@ -28,11 +28,13 @@ import {
   parseScopeString,
   verifyAccessToken,
 } from "@/lib/mcp/auth";
+import type { McpAuthInfo, Scope } from "@/lib/mcp/auth";
 import { mcpUrls } from "@/lib/mcp/config";
 import { createInMemoryProposalStore } from "@/lib/mcp/proposals";
 import { createInMemoryRateLimiter } from "@/lib/mcp/ratelimit";
 import { runTool, TOOLS } from "@/lib/mcp/tools";
 import type { McpDeps } from "@/lib/mcp/contracts";
+import type { Section, TermCode } from "@/lib/types";
 
 const BASE_URL = "http://localhost:3000";
 const REDIRECT_URI = "http://127.0.0.1:51000/callback";
@@ -115,6 +117,7 @@ function testDeps(): McpDeps {
     ratings: {} as McpDeps["ratings"],
     seatHistory: {} as McpDeps["seatHistory"],
     plans: {} as McpDeps["plans"],
+    bookmarks: {} as McpDeps["bookmarks"],
     proposals: createInMemoryProposalStore(),
     rateLimiter: createInMemoryRateLimiter(),
     baseUrl: BASE_URL,
@@ -403,5 +406,171 @@ describe("the OAuth flow", () => {
     // A client asking only for schedule access still gets to look up the course
     // it is talking about.
     expect(parseScopeString("schedule:read").granted).toContain("catalog:read");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Saved classes over MCP
+// ---------------------------------------------------------------------------
+
+/**
+ * The bookmark tools are the second caller of the proposal machinery, and the
+ * first one whose proposals have no plan. These tests pin the two things that
+ * distinguish them: the write pair still cannot write, and a bookmark proposal
+ * is stored with a null `planId` (which migration 0023's CHECK constraint
+ * requires — a non-null one would be rejected by Postgres, not by us).
+ */
+
+const SECTION_ID = "20263COMS4118W001";
+
+function sectionStub() {
+  return {
+    sectionId: SECTION_ID,
+    courseId: "COMS4118",
+    sectionCode: "001",
+    termCode: "20263",
+    instructors: [],
+    meetings: [],
+    enrollmentCount: 40,
+    enrollmentCap: 50,
+    waitlistCount: 0,
+    status: "open",
+    sourceAsOf: "2026-08-01T00:00:00.000Z",
+  } as unknown as Section;
+}
+
+function bookmarkDeps(saved: string[] = []): McpDeps {
+  const deps = testDeps();
+  const savedSet = new Set(saved);
+  deps.catalog = {
+    getSection: async (id: string) => (id === SECTION_ID ? sectionStub() : null),
+    getSections: async (ids: string[]) => ids.filter((id) => id === SECTION_ID).map(sectionStub),
+  } as unknown as McpDeps["catalog"];
+  deps.bookmarks = {
+    listFolders: async () => [
+      { folderId: "f1", name: "Maybe", createdAt: "2026-08-01T00:00:00.000Z", count: 1 },
+    ],
+    listBookmarks: async () =>
+      [...savedSet].map((sectionId) => ({
+        sectionId,
+        termCode: "20263" as TermCode,
+        savedAt: "2026-08-01T00:00:00.000Z",
+        folderIds: [] as string[],
+      })),
+    isBookmarked: async (_userId: string, sectionId: string) => savedSet.has(sectionId),
+  };
+  return deps;
+}
+
+function bookmarkAuth(scopes: Scope[] = ["catalog:read", "bookmarks:rw"]): McpAuthInfo {
+  return {
+    token: "t",
+    clientId: "c",
+    scopes,
+    extra: { userId: "u1", email: "s@columbia.edu" },
+  };
+}
+
+function parseToolPayload(result: { content: { text: string }[] }): Record<string, unknown> {
+  return JSON.parse(result.content[0].text) as Record<string, unknown>;
+}
+
+describe("the bookmark tools", () => {
+  it("gates all four behind bookmarks:rw", () => {
+    const names = ["list_bookmark_folders", "list_bookmarks", "propose_bookmark", "propose_unbookmark"];
+    for (const name of names) {
+      const tool = TOOLS.find((candidate) => candidate.name === name);
+      expect(tool, `${name} should exist`).toBeTruthy();
+      expect(tool!.scopes).toEqual(["bookmarks:rw"]);
+    }
+  });
+
+  it("refuses a token holding every other scope", async () => {
+    const result = await runTool(
+      "list_bookmarks",
+      {},
+      {
+        deps: bookmarkDeps(),
+        auth: bookmarkAuth(["catalog:read", "schedule:read", "schedule:write", "watch:write"]),
+        callerKey: "test",
+      },
+    );
+    expect(result.isError).toBe(true);
+    expect(parseToolError(result).requiredScopes).toContain("bookmarks:rw");
+  });
+
+  it("proposes a save without saving anything", async () => {
+    const deps = bookmarkDeps();
+    const result = await runTool(
+      "propose_bookmark",
+      { sectionId: SECTION_ID },
+      { deps, auth: bookmarkAuth(), callerKey: "test" },
+    );
+
+    const payload = parseToolPayload(result);
+    expect(payload.proposed).toBe(true);
+    // The flag an agent skims for. It must never read as done.
+    expect(payload.applied).toBe(false);
+    expect(String(payload.reviewUrl)).toContain(String(payload.proposalId));
+
+    // Still not saved: the tool created a decision, not a row in `bookmarks`.
+    expect(await deps.bookmarks.isBookmarked("u1", SECTION_ID)).toBe(false);
+  });
+
+  it("stores a bookmark proposal with no plan", async () => {
+    const deps = bookmarkDeps();
+    await runTool(
+      "propose_bookmark",
+      { sectionId: SECTION_ID },
+      { deps, auth: bookmarkAuth(), callerKey: "test" },
+    );
+
+    const pending = await deps.proposals.listPending("u1");
+    expect(pending).toHaveLength(1);
+    expect(pending[0].kind).toBe("add_bookmark");
+    // Migration 0023 pairs kind with plan_id in Postgres. A non-null value
+    // here would fail the insert against the real database.
+    expect(pending[0].planId).toBeNull();
+  });
+
+  it("refuses to queue a proposal that would change nothing", async () => {
+    const alreadySaved = await runTool(
+      "propose_bookmark",
+      { sectionId: SECTION_ID },
+      { deps: bookmarkDeps([SECTION_ID]), auth: bookmarkAuth(), callerKey: "a" },
+    );
+    expect(alreadySaved.isError).toBe(true);
+    expect(String(parseToolError(alreadySaved).error)).toMatch(/already saved/i);
+
+    const notSaved = await runTool(
+      "propose_unbookmark",
+      { sectionId: SECTION_ID },
+      { deps: bookmarkDeps(), auth: bookmarkAuth(), callerKey: "b" },
+    );
+    expect(notSaved.isError).toBe(true);
+    expect(String(parseToolError(notSaved).error)).toMatch(/not saved/i);
+  });
+
+  it("marks an unfiled bookmark as uncategorized rather than inventing a folder", async () => {
+    const result = await runTool(
+      "list_bookmarks",
+      {},
+      { deps: bookmarkDeps([SECTION_ID]), auth: bookmarkAuth(), callerKey: "test" },
+    );
+
+    const payload = parseToolPayload(result);
+    const bookmarks = payload.bookmarks as { folderIds: string[]; uncategorized: boolean }[];
+    expect(bookmarks).toHaveLength(1);
+    expect(bookmarks[0].folderIds).toEqual([]);
+    expect(bookmarks[0].uncategorized).toBe(true);
+
+    // And no folder called "Uncategorized" is ever listed, because none exists.
+    const folders = await runTool(
+      "list_bookmark_folders",
+      {},
+      { deps: bookmarkDeps(), auth: bookmarkAuth(), callerKey: "test" },
+    );
+    const names = (parseToolPayload(folders).folders as { name: string }[]).map((f) => f.name);
+    expect(names).not.toContain("Uncategorized");
   });
 });

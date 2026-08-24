@@ -7,8 +7,8 @@ import { meetingLines, placeSummary, prettyTitle } from "@/components/course/for
 import { RegistrationHandoff } from "@/components/course/registration-handoff";
 import { SectionCompare } from "@/components/course/section-compare";
 import { ProvenanceStamp, SeatPill } from "@/components/course/seat-state";
+import { BookmarkControls } from "@/components/bookmarks/bookmark-controls";
 import { InstructorLinks } from "@/components/instructor/instructor-link";
-import { WatchButton } from "@/components/watch/watch-button";
 import { useWatchlist } from "@/hooks/use-watchlist";
 import { isDistinctSectionTitle } from "@/lib/catalog-list-types";
 import type { Section } from "@/lib/types";
@@ -169,9 +169,10 @@ export function SectionsPanel({ sections, courseCode, courseTitle }: SectionsPan
                   courseTitle={courseTitle}
                   variant="inline"
                 />
-                <WatchButton
+                <BookmarkControls
                   sectionId={section.sectionId}
                   sectionCode={section.sectionCode}
+                  courseLabel={courseCode}
                 />
                 <button
                   type="button"

@@ -5,6 +5,7 @@ import { RiAddLine, RiCalendarLine } from "@remixicon/react";
 
 import { Button } from "@/components/base/buttons/button";
 import { Notification, NotificationViewport } from "@/components/base/notification/notification";
+import { AddFromSaved } from "@/components/schedule/add-from-saved";
 import { CalendarShell } from "@/components/schedule/calendar-shell";
 import { ownerIdOf, toWeekGridBlocks } from "@/components/schedule/to-blocks";
 import type { SourcedBlock } from "@/components/schedule/calendar-types";
@@ -228,6 +229,23 @@ export function PlanWorkspace({ termCode = CURRENT_TERM, term, className }: Plan
             customBlocks={selected.customBlocks}
             onRemoveSection={(sectionId) =>
               guard(() => planStore.removeSection(selected.planId, sectionId))
+            }
+            savedPicker={
+              /*
+                The shortlist, one click from the canvas.
+                Rendered against the week rather than beside a list of what is
+                already on the plan, because the decision it serves — "what
+                fills this Tuesday gap" — is made looking at the calendar.
+              */
+              <AddFromSaved
+                termCode={termCode}
+                planSections={resolved.sections}
+                planBlocks={selected.customBlocks}
+                planSectionIds={selected.sectionIds}
+                onAdd={(sectionId) =>
+                  guard(() => planStore.addSection(selected.planId, sectionId))
+                }
+              />
             }
             onSaveBlock={(block: CustomBlock) =>
               guard(() => planStore.upsertBlock(selected.planId, block))

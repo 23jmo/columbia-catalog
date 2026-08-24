@@ -33,8 +33,21 @@ import { ALLOWED_EMAIL_DOMAINS, mcpUrls } from "./config";
  *   schedule:read   the student's own plans, watches, pending proposals
  *   schedule:write  propose a change to a plan (still never applies it)
  *   watch:write     start watching a section for seat changes
+ *   bookmarks:rw    read the student's saved classes and folders, and propose
+ *                   saving or unsaving one
+ *
+ * `bookmarks:rw` is one scope rather than a read/write pair because its write
+ * half cannot change anything on its own — it creates a pending proposal the
+ * student still has to accept. Splitting it would ask a student to reason
+ * about a distinction the system does not actually make.
  */
-export const SCOPES = ["catalog:read", "schedule:read", "schedule:write", "watch:write"] as const;
+export const SCOPES = [
+  "catalog:read",
+  "schedule:read",
+  "schedule:write",
+  "watch:write",
+  "bookmarks:rw",
+] as const;
 
 export type Scope = (typeof SCOPES)[number];
 
@@ -45,6 +58,7 @@ export const SCOPE_DESCRIPTIONS: Record<Scope, string> = {
   "schedule:read": "Read your saved schedules, watches and pending proposals",
   "schedule:write": "Propose changes to your schedule for you to accept or reject",
   "watch:write": "Watch a section and alert you when seats change",
+  "bookmarks:rw": "Read your saved classes and folders, and suggest ones to save",
 };
 
 /**

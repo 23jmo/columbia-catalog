@@ -57,6 +57,9 @@ import type {
 } from "../types";
 
 import type {
+  BookmarkEntry,
+  BookmarkFolderSummary,
+  BookmarksPort,
   CatalogPort,
   PlansPort,
   RequirementReport,
@@ -66,6 +69,7 @@ import type {
   SeatHistoryPort,
 } from "./contracts";
 import { requirementReportFrom } from "./fallbacks";
+import { UNCATEGORIZED_FOLDER } from "../bookmarks/grouping";
 
 // ---------------------------------------------------------------------------
 // Catalog
@@ -293,6 +297,102 @@ export const plansAdapter: PlansPort = {
     const created = watches.find((watch) => watch.sectionId === sectionId);
     if (!created) throw new Error(`addWatch: section ${sectionId} not found after write`);
     return created;
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Saved classes
+// ---------------------------------------------------------------------------
+
+/**
+ * Read-only, and every query carries an explicit `user_id` predicate.
+ *
+ * The service-role key bypasses RLS, so the row-level policies that protect
+ * these tables in the browser protect nothing here. The `.eq("user_id", …)` on
+ * each query IS the access control on this path — dropping one would not fail
+ * a test, it would quietly hand one student's shortlist to another student's
+ * agent. Same discipline as `plansAdapter`, for the same reason.
+ */
+export const bookmarksAdapter: BookmarksPort = {
+  async listFolders(userId: string): Promise<BookmarkFolderSummary[]> {
+    const db = requireServiceRoleClient();
+    const [{ data: folders, error }, { data: items, error: itemsError }] = await Promise.all([
+      db
+        .from("bookmark_folders")
+        .select("folder_id, name, created_at")
+        .eq("user_id", userId)
+        .order("name", { ascending: true }),
+      db.from("bookmark_folder_items").select("folder_id").eq("user_id", userId),
+    ]);
+    if (error) throw new Error(`listFolders failed: ${error.message}`);
+    if (itemsError) throw new Error(`listFolders failed: ${itemsError.message}`);
+
+    const counts = new Map<string, number>();
+    for (const item of items ?? []) {
+      counts.set(item.folder_id, (counts.get(item.folder_id) ?? 0) + 1);
+    }
+
+    return (folders ?? []).map((folder) => ({
+      folderId: folder.folder_id,
+      name: folder.name,
+      createdAt: folder.created_at,
+      count: counts.get(folder.folder_id) ?? 0,
+    }));
+  },
+
+  async listBookmarks(
+    userId: string,
+    options?: { termCode?: TermCode; folderId?: string },
+  ): Promise<BookmarkEntry[]> {
+    const db = requireServiceRoleClient();
+
+    let query = db
+      .from("bookmarks")
+      .select("section_id, term_code, created_at")
+      .eq("user_id", userId);
+    if (options?.termCode) query = query.eq("term_code", options.termCode);
+
+    const [{ data: rows, error }, { data: items, error: itemsError }] = await Promise.all([
+      query.order("created_at", { ascending: false }),
+      db.from("bookmark_folder_items").select("section_id, folder_id").eq("user_id", userId),
+    ]);
+    if (error) throw new Error(`listBookmarks failed: ${error.message}`);
+    if (itemsError) throw new Error(`listBookmarks failed: ${itemsError.message}`);
+
+    const foldersBySection = new Map<string, string[]>();
+    for (const item of items ?? []) {
+      const list = foldersBySection.get(item.section_id);
+      if (list) list.push(item.folder_id);
+      else foldersBySection.set(item.section_id, [item.folder_id]);
+    }
+
+    const entries = (rows ?? []).map((row) => ({
+      sectionId: row.section_id,
+      termCode: row.term_code as TermCode,
+      savedAt: row.created_at,
+      folderIds: foldersBySection.get(row.section_id) ?? [],
+    }));
+
+    // Filtering in memory rather than with a join: the membership rows are
+    // already fetched to populate `folderIds`, and a student is capped at 500
+    // bookmarks, so the join would buy nothing but a second round trip.
+    if (!options?.folderId) return entries;
+    if (options.folderId === UNCATEGORIZED_FOLDER) {
+      return entries.filter((entry) => entry.folderIds.length === 0);
+    }
+    return entries.filter((entry) => entry.folderIds.includes(options.folderId!));
+  },
+
+  async isBookmarked(userId: string, sectionId: string): Promise<boolean> {
+    const db = requireServiceRoleClient();
+    const { data, error } = await db
+      .from("bookmarks")
+      .select("section_id")
+      .eq("user_id", userId)
+      .eq("section_id", sectionId)
+      .maybeSingle();
+    if (error) throw new Error(`isBookmarked failed: ${error.message}`);
+    return data !== null;
   },
 };
 

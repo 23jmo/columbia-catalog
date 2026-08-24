@@ -38,10 +38,11 @@
 import { z } from "zod";
 
 import { WEEKDAYS } from "../constants";
-import type { CourseWithSections, SearchFilters, Section, Weekday } from "../types";
+import type { CourseWithSections, SearchFilters, Section, TermCode, Weekday } from "../types";
 
 import { hasScopes, type McpAuthInfo, type Scope } from "./auth";
 import type { McpDeps } from "./contracts";
+import { isPlanKind, type ProposalKind } from "./proposals";
 import { PROPOSAL_RULE, ANONYMOUS_TOOL_RULE, AUTHENTICATED_TOOL_RULE } from "./ratelimit";
 
 // ---------------------------------------------------------------------------
@@ -557,6 +558,108 @@ export const TOOLS: ToolDefinition[] = [
       });
     },
   },
+
+  // -------------------------------------------------------------------------
+  // Saved classes
+  // -------------------------------------------------------------------------
+
+  {
+    name: "list_bookmark_folders",
+    title: "List the student's saved-class folders",
+    description:
+      "The folders the student made to organise their saved classes, with how many classes " +
+      "are in each. There is no folder for unfiled classes — a class in no folder is shown " +
+      "on the site as 'Uncategorized', which is a computed view, not a folder you can file " +
+      "into. Pass folderId: 'uncategorized' to list_bookmarks to see those.",
+    scopes: ["bookmarks:rw"],
+    inputSchema: {},
+    async handler(_args, { deps, auth }) {
+      const folders = await deps.bookmarks.listFolders(auth!.extra.userId);
+      return ok({ count: folders.length, folders });
+    },
+  },
+
+  {
+    name: "list_bookmarks",
+    title: "List the student's saved classes",
+    description:
+      "The student's shortlist: sections they saved while deciding what to take. This is NOT " +
+      "their schedule and not their registration — saving is deliberately looser than " +
+      "planning, and a student will usually have saved more classes than they can take. " +
+      "Seat numbers come with the timestamp they were read at.",
+    scopes: ["bookmarks:rw"],
+    inputSchema: {
+      termCode: z.string().optional().describe("e.g. 20263. Omit for every term."),
+      folderId: z
+        .string()
+        .optional()
+        .describe("A folder id from list_bookmark_folders, or 'uncategorized' for unfiled ones."),
+    },
+    async handler(args, { deps, auth }) {
+      const entries = await deps.bookmarks.listBookmarks(auth!.extra.userId, {
+        termCode: args.termCode as TermCode | undefined,
+        folderId: args.folderId as string | undefined,
+      });
+      if (entries.length === 0) return ok({ count: 0, bookmarks: [] });
+
+      const sections = await deps.catalog.getSections(entries.map((entry) => entry.sectionId));
+      const sectionById = new Map(sections.map((section) => [section.sectionId, section]));
+
+      return ok({
+        count: entries.length,
+        bookmarks: entries.flatMap((entry) => {
+          const section = sectionById.get(entry.sectionId);
+          // Same rule as list_watches: a row we cannot resolve to a section is
+          // dropped rather than returned hollow.
+          if (!section) return [];
+          return [
+            {
+              sectionId: entry.sectionId,
+              savedAt: entry.savedAt,
+              folderIds: entry.folderIds,
+              uncategorized: entry.folderIds.length === 0,
+              section: serializeSection(section),
+            },
+          ];
+        }),
+      });
+    },
+  },
+
+  {
+    name: "propose_bookmark",
+    title: "Propose saving a class to the student's shortlist",
+    description:
+      "Creates a PENDING proposal and returns a URL where the student accepts or rejects it. " +
+      "This does not save anything. Use it when you have found a class worth considering — " +
+      "the shortlist is where a student collects candidates, so a proposal here is a much " +
+      "lighter suggestion than one that changes a schedule.",
+    scopes: ["bookmarks:rw"],
+    inputSchema: {
+      sectionId: z.string(),
+      note: z.string().optional().describe("Why you are suggesting this; shown to the student."),
+    },
+    async handler(args, context) {
+      return proposeChange("add_bookmark", args, context);
+    },
+  },
+
+  {
+    name: "propose_unbookmark",
+    title: "Propose removing a class from the student's shortlist",
+    description:
+      "Creates a PENDING proposal and returns a URL where the student accepts or rejects it. " +
+      "This does not remove anything. Accepting also stops any seat alert on that section, " +
+      "because a watch only exists on a saved class.",
+    scopes: ["bookmarks:rw"],
+    inputSchema: {
+      sectionId: z.string(),
+      note: z.string().optional(),
+    },
+    async handler(args, context) {
+      return proposeChange("remove_bookmark", args, context);
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -564,12 +667,11 @@ export const TOOLS: ToolDefinition[] = [
 // ---------------------------------------------------------------------------
 
 async function proposeChange(
-  kind: "add_section" | "remove_section",
+  kind: ProposalKind,
   args: Record<string, unknown>,
   { deps, auth, callerKey }: ToolContext,
 ): Promise<ToolResult> {
   const userId = auth!.extra.userId;
-  const planId = args.planId as string;
   const sectionId = args.sectionId as string;
 
   // Metered separately and far more tightly than reads. A proposal costs an
@@ -581,31 +683,58 @@ async function proposeChange(
     });
   }
 
-  const plan = await deps.plans.getPlan(userId, planId);
-  if (!plan) return fail(`No plan ${planId} for this account.`);
-
   const section = await deps.catalog.getSection(sectionId);
   if (!section) return fail(`No section with id ${sectionId}.`);
 
-  // Refuse the no-ops rather than queueing them: a proposal to add something
-  // already there is a decision the student would have to read and dismiss.
-  const alreadyIn = plan.sectionIds.includes(sectionId);
-  if (kind === "add_section" && alreadyIn) {
-    return fail(`Section ${sectionId} is already in "${plan.name}".`);
-  }
-  if (kind === "remove_section" && !alreadyIn) {
-    return fail(`Section ${sectionId} is not in "${plan.name}".`);
+  /*
+   * Both families end in the same row; only the target and the no-op check
+   * differ. Plan kinds carry a `planId` and bookmark kinds carry null — a
+   * pairing migration 0023 enforces in Postgres, so a mistake here is a failed
+   * insert rather than a proposal pointing at nothing.
+   */
+  let planId: string | null = null;
+  let summary: string;
+
+  if (isPlanKind(kind)) {
+    planId = args.planId as string;
+    const plan = await deps.plans.getPlan(userId, planId);
+    if (!plan) return fail(`No plan ${planId} for this account.`);
+
+    // Refuse the no-ops rather than queueing them: a proposal to add something
+    // already there is a decision the student would have to read and dismiss.
+    const alreadyIn = plan.sectionIds.includes(sectionId);
+    if (kind === "add_section" && alreadyIn) {
+      return fail(`Section ${sectionId} is already in "${plan.name}".`);
+    }
+    if (kind === "remove_section" && !alreadyIn) {
+      return fail(`Section ${sectionId} is not in "${plan.name}".`);
+    }
+
+    const verb = kind === "add_section" ? "Add" : "Remove";
+    const preposition = kind === "add_section" ? "to" : "from";
+    summary = `${verb} ${section.courseId} section ${section.sectionCode} ${preposition} "${plan.name}"`;
+  } else {
+    const alreadySaved = await deps.bookmarks.isBookmarked(userId, sectionId);
+    if (kind === "add_bookmark" && alreadySaved) {
+      return fail(`Section ${sectionId} is already saved.`);
+    }
+    if (kind === "remove_bookmark" && !alreadySaved) {
+      return fail(`Section ${sectionId} is not saved.`);
+    }
+
+    summary =
+      kind === "add_bookmark"
+        ? `Save ${section.courseId} section ${section.sectionCode} to your saved classes`
+        : `Remove ${section.courseId} section ${section.sectionCode} from your saved classes`;
   }
 
-  const verb = kind === "add_section" ? "Add" : "Remove";
-  const preposition = kind === "add_section" ? "to" : "from";
   const proposal = await deps.proposals.create({
     userId,
     planId,
     kind,
     sectionId,
     courseId: section.courseId,
-    summary: `${verb} ${section.courseId} section ${section.sectionCode} ${preposition} "${plan.name}"`,
+    summary,
     note: (args.note as string | undefined) ?? null,
     originClientId: auth!.clientId,
     baseUrl: deps.baseUrl,
