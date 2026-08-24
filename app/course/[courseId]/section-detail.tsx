@@ -19,10 +19,10 @@ import { InstructorChip } from "@/components/course/instructor-chip";
 import type { SectionDetailData } from "@/components/course/load-section-detail";
 import { MeetingSchedule } from "@/components/course/meeting-schedule";
 import { RegistrationHandoff } from "@/components/course/registration-handoff";
+import { BookmarkControls } from "@/components/bookmarks/bookmark-controls";
 import { SectionWeekPreview } from "@/components/course/section-week-preview";
 import { SeatPill } from "@/components/course/seat-state";
 import { AddToScheduleButton } from "@/components/schedule/add-to-schedule-button";
-import { WatchButton } from "@/components/watch/watch-button";
 import { REQUIREMENT_FILTERS } from "@/lib/constants";
 import type { Section } from "@/lib/types";
 import { cx } from "@/utils/cx";
@@ -401,11 +401,15 @@ export function SectionDetail({
             The call number belongs to the identity block, not to a panel of
             its own: it is the name Columbia's own systems use for this class,
             so it reads under the title the way a serial number reads under a
-            product name. Copy chip, Vergil link and Watch ride along
+            product name. Copy chip, Vergil link and the bookmark ride along
             at the same weight, because the ways of acting on this section —
-            paste into SSOL, click through to Vergil, or ask to be told when a
-            seat opens — are equally likely, and the one left below the seat
-            card read as an afterthought rather than a peer.
+            paste into SSOL, click through to Vergil, or save it to decide
+            later — are equally likely, and the one left below the seat card
+            read as an afterthought rather than a peer.
+
+            The bell lives inside the bookmark's overflow menu rather than
+            here, because a watch is a child of a save: there is nothing to be
+            notified about on a class you have not shortlisted.
           */}
           <RegistrationHandoff
             section={section}
@@ -413,7 +417,11 @@ export function SectionDetail({
             courseTitle={courseTitle}
             variant="compact"
             actions={
-              <WatchButton sectionId={section.sectionId} sectionCode={section.sectionCode} />
+              <BookmarkControls
+                sectionId={section.sectionId}
+                sectionCode={section.sectionCode}
+                courseLabel={code}
+              />
             }
           />
         </header>

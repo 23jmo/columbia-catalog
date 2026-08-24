@@ -520,6 +520,53 @@ export type WatchRow = {
   notify_email: boolean;
 };
 
+/**
+ * A saved section (migration 0022). Private to its owner — there is
+ * deliberately no public aggregate, unlike `watches`.
+ *
+ * `term_code` is denormalised off `sections` and stamped by a trigger, so it
+ * is never sent on insert.
+ */
+export type BookmarkRow = {
+  user_id: string;
+  section_id: string;
+  term_code: string;
+  created_at: string;
+};
+
+export type BookmarkInsert = Pick<BookmarkRow, "user_id" | "section_id"> &
+  Partial<Pick<BookmarkRow, "created_at">>;
+
+/**
+ * A folder is a LABEL, not a container: membership lives in
+ * `bookmark_folder_items`, so deleting one never deletes a saved section.
+ *
+ * There is no colour column — cover art is derived from `folder_id` by
+ * `lib/bookmarks/folder-art.ts`, which keeps a folder looking the same in the
+ * chip, the picker and the gallery without storing anything.
+ */
+export type BookmarkFolderRow = {
+  folder_id: string;
+  user_id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BookmarkFolderInsert = Pick<BookmarkFolderRow, "user_id" | "name"> &
+  Partial<Pick<BookmarkFolderRow, "folder_id" | "created_at">>;
+
+/** Many-to-many. Zero rows for a bookmark is the computed "Uncategorized". */
+export type BookmarkFolderItemRow = {
+  folder_id: string;
+  user_id: string;
+  section_id: string;
+  added_at: string;
+};
+
+export type BookmarkFolderItemInsert = Omit<BookmarkFolderItemRow, "added_at"> &
+  Partial<Pick<BookmarkFolderItemRow, "added_at">>;
+
 export type AlertSentRow = {
   alert_id: string;
   user_id: string;
@@ -538,7 +585,12 @@ export type AlertSentRow = {
 export type PlanProposalRow = {
   proposal_id: string;
   user_id: string;
-  plan_id: string;
+  /**
+   * Null for bookmark proposals, which have no plan (migration 0023). A
+   * CHECK constraint keeps the pairing honest in both directions, so this is
+   * never null for `add_section`/`remove_section`.
+   */
+  plan_id: string | null;
   kind: string;
   section_id: string;
   course_id: string | null;
@@ -1188,6 +1240,31 @@ export type Database = {
           Rel<["section_id"], "sections", ["section_id"]>,
         ];
       };
+      bookmarks: {
+        Row: BookmarkRow;
+        Insert: BookmarkInsert;
+        Update: Partial<BookmarkInsert>;
+        Relationships: [
+          Rel<["user_id"], "users", ["user_id"]>,
+          Rel<["section_id"], "sections", ["section_id"]>,
+          Rel<["term_code"], "terms", ["term_code"]>,
+        ];
+      };
+      bookmark_folders: {
+        Row: BookmarkFolderRow;
+        Insert: BookmarkFolderInsert;
+        Update: Partial<BookmarkFolderInsert>;
+        Relationships: [Rel<["user_id"], "users", ["user_id"]>];
+      };
+      bookmark_folder_items: {
+        Row: BookmarkFolderItemRow;
+        Insert: BookmarkFolderItemInsert;
+        Update: Partial<BookmarkFolderItemInsert>;
+        Relationships: [
+          Rel<["folder_id"], "bookmark_folders", ["folder_id"]>,
+          Rel<["user_id", "section_id"], "bookmarks", ["user_id", "section_id"]>,
+        ];
+      };
       alerts_sent: {
         Row: AlertSentRow;
         Insert: Partial<AlertSentRow> & Pick<AlertSentRow, "user_id" | "section_id">;
@@ -1244,6 +1321,14 @@ export type Database = {
        * (migration 0019). Reads `auth.uid()` itself, so it returns nothing to
        * a service-role client.
        */
+      /**
+       * Deletes a folder, optionally with the bookmarks filed in it, in one
+       * transaction (migration 0022). Returns how many bookmarks it removed.
+       */
+      delete_bookmark_folder: {
+        Args: { p_folder_id: string; p_delete_bookmarks?: boolean };
+        Returns: number;
+      };
       list_plan_proposals: {
         Args: Record<string, never>;
         Returns: PlanProposalRow[];

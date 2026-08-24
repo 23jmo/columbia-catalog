@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { RiAddLine, RiCalendarCheckFill, RiCalendarLine, RiCheckLine } from "@remixicon/react";
 
 import { Button } from "@/components/base/buttons/button";
@@ -8,6 +7,7 @@ import { usePlans } from "@/hooks/use-plans";
 import { useSessionAccount } from "@/hooks/use-session-account";
 import { CURRENT_TERM } from "@/lib/constants";
 import { PlanWriteDeniedError, planStore } from "@/lib/schedule/plans";
+import { toast } from "@/lib/toast/store";
 import type { TermCode } from "@/lib/types";
 import { cx } from "@/utils/cx";
 
@@ -95,7 +95,6 @@ export function AddToScheduleButton({
 }: AddToScheduleButtonProps) {
   const plans = usePlans(termCode);
   const { account, isLoading } = useSessionAccount();
-  const [denied, setDenied] = useState<string | null>(null);
 
   const primary = plans.find((plan) => plan.isPrimary) ?? plans[0] ?? null;
   const isOnSchedule = primary?.sectionIds.includes(sectionId) ?? false;
@@ -108,7 +107,6 @@ export function AddToScheduleButton({
       : `Add section ${sectionCode} to your schedule`;
 
   function toggle() {
-    setDenied(null);
     try {
       // First use in a term has no plan yet. Creating one as a side effect of
       // the first add is the whole "no dialog before the click" idea.
@@ -116,8 +114,17 @@ export function AddToScheduleButton({
       if (isOnSchedule) planStore.removeSection(plan.planId, sectionId);
       else planStore.addSection(plan.planId, sectionId);
     } catch (cause) {
-      if (cause instanceof PlanWriteDeniedError) setDenied(cause.message);
-      else throw cause;
+      // A refusal used to render as a caption under the button, which in a
+      // dense section list is both easy to miss and a layout shift on every
+      // failure. It goes to the shared toast surface instead — the same place
+      // every other refused write in the app now reports itself.
+      if (cause instanceof PlanWriteDeniedError) {
+        toast.error({
+          title: "Couldn't update your schedule",
+          description: cause.message,
+          dedupeKey: `plan-denied:${sectionId}`,
+        });
+      } else throw cause;
     }
   }
 
@@ -140,15 +147,10 @@ export function AddToScheduleButton({
         disabled={isSignedOut}
         aria-pressed={isOnSchedule}
         aria-label={label}
-        title={denied ?? label}
+        title={label}
       >
         {iconOnly ? undefined : isOnSchedule ? "On schedule" : "Add to schedule"}
       </Button>
-      {denied ? (
-        <span role="status" className="text-caption-1-regular text-text-error-primary">
-          {denied}
-        </span>
-      ) : null}
     </span>
   );
 }

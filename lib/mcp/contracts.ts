@@ -158,6 +158,61 @@ export interface PlansPort {
 }
 
 // ---------------------------------------------------------------------------
+// 7. Saved classes — database lane (lib/db/bookmarks.ts)
+// ---------------------------------------------------------------------------
+
+/** One folder, with how many saved classes carry its label. */
+export interface BookmarkFolderSummary {
+  folderId: string;
+  name: string;
+  createdAt: string;
+  count: number;
+}
+
+/**
+ * One saved section.
+ *
+ * `folderIds` is a list because folders are many-to-many — a class can be in
+ * "Maybe" and "Fallbacks" at once. An empty list is the computed
+ * "Uncategorized"; there is no folder row with that name and an agent must not
+ * invent one.
+ */
+export interface BookmarkEntry {
+  sectionId: string;
+  termCode: TermCode;
+  savedAt: string;
+  folderIds: string[];
+}
+
+/**
+ * READ-ONLY, for the same reason `PlansPort` is (see above).
+ *
+ * A bookmark is cheaper to undo than a schedule change, but it is still the
+ * student's shortlist — the list they reason about when they decide what to
+ * take. An agent quietly adding to it would corrupt the input to a decision
+ * rather than the decision itself, which is worse, not better. So the write
+ * pair (`propose_bookmark`, `propose_unbookmark`) goes through the same
+ * proposal review as everything else, and there is deliberately no
+ * `addBookmark` on this interface.
+ *
+ * `watch:write` remains the one direct write, because a watch changes nothing
+ * a student reads — it only asks to be told something.
+ */
+export interface BookmarksPort {
+  listFolders(userId: string): Promise<BookmarkFolderSummary[]>;
+  /**
+   * `folderId` filters to one folder's contents; the sentinel
+   * `"uncategorized"` selects the bookmarks with no folder at all.
+   */
+  listBookmarks(
+    userId: string,
+    options?: { termCode?: TermCode; folderId?: string },
+  ): Promise<BookmarkEntry[]>;
+  /** True when this section is already saved — used to refuse no-op proposals. */
+  isBookmarked(userId: string, sectionId: string): Promise<boolean>;
+}
+
+// ---------------------------------------------------------------------------
 // Bundle
 // ---------------------------------------------------------------------------
 
@@ -171,6 +226,7 @@ export interface McpDeps {
   ratings: RatingsPort;
   seatHistory: SeatHistoryPort;
   plans: PlansPort;
+  bookmarks: BookmarksPort;
   proposals: ProposalStore;
   rateLimiter: RateLimiter;
   /** Public origin, used to build review links returned to the agent. */

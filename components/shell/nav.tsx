@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ComponentType } from "react";
 import {
+  RiBookmarkLine,
   RiCalendarScheduleLine,
   RiGraduationCapLine,
   RiHome5Line,
@@ -12,18 +13,28 @@ import { cx } from "@/utils/cx";
  * The app's top-level destinations (spec §4). `/course/[id]` is deliberately
  * absent: it is a drawer over search, not a nav destination.
  *
+ * Saved sits between Search and Schedule because that is the order the work
+ * happens in: you find classes, you shortlist them, you schedule the ones that
+ * survive. A nav that reads in the order of the task is one fewer thing to
+ * learn.
+ *
  * `/profile` is last because it is the only one that needs an account. It still
  * sits in the primary nav rather than behind the account menu: a degree audit
  * is a destination a student comes back to, and burying it in a dropdown would
  * make it feel like a settings page. Signed out it renders an explanation
  * rather than an auth wall, so linking at it unconditionally is safe.
  *
+ * Saved sits between Search and Schedule because that is the order the work
+ * happens in: you find classes, you shortlist them, you schedule the ones that
+ * survive. A nav that reads in the order of the task is one fewer thing to
+ * learn.
+ *
  * Route ownership note: `/search` and `/schedule` are built by other lanes.
  * This module only ever links at them, so it stays correct whether or not
  * those routes exist yet.
  */
 
-export type ShellNavKey = "home" | "search" | "schedule" | "profile";
+export type ShellNavKey = "home" | "search" | "saved" | "schedule" | "profile";
 
 type IconComponent = ComponentType<{
   className?: string;
@@ -49,6 +60,12 @@ export const SHELL_NAV_ITEMS: ShellNavItem[] = [
     label: "Search",
     href: "/search",
     icon: RiSearchLine,
+  },
+  {
+    key: "saved",
+    label: "Saved",
+    href: "/saved",
+    icon: RiBookmarkLine,
   },
   {
     key: "schedule",

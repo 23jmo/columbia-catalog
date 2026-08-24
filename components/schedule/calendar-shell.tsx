@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { RiAddLine, RiDeleteBinLine, RiStarFill, RiStarLine } from "@remixicon/react";
 import { addDays, startOfMonth, startOfWeek } from "date-fns";
 import { Button } from "@/components/base/buttons/button";
@@ -49,6 +49,7 @@ export function CalendarShell({
   isPrimary,
   name,
   onRename,
+  savedPicker,
   className,
 }: {
   plans: readonly CalendarRailPlan[];
@@ -75,6 +76,15 @@ export function CalendarShell({
   isPrimary: boolean;
   name: string;
   onRename: (name: string) => void;
+  /**
+   * "Add from saved" — the student's shortlist, one click from the canvas.
+   *
+   * A slot rather than a built-in, because this component owns the calendar
+   * and knows nothing about bookmarks; the workspace above it does. It leads
+   * the trailing group because it is the only control there that ADDS a class
+   * — the rest act on the plan as a whole.
+   */
+  savedPicker?: ReactNode;
   className?: string;
 }) {
   const [view, setView] = useState<CalendarView>("month");
@@ -225,6 +235,7 @@ export function CalendarShell({
           onToday={() => setCursor(clampToTerm(new Date(), termStart, termEnd))}
           trailing={
             <>
+              {savedPicker}
               <Button size="small" variant="secondary" leadingIcon={RiAddLine} onClick={addCommitmentFromToolbar}>
                 Commitment
               </Button>
