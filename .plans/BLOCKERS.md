@@ -536,7 +536,15 @@ written down rather than discovered later.
 ## 16. Search index is at 91.9% of its size budget
 
 The rebuild after descriptions completed came in at 2.76 MB gzip against spec
-§19's 3.00 MB ceiling — 249 KB of headroom, 4,878 courses / 9,576 sections.
+§19's 3.00 MB ceiling — 4,878 courses / 9,576 sections.
+
+**The real headroom is smaller than the build reports.** `build-index.ts`
+measures with Node's `gzipSync`; what ships is whatever Vercel's edge encodes.
+Measured against production, the wire transfer is 2,948,324 bytes (2.81 MB)
+versus the build's own 2,890,558 (2.76 MB) — 57 KB worse. So the actual margin
+is **~191 KB, not 249 KB**, and the number printed by the build is optimistic
+about the only figure that matters. Worth fixing the budget check to be
+pessimistic rather than discovering the gap at the ceiling.
 
 Descriptions are what grew it (the `display` block is now 67% of the raw
 artifact). Nothing is wrong today, but the margin is thin enough that it is
