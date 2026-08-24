@@ -4,6 +4,7 @@ import {
   RiCalendarScheduleLine,
   RiGraduationCapLine,
   RiHome5Line,
+  RiNodeTree,
   RiSearchLine,
 } from "@remixicon/react";
 import { cx } from "@/utils/cx";
@@ -23,7 +24,7 @@ import { cx } from "@/utils/cx";
  * those routes exist yet.
  */
 
-export type ShellNavKey = "home" | "search" | "schedule" | "profile";
+export type ShellNavKey = "home" | "search" | "schedule" | "progression" | "profile";
 
 type IconComponent = ComponentType<{
   className?: string;
@@ -55,6 +56,12 @@ export const SHELL_NAV_ITEMS: ShellNavItem[] = [
     label: "Schedule",
     href: "/schedule",
     icon: RiCalendarScheduleLine,
+  },
+  {
+    key: "progression",
+    label: "Progression",
+    href: "/progression",
+    icon: RiNodeTree,
   },
   {
     key: "profile",

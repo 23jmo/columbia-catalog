@@ -27,6 +27,7 @@
     "@tanstack/react-table": "^8.21.3",
     "@tanstack/react-virtual": "^3.14.10",
     "@types/three": "^0.185.4",
+    "@xyflow/react": "^12.11.3",
     "agentation": "^3.0.2",
     "date-fns": "^4.4.0",
     "ics": "^3.12.0",

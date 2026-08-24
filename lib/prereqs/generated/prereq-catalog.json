@@ -1,0 +1,3060 @@
+{
+  "source": "lib/ingest/__fixtures__/bulletin-cs.html",
+  "builtAt": "2026-08-22",
+  "courses": [
+    {
+      "courseId": "CBMF4761W",
+      "subjectCode": "CBMF",
+      "number": 4761,
+      "qualifier": "W",
+      "title": "Computational Genomics",
+      "points": 3,
+      "prereq": {
+        "courseId": "CBMF4761W",
+        "rawText": "Prerequisites: Working knowledge of at least one programming language, and some background in probability and statistics.",
+        "tree": null,
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "Working knowledge of at least one programming language",
+          "some background in probability and statistics"
+        ],
+        "confidence": "prose"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS1E",
+      "subjectCode": "COMS",
+      "number": 1,
+      "qualifier": "E",
+      "title": "Found of Comput Sci-Track",
+      "points": 0,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS2E",
+      "subjectCode": "COMS",
+      "number": 2,
+      "qualifier": "E",
+      "title": "Software Systems Track",
+      "points": 0,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS3E",
+      "subjectCode": "COMS",
+      "number": 3,
+      "qualifier": "E",
+      "title": "Intelligent Systems Track",
+      "points": 0,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4E",
+      "subjectCode": "COMS",
+      "number": 4,
+      "qualifier": "E",
+      "title": "Applications-Track",
+      "points": 0,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS5E",
+      "subjectCode": "COMS",
+      "number": 5,
+      "qualifier": "E",
+      "title": "Vision ＆ Graphics-Track",
+      "points": 0,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS6E",
+      "subjectCode": "COMS",
+      "number": 6,
+      "qualifier": "E",
+      "title": "Digital Systems Track",
+      "points": 0,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS1001W",
+      "subjectCode": "COMS",
+      "number": 1001,
+      "qualifier": "W",
+      "title": "Intro to Information Science",
+      "points": 3,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS1002W",
+      "subjectCode": "COMS",
+      "number": 1002,
+      "qualifier": "W",
+      "title": "Computing in Context",
+      "points": 4,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS1003W",
+      "subjectCode": "COMS",
+      "number": 1003,
+      "qualifier": "W",
+      "title": "Intro-Comput Sci/Program in C",
+      "points": 3,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS1004W",
+      "subjectCode": "COMS",
+      "number": 1004,
+      "qualifier": "W",
+      "title": "Programming in Java",
+      "points": 3,
+      "prereq": null,
+      "equivalents": [
+        "COMS1005W"
+      ]
+    },
+    {
+      "courseId": "COMS1005W",
+      "subjectCode": "COMS",
+      "number": 1005,
+      "qualifier": "W",
+      "title": "Intro-Comput Sci/Prog-Matlab",
+      "points": 3,
+      "prereq": null,
+      "equivalents": [
+        "COMS1004W"
+      ]
+    },
+    {
+      "courseId": "COMS1011W",
+      "subjectCode": "COMS",
+      "number": 1011,
+      "qualifier": "W",
+      "title": "Intermed Computer Programming",
+      "points": 3,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS1012W",
+      "subjectCode": "COMS",
+      "number": 1012,
+      "qualifier": "W",
+      "title": "Computing in Context Rec",
+      "points": 0,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS1103W",
+      "subjectCode": "COMS",
+      "number": 1103,
+      "qualifier": "W",
+      "title": "Honors Intro Computer Science",
+      "points": 3,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS1404W",
+      "subjectCode": "COMS",
+      "number": 1404,
+      "qualifier": "W",
+      "title": "Emerging Scholars Prog Seminar",
+      "points": 1,
+      "prereq": {
+        "courseId": "COMS1404W",
+        "rawText": "Prerequisites: Students must be enrolled in an introductory computing course.",
+        "tree": null,
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "Students must be enrolled in an introductory computing course"
+        ],
+        "confidence": "prose"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS2132W",
+      "subjectCode": "COMS",
+      "number": 2132,
+      "qualifier": "W",
+      "title": "Intermediate Computing in Python",
+      "points": 4,
+      "prereq": {
+        "courseId": "COMS2132W",
+        "rawText": "Prerequisites: (ENGI E1006) or (COMS W1002) or equivalent prior programming background in Python.",
+        "tree": {
+          "kind": "any",
+          "children": [
+            {
+              "kind": "course",
+              "courseId": "ENGI1006E",
+              "label": "ENGI E1006"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS1002W",
+              "label": "COMS W1002"
+            },
+            {
+              "kind": "advisory",
+              "text": "equivalent prior programming background in Python"
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [],
+        "confidence": "partial"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS2702W",
+      "subjectCode": "COMS",
+      "number": 2702,
+      "qualifier": "W",
+      "title": "AI in Context",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS2702W",
+        "rawText": "Prerequisites: STAT UN1201 or equivalent is strongly recommended.",
+        "tree": {
+          "kind": "any",
+          "children": [
+            {
+              "kind": "course",
+              "courseId": "STAT1201UN",
+              "label": "STAT UN1201"
+            },
+            {
+              "kind": "advisory",
+              "text": "equivalent is strongly recommended"
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [],
+        "confidence": "partial"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS3011W",
+      "subjectCode": "COMS",
+      "number": 3011,
+      "qualifier": "W",
+      "title": "Intermed Computer Programming",
+      "points": 3,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS3101W",
+      "subjectCode": "COMS",
+      "number": 3101,
+      "qualifier": "W",
+      "title": "Programming Languages",
+      "points": 1,
+      "prereq": {
+        "courseId": "COMS3101W",
+        "rawText": "Prerequisites: Fluency in at least one programming language.",
+        "tree": null,
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "Fluency in at least one programming language"
+        ],
+        "confidence": "prose"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS3102W",
+      "subjectCode": "COMS",
+      "number": 3102,
+      "qualifier": "W",
+      "title": "Development Technology",
+      "points": 1,
+      "prereq": {
+        "courseId": "COMS3102W",
+        "rawText": "Prerequisites: Fluency in at least one programming language.",
+        "tree": null,
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "Fluency in at least one programming language"
+        ],
+        "confidence": "prose"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS3107W",
+      "subjectCode": "COMS",
+      "number": 3107,
+      "qualifier": "W",
+      "title": "Clean Object-Oriented Design",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS3107W",
+        "rawText": "Prerequisites: COMS W1004 or permission of instructor. May not take for credit if already received credit for COMS W1007",
+        "tree": {
+          "kind": "course",
+          "courseId": "COMS1004W",
+          "label": "COMS W1004"
+        },
+        "corequisites": null,
+        "instructorPermission": true,
+        "advisories": [
+          "May not take for credit if already received credit for COMS W1007"
+        ],
+        "confidence": "partial"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS3123W",
+      "subjectCode": "COMS",
+      "number": 3123,
+      "qualifier": "W",
+      "title": "Assembly Lang and Comput Logic",
+      "points": 3,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS3132W",
+      "subjectCode": "COMS",
+      "number": 3132,
+      "qualifier": "W",
+      "title": "Intermediate Computing in Python",
+      "points": 4,
+      "prereq": {
+        "courseId": "COMS3132W",
+        "rawText": "Prerequisites: ENGI E1006 OR COMS W1002; or equivalent Python programming experience. Intermediate interdisciplinary course in computing intended for non-CS majors.",
+        "tree": {
+          "kind": "any",
+          "children": [
+            {
+              "kind": "course",
+              "courseId": "ENGI1006E",
+              "label": "ENGI E1006"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS1002W",
+              "label": "COMS W1002"
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "equivalent Python programming experience. Intermediate interdisciplinary course in computing intended for non-CS majors"
+        ],
+        "confidence": "partial"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS3134W",
+      "subjectCode": "COMS",
+      "number": 3134,
+      "qualifier": "W",
+      "title": "Data Structures in Java",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS3134W",
+        "rawText": "Prerequisites: (COMS W1004) or COMS W1004; Knowledge of Java",
+        "tree": {
+          "kind": "course",
+          "courseId": "COMS1004W",
+          "label": "COMS W1004"
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "Knowledge of Java"
+        ],
+        "confidence": "partial"
+      },
+      "equivalents": [
+        "COMS3136W",
+        "COMS3137W"
+      ]
+    },
+    {
+      "courseId": "COMS3136W",
+      "subjectCode": "COMS",
+      "number": 3136,
+      "qualifier": "W",
+      "title": "Essential Data Structures",
+      "points": 4,
+      "prereq": {
+        "courseId": "COMS3136W",
+        "rawText": "Prerequisites: (COMS W1004) or (COMS W1005) or (COMS W1007) or (ENGI E1006) COMS W1005 OR COMS W1007 OR ENGI E1006 OR COMS W1004",
+        "tree": {
+          "kind": "any",
+          "children": [
+            {
+              "kind": "course",
+              "courseId": "COMS1004W",
+              "label": "COMS W1004"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS1005W",
+              "label": "COMS W1005"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS1007W",
+              "label": "COMS W1007"
+            },
+            {
+              "kind": "course",
+              "courseId": "ENGI1006E",
+              "label": "ENGI E1006"
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [],
+        "confidence": "structured"
+      },
+      "equivalents": [
+        "COMS3134W",
+        "COMS3137W"
+      ]
+    },
+    {
+      "courseId": "COMS3137W",
+      "subjectCode": "COMS",
+      "number": 3137,
+      "qualifier": "W",
+      "title": "Honors Data Structures ＆ Algol",
+      "points": 4,
+      "prereq": {
+        "courseId": "COMS3137W",
+        "rawText": "Prerequisites: (COMS W1004) or (COMS W1007) COMS W1004 OR COMS W1007",
+        "tree": {
+          "kind": "any",
+          "children": [
+            {
+              "kind": "course",
+              "courseId": "COMS1004W",
+              "label": "COMS W1004"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS1007W",
+              "label": "COMS W1007"
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [],
+        "confidence": "structured"
+      },
+      "equivalents": [
+        "COMS3134W",
+        "COMS3136W"
+      ]
+    },
+    {
+      "courseId": "COMS3157W",
+      "subjectCode": "COMS",
+      "number": 3157,
+      "qualifier": "W",
+      "title": "Advanced Programming",
+      "points": 4,
+      "prereq": {
+        "courseId": "COMS3157W",
+        "rawText": "Prerequisites: (COMS W3134) or (COMS W3137) COMS W3134 OR COMS W3137",
+        "tree": {
+          "kind": "any",
+          "children": [
+            {
+              "kind": "course",
+              "courseId": "COMS3134W",
+              "label": "COMS W3134"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS3137W",
+              "label": "COMS W3137"
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [],
+        "confidence": "structured"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS3202W",
+      "subjectCode": "COMS",
+      "number": 3202,
+      "qualifier": "W",
+      "title": "Finite Mathematics",
+      "points": 3,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS3203W",
+      "subjectCode": "COMS",
+      "number": 3203,
+      "qualifier": "W",
+      "title": "Discrete Mathematics",
+      "points": 4,
+      "prereq": {
+        "courseId": "COMS3203W",
+        "rawText": "Prerequisites: Any introductory course in computer programming.",
+        "tree": null,
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "Any introductory course in computer programming"
+        ],
+        "confidence": "prose"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS3204W",
+      "subjectCode": "COMS",
+      "number": 3204,
+      "qualifier": "W",
+      "title": "Finite Mathematics",
+      "points": 3,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS3205W",
+      "subjectCode": "COMS",
+      "number": 3205,
+      "qualifier": "W",
+      "title": "Intro to Discrete Structures",
+      "points": 3,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS3210W",
+      "subjectCode": "COMS",
+      "number": 3210,
+      "qualifier": "W",
+      "title": "Scientific Computation",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS3210W",
+        "rawText": "Prerequisites: two terms of calculus.",
+        "tree": null,
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "two terms of calculus"
+        ],
+        "confidence": "prose"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS3240W",
+      "subjectCode": "COMS",
+      "number": 3240,
+      "qualifier": "W",
+      "title": "Elementary Numerical Analysis",
+      "points": 3,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS3244W",
+      "subjectCode": "COMS",
+      "number": 3244,
+      "qualifier": "W",
+      "title": "Probability and Matrix Models",
+      "points": 3,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS3251W",
+      "subjectCode": "COMS",
+      "number": 3251,
+      "qualifier": "W",
+      "title": "Computational Linear Algebra",
+      "points": 4,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS3252W",
+      "subjectCode": "COMS",
+      "number": 3252,
+      "qualifier": "W",
+      "title": "Scientific Computation Ii",
+      "points": 3,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS3261W",
+      "subjectCode": "COMS",
+      "number": 3261,
+      "qualifier": "W",
+      "title": "Computer Science Theory",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS3261W",
+        "rawText": "Prerequisites: (COMS W3203)",
+        "tree": {
+          "kind": "course",
+          "courseId": "COMS3203W",
+          "label": "COMS W3203"
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [],
+        "confidence": "structured"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS3410W",
+      "subjectCode": "COMS",
+      "number": 3410,
+      "qualifier": "W",
+      "title": "Computers and Society",
+      "points": 3,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS3770W",
+      "subjectCode": "COMS",
+      "number": 3770,
+      "qualifier": "W",
+      "title": "Mathematics for Machine Learning",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS3770W",
+        "rawText": "Prerequisites: (MATH UN2010 or MATH UN2015 or APMA E2101 or APMA E3101 or COMS W3251) and (MATH UN1201 or MATH UN1205 or APMA E2000) and (STAT UN1201 or MATH UN2015 or IEOR E3658) Familiarity with mathematical proof writing",
+        "tree": {
+          "kind": "all",
+          "children": [
+            {
+              "kind": "any",
+              "children": [
+                {
+                  "kind": "course",
+                  "courseId": "MATH2010UN",
+                  "label": "MATH UN2010"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "MATH2015UN",
+                  "label": "MATH UN2015"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "APMA2101E",
+                  "label": "APMA E2101"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "APMA3101E",
+                  "label": "APMA E3101"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "COMS3251W",
+                  "label": "COMS W3251"
+                }
+              ]
+            },
+            {
+              "kind": "any",
+              "children": [
+                {
+                  "kind": "course",
+                  "courseId": "MATH1201UN",
+                  "label": "MATH UN1201"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "MATH1205UN",
+                  "label": "MATH UN1205"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "APMA2000E",
+                  "label": "APMA E2000"
+                }
+              ]
+            },
+            {
+              "kind": "any",
+              "children": [
+                {
+                  "kind": "course",
+                  "courseId": "STAT1201UN",
+                  "label": "STAT UN1201"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "MATH2015UN",
+                  "label": "MATH UN2015"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "IEOR3658E",
+                  "label": "IEOR E3658"
+                }
+              ]
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "Familiarity with mathematical proof writing"
+        ],
+        "confidence": "partial"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS3899E",
+      "subjectCode": "COMS",
+      "number": 3899,
+      "qualifier": "E",
+      "title": "Research Training",
+      "points": 0,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS3902W",
+      "subjectCode": "COMS",
+      "number": 3902,
+      "qualifier": "W",
+      "title": "Undergraduate Thesis",
+      "points": 0,
+      "prereq": {
+        "courseId": "COMS3902W",
+        "rawText": "Prerequisites: Agreement by a faculty member to serve as thesis adviser.",
+        "tree": null,
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "Agreement by a faculty member to serve as thesis adviser"
+        ],
+        "confidence": "prose"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS3995W",
+      "subjectCode": "COMS",
+      "number": 3995,
+      "qualifier": "W",
+      "title": "Topics in Computer Science",
+      "points": 3,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS3998W",
+      "subjectCode": "COMS",
+      "number": 3998,
+      "qualifier": "W",
+      "title": "Undergrad Projects in Computer Science",
+      "points": 1,
+      "prereq": {
+        "courseId": "COMS3998W",
+        "rawText": "Prerequisites: Approval by a faculty member who agrees to supervise the work.",
+        "tree": null,
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "Approval by a faculty member who agrees to supervise the work"
+        ],
+        "confidence": "prose"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS3999W",
+      "subjectCode": "COMS",
+      "number": 3999,
+      "qualifier": "W",
+      "title": "Fieldwork",
+      "points": 1,
+      "prereq": {
+        "courseId": "COMS3999W",
+        "rawText": "Prerequisites: Obtained internship and approval from faculty advisor",
+        "tree": null,
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "Obtained internship",
+          "approval from faculty advisor"
+        ],
+        "confidence": "prose"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS3999E",
+      "subjectCode": "COMS",
+      "number": 3999,
+      "qualifier": "E",
+      "title": "Fieldwork",
+      "points": 1,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4111E",
+      "subjectCode": "COMS",
+      "number": 4111,
+      "qualifier": "E",
+      "title": "Introduction to Databases",
+      "points": 3,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4111W",
+      "subjectCode": "COMS",
+      "number": 4111,
+      "qualifier": "W",
+      "title": "Introduction to Databases",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4111W",
+        "rawText": "Prerequisites: (COMS W3134) and (COMS W3136) and (COMS W3137) COMS W3134, COMS W3136, or COMS W3136; or instructor's permission",
+        "tree": {
+          "kind": "any",
+          "children": [
+            {
+              "kind": "course",
+              "courseId": "COMS3134W",
+              "label": "COMS W3134"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS3136W",
+              "label": "COMS W3136"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS3137W",
+              "label": "COMS W3137"
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": true,
+        "advisories": [],
+        "confidence": "structured"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4112W",
+      "subjectCode": "COMS",
+      "number": 4112,
+      "qualifier": "W",
+      "title": "Database System Implementation",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4112W",
+        "rawText": "Prerequisites: (COMS W4111) and COMS W4111; fluency in Java or C++. CSEE W3827 is recommended.",
+        "tree": {
+          "kind": "course",
+          "courseId": "COMS4111W",
+          "label": "COMS W4111"
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "fluency in Java or C++ CSEE W3827 is recommended"
+        ],
+        "confidence": "partial"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4113W",
+      "subjectCode": "COMS",
+      "number": 4113,
+      "qualifier": "W",
+      "title": "Fund-Large-Scale Dist Systems",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4113W",
+        "rawText": "Prerequisites: (COMS W3134 or COMS W3136 or COMS W3137) and (COMS W3157 or COMS W4118 or CSEE W4119) COMS W3134, W3136, or W3137. COMS W3157 or good working knowledge of C and C++. COMS W4118 or CSEE W4119.",
+        "tree": {
+          "kind": "all",
+          "children": [
+            {
+              "kind": "any",
+              "children": [
+                {
+                  "kind": "course",
+                  "courseId": "COMS3134W",
+                  "label": "COMS W3134"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "COMS3136W",
+                  "label": "COMS W3136"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "COMS3137W",
+                  "label": "COMS W3137"
+                }
+              ]
+            },
+            {
+              "kind": "any",
+              "children": [
+                {
+                  "kind": "course",
+                  "courseId": "COMS3157W",
+                  "label": "COMS W3157"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "COMS4118W",
+                  "label": "COMS W4118"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "CSEE4119W",
+                  "label": "CSEE W4119"
+                }
+              ]
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "good working knowledge of C and C++"
+        ],
+        "confidence": "partial"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4114W",
+      "subjectCode": "COMS",
+      "number": 4114,
+      "qualifier": "W",
+      "title": "Assembly Lang and Systems Prog",
+      "points": 3,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4115E",
+      "subjectCode": "COMS",
+      "number": 4115,
+      "qualifier": "E",
+      "title": "Programming Lang ＆ Transl",
+      "points": 3,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4115W",
+      "subjectCode": "COMS",
+      "number": 4115,
+      "qualifier": "W",
+      "title": "Programming Lang ＆ Translators",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4115W",
+        "rawText": "Prerequisites: (COMS W3134) or (COMS W3136) or (COMS W3137) or (COMS W3261 and CSEE W3827) Or the instructor's permission",
+        "tree": {
+          "kind": "any",
+          "children": [
+            {
+              "kind": "course",
+              "courseId": "COMS3134W",
+              "label": "COMS W3134"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS3136W",
+              "label": "COMS W3136"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS3137W",
+              "label": "COMS W3137"
+            },
+            {
+              "kind": "all",
+              "children": [
+                {
+                  "kind": "course",
+                  "courseId": "COMS3261W",
+                  "label": "COMS W3261"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "CSEE3827W",
+                  "label": "CSEE W3827"
+                }
+              ]
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": true,
+        "advisories": [],
+        "confidence": "structured"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4118W",
+      "subjectCode": "COMS",
+      "number": 4118,
+      "qualifier": "W",
+      "title": "Operating Systems I",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4118W",
+        "rawText": "Prerequisites: (CSEE W3827) and CSEE W3827; Knowledge of C and programming tools as covered in COMS COMS W3136, COMS W3157, or COMS W3101, or the instructor's permission.",
+        "tree": {
+          "kind": "course",
+          "courseId": "CSEE3827W",
+          "label": "CSEE W3827"
+        },
+        "corequisites": null,
+        "instructorPermission": true,
+        "advisories": [
+          "Knowledge of C and programming tools as covered in COMS W3136 or COMS W3157 or COMS W3101"
+        ],
+        "confidence": "partial"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4119W",
+      "subjectCode": "COMS",
+      "number": 4119,
+      "qualifier": "W",
+      "title": "Computer Networks",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4119W",
+        "rawText": "Prerequisites: Comfort with basic probability and programming fluency in Python, C++, Java, or Ruby.",
+        "tree": null,
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "Comfort with basic probability",
+          "programming fluency in Python",
+          "C++",
+          "Java",
+          "Ruby"
+        ],
+        "confidence": "prose"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4121W",
+      "subjectCode": "COMS",
+      "number": 4121,
+      "qualifier": "W",
+      "title": "Computer Systems for Data Science",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4121W",
+        "rawText": "Prerequisites: CSOR W4246 OR STAT W4203; or equivalent as approved by faculty advisor. background in Computer System Organization and good working knowledge of C/C++",
+        "tree": {
+          "kind": "any",
+          "children": [
+            {
+              "kind": "course",
+              "courseId": "CSOR4246W",
+              "label": "CSOR W4246"
+            },
+            {
+              "kind": "course",
+              "courseId": "STAT4203W",
+              "label": "STAT W4203"
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "equivalent as approved by faculty advisor. background in Computer System Organization and good working knowledge of C or C++"
+        ],
+        "confidence": "partial"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4125W",
+      "subjectCode": "COMS",
+      "number": 4125,
+      "qualifier": "W",
+      "title": "Programing Language Semantics",
+      "points": 3,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4137W",
+      "subjectCode": "COMS",
+      "number": 4137,
+      "qualifier": "W",
+      "title": "From Algorithmic Thinking to Development",
+      "points": 3,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4152W",
+      "subjectCode": "COMS",
+      "number": 4152,
+      "qualifier": "W",
+      "title": "Engineering Software-as-a-Service",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4152W",
+        "rawText": "Prerequisites: COMS W3134 AND COMS W3157 AND CSEE W3827",
+        "tree": {
+          "kind": "all",
+          "children": [
+            {
+              "kind": "course",
+              "courseId": "COMS3134W",
+              "label": "COMS W3134"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS3157W",
+              "label": "COMS W3157"
+            },
+            {
+              "kind": "course",
+              "courseId": "CSEE3827W",
+              "label": "CSEE W3827"
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [],
+        "confidence": "structured"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4153W",
+      "subjectCode": "COMS",
+      "number": 4153,
+      "qualifier": "W",
+      "title": "Cloud Computing",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4153W",
+        "rawText": "Prerequisites: COMS W4111",
+        "tree": {
+          "kind": "course",
+          "courseId": "COMS4111W",
+          "label": "COMS W4111"
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [],
+        "confidence": "structured"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4156W",
+      "subjectCode": "COMS",
+      "number": 4156,
+      "qualifier": "W",
+      "title": "Advanced Software Engineering",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4156W",
+        "rawText": "Prerequisites: (COMS W3157)",
+        "tree": {
+          "kind": "course",
+          "courseId": "COMS3157W",
+          "label": "COMS W3157"
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [],
+        "confidence": "structured"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4160W",
+      "subjectCode": "COMS",
+      "number": 4160,
+      "qualifier": "W",
+      "title": "Computer Graphics",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4160W",
+        "rawText": "Prerequisites: (COMS W3134) or (COMS W3136) or (COMS W3137) COMS W3134 OR COMS W3136 OR COMS W3137; Strong programming background and some mathematical familiarity including linear algebra is required.",
+        "tree": {
+          "kind": "any",
+          "children": [
+            {
+              "kind": "course",
+              "courseId": "COMS3134W",
+              "label": "COMS W3134"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS3136W",
+              "label": "COMS W3136"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS3137W",
+              "label": "COMS W3137"
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "Strong programming background and some mathematical familiarity including linear algebra is required"
+        ],
+        "confidence": "partial"
+      },
+      "equivalents": [
+        "COMS3160BC"
+      ]
+    },
+    {
+      "courseId": "COMS4162W",
+      "subjectCode": "COMS",
+      "number": 4162,
+      "qualifier": "W",
+      "title": "Advanced Computer Graphics",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4162W",
+        "rawText": "Prerequisites: (COMS W4160) or COMS W4160",
+        "tree": {
+          "kind": "course",
+          "courseId": "COMS4160W",
+          "label": "COMS W4160"
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [],
+        "confidence": "structured"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4165W",
+      "subjectCode": "COMS",
+      "number": 4165,
+      "qualifier": "W",
+      "title": "Comput Techniques-Pixel Procss",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4165W",
+        "rawText": "Prerequisites: COMS W3137, COMS W3251 recommended, and a good working knowledge of UNIX and C. Intended for graduate students and advanced undergraduates.",
+        "tree": {
+          "kind": "any",
+          "children": [
+            {
+              "kind": "course",
+              "courseId": "COMS3137W",
+              "label": "COMS W3137"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS3251W",
+              "label": "COMS W3251"
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "recommended and a good working knowledge of UNIX and C. Intended for graduate students and advanced undergraduates"
+        ],
+        "confidence": "partial"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4167W",
+      "subjectCode": "COMS",
+      "number": 4167,
+      "qualifier": "W",
+      "title": "Computer Animation",
+      "points": 3,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4170W",
+      "subjectCode": "COMS",
+      "number": 4170,
+      "qualifier": "W",
+      "title": "User Interface Design",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4170W",
+        "rawText": "Prerequisites: (COMS W3134 or COMS W3136 or COMS W3137) COMS W3134 OR COMS W3136 OR COMS W3137",
+        "tree": {
+          "kind": "any",
+          "children": [
+            {
+              "kind": "course",
+              "courseId": "COMS3134W",
+              "label": "COMS W3134"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS3136W",
+              "label": "COMS W3136"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS3137W",
+              "label": "COMS W3137"
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [],
+        "confidence": "structured"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4172W",
+      "subjectCode": "COMS",
+      "number": 4172,
+      "qualifier": "W",
+      "title": "3d Ui and Augmented Reality",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4172W",
+        "rawText": "Prerequisites: (COMS W4160) or (COMS W4170) or COMS W4160 OR COMS W4170; Or instructor's permission",
+        "tree": {
+          "kind": "any",
+          "children": [
+            {
+              "kind": "course",
+              "courseId": "COMS4160W",
+              "label": "COMS W4160"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS4170W",
+              "label": "COMS W4170"
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": true,
+        "advisories": [],
+        "confidence": "structured"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4181W",
+      "subjectCode": "COMS",
+      "number": 4181,
+      "qualifier": "W",
+      "title": "Security I",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4181W",
+        "rawText": "Prerequisites: COMS W3157; or equivalent.",
+        "tree": {
+          "kind": "course",
+          "courseId": "COMS3157W",
+          "label": "COMS W3157"
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "equivalent"
+        ],
+        "confidence": "partial"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4182W",
+      "subjectCode": "COMS",
+      "number": 4182,
+      "qualifier": "W",
+      "title": "Security Ii",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4182W",
+        "rawText": "Prerequisites: COMS W4118 AND COMS W4181 AND CSEE W4119",
+        "tree": {
+          "kind": "all",
+          "children": [
+            {
+              "kind": "course",
+              "courseId": "COMS4118W",
+              "label": "COMS W4118"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS4181W",
+              "label": "COMS W4181"
+            },
+            {
+              "kind": "course",
+              "courseId": "CSEE4119W",
+              "label": "CSEE W4119"
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [],
+        "confidence": "structured"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4186W",
+      "subjectCode": "COMS",
+      "number": 4186,
+      "qualifier": "W",
+      "title": "Malware Analysis＆reverse Engineering",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4186W",
+        "rawText": "Prerequisites: COMS W3157 AND CSEE W3827; or equivalent.",
+        "tree": {
+          "kind": "all",
+          "children": [
+            {
+              "kind": "course",
+              "courseId": "COMS3157W",
+              "label": "COMS W3157"
+            },
+            {
+              "kind": "course",
+              "courseId": "CSEE3827W",
+              "label": "CSEE W3827"
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "equivalent"
+        ],
+        "confidence": "partial"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4203W",
+      "subjectCode": "COMS",
+      "number": 4203,
+      "qualifier": "W",
+      "title": "Graph Theory",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4203W",
+        "rawText": "Prerequisites: (COMS W3203) COMS W3203",
+        "tree": {
+          "kind": "course",
+          "courseId": "COMS3203W",
+          "label": "COMS W3203"
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [],
+        "confidence": "structured"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4205W",
+      "subjectCode": "COMS",
+      "number": 4205,
+      "qualifier": "W",
+      "title": "Combinatorial Theory",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4205W",
+        "rawText": "Prerequisites: (COMS W3203) and course in calculus.",
+        "tree": {
+          "kind": "all",
+          "children": [
+            {
+              "kind": "course",
+              "courseId": "COMS3203W",
+              "label": "COMS W3203"
+            },
+            {
+              "kind": "advisory",
+              "text": "course in calculus"
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [],
+        "confidence": "partial"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4223W",
+      "subjectCode": "COMS",
+      "number": 4223,
+      "qualifier": "W",
+      "title": "Networks, Crowds, and the Web",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4223W",
+        "rawText": "Prerequisites: Familiarity with elementary concepts of probability and data structures or experience programming with data",
+        "tree": null,
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "Familiarity with elementary concepts of probability",
+          "data structures",
+          "experience programming with data"
+        ],
+        "confidence": "prose"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4231W",
+      "subjectCode": "COMS",
+      "number": 4231,
+      "qualifier": "W",
+      "title": "Analysis of Algorithms I",
+      "points": 3,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4232W",
+      "subjectCode": "COMS",
+      "number": 4232,
+      "qualifier": "W",
+      "title": "Advanced Algorithms",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4232W",
+        "rawText": "Prerequisites: see notes re: points COMS W4231",
+        "tree": null,
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "see notes re: points",
+          "COMS W4231"
+        ],
+        "confidence": "prose"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4236W",
+      "subjectCode": "COMS",
+      "number": 4236,
+      "qualifier": "W",
+      "title": "Intro-Computational Complexity",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4236W",
+        "rawText": "Prerequisites: (COMS W3261) COMS W3261",
+        "tree": {
+          "kind": "course",
+          "courseId": "COMS3261W",
+          "label": "COMS W3261"
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [],
+        "confidence": "structured"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4241W",
+      "subjectCode": "COMS",
+      "number": 4241,
+      "qualifier": "W",
+      "title": "Numericl Algorithms-Complexity",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4241W",
+        "rawText": "Prerequisites: knowledge of a programming language. Some knowledge of scientific computation is desirable.",
+        "tree": null,
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "knowledge of a programming language. Some knowledge of scientific computation is desirable"
+        ],
+        "confidence": "prose"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4242W",
+      "subjectCode": "COMS",
+      "number": 4242,
+      "qualifier": "W",
+      "title": "Numrcl Algorthms-Complexity Ii",
+      "points": 3,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4252W",
+      "subjectCode": "COMS",
+      "number": 4252,
+      "qualifier": "W",
+      "title": "Intro-Computational Learn Thry",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4252W",
+        "rawText": "Prerequisites: (CSOR W4231) or (COMS W4236) or (COMS W3203) or (COMS W3261)",
+        "tree": {
+          "kind": "any",
+          "children": [
+            {
+              "kind": "course",
+              "courseId": "CSOR4231W",
+              "label": "CSOR W4231"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS4236W",
+              "label": "COMS W4236"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS3203W",
+              "label": "COMS W3203"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS3261W",
+              "label": "COMS W3261"
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [],
+        "confidence": "structured"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4261W",
+      "subjectCode": "COMS",
+      "number": 4261,
+      "qualifier": "W",
+      "title": "Intro to Cryptography",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4261W",
+        "rawText": "Prerequisites: COMS W3261 OR CSOR W4231; Comfort with basic discrete math and probability. Recommended: COMS W3261 or CSOR W4231.",
+        "tree": {
+          "kind": "any",
+          "children": [
+            {
+              "kind": "course",
+              "courseId": "COMS3261W",
+              "label": "COMS W3261"
+            },
+            {
+              "kind": "course",
+              "courseId": "CSOR4231W",
+              "label": "CSOR W4231"
+            },
+            {
+              "kind": "all",
+              "children": [
+                {
+                  "kind": "advisory",
+                  "text": "Comfort with basic discrete math"
+                },
+                {
+                  "kind": "advisory",
+                  "text": "probability. Recommended:"
+                }
+              ]
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [],
+        "confidence": "partial"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4281W",
+      "subjectCode": "COMS",
+      "number": 4281,
+      "qualifier": "W",
+      "title": "Intro to Quantum Computing",
+      "points": 3,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4295W",
+      "subjectCode": "COMS",
+      "number": 4295,
+      "qualifier": "W",
+      "title": "Topics in Theoretical Computer Science",
+      "points": 3,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4419W",
+      "subjectCode": "COMS",
+      "number": 4419,
+      "qualifier": "W",
+      "title": "Internet Technology, Economics, and Policy",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4419W",
+        "rawText": "Prerequisites: General engineering, economics, law or technology background. Programming background is not required.",
+        "tree": null,
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "General engineering",
+          "economics",
+          "law",
+          "technology background. Programming background is not required"
+        ],
+        "confidence": "prose"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4444W",
+      "subjectCode": "COMS",
+      "number": 4444,
+      "qualifier": "W",
+      "title": "Programming ＆ Problem Solving",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4444W",
+        "rawText": "Prerequisites: (COMS W3134 and COMS W3136) or (COMS W3137 and CSEE W3827)",
+        "tree": {
+          "kind": "any",
+          "children": [
+            {
+              "kind": "course",
+              "courseId": "COMS3134W",
+              "label": "COMS W3134"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS3136W",
+              "label": "COMS W3136"
+            },
+            {
+              "kind": "all",
+              "children": [
+                {
+                  "kind": "course",
+                  "courseId": "COMS3137W",
+                  "label": "COMS W3137"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "CSEE3827W",
+                  "label": "CSEE W3827"
+                }
+              ]
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [],
+        "confidence": "structured"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4460W",
+      "subjectCode": "COMS",
+      "number": 4460,
+      "qualifier": "W",
+      "title": "Prin-Innovatn/Entrepreneurship",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4460W",
+        "rawText": "Prerequisites: (COMS W3134 or COMS W3136 or COMS W3137) Or instructor's permission",
+        "tree": {
+          "kind": "any",
+          "children": [
+            {
+              "kind": "course",
+              "courseId": "COMS3134W",
+              "label": "COMS W3134"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS3136W",
+              "label": "COMS W3136"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS3137W",
+              "label": "COMS W3137"
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": true,
+        "advisories": [],
+        "confidence": "structured"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4701W",
+      "subjectCode": "COMS",
+      "number": 4701,
+      "qualifier": "W",
+      "title": "Artificial Intelligence",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4701W",
+        "rawText": "Prerequisites: (COMS W3134 or COMS W3136 or COMS W3137) and COMS W3134 OR COMS W3136 OR COMS W3137; Any course on probability",
+        "tree": {
+          "kind": "any",
+          "children": [
+            {
+              "kind": "course",
+              "courseId": "COMS3134W",
+              "label": "COMS W3134"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS3136W",
+              "label": "COMS W3136"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS3137W",
+              "label": "COMS W3137"
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "Any course on probability"
+        ],
+        "confidence": "partial"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4705W",
+      "subjectCode": "COMS",
+      "number": 4705,
+      "qualifier": "W",
+      "title": "Natural Language Processing",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4705W",
+        "rawText": "Prerequisites: (COMS W3134 or COMS W3136 or COMS W3137) or Python programming experience, probability theory, and linear algebra recommended. Some previous or concurrent exposure to AI and machine learning is benefici Some previous or concurrent exposure to AI or Machine Learning is recommended but not required.",
+        "tree": {
+          "kind": "any",
+          "children": [
+            {
+              "kind": "course",
+              "courseId": "COMS3134W",
+              "label": "COMS W3134"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS3136W",
+              "label": "COMS W3136"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS3137W",
+              "label": "COMS W3137"
+            },
+            {
+              "kind": "advisory",
+              "text": "Python programming experience"
+            },
+            {
+              "kind": "advisory",
+              "text": "probability theory"
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "linear algebra recommended. Some previous or concurrent exposure to AI and machine learning is benefici Some previous or concurrent exposure to AI or Machine Learning is recommended but not required"
+        ],
+        "confidence": "partial"
+      },
+      "equivalents": [
+        "COMS3705BC"
+      ]
+    },
+    {
+      "courseId": "COMS4706W",
+      "subjectCode": "COMS",
+      "number": 4706,
+      "qualifier": "W",
+      "title": "Spoken Language Processing",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4706W",
+        "rawText": "Prerequisites: (COMS W3134 or COMS W3136 or COMS W3137) or COMS W3134, W3136, or W3137; or the instructor's permission.",
+        "tree": {
+          "kind": "any",
+          "children": [
+            {
+              "kind": "course",
+              "courseId": "COMS3134W",
+              "label": "COMS W3134"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS3136W",
+              "label": "COMS W3136"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS3137W",
+              "label": "COMS W3137"
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": true,
+        "advisories": [],
+        "confidence": "structured"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4710W",
+      "subjectCode": "COMS",
+      "number": 4710,
+      "qualifier": "W",
+      "title": "Ethical and Responsible AI",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4710W",
+        "rawText": "Prerequisites: (COMS W2132) or (COMS W3134) or (COMS W3136) or (COMS W3137) or (IEOR E2000) Programming proficiency in Python. Basic knowledge of probability theory and statistics. Familiarity with machine learning recommended.",
+        "tree": {
+          "kind": "any",
+          "children": [
+            {
+              "kind": "course",
+              "courseId": "COMS2132W",
+              "label": "COMS W2132"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS3134W",
+              "label": "COMS W3134"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS3136W",
+              "label": "COMS W3136"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS3137W",
+              "label": "COMS W3137"
+            },
+            {
+              "kind": "course",
+              "courseId": "IEOR2000E",
+              "label": "IEOR E2000"
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "Programming proficiency in Python. Basic knowledge of probability theory and statistics. Familiarity with machine learning recommended"
+        ],
+        "confidence": "partial"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4721W",
+      "subjectCode": "COMS",
+      "number": 4721,
+      "qualifier": "W",
+      "title": "Machine Learning for Data Sci",
+      "points": 3,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4725W",
+      "subjectCode": "COMS",
+      "number": 4725,
+      "qualifier": "W",
+      "title": "Knowledge representation and reasoning",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4725W",
+        "rawText": "Prerequisites: (COMS W4701)",
+        "tree": {
+          "kind": "course",
+          "courseId": "COMS4701W",
+          "label": "COMS W4701"
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [],
+        "confidence": "structured"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4726W",
+      "subjectCode": "COMS",
+      "number": 4726,
+      "qualifier": "W",
+      "title": "Deep Learning for Data Science",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4726W",
+        "rawText": "Prerequisites: This course presumes prior knowledge of machine learning equivalent to having taken an introductory course in ML. It also assumes the ability to code in Python.",
+        "tree": null,
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "This course presumes prior knowledge of machine learning equivalent to having taken an introductory course in ML. It also assumes the ability to code in Python"
+        ],
+        "confidence": "prose"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4731W",
+      "subjectCode": "COMS",
+      "number": 4731,
+      "qualifier": "W",
+      "title": "Computer Vision I: First Principles",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4731W",
+        "rawText": "Prerequisites: Fundamentals of calculus, linear algebra, and C programming. Students without any of these prerequisites are advised to contact the instructor prior to taking the course.",
+        "tree": null,
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "Fundamentals of calculus",
+          "linear algebra",
+          "C programming. Students without any of these prerequisites are advised to contact the instructor prior to taking the course"
+        ],
+        "confidence": "prose"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4732W",
+      "subjectCode": "COMS",
+      "number": 4732,
+      "qualifier": "W",
+      "title": "Computer Vision II: Learning",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4732W",
+        "rawText": "Prerequisites: COMS W4731; Fundamentals of calculus, linear algebra, and Python programming. Students without any of these prerequisites are advised to contact the instructor prior to taking the course.",
+        "tree": {
+          "kind": "any",
+          "children": [
+            {
+              "kind": "course",
+              "courseId": "COMS4731W",
+              "label": "COMS W4731"
+            },
+            {
+              "kind": "advisory",
+              "text": "Fundamentals of calculus"
+            },
+            {
+              "kind": "advisory",
+              "text": "linear algebra"
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "Python programming. Students without any of these prerequisites are advised to contact the instructor prior to taking the course"
+        ],
+        "confidence": "partial"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4733W",
+      "subjectCode": "COMS",
+      "number": 4733,
+      "qualifier": "W",
+      "title": "Computational Aspects of Robotics",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4733W",
+        "rawText": "Prerequisites: (COMS W3134 or COMS W3136 or COMS W3137) and (COMS W3251 or MATH UN2010 or APMA E2101 or APMA E3101 or MATH UN2015) and (STAT GU4001 or IEOR E3658 or STAT UN1201 or MATH UN2015) Proficiency in Python or a similar programming language.",
+        "tree": {
+          "kind": "all",
+          "children": [
+            {
+              "kind": "any",
+              "children": [
+                {
+                  "kind": "course",
+                  "courseId": "COMS3134W",
+                  "label": "COMS W3134"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "COMS3136W",
+                  "label": "COMS W3136"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "COMS3137W",
+                  "label": "COMS W3137"
+                }
+              ]
+            },
+            {
+              "kind": "any",
+              "children": [
+                {
+                  "kind": "course",
+                  "courseId": "COMS3251W",
+                  "label": "COMS W3251"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "MATH2010UN",
+                  "label": "MATH UN2010"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "APMA2101E",
+                  "label": "APMA E2101"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "APMA3101E",
+                  "label": "APMA E3101"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "MATH2015UN",
+                  "label": "MATH UN2015"
+                }
+              ]
+            },
+            {
+              "kind": "any",
+              "children": [
+                {
+                  "kind": "course",
+                  "courseId": "STAT4001GU",
+                  "label": "STAT GU4001"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "IEOR3658E",
+                  "label": "IEOR E3658"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "STAT1201UN",
+                  "label": "STAT UN1201"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "MATH2015UN",
+                  "label": "MATH UN2015"
+                }
+              ]
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "Proficiency in Python or a similar programming language"
+        ],
+        "confidence": "partial"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4735W",
+      "subjectCode": "COMS",
+      "number": 4735,
+      "qualifier": "W",
+      "title": "Visual Interfaces to Computers",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4735W",
+        "rawText": "Prerequisites: (COMS W3134 or COMS W3136 or COMS W3137) COMS W3134 OR COMS W3136 OR COMS W3137",
+        "tree": {
+          "kind": "any",
+          "children": [
+            {
+              "kind": "course",
+              "courseId": "COMS3134W",
+              "label": "COMS W3134"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS3136W",
+              "label": "COMS W3136"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS3137W",
+              "label": "COMS W3137"
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [],
+        "confidence": "structured"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4737W",
+      "subjectCode": "COMS",
+      "number": 4737,
+      "qualifier": "W",
+      "title": "Biometrics",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4737W",
+        "rawText": "Prerequisites: a background at the sophomore level in computer science, engineering, or like discipline.",
+        "tree": null,
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "a background at the sophomore level in computer science",
+          "engineering",
+          "like discipline"
+        ],
+        "confidence": "prose"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4762W",
+      "subjectCode": "COMS",
+      "number": 4762,
+      "qualifier": "W",
+      "title": "Machine Learning for Functional Genomics",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4762W",
+        "rawText": "Prerequisites: Proficiency in a high level programming language Python/R/Julia. An introductory machine learning class such as COMS W4771 Machine Learning will be helpful but is not required.",
+        "tree": null,
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "Proficiency in a high level programming language Python",
+          "Julia. An introductory machine learning class such as",
+          "COMS W4771 Machine Learning will be helpful but is not required"
+        ],
+        "confidence": "prose"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4762E",
+      "subjectCode": "COMS",
+      "number": 4762,
+      "qualifier": "E",
+      "title": "Machine Learning for Functional Genomics",
+      "points": 3,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4771W",
+      "subjectCode": "COMS",
+      "number": 4771,
+      "qualifier": "W",
+      "title": "Machine Learning",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4771W",
+        "rawText": "Prerequisites: (MATH UN1201 or MATH UN1205 or APMA E2000) and (COMS W3251 or MATH UN2010 or MATH UN2015) and (STAT UN1201 or STAT GU4001 or IEOR E3658 or MATH UN2015) and COMS W3203 and COMS W3134 General mathematical maturity. COMS W3770 is recommended for students who wish to refresh their math background.",
+        "tree": {
+          "kind": "all",
+          "children": [
+            {
+              "kind": "any",
+              "children": [
+                {
+                  "kind": "course",
+                  "courseId": "MATH1201UN",
+                  "label": "MATH UN1201"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "MATH1205UN",
+                  "label": "MATH UN1205"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "APMA2000E",
+                  "label": "APMA E2000"
+                }
+              ]
+            },
+            {
+              "kind": "any",
+              "children": [
+                {
+                  "kind": "course",
+                  "courseId": "COMS3251W",
+                  "label": "COMS W3251"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "MATH2010UN",
+                  "label": "MATH UN2010"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "MATH2015UN",
+                  "label": "MATH UN2015"
+                }
+              ]
+            },
+            {
+              "kind": "any",
+              "children": [
+                {
+                  "kind": "course",
+                  "courseId": "STAT1201UN",
+                  "label": "STAT UN1201"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "STAT4001GU",
+                  "label": "STAT GU4001"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "IEOR3658E",
+                  "label": "IEOR E3658"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "MATH2015UN",
+                  "label": "MATH UN2015"
+                }
+              ]
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS3203W",
+              "label": "COMS W3203"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS3134W",
+              "label": "COMS W3134"
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "General mathematical maturity COMS W3770 is recommended for students who wish to refresh their math background"
+        ],
+        "confidence": "partial"
+      },
+      "equivalents": [
+        "COMS4776W"
+      ]
+    },
+    {
+      "courseId": "COMS4772W",
+      "subjectCode": "COMS",
+      "number": 4772,
+      "qualifier": "W",
+      "title": "Advanced Machine Learning",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4772W",
+        "rawText": "Prerequisites: (COMS W4771) or COMS W4771; Instructor's permission; knowledge of linear algebra & introductory probability or statistics is required.",
+        "tree": {
+          "kind": "course",
+          "courseId": "COMS4771W",
+          "label": "COMS W4771"
+        },
+        "corequisites": null,
+        "instructorPermission": true,
+        "advisories": [
+          "Instructor's permission or knowledge of linear algebra & introductory probability or statistics is required"
+        ],
+        "confidence": "partial"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4773W",
+      "subjectCode": "COMS",
+      "number": 4773,
+      "qualifier": "W",
+      "title": "Machine Learning Theory",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4773W",
+        "rawText": "Prerequisites: COMS W4771",
+        "tree": {
+          "kind": "course",
+          "courseId": "COMS4771W",
+          "label": "COMS W4771"
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [],
+        "confidence": "structured"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4773E",
+      "subjectCode": "COMS",
+      "number": 4773,
+      "qualifier": "E",
+      "title": "Machine Learning Theory",
+      "points": 3,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4774W",
+      "subjectCode": "COMS",
+      "number": 4774,
+      "qualifier": "W",
+      "title": "Unsupervised Learning",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4774W",
+        "rawText": "Prerequisites: COMS W4771 Background in probability and statistics, linear algebra, and multivariate calculus. Ability to program in a high-level language, and familiarity with basic algorithm design and coding principles",
+        "tree": {
+          "kind": "course",
+          "courseId": "COMS4771W",
+          "label": "COMS W4771"
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "Background in probability and statistics or linear algebra and multivariate calculus. Ability to program in a high-level language and familiarity with basic algorithm design and coding principles"
+        ],
+        "confidence": "partial"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4775W",
+      "subjectCode": "COMS",
+      "number": 4775,
+      "qualifier": "W",
+      "title": "Causal Inference",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4775W",
+        "rawText": "Prerequisites: COMS W4771 Discrete Math, Calculus, Statistics basic probability, modeling, experimental design, Some programming experience",
+        "tree": {
+          "kind": "course",
+          "courseId": "COMS4771W",
+          "label": "COMS W4771"
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "Discrete Math or Calculus or Statistics basic probability or modeling or experimental design or Some programming experience"
+        ],
+        "confidence": "partial"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4775E",
+      "subjectCode": "COMS",
+      "number": 4775,
+      "qualifier": "E",
+      "title": "Causal Inference",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4775E",
+        "rawText": "Prerequisites: (COMS4711W) and",
+        "tree": null,
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "COMS4711W"
+        ],
+        "confidence": "prose"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4776W",
+      "subjectCode": "COMS",
+      "number": 4776,
+      "qualifier": "W",
+      "title": "Neural Networks ＆ Deep Learning",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4776W",
+        "rawText": "Prerequisites: (COMS W4771) and (COMS W3251 or MATH UN2010 or MATH UN2015) and (STAT UN1201 or STAT GU4001 or STAT GU4203 or IEOR E3658 or MATH UN2015)",
+        "tree": {
+          "kind": "all",
+          "children": [
+            {
+              "kind": "course",
+              "courseId": "COMS4771W",
+              "label": "COMS W4771"
+            },
+            {
+              "kind": "any",
+              "children": [
+                {
+                  "kind": "course",
+                  "courseId": "COMS3251W",
+                  "label": "COMS W3251"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "MATH2010UN",
+                  "label": "MATH UN2010"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "MATH2015UN",
+                  "label": "MATH UN2015"
+                }
+              ]
+            },
+            {
+              "kind": "any",
+              "children": [
+                {
+                  "kind": "course",
+                  "courseId": "STAT1201UN",
+                  "label": "STAT UN1201"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "STAT4001GU",
+                  "label": "STAT GU4001"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "STAT4203GU",
+                  "label": "STAT GU4203"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "IEOR3658E",
+                  "label": "IEOR E3658"
+                },
+                {
+                  "kind": "course",
+                  "courseId": "MATH2015UN",
+                  "label": "MATH UN2015"
+                }
+              ]
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [],
+        "confidence": "structured"
+      },
+      "equivalents": [
+        "COMS4771W"
+      ]
+    },
+    {
+      "courseId": "COMS4776E",
+      "subjectCode": "COMS",
+      "number": 4776,
+      "qualifier": "E",
+      "title": "Machine Learning for Data Science",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4776E",
+        "rawText": "Prerequisites: SIEO W3600 or W4150 or equivalent.",
+        "tree": {
+          "kind": "any",
+          "children": [
+            {
+              "kind": "course",
+              "courseId": "SIEO3600W",
+              "label": "SIEO W3600"
+            },
+            {
+              "kind": "course",
+              "courseId": "COMS4150W",
+              "label": "COMS W4150"
+            },
+            {
+              "kind": "advisory",
+              "text": "equivalent"
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [],
+        "confidence": "partial"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4824W",
+      "subjectCode": "COMS",
+      "number": 4824,
+      "qualifier": "W",
+      "title": "Computer Architecture",
+      "points": 3,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4835W",
+      "subjectCode": "COMS",
+      "number": 4835,
+      "qualifier": "W",
+      "title": "Computer Organization Ii",
+      "points": 3,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4841W",
+      "subjectCode": "COMS",
+      "number": 4841,
+      "qualifier": "W",
+      "title": "Intro to Vlsi Systems",
+      "points": 3,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4899E",
+      "subjectCode": "COMS",
+      "number": 4899,
+      "qualifier": "E",
+      "title": "Research Training",
+      "points": 0,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4901W",
+      "subjectCode": "COMS",
+      "number": 4901,
+      "qualifier": "W",
+      "title": "Projects in Computer Science",
+      "points": 1,
+      "prereq": {
+        "courseId": "COMS4901W",
+        "rawText": "Prerequisites: Approval by a faculty member who agrees to supervise the work.",
+        "tree": null,
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "Approval by a faculty member who agrees to supervise the work"
+        ],
+        "confidence": "prose"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4910W",
+      "subjectCode": "COMS",
+      "number": 4910,
+      "qualifier": "W",
+      "title": "Curricular Practical Training",
+      "points": 1,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4975W",
+      "subjectCode": "COMS",
+      "number": 4975,
+      "qualifier": "W",
+      "title": "Topics in Natural Language Processing",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4975W",
+        "rawText": "Prerequisites: (COMS W4705)",
+        "tree": {
+          "kind": "course",
+          "courseId": "COMS4705W",
+          "label": "COMS W4705"
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [],
+        "confidence": "structured"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4995E",
+      "subjectCode": "COMS",
+      "number": 4995,
+      "qualifier": "E",
+      "title": "Computer Arts/Video Games",
+      "points": 3,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4995W",
+      "subjectCode": "COMS",
+      "number": 4995,
+      "qualifier": "W",
+      "title": "Topics in Computer Science",
+      "points": 3,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "COMS4996W",
+      "subjectCode": "COMS",
+      "number": 4996,
+      "qualifier": "W",
+      "title": "Special topics in computer science, II",
+      "points": 3,
+      "prereq": {
+        "courseId": "COMS4996W",
+        "rawText": "Prerequisites: Instructor's permission.",
+        "tree": null,
+        "corequisites": null,
+        "instructorPermission": true,
+        "advisories": [
+          "Instructor's permission"
+        ],
+        "confidence": "prose"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "CSEE3826W",
+      "subjectCode": "CSEE",
+      "number": 3826,
+      "qualifier": "W",
+      "title": "Fundamentals of Computer Org",
+      "points": 3,
+      "prereq": null,
+      "equivalents": []
+    },
+    {
+      "courseId": "CSEE3827W",
+      "subjectCode": "CSEE",
+      "number": 3827,
+      "qualifier": "W",
+      "title": "Fundamentals of Computer Systs",
+      "points": 3,
+      "prereq": {
+        "courseId": "CSEE3827W",
+        "rawText": "Prerequisites: An introductory programming course.",
+        "tree": null,
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "An introductory programming course"
+        ],
+        "confidence": "prose"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "CSEE4119W",
+      "subjectCode": "CSEE",
+      "number": 4119,
+      "qualifier": "W",
+      "title": "Computer Networks",
+      "points": 3,
+      "prereq": {
+        "courseId": "CSEE4119W",
+        "rawText": "Prerequisites: Comfort with basic probability. Programming fluency in Python, C++, Java, or Ruby please see section course page for specific language requirements.",
+        "tree": null,
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "Comfort with basic probability. Programming fluency in Python",
+          "C++",
+          "Java",
+          "Ruby please see section course page for specific language requirements"
+        ],
+        "confidence": "prose"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "CSEE4121W",
+      "subjectCode": "CSEE",
+      "number": 4121,
+      "qualifier": "W",
+      "title": "Computer Systems for Data Science",
+      "points": 3,
+      "prereq": {
+        "courseId": "CSEE4121W",
+        "rawText": "Prerequisites: Background in Computer System Organization and good working knowledge of C/C++. CSOR W4246 Algorithms for Data Science, STAT W4203 Probability Theory, or equivalent as approved by faculty advisor.",
+        "tree": null,
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "Background in Computer System Organization",
+          "good working knowledge of C",
+          "C++",
+          "CSOR W4246 Algorithms for Data Science or STAT W4203 Probability Theory or equivalent as approved by faculty advisor"
+        ],
+        "confidence": "prose"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "CSEE4140W",
+      "subjectCode": "CSEE",
+      "number": 4140,
+      "qualifier": "W",
+      "title": "Networking Laboratory",
+      "points": 3,
+      "prereq": {
+        "courseId": "CSEE4140W",
+        "rawText": "Prerequisites: (CSEE W4119) or CSEE W4119; or equivalent.",
+        "tree": {
+          "kind": "course",
+          "courseId": "CSEE4119W",
+          "label": "CSEE W4119"
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "equivalent"
+        ],
+        "confidence": "partial"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "CSEE4823W",
+      "subjectCode": "CSEE",
+      "number": 4823,
+      "qualifier": "W",
+      "title": "Advanced Logic Design",
+      "points": 3,
+      "prereq": {
+        "courseId": "CSEE4823W",
+        "rawText": "Prerequisites: (CSEE W3827) or CSEE W3827; Or a half semester introduction to digital logic, or the equivalent.",
+        "tree": {
+          "kind": "course",
+          "courseId": "CSEE3827W",
+          "label": "CSEE W3827"
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [
+          "a half semester introduction to digital logic or the equivalent"
+        ],
+        "confidence": "partial"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "CSEE4824W",
+      "subjectCode": "CSEE",
+      "number": 4824,
+      "qualifier": "W",
+      "title": "Computer Architecture",
+      "points": 3,
+      "prereq": {
+        "courseId": "CSEE4824W",
+        "rawText": "Prerequisites: (CSEE W3827) or CSEE W3827",
+        "tree": {
+          "kind": "course",
+          "courseId": "CSEE3827W",
+          "label": "CSEE W3827"
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [],
+        "confidence": "structured"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "CSEE4840W",
+      "subjectCode": "CSEE",
+      "number": 4840,
+      "qualifier": "W",
+      "title": "Embedded Systems",
+      "points": 3,
+      "prereq": {
+        "courseId": "CSEE4840W",
+        "rawText": "Prerequisites: (CSEE W4823) CSEE W4823",
+        "tree": {
+          "kind": "course",
+          "courseId": "CSEE4823W",
+          "label": "CSEE W4823"
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [],
+        "confidence": "structured"
+      },
+      "equivalents": []
+    },
+    {
+      "courseId": "CSEE4868W",
+      "subjectCode": "CSEE",
+      "number": 4868,
+      "qualifier": "W",
+      "title": "System-on-Chip Platforms",
+      "points": 3,
+      "prereq": {
+        "courseId": "CSEE4868W",
+        "rawText": "Prerequisites: (COMS W3157) and (CSEE W3827) COMS W3157 AND CSEE W3827",
+        "tree": {
+          "kind": "all",
+          "children": [
+            {
+              "kind": "course",
+              "courseId": "COMS3157W",
+              "label": "COMS W3157"
+            },
+            {
+              "kind": "course",
+              "courseId": "CSEE3827W",
+              "label": "CSEE W3827"
+            }
+          ]
+        },
+        "corequisites": null,
+        "instructorPermission": false,
+        "advisories": [],
+        "confidence": "structured"
+      },
+      "equivalents": []
+    }
+  ],
+  "equivalenceGroups": [
+    {
+      "courseIds": [
+        "COMS1004W",
+        "COMS1005W"
+      ],
+      "sourceText": "credit for only one of the following two courses: W1004 or W1005."
+    },
+    {
+      "courseIds": [
+        "COMS3134W",
+        "COMS3136W",
+        "COMS3137W"
+      ],
+      "sourceText": "credit for only one of the following three courses: COMS W3134, COMS W3136, COMS W3137."
+    },
+    {
+      "courseIds": [
+        "COMS3160BC",
+        "COMS4160W"
+      ],
+      "sourceText": "only one of COMS 4160 or Barnard COMS 3160BC may be taken for credit"
+    },
+    {
+      "courseIds": [
+        "COMS3705BC",
+        "COMS4705W"
+      ],
+      "sourceText": "only one of COMS 4705 or Barnard COMS 3705BC may be taken for credit."
+    },
+    {
+      "courseIds": [
+        "COMS4771W",
+        "COMS4776W"
+      ],
+      "sourceText": "may not receive credit for both COMS W4771 and W4776."
+    }
+  ]
+}
