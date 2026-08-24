@@ -85,8 +85,16 @@ against a real January 19 (a dropped first Tuesday).
   to `promoteToHot`. The window test runs in SQL so "now" is the database's
   clock, not a serverless function's — that distinction only matters on a
   drifted host and only at the moment a window opens, which is the one moment
-  the tier exists for. Dormant today at 0 watches, since only watched subjects
-  escalate; the first Fall 2026 window it can act on opens 2026-08-25.
+  the tier exists for.
+
+  Verified on production by creating a watch, running the cron
+  (`promotedSubjectTerms: 1`), and removing it again. Worth recording what that
+  showed: escalation is two-layered. `trg_watches_escalate_tier` fires on the
+  watch INSERT and takes the subject to `hot` synchronously — no cron needed,
+  and it never downgrades. That trigger hardcodes `hot`, so the cron's
+  `promoteToHot` is the only path that can reach `registration`, which is what
+  made this wiring necessary rather than redundant. The first Fall 2026 window
+  it can act on opens 2026-08-25.
 - `components/schedule/calendar-week-preview.tsx` still builds a synthetic term
   internally, so its "first week of term" sample is picked from the fallback
   shape. Left alone deliberately: it is consumed from `components/course/`,
@@ -246,36 +254,44 @@ with a columbia.edu or barnard.edu account. A `users` row appearing is the
 confirmation. If anything goes wrong the app now says which stage failed
 rather than failing blank — `?auth_error=` is rendered by `AuthErrorNotice`.
 
-## 7. Resend: API key + a verified sending domain (seat alerts)
+## 7. Resend: an API key. Seat alerts are the last unimplemented spec item.
+**Status: blocked on a credential, and only on a credential.** Spec §14 names
+email as the delivery mechanism, so this is the one part of the spec that
+cannot be finished from inside the repository.
 
-**What is blocked:** the seat-opened email, and nothing else. The whole alert
-lane is built and runs end-to-end today — `sections_opened_since` detects the
-transition, `pending_seat_alerts` finds the watchers owed one and dedupes
-against `alerts_sent`, `/api/alerts/sweep` renders and sends, and
-`record_alerts_sent` books it. Only the transport is missing.
+**The ask is smaller than this document previously claimed.** It said "API key
++ a DNS-verified sending domain". The domain is needed to reach *arbitrary*
+recipients — real students — but not to make alerts work:
 
-Without a key the sweep reports `stoppedBecause: "email_not_configured"`,
-records nothing as sent, and leaves the alerts pending. The first sweep after
-the key lands delivers whatever is still inside the 90-minute window. It fails
-loudly in the summary rather than silently, because a sweep that sends nothing
-and says nothing looks identical to a sweep with nothing to send.
+1. Create a Resend account, generate an API key with Sending access.
+2. `RESEND_API_KEY=<key>` and `ALERT_FROM_EMAIL=onboarding@resend.dev` in
+   `.env.local`, and the same two in the Vercel project (Production).
 
-**What I need from you:**
+`onboarding@resend.dev` is Resend's shared sender: no DNS, no domain, and it
+delivers to the address that owns the Resend account. That is enough to
+exercise the entire path. `isEmailConfigured()` is `RESEND_API_KEY &&
+ALERT_FROM_EMAIL` and nothing validates the domain, so no code changes at
+either step. Add DNS verification later, when alerts go out to other people.
 
-1. resend.com → API Keys → create one with **Sending access**.
-2. Domains → add a domain you control and complete the DNS records. Resend
-   refuses to send from an unverified domain, so this is not optional.
-3. Add both to `.env.local` and to the Vercel project:
-   ```
-   RESEND_API_KEY=re_...
-   ALERT_FROM_EMAIL="Columbia Catalog <alerts@yourdomain.tld>"
-   ```
+**Why I cannot do it:** creating the account means agreeing to terms of service
+as the user, and the key would be theirs. Unlike #4, #12 and #17 — each of
+which turned out to be a belief about a tool rather than a fact about the
+world — restating this one does not dissolve it. Every route to delivering mail
+ends at an account somebody has to own.
 
-There is no fallback and deliberately no mock. A stubbed sender that logged to
-the console would let the whole feature pass a smoke test while every watcher
-got nothing.
+**Everything up to the transport is verified.** `runAlertSweep` has nine tests
+covering the invariant that matters — an alert is recorded as sent if and only
+if it was delivered, so an unconfigured transport can never silently consume a
+watcher's one notification. Exercised on production: the sweep runs clean, and
+with a live watch in place the trigger, dedupe and section-context reads all
+execute. The only untaken branch is the HTTP call to Resend.
 
----
+**Not tested, and deliberately not:** the full trigger→send path needs a
+section that actually transitions to having an open seat. Fall 2026 seat counts
+are static right now, and manufacturing one would mean writing enrollment
+snapshots Columbia never published into the table that renders the public
+seat-history chart with provenance. That is a worse outcome than an untested
+branch.
 
 ## 8. Vercel plan: cron frequency — RESOLVED IN CODE, still worth knowing
 

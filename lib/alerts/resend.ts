@@ -39,9 +39,14 @@ export function isEmailConfigured(): boolean {
 }
 
 /**
- * The From header. A verified sending domain is required by Resend, so this is
- * configuration rather than a constant — the value that works in production is
- * not one this repository can know.
+ * The From header. Configuration rather than a constant, because the value that
+ * works in production is not one this repository can know.
+ *
+ * A verified sending domain is required to reach *arbitrary* recipients, which
+ * is what shipping to students needs. It is not required to start: Resend's
+ * shared `onboarding@resend.dev` sender works with only an API key and delivers
+ * to the account owner's own address, which is enough to exercise the whole
+ * path end to end. Nothing here validates the domain, so either value works.
  */
 function fromAddress(): string | null {
   return process.env.ALERT_FROM_EMAIL ?? null;
