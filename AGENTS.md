@@ -20,6 +20,33 @@ thorough outside it.
    If something is genuinely missing, say so in your final report and work
    around it. Do not add dependencies.
 
+   > **Amendment — 2026-08-24, owner decision.** Rules 1 and 2 were lifted once,
+   > for one purpose: the natural-language agent. `package.json` gained `ai`
+   > (the SDK), `@ai-sdk/react` (its `useChat` hook, needed by the client) and
+   > `@ai-sdk/openai` (the provider), and `npm install` was run.
+   >
+   > This is recorded here so the next agent to read these rules does not find a
+   > dependency that "shouldn't" exist and try to remove it, or conclude the
+   > rules are advisory. **They are not.** The exception was granted explicitly,
+   > in advance, for that one package. Rules 1 and 2 apply in full to everything
+   > else and to every other agent.
+   >
+   > Two things worth knowing before touching that dependency:
+   >
+   > - **Do not trust recalled knowledge of this SDK.** v7 renamed enough that
+   >   confident memory is worse than no memory — `stepCountIs` is now
+   >   `isStepCount`, and `useChat` changed substantially. Verify against
+   >   `node_modules/ai/docs/` and `node_modules/ai/dist/index.d.ts`, which ship
+   >   with the installed version and are therefore correct for it.
+   > - **Do not hard-code a model id from memory either.** The agent runs on
+   >   whichever of two credentials is present — `OPENAI_API_KEY` wins,
+   >   otherwise the Vercel AI Gateway — and each names its models differently,
+   >   so read the ids from the source that matches the route. Gateway:
+   >   `curl -s https://ai-gateway.vercel.sh/v1/models | jq -r '.data[].id'`.
+   >   OpenAI: the capability table in
+   >   `node_modules/@ai-sdk/openai/docs/03-openai.mdx`, which is also where to
+   >   check that a tier still supports tool calling before switching to it.
+
 3. **Only create or edit files inside the directories you own.** They are listed
    in your task prompt. If you need something from another lane, define a
    narrow local interface and code against it — do not reach into their files.

@@ -14,9 +14,12 @@
     "build:campus": "tsx scripts/build-campus-map.ts",
     "check": "npm run typecheck && npm run lint && npm run test",
     "seed:meetings": "tsx scripts/enrich-seed-meetings.ts",
-    "profile:search": "tsx scripts/profile-search-load.ts"
+    "profile:search": "tsx scripts/profile-search-load.ts",
+    "dump:program": "tsx --env-file=.env.local scripts/dump-program.ts"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^4.0.46",
+    "@ai-sdk/react": "^3.0.268",
     "@internationalized/date": "^3.12.3",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@react-three/drei": "^10.7.8",
@@ -29,6 +32,7 @@
     "@types/three": "^0.185.4",
     "@xyflow/react": "^12.11.3",
     "agentation": "^3.0.2",
+    "ai": "^7.0.78",
     "date-fns": "^4.4.0",
     "ics": "^3.12.0",
     "motion": "^13.1.1",
