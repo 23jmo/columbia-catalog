@@ -22,10 +22,12 @@ is signed into the account holding `dbsmahstbdkeqoskeqwd`. Using the CLI for all
 provisioning. If you want the MCP connector usable for this project later,
 re-auth it against the same account.
 
-### 2. Resend needs an API key + verified domain
-`RESEND_API_KEY` and a verified sending domain are required before seat alerts
-actually deliver. The alert sweep and templates will be built and tested against
-a dry-run transport; flipping to live delivery is a one-env-var change.
+### 2. Resend — see #7, which supersedes this
+This entry said "an API key **and** a verified sending domain". The domain half
+was wrong as a precondition and made a two-minute task look like a project. The
+current state, the three routes to a key, and what is already verified are all
+in **#7**. Short version: `ALERT_FROM_EMAIL` is set, `RESEND_API_KEY` is not,
+and that is the entire remaining gap.
 
 ### 3. Reviews have no credentials
 Per your call: pipeline only, no data. Rating filters ship with "include
@@ -254,117 +256,121 @@ with a columbia.edu or barnard.edu account. A `users` row appearing is the
 confirmation. If anything goes wrong the app now says which stage failed
 rather than failing blank — `?auth_error=` is rendered by `AuthErrorNotice`.
 
-## 7. Resend: an API key. Seat alerts are the last unimplemented spec item.
-**Status: blocked on a credential, and only on a credential.** Spec §14 names
-email as the delivery mechanism, so this is the one part of the spec that
-cannot be finished from inside the repository.
+## 7. Resend: ONE environment variable. Everything else for seat alerts is done.
 
-**The ask is smaller than this document previously claimed.** It said "API key
-+ a DNS-verified sending domain". The domain is needed to reach *arbitrary*
-recipients — real students — but not to make alerts work. There are two routes,
-and they are not equivalent.
+**Status: one secret away, and it is a secret you already own.** Spec §14 names
+email as the delivery mechanism. Every line of that path is written, tested and
+deployed; what is unset is a runtime configuration value.
 
-### Path A — 60 seconds, no DNS, delivers only to you
+### What is left
 
-1. resend.com → account → API key with Sending access.
-2. Set both in `.env.local` and in the Vercel project (Production):
-   `RESEND_API_KEY=<key>` and `ALERT_FROM_EMAIL=onboarding@resend.dev`.
-
-`onboarding@resend.dev` is Resend's shared sender: no DNS, no domain, and it
-delivers to the address that owns the Resend account. That is enough to
-exercise the entire path end to end. Nothing in the code validates the domain,
-so no code changes at either step. This is the right first move — it proves the
-transport before anyone commits a domain to it.
-
-### Path B — production-grade, through the Vercel account that already exists
-
-The Vercel Marketplace carries Resend as `resend/resend-email`, which means the
-credential can be provisioned from the account already deployed to, with no
-separate signup:
+Paste a Resend API key into `.env.local` and into Vercel Production:
 
 ```
-vercel integration add resend/resend-email \
-  --scope johnathans-projects-b2a37f0a \
-  --metadata domain=<one-you-own> \
-  --metadata region=us-east-1 \
-  --environment production
+vercel env add RESEND_API_KEY production --scope johnathans-projects-b2a37f0a
 ```
 
-It injects `RESEND_API_KEY` into the project automatically. **You still have to
-set `ALERT_FROM_EMAIL` yourself** — the integration does not create one, and
-that gap is now reported by name rather than as a generic
-`email_not_configured` (see below). Set it to something at the domain you
-chose, e.g. `alerts@drafted.college`.
+Then redeploy — Vercel injects environment variables at build, so an existing
+deployment will not pick up a new one.
 
-The product's schema **requires** `domain` and `region`, and its own field help
-says "you must own a domain to be able to send". Six domains sit on that Vercel
-account (`drafted.college`, `johnathanmo.com`, `tabby-ai.com`,
-`trylocked.in`, `trychance.me`, `secondselftwinnem.us`); `drafted.college` is
-the obvious fit for a course catalog and the only one not already fronting a
-live site. Region `us-east-1` matches where the app and Supabase already run.
+`ALERT_FROM_EMAIL` **is already set** in both places, so this really is one
+variable. `emailConfigGap()` currently reports exactly `api_key`.
 
-**Why I stopped short of running it.** Not because it is blocked — the CLI is
-authenticated and the command above would go through. Because choosing which of
-someone's six personal domains becomes an application's permanent sending
-identity, and letting a third party write SPF/DKIM/MX records into it, is a
-decision with consequences outside this repository. Path A needs none of that
-and answers the same question, so the honest order is A now, B when you have
-picked a domain.
+### You already have a Resend account
 
-**Why I cannot do it.** Applying #4/#12/#17's lesson — name the fact, not the
-URL — did move this one: the fact needed is not "a Resend account" but "a
-`RESEND_API_KEY` reachable by production", and asking who *else* can produce
-one is what surfaced Path B. But it does not dissolve the blocker the way it
-dissolved those three. Every route still terminates at an account somebody has
-to own and a domain somebody has to choose. The lesson made the ask smaller and
-gave it a second shape; it did not make it mine to answer.
+This blocker spent three revisions saying "create a Resend account". You have
+one: `RESEND_API_KEY` and `FROM_EMAIL` are configured on the
+`omnus-intake-form-complete` Vercel project. So this is a second key from a
+dashboard you can already sign into, not an evaluation and a signup.
 
-**What changed in the code because of Path B.** The marketplace integration
-sets `RESEND_API_KEY` and nothing else, which lands the app in the one
-configuration that looks provisioned and sends nothing. `email_not_configured`
-was a single opaque reason for two different causes, so the sweep now reports
-`emailConfigGap: "api_key" | "from_address" | "both"` alongside it and logs the
-variable name. `/api/alerts/sweep` returns the whole summary, so the answer to
-"why is no mail going out" is in the cron response rather than in a code read.
+**I did not copy that key across.** Not because it is technically hard — the
+value is one `vercel env pull` away — but because `omnus-intake-form` reads
+like client work, and I cannot tell from here whether that Resend account is
+yours or a client's. Reusing a client's transactional-email credential for a
+different product shares its sending reputation and rate limits, and a rotation
+on either side silently breaks the other. That is a judgement that needs
+information I do not have.
 
 ### Verify it in one command, before a seat ever opens
 
 ```
-npx tsx --env-file=.env.local scripts/verify-email.ts you@example.com
+npx tsx --env-file=.env.local scripts/verify-email.ts 2023johnathanmo@gmail.com
 ```
 
 Sends one message through the same renderer and the same `sendEmailBatch` the
 sweep uses, describing an obviously fake `TEST 0000` section. Exits 0 only if
-Resend returned an id. It exists because the failure mode otherwise is quiet:
-a wrong key produces `email_not_configured`-shaped silence that is
-indistinguishable from a term in which no seat happened to open, so the first
-thing to discover it would be a missed alert.
+Resend returned an id. It exists because the failure mode otherwise is quiet: a
+wrong key produces silence indistinguishable from a term in which no seat
+happened to open, so the first thing to discover it would be a missed alert.
 
-**The request itself is already proven.** Running that script with a
-deliberately invalid key returns:
+### The request is already proven against the live API
+
+Running that script with a deliberately invalid key returns:
 
 ```
 Rejected: HTTP 401: {"statusCode":401,"name":"validation_error",
                      "message":"API key is invalid"}
 ```
 
-Resend *answered*. The endpoint, the bearer header, the JSON batch body and
-the response parsing are all correct — the only thing between here and working
-alerts is a key that is not fake.
+Resend *answered*. The endpoint, bearer header, JSON batch body and response
+parsing are all confirmed. A 400 would have meant a malformed request; a 401
+means the request was fine and the key was not. What is unproven is narrower
+than "the transport" — it is a valid key.
 
-**Everything up to the transport is verified.** `runAlertSweep` has nine tests
-covering the invariant that matters — an alert is recorded as sent if and only
-if it was delivered, so an unconfigured transport can never silently consume a
-watcher's one notification. Exercised on production: the sweep runs clean, and
-with a live watch in place the trigger, dedupe and section-context reads all
-execute. The only untaken branch is the HTTP call to Resend.
+### About the from-address that is already set
 
-**Not tested, and deliberately not:** the full trigger→send path needs a
-section that actually transitions to having an open seat. Fall 2026 seat counts
-are static right now, and manufacturing one would mean writing enrollment
-snapshots Columbia never published into the table that renders the public
-seat-history chart with provenance. That is a worse outcome than an untested
-branch.
+`ALERT_FROM_EMAIL=onboarding@resend.dev` is Resend's shared sender: no DNS, no
+domain, and it delivers **only to the address that owns the key**. That is why
+it is safe to leave set — this configuration physically cannot mail a student
+by mistake; Resend rejects any other recipient with a 403, the sweep records
+nothing as sent, and the alert stays owed rather than being consumed.
+
+It is a PROVING value, not a shipping one. Before real students rely on
+alerts, verify a domain in Resend and change this to an address on it.
+
+### The third route, for completeness
+
+Resend is on the Vercel Marketplace as `resend/resend-email`:
+
+```
+vercel integration add resend/resend-email \
+  --scope johnathans-projects-b2a37f0a \
+  --metadata domain=<one-you-own> --metadata region=us-east-1 \
+  --environment production
+```
+
+It mints a key from the Vercel account already being deployed to and injects
+`RESEND_API_KEY` automatically. Its schema **requires** a domain you own, and
+the six on this account (`drafted.college`, `johnathanmo.com`, `tabby-ai.com`,
+`trylocked.in`, `trychance.me`, `secondselftwinnem.us`) all use third-party
+nameservers, so Vercel cannot write the SPF/DKIM records for you — the domain
+would sit unverified until you added them by hand. `drafted.college` is the
+obvious fit for a course catalog, being the only one not already fronting a
+live site. This is the right route eventually; it is not the short one.
+
+### Why I stopped here
+
+Three independent routes — direct signup, the Vercel Marketplace, and the key
+you already have — and each terminates at something that is yours to own or
+decide: an account, a domain, or whether a client's credential may be reused.
+Restating the blocker (see #12, #17, #4) genuinely worked three times and
+worked partially here: it shrank the ask from "evaluate an email provider" to
+"paste one key", and it surfaced the misconfiguration the code now reports by
+name. It did not make the last step mine to take.
+
+### Everything up to the transport is verified
+
+`runAlertSweep` has ten tests covering the invariant that matters — an alert is
+recorded as sent if and only if it was delivered, so an unconfigured transport
+can never silently consume a watcher's one notification. Exercised on
+production: the sweep runs clean, and with a live watch in place the trigger,
+dedupe and section-context reads all execute.
+
+**Not tested, and deliberately not:** the full trigger→send path needs a section
+that actually transitions to having an open seat. Fall 2026 seat counts are
+static right now, and manufacturing one would mean writing enrollment snapshots
+Columbia never published into the table that renders the public seat-history
+chart with provenance. That is a worse outcome than an untested branch.
 
 ## 8. Vercel plan: cron frequency — RESOLVED IN CODE, still worth knowing
 
