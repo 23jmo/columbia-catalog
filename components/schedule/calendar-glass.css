@@ -1,0 +1,26 @@
+/**
+ * Glass chrome from Nuxt Calendar Template `app/assets/css/main.css` (MIT).
+ * Their `--ui-primary` hexes are dropped; fills resolve through BoardUI tokens.
+ */
+
+.calendar-root {
+  --ui-header-height: 4rem;
+  --glass-bg: color-mix(in oklab, var(--color-background-primary-default) 72%, transparent);
+  --control-bg: color-mix(in oklab, var(--color-text-primary) 5%, transparent);
+}
+
+.calendar-glass {
+  -webkit-backdrop-filter: blur(24px) saturate(180%) brightness(105%);
+  backdrop-filter: blur(24px) saturate(180%) brightness(105%);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .calendar-glass {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .calendar-root {
+    --glass-bg: var(--color-background-primary-default);
+  }
+}

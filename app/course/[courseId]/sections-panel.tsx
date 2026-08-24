@@ -7,6 +7,7 @@ import { meetingLines, placeSummary, prettyTitle } from "@/components/course/for
 import { RegistrationHandoff } from "@/components/course/registration-handoff";
 import { SectionCompare } from "@/components/course/section-compare";
 import { ProvenanceStamp, SeatPill } from "@/components/course/seat-state";
+import { InstructorLinks } from "@/components/instructor/instructor-link";
 import { WatchButton } from "@/components/watch/watch-button";
 import { useWatchlist } from "@/hooks/use-watchlist";
 import { isDistinctSectionTitle } from "@/lib/catalog-list-types";
@@ -127,9 +128,7 @@ export function SectionsPanel({ sections, courseCode, courseTitle }: SectionsPan
                   </div>
 
                   <p className="mt-1 text-caption-1-regular text-text-secondary">
-                    {section.instructors.length > 0
-                      ? section.instructors.join(" · ")
-                      : "Instructor TBA"}
+                    <InstructorLinks names={section.instructors} separator=" · " />
                   </p>
 
                   <div className="mt-1 flex flex-col gap-0.5 text-caption-1-regular text-text-secondary">

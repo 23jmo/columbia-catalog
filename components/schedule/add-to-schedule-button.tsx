@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { RiCalendarCheckFill, RiCalendarLine } from "@remixicon/react";
+import { RiAddLine, RiCalendarCheckFill, RiCalendarLine, RiCheckLine } from "@remixicon/react";
 
 import { Button } from "@/components/base/buttons/button";
 import { usePlans } from "@/hooks/use-plans";
@@ -39,6 +39,24 @@ import { cx } from "@/utils/cx";
  * button is not a permission check.
  */
 
+/**
+ * Which glyph pair states the action.
+ *
+ * `calendar` is the default and belongs next to a label: the words already say
+ * "add to schedule", so the icon's job is to name the destination.
+ *
+ * `plus` is for the bare square button beside a section heading, where there is
+ * no label at all. A lone calendar there says "something to do with calendars"
+ * and leaves the reader to guess the verb — the same reason a toolbar's "new"
+ * control is a plus and not a document. The "on" half of the pair is a check
+ * rather than a filled plus, because the state being reported is "done", and a
+ * plus that stays a plus after a successful add reads as a no-op.
+ */
+const GLYPHS = {
+  calendar: { idle: RiCalendarLine, active: RiCalendarCheckFill },
+  plus: { idle: RiAddLine, active: RiCheckLine },
+} as const;
+
 export interface AddToScheduleButtonProps {
   sectionId: string;
   /** For the accessible label — "Add section 001 to your schedule". */
@@ -46,6 +64,22 @@ export interface AddToScheduleButtonProps {
   termCode?: TermCode;
   size?: "xs" | "small" | "medium";
   iconOnly?: boolean;
+  /** See `GLYPHS`. Default `calendar`; use `plus` for an unlabelled button. */
+  glyph?: keyof typeof GLYPHS;
+  /**
+   * How loudly the button asks.
+   *
+   * `normal` is a secondary button that fills in once the section is on the
+   * plan — right in a row of peer actions, where going primary would make one
+   * of several equal choices look like the answer.
+   *
+   * `high` inverts it: primary while the section is NOT on the plan, secondary
+   * once it is. That is the shape of a call to action — loud invitation, quiet
+   * acknowledgement — and it is what the section heading wants, where this is
+   * the only thing you can do to the class rather than one of five. Leaving it
+   * primary after the add would keep shouting an invitation already accepted.
+   */
+  emphasis?: "normal" | "high";
   className?: string;
 }
 
@@ -55,6 +89,8 @@ export function AddToScheduleButton({
   termCode = CURRENT_TERM,
   size = "medium",
   iconOnly = false,
+  glyph = "calendar",
+  emphasis = "normal",
   className,
 }: AddToScheduleButtonProps) {
   const plans = usePlans(termCode);
@@ -66,7 +102,7 @@ export function AddToScheduleButton({
   const isSignedOut = !isLoading && account === null;
 
   const label = isSignedOut
-    ? "Sign in to save a schedule"
+    ? "Sign in to add classes"
     : isOnSchedule
       ? `Remove section ${sectionCode} from your schedule`
       : `Add section ${sectionCode} to your schedule`;
@@ -89,9 +125,17 @@ export function AddToScheduleButton({
     <span className={cx("inline-flex flex-col items-start gap-1", className)}>
       <Button
         size={size}
-        variant={isOnSchedule ? "primary" : "secondary"}
+        variant={
+          emphasis === "high"
+            ? isOnSchedule
+              ? "secondary"
+              : "primary"
+            : isOnSchedule
+              ? "primary"
+              : "secondary"
+        }
         iconOnly={iconOnly}
-        leadingIcon={isOnSchedule ? RiCalendarCheckFill : RiCalendarLine}
+        leadingIcon={isOnSchedule ? GLYPHS[glyph].active : GLYPHS[glyph].idle}
         onClick={toggle}
         disabled={isSignedOut}
         aria-pressed={isOnSchedule}

@@ -163,7 +163,27 @@ export function SearchScreen({ initialFilters, termCode }: SearchScreenProps) {
     : "Loading catalog index…";
 
   return (
-    <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-6">
+    /*
+      `px-3` is the gutter the result rows bleed back out of.
+
+      Every row body carries `px-3` so its hover tint and hairline have
+      breathing room around the text. That padding used to push result titles
+      12px right of the page title and the search field, which sit flush
+      against this container — three different left edges in one column.
+
+      Putting the gutter HERE and letting `ResultsList` cancel it with `-mx-3`
+      gives the screen exactly two vertical edges: text on 12px, and row
+      surfaces on 0. The rows still bleed, they just bleed into padding that
+      exists instead of past the container.
+    */
+    /*
+      No min-width here on purpose. The 480px floor that keeps a result row
+      readable while the drawer is open lives on the shell's content column in
+      `components/shell/app-shell.tsx` — a floor set at this level would
+      overflow into the strip the fixed panel covers instead of making the page
+      scrollable. See the note there.
+    */
+    <div className="mx-auto flex w-full max-w-[1320px] flex-col gap-6 px-3">
       <PageHeader title="Search">
         <div className="flex items-start gap-2">
           <SearchBar

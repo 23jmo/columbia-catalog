@@ -74,9 +74,22 @@ const RMP_PUBLIC_CLIENT_AUTH = "Basic dGVzdDp0ZXN0";
  * Isolated here because they are the most likely thing to need updating.
  */
 const RMP_SCHOOL_IDS: string[] = [
-  "U2Nob29sLTI3OA==", // School-278  — Columbia University
-  "U2Nob29sLTE2OA==", // School-168  — Barnard College
+  "U2Nob29sLTI3OA==", // School-278   — Columbia University      (~1,195 professors)
+  "U2Nob29sLTgz", //     School-83    — Barnard College          (~102 professors)
+  "U2Nob29sLTk5Ng==", // School-996   — Teachers College         (~411 professors)
 ];
+
+/*
+ * A note on the id that used to be second in that list.
+ *
+ * It was `U2Nob29sLTE2OA==` — School-168 — labelled "Barnard College". School-168
+ * is California State University Monterey Bay. Barnard is School-83. Because the
+ * loop below falls through to the next school when the first yields nothing, every
+ * Columbia instructor without an RMP profile was being matched against 859
+ * professors at a university 3,000 miles away, and the name matcher below was
+ * lenient enough to find one. Verified against RMP's own `school { name }` field
+ * before changing it.
+ */
 
 /** Public profile URL for a professor's numeric legacy id. */
 function profileUrlFor(legacyId: number | string): string {
@@ -178,42 +191,108 @@ function finiteOrNull(value: unknown): number | null {
   return value;
 }
 
-/** Tokens of a name, lowercased, punctuation stripped. */
+/** Tokens of a name, lowercased, punctuation stripped. Keeps single letters. */
 function nameTokens(name: string): string[] {
   return name
     .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z\s-]/g, " ")
     .split(/[\s-]+/)
-    .filter((token) => token.length > 1);
+    .filter((token) => token.length > 0);
+}
+
+/**
+ * Are these two GIVEN names plausibly the same person?
+ *
+ * Deliberately strict, and the strictness is the whole point — see
+ * `pickBestMatch`. Accepts:
+ *
+ *   · the same name                      "daniel"  ~ "daniel"
+ *   · a nickname/short form by prefix    "jae"     ~ "jae woo"   (registrar
+ *                                                    prints "Jae W Lee", RMP
+ *                                                    has "Jae Woo Lee")
+ *   · an initial against a full name     "a"       ~ "adam"
+ *
+ * Rejects two different full names that merely share a first letter. That
+ * single rule is what stops "Eugene Wu" from becoming Elwin Wu: both are real
+ * Columbia professors, both surnamed Wu, and only one of them has the 4.8 we
+ * were printing under the other one's name.
+ */
+function givenNamesAgree(queried: string, candidate: string): boolean {
+  if (!queried || !candidate) return false;
+  if (queried === candidate) return true;
+  // An initial on either side matches a full name starting with it.
+  if (queried.length === 1 || candidate.length === 1) return queried[0] === candidate[0];
+  // "Jae" ~ "Jae Woo" — one is how the other is shortened. Requires 3+ chars so
+  // that "Al" ~ "Alexandr" is not enough on its own.
+  const shorter = queried.length <= candidate.length ? queried : candidate;
+  const longer = shorter === queried ? candidate : queried;
+  return shorter.length >= 3 && longer.startsWith(shorter);
 }
 
 /**
  * Pick the best match, or none.
  *
- * We require the surname to match. RMP's search is fuzzy and a
- * confidently-wrong professor attached to someone's name is far worse than an
- * empty RMP row.
+ * ── Why this is as strict as it is ─────────────────────────────────────────
+ *
+ * The previous version asked only that the queried SURNAME appear somewhere in
+ * the candidate's tokens, then broke ties toward whoever had the most ratings.
+ * Both halves were wrong, and together they were worse than either:
+ *
+ *   · Surname-anywhere let a candidate match on their FIRST name. "Antoni
+ *     Viros I Martin" ends in "Martin", so `Martin Haugh` matched and we
+ *     printed his 4.7 under a different person's name.
+ *   · Ranking by rating count means that when several people share a surname —
+ *     Wu, Wang, Liu, Lee, Kim, Smith — the one we show is systematically the
+ *     one with the most ratings, i.e. the one whose number is most likely to be
+ *     seen and least likely to be right.
+ *
+ * Measured against a 40-name sample of real Fall 2026 COMS instructors, that
+ * produced 12 matches of which 4 were a different human being.
+ *
+ * So the rule is now: the SURNAMES must agree and the GIVEN names must agree.
+ * RMP returns `firstName` and `lastName` as separate fields, so there is no
+ * need to guess which token is which on their side; only the registrar's
+ * single string needs splitting, and its format is "First [Middle] Last".
+ *
+ * This finds fewer professors. That is the correct trade: an empty RMP row
+ * says "we don't know", and the failure it replaces said something false about
+ * a named person.
  */
 function pickBestMatch(nodes: RmpTeacherNode[], queriedName: string): RmpTeacherNode | null {
   const queried = nameTokens(queriedName);
-  if (queried.length === 0) return null;
-  const surname = queried[queried.length - 1];
+  if (queried.length < 2) return null;
+  const queriedGiven = queried[0];
+  const queriedSurname = queried[queried.length - 1];
 
   let best: RmpTeacherNode | null = null;
-  let bestScore = 0;
+  let bestRatings = -1;
 
   for (const node of nodes) {
     const first = typeof node.firstName === "string" ? node.firstName : "";
     const last = typeof node.lastName === "string" ? node.lastName : "";
-    const candidate = nameTokens(`${first} ${last}`);
-    if (!candidate.includes(surname)) continue;
+    const candidateGiven = nameTokens(first)[0] ?? "";
+    const candidateSurnameTokens = nameTokens(last);
+    if (candidateSurnameTokens.length === 0) continue;
+    /*
+     * Compare the LAST token of each surname. Compound surnames are written
+     * inconsistently across the two systems ("Viros i Martin" / "Martin"), and
+     * the final element is the part that survives every abbreviation of them.
+     */
+    const candidateSurname = candidateSurnameTokens[candidateSurnameTokens.length - 1];
 
-    const overlap = candidate.filter((token) => queried.includes(token)).length;
+    if (candidateSurname !== queriedSurname) continue;
+    if (!givenNamesAgree(queriedGiven, candidateGiven)) continue;
+
+    /*
+     * Only NOW does rating count break a tie, and by this point every remaining
+     * candidate agrees on both names — so this is choosing between duplicate
+     * profiles for one person, which is exactly what it should be for.
+     */
     const ratings = finiteOrNull(node.numRatings) ?? 0;
-    // Prefer more name overlap; break ties toward the better-attested profile.
-    const score = overlap * 1000 + Math.min(ratings, 999);
-    if (score > bestScore) {
-      bestScore = score;
+    if (ratings > bestRatings) {
+      bestRatings = ratings;
       best = node;
     }
   }

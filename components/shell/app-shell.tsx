@@ -66,7 +66,73 @@ export function AppShell({ children, activeNav = "home", contentClassName }: App
         <CatalogSidebar activeNav={activeNav} className="h-full" />
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      {/*
+        The right edge yields to the section rail — and stops yielding at 34rem.
+
+        ── The channel ───────────────────────────────────────────────────────
+        When the drawer opens as a rail it writes its footprint to
+        `--drawer-rail` on `<html>`, and this column reserves that much of its
+        own width. The two never import each other: the drawer lives in the
+        `@drawer` slot, a sibling of `{children}` in the root layout, so there
+        is no prop path between them and a custom property is the channel they
+        already share. The fallback `0px` keeps every page that has never
+        opened a drawer fully specified — no class toggling, nothing to clean
+        up if a panel unmounts abruptly.
+
+        Padding rather than a transform: the results genuinely have less room
+        and should re-wrap into it. A transform would slide the column leftward
+        under the nav instead, hiding content rather than fitting it.
+
+        `lg:` on both because that is the only width where pushing leaves a
+        usable list — below it the panel is an overlay and must not move
+        anything, and an unconditional floor would put a horizontal scrollbar
+        on every phone.
+
+        ── The floor ─────────────────────────────────────────────────────────
+        The nav rail is `shrink-0`, so the entire squeeze lands here. With
+        plain `min-w-0` there was no bottom to it: at a 1024px viewport the
+        rail takes ~454px and the nav 284px, leaving this column 286px — titles
+        wrapping to three lines and an enrollment column sitting on top of the
+        text, at the exact moment the list is being read against the drawer
+        beside it. Below the floor the page scrolls horizontally instead of
+        compressing further; a scrollbar is a recoverable inconvenience, an
+        unreadable list is not.
+
+        34rem = 544px = a 480px content measure plus this column's own `lg:px-8`
+        gutters. 480px is where a search row still reads: title on one line,
+        the code/credits line intact, the 168px meter column clear of the text.
+
+        ── Why both live on THIS box ─────────────────────────────────────────
+        The reservation used to be `padding-right` on the shell root, and the
+        floor cannot work from there: a parent's padding always absorbs its own
+        children's overflow. At 1024 the line needed 284 + 544 = 828px inside a
+        570px content box — a real 258px overflow, but 828 is still inside the
+        root's 1024px border box, so `scrollWidth` never grew and the overflow
+        just sat under the fixed panel. Correct width, invisible.
+
+        Held here the nav becomes a *sibling* that adds to the flex line
+        instead of a child that shares a padded box: 284 + (544 + 454) = 1282
+        against a 1024px viewport, so the document really does overflow.
+        `min-width` therefore has to carry the rail too — it is a border-box
+        floor, and a bare 34rem would be eaten by the padding.
+
+        The numbers land exactly: at full scroll the column's content sits
+        flush against the panel's left edge, because the floor IS the content
+        measure plus its gutters.
+      */}
+      <div
+        className={cx(
+          "flex min-w-0 flex-1 flex-col transition-[padding,min-width] motion-reduce:transition-none",
+          "lg:[padding-right:var(--drawer-rail,0px)] lg:[min-width:calc(34rem+var(--drawer-rail,0px))]",
+        )}
+        style={{
+          // The drawer sets these per direction, so the page moves on exactly
+          // the panel's clock — including while the dev motion dial is dragged.
+          transitionDuration: "var(--drawer-push-duration, 90ms)",
+          transitionTimingFunction:
+            "var(--drawer-push-ease, cubic-bezier(0.34, 1.35, 0.64, 1))",
+        }}
+      >
         <MobileNavBar activeNav={activeNav} />
         <main className={cx("min-w-0 flex-1 px-4 py-5 sm:px-6 lg:px-8 lg:py-7", contentClassName)}>
           {children}

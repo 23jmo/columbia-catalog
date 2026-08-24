@@ -92,7 +92,7 @@ export function TimeFilters({
   return (
     <FilterGroup title="Time and structure" activeCount={activeCount}>
       {!meetingFiltersAvailable ? (
-        <p className="flex items-start gap-1.5 rounded-2lg border border-dashed border-border-button-default bg-background-secondary-default px-3 py-2 text-caption-1-regular text-text-secondary">
+        <p className="flex items-start gap-1.5 rounded-2lg border border-dashed border-border-button-default bg-background-secondary-default px-3 py-2 text-caption-1-regular text-pretty text-text-secondary">
           <RiInformationLine aria-hidden className="mt-px size-3.5 shrink-0" />
           <span>
             Day and time filters are unavailable until the search index includes meeting data.

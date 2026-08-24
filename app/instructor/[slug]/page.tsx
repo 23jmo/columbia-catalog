@@ -6,29 +6,54 @@ import { RiArrowLeftLine } from "@remixicon/react";
 import {
   ClassroomLoadCard,
   CoursesTaught,
+  InstructorClassroomMap,
   InstructorDetailsCard,
+  InstructorFunFacts,
   InstructorProfileCard,
   InstructorReviewsCard,
   TeachingRhythmCard,
 } from "@/components/instructor";
 import { AppShell } from "@/components/shell/app-shell";
-import { CURRENT_TERM, subjectTermUrl, termLabel } from "@/lib/constants";
+import { CURRENT_TERM, termLabel } from "@/lib/constants";
 import { listInstructors, loadInstructorProfile } from "@/lib/data/instructors";
 
 /**
  * The instructor page.
  *
- * Layout is the BoardUI ai-profile template: one centred 680px column of
- * stacked cards — identity hero, then charts, then substance. Nothing about a
- * person's teaching benefits from a second column, and the narrow measure is
- * what makes the page feel like a profile rather than a dashboard.
+ * One centred column of stacked cards, ordered by what the reader came for:
  *
- * Everything on it is derived from the registrar's published sections
- * (`lib/data/instructors.ts`) except the RateMyProfessor block, which is read
- * live in the browser and never stored. There is deliberately no single
- * "instructor score" anywhere on the page: course quality and instructor
- * quality are scored separately (spec §12) and CULPA and RMP are never
- * averaged into one number.
+ *   1. **Who, and are they any good.** The identity hero, whose headline figure
+ *      is the RATING. This is the question the page exists to answer.
+ *   2. **What do they teach.** The sections, as a clean list.
+ *   3. **The reviews in full** — both sources, side by side, with their sample
+ *      sizes and date ranges.
+ *   4. **Everything else**, labelled as trivia: seat counts, teaching rhythm,
+ *      classroom load, a map of the rooms they stand in.
+ *
+ * That order is a change. The hero used to lead with "students taught" — a sum
+ * over the registrar's seat table — and the reviews sat at the very bottom.
+ * Both were backwards.
+ *
+ * Everything on the page is derived from the registrar's published sections
+ * (`lib/data/instructors.ts`) except the RateMyProfessor numbers, which are
+ * read live in the browser and never stored.
+ *
+ * ── The headline rating and spec §12 ───────────────────────────────────────
+ *
+ * §12's own display example leads with `Instructor 4.4 / 5 · n=38`, so a
+ * headline number is the spec, not a departure from it. What §12 forbids is
+ * merging *course* quality with *instructor* quality, and averaging CULPA and
+ * RMP into a single figure. Neither happens here: when both sources have a
+ * number, both are printed, each with its own denominator and its own link out.
+ *
+ * ── Coverage ───────────────────────────────────────────────────────────────
+ *
+ * Most instructors will show no rating, and the page says so plainly rather
+ * than inventing one. RMP lists roughly 1,700 professors across Columbia,
+ * Barnard and Teachers College against several thousand instructors a term; a
+ * 40-name sample of Fall 2026 COMS instructors matched 20%, at a median of two
+ * ratings each. CULPA is the only source that would move that number, and it is
+ * being pursued as a partnership rather than a scrape.
  *
  * `generateStaticParams` prerenders the term's instructors. The set is small
  * (tens per subject) and entirely derived from data we already hold, so this
@@ -71,17 +96,9 @@ export default async function InstructorPage({ params }: InstructorPageProps) {
   const data = await loadInstructorProfile(slug, CURRENT_TERM);
   if (!data) notFound();
 
-  const directoryUrl = data.subjects[0]
-    ? subjectTermUrl(data.subjects[0], data.termCode)
-    : null;
-
   return (
     <AppShell activeNav="search">
-      {/*
-        The template centres a single 680px column. Kept exactly: the cards are
-        designed against that measure and widen badly.
-      */}
-      <div className="mx-auto flex w-full max-w-[680px] flex-col items-center gap-4">
+      <div className="mx-auto flex w-full max-w-4xl flex-col items-center gap-4">
         <Link
           href="/search"
           className="mr-auto inline-flex w-fit items-center gap-1.5 rounded-lg px-1.5 py-1 text-caption-1-medium text-text-secondary transition-colors outline-none hover:bg-background-primary-hover hover:text-text-primary focus-visible:ring-2 focus-visible:ring-border-focus-ring"
@@ -90,11 +107,14 @@ export default async function InstructorPage({ params }: InstructorPageProps) {
           All courses
         </Link>
 
-        <InstructorProfileCard data={data} directoryUrl={directoryUrl} />
-
-        <TeachingRhythmCard months={data.months} />
-
-        <ClassroomLoadCard data={data} />
+        {/*
+          TODO(reviews): pass `summarizeInstructor(reviews)` from
+          `lib/reviews/aggregate` once a CULPA feed lands. `null` renders the
+          honest "not rated yet" state, which is the truth today — and it is the
+          same prop on both the hero and the reviews card, so one wiring lights
+          up the whole page.
+        */}
+        <InstructorProfileCard data={data} reputation={null} />
 
         <CoursesTaught
           courses={data.courses}
@@ -102,14 +122,26 @@ export default async function InstructorPage({ params }: InstructorPageProps) {
           termLabel={data.termLabel}
         />
 
-        <InstructorDetailsCard data={data} />
+        {/*
+          `showRmp={false}`: the hero above already carries the RMP rating,
+          difficulty, would-take-again and sample size. This card is where the
+          Columbia corpus goes when it lands.
+        */}
+        <InstructorReviewsCard instructorName={data.name} reputation={null} showRmp={false} />
 
         {/*
-          TODO(reviews): pass `summarizeInstructor(reviews)` from
-          `lib/reviews/aggregate` once a CULPA feed lands. `null` renders the
-          honest "nothing aggregated yet" state, which is the truth today.
+          Below here is trivia, and is ordered as such. Nothing a reader needs
+          in order to decide about a class lives past this point.
         */}
-        <InstructorReviewsCard instructorName={data.name} reputation={null} />
+        <InstructorFunFacts data={data} />
+
+        <InstructorClassroomMap data={data} />
+
+        <TeachingRhythmCard months={data.months} />
+
+        <ClassroomLoadCard data={data} />
+
+        <InstructorDetailsCard data={data} />
       </div>
     </AppShell>
   );

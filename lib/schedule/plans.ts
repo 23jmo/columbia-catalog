@@ -21,11 +21,12 @@
  * a plan, which is what makes one auth guard sufficient.
  *
  * ── Auth ───────────────────────────────────────────────────────────────────
- * Spec §15: writes require an account, reads are free. `setAuthGuard` is the
- * hook point, and `components/schedule/plan-sync-provider.tsx` installs the
- * real Supabase session check into it for the life of the session. See that
- * file for the two cases it deliberately allows: while the session is still
- * loading, and when Supabase is not configured at all.
+ * Spec §15: reads are free; cloud persistence needs an account. Local plan
+ * structure (create, rename, commitments) stays editable while signed out —
+ * anonymous plans use `LOCAL_USER_ID` and are claimed on first sign-in.
+ *
+ * Adding **classes** is the write wall: `setSectionAuthGuard` is the hook, and
+ * `components/schedule/plan-sync-provider.tsx` installs the session check.
  */
 
 import type { CustomBlock, Plan, TermCode, Weekday } from "../types";
@@ -57,18 +58,22 @@ export type AuthGuard = () => AuthGuardResult;
  * Permissive by default, and deliberately so.
  *
  * This module is imported by tests, by the MCP lane and by a server render, none
- * of which have a session to consult. `PlanSyncProvider` replaces it with the
- * real check as soon as the browser mounts the shell, and restores this one on
- * unmount. A default that refused would mean every test had to install a guard
- * before it could write a plan.
+ * of which have a session to consult. `PlanSyncProvider` replaces the section
+ * guard as soon as the browser mounts the shell, and restores this one on
+ * unmount.
  */
-let authGuard: AuthGuard = () => ({ allowed: true });
+let sectionAuthGuard: AuthGuard = () => ({ allowed: true });
 
+/** @deprecated Use `setSectionAuthGuard`. Kept so older tests can still compile. */
 export function setAuthGuard(guard: AuthGuard): void {
-  authGuard = guard;
+  sectionAuthGuard = guard;
 }
 
-/** Thrown when a write is attempted without the account spec §15 requires. */
+export function setSectionAuthGuard(guard: AuthGuard): void {
+  sectionAuthGuard = guard;
+}
+
+/** Thrown when a section write is attempted without the account spec §15 requires. */
 export class PlanWriteDeniedError extends Error {
   constructor(reason: string) {
     super(reason);
@@ -76,10 +81,10 @@ export class PlanWriteDeniedError extends Error {
   }
 }
 
-function assertCanWrite(): void {
-  const verdict = authGuard();
+function assertCanAddSection(): void {
+  const verdict = sectionAuthGuard();
   if (!verdict.allowed) {
-    throw new PlanWriteDeniedError(verdict.reason ?? "Sign in to save changes to a plan.");
+    throw new PlanWriteDeniedError(verdict.reason ?? "Sign in to add classes to your schedule.");
   }
 }
 
@@ -307,7 +312,6 @@ export class LocalPlanStore implements PlanStore {
   }
 
   createPlan(input: CreatePlanInput): Plan {
-    assertCanWrite();
     const termCode = input.termCode ?? CURRENT_TERM;
     const existing = this.read();
     const firstInTerm = !existing.some((plan) => plan.termCode === termCode);
@@ -329,7 +333,6 @@ export class LocalPlanStore implements PlanStore {
   }
 
   renamePlan(planId: string, name: string): Plan {
-    assertCanWrite();
     const plan = this.require(planId);
     const trimmed = name.trim();
     if (!trimmed) throw new Error("A plan needs a name.");
@@ -337,7 +340,6 @@ export class LocalPlanStore implements PlanStore {
   }
 
   duplicatePlan(planId: string, name?: string): Plan {
-    assertCanWrite();
     const source = this.require(planId);
     const names = this.read().map((plan) => plan.name);
     const copy: Plan = {
@@ -354,7 +356,6 @@ export class LocalPlanStore implements PlanStore {
   }
 
   deletePlan(planId: string): void {
-    assertCanWrite();
     const plan = this.require(planId);
     const remaining = this.read().filter((candidate) => candidate.planId !== planId);
     // Deleting the primary promotes the next plan in the same term, so a term is
@@ -367,7 +368,6 @@ export class LocalPlanStore implements PlanStore {
   }
 
   setPrimaryPlan(planId: string): Plan {
-    assertCanWrite();
     const plan = this.require(planId);
     this.write(
       this.read().map((candidate) =>
@@ -380,20 +380,19 @@ export class LocalPlanStore implements PlanStore {
   }
 
   setSections(planId: string, sectionIds: string[]): Plan {
-    assertCanWrite();
+    assertCanAddSection();
     const plan = this.require(planId);
     return this.replace({ ...plan, sectionIds: [...new Set(sectionIds)] });
   }
 
   addSection(planId: string, sectionId: string): Plan {
-    assertCanWrite();
+    assertCanAddSection();
     const plan = this.require(planId);
     if (plan.sectionIds.includes(sectionId)) return plan;
     return this.replace({ ...plan, sectionIds: [...plan.sectionIds, sectionId] });
   }
 
   removeSection(planId: string, sectionId: string): Plan {
-    assertCanWrite();
     const plan = this.require(planId);
     return this.replace({
       ...plan,
@@ -402,7 +401,6 @@ export class LocalPlanStore implements PlanStore {
   }
 
   upsertBlock(planId: string, block: CustomBlock): Plan {
-    assertCanWrite();
     const plan = this.require(planId);
     const exists = plan.customBlocks.some((candidate) => candidate.blockId === block.blockId);
     return this.replace({
@@ -416,7 +414,6 @@ export class LocalPlanStore implements PlanStore {
   }
 
   removeBlock(planId: string, blockId: string): Plan {
-    assertCanWrite();
     const plan = this.require(planId);
     return this.replace({
       ...plan,

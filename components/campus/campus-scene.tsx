@@ -45,7 +45,7 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Edges, Instance, Instances, OrbitControls } from "@react-three/drei";
+import { Edges, Html, Instance, Instances, Line, OrbitControls } from "@react-three/drei";
 import {
   PMREMGenerator,
   type BufferGeometry,
@@ -57,8 +57,11 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 import { CAMPUS_VIEW_WIDTH_UNITS, buildingsOnPlane, campusPlane, roadsOnPlane } from "@/lib/campus";
 import type { CampusLayoutBuilding, CampusPlaneId, CampusRoad } from "@/lib/campus";
 import { buildingGeometry, contextShell, mergedShell, type CampusShell } from "./footprints";
+import { groundLabel } from "./labels";
+import type { CampusMarker } from "./contracts";
+import type { CampusRoutePoint } from "./contracts";
 import { facadeMaps, type FacadeMaps } from "./facade";
-import { shadeAgainst, type CampusPalette } from "./palette";
+import { blendToward, shadeAgainst, type CampusPalette } from "./palette";
 
 export interface CampusSceneProps {
   plane: CampusPlaneId;
@@ -75,6 +78,8 @@ export interface CampusSceneProps {
   animate: boolean;
   /** Accessible name for the canvas — the same sentence the caption carries. */
   description: string;
+  /** Printed over the pin, inside the frame. */
+  marker: CampusMarker;
   /**
    * Fires once the renderer exists and has been handed its first frame. The
    * card keeps the flat map underneath until this lands, so the swap happens on
@@ -83,6 +88,10 @@ export interface CampusSceneProps {
   onReady?: () => void;
   /** Fires if the GPU drops the context, so the card can fall back to 2D. */
   onContextLost?: () => void;
+  /** Same-plane walking path between day's classes. */
+  route?: ReadonlyArray<CampusRoutePoint> | null;
+  /** See `DayRoute` — false draws the stops as a set, not a walk. */
+  connectStops?: boolean;
 }
 
 /**
@@ -105,6 +114,51 @@ const CAMERA_DISTANCE = 40;
  * stopped at the last Columbia building would leave those blocks hovering.
  */
 const GROUND_OVERSCAN_UNITS = 20;
+/**
+ * Cap height of a street name, in plane units — 26 m to the unit, so this is
+ * about six metres of lettering. Larger than any real road marking, because the
+ * card frames 680 m of city into a box a few hundred pixels wide and a name at
+ * true scale would be a smudge.
+ */
+const ROAD_LABEL_HEIGHT = 0.52;
+
+/**
+ * Drawn after the city, since it ignores depth and would otherwise be painted
+ * over by anything that happens to be sorted later.
+ */
+const ROAD_LABEL_RENDER_ORDER = 3;
+
+/**
+ * How far along its own street a name sits from whatever the camera is centred
+ * on, in plane units (~94 m).
+ *
+ * Not zero, because the labels ignore depth: a name placed at the focus lands
+ * squarely on the accent-coloured building the whole card exists to point at,
+ * and "Amsterdam Ave" written across the pin reads as a bug rather than as a
+ * street. Far enough to clear the widest building on campus, near enough that
+ * it is still obviously *this* stretch of the street.
+ */
+const ROAD_LABEL_OFFSET = 3.6;
+
+/**
+ * How far a building's roof leans over its own street, as a fraction of the
+ * building's height.
+ *
+ * An isometric roof is drawn displaced up-screen from the footprint it stands
+ * on, so a tall building overhangs the street it fronts *on screen* even though
+ * it does not in the world. A label that ignores depth then lands on the
+ * accent-coloured box however far along the street we push it — the collision
+ * is in screen space, and no amount of offsetting along the road fixes it. So
+ * the one name that would deface the pin is skipped instead; the other majors
+ * still orient the reader, and the pin's own plate already names the place.
+ *
+ * Proportional to height rather than constant, because that is what the lean
+ * actually is: a flat constant either lets 2.1-unit IAB overhang Amsterdam
+ * unchecked or drops both of low-rise Kent Hall's streets for no reason.
+ * Calibrated against exactly those two — IAB clears at anything above 0.33,
+ * Kent keeps both of its streets below 0.52.
+ */
+const ROAD_LABEL_LEAN_PER_UNIT_HEIGHT = 0.45;
 
 function roadBox(road: CampusRoad) {
   const length = road.to - road.from;
@@ -336,6 +390,223 @@ function CameraRig({ focus, animate }: { focus: { x: number; z: number }; animat
   return null;
 }
 
+/**
+ * Street names, lying on the asphalt.
+ *
+ * One per major road, placed where the road passes closest to what the camera
+ * is looking at, so whichever way the reader orbits there is a name in frame
+ * without repeating it down the whole street. `focus` is the orbit target, so
+ * this tracks the pin rather than the plane.
+ *
+ * `meshBasicMaterial`, not standard: these are paint, and paint that took the
+ * scene's key light would go dim on the shaded half of the map, which is
+ * exactly where a reader most needs to know which street they are looking at.
+ *
+ * WHY they ignore depth entirely: a street is a narrow slot between two rows of
+ * buildings, and an isometric camera looks at the ground *through* the near row.
+ * Depth-tested, the name of the street is hidden by the buildings on it — which
+ * is physically honest and completely useless. Every printed map resolves this
+ * the same way, by letting the label float over whatever is in front of it, and
+ * a reader reads it as an annotation rather than as paint that has stopped
+ * obeying the world.
+ */
+function RoadLabels({
+  plane,
+  focus,
+  palette,
+  pinned,
+}: {
+  plane: CampusPlaneId;
+  focus: { x: number; z: number };
+  palette: CampusPalette;
+  pinned: CampusLayoutBuilding | null;
+}) {
+  const labels = useMemo(
+    () =>
+      roadsOnPlane(plane)
+        .filter((road) => road.isMajor && !runsUnderPin(road, pinned))
+        .map((road) => ({
+          road,
+          // Haloed in the road's own colour, so the name still reads where it
+          // strays off the asphalt onto a roof.
+          label: groundLabel(road.label, palette.roadLabel, palette.road, ROAD_LABEL_HEIGHT),
+        }))
+        .filter((entry): entry is { road: CampusRoad; label: NonNullable<typeof entry.label> } =>
+          entry.label !== null,
+        ),
+    [plane, palette.roadLabel, palette.road, pinned],
+  );
+
+  return (
+    <>
+      {labels.map(({ road, label }) => {
+        const alongAxis = road.orientation === "north-south" ? focus.z : focus.x;
+        // Held clear of the road's own ends, so a label never runs off the
+        // stripe it belongs to.
+        const margin = label.width / 2 + 0.5;
+        const along = offsetAlongRoad(alongAxis, road.from + margin, road.to - margin);
+        const position: [number, number, number] =
+          road.orientation === "north-south" ? [road.at, 0.05, along] : [along, 0.05, road.at];
+        return (
+          <mesh
+            key={road.roadId}
+            position={position}
+            // Flat on the ground, then a quarter turn for the avenues so the
+            // name runs along its own street rather than across it. The turn is
+            // anticlockwise: the grid is drawn with +z running campus-SOUTH, so
+            // the other direction lays every avenue name out upside down.
+            rotation={[-Math.PI / 2, 0, road.orientation === "north-south" ? Math.PI / 2 : 0]}
+            renderOrder={ROAD_LABEL_RENDER_ORDER}
+          >
+            <planeGeometry args={[label.width, label.height]} />
+            <meshBasicMaterial
+              map={label.texture}
+              transparent
+              opacity={0.9}
+              depthTest={false}
+              depthWrite={false}
+              toneMapped={false}
+            />
+          </mesh>
+        );
+      })}
+    </>
+  );
+}
+
+/** Does this street pass close enough to the pin that its name would sit on it? */
+function runsUnderPin(road: CampusRoad, pinned: CampusLayoutBuilding | null): boolean {
+  if (!pinned) return false;
+  const [pinAt, pinExtent] =
+    road.orientation === "north-south" ? [pinned.x, pinned.width] : [pinned.z, pinned.depth];
+  const overhang = pinExtent / 2 + pinned.height * ROAD_LABEL_LEAN_PER_UNIT_HEIGHT;
+  return Math.abs(road.at - pinAt) < overhang;
+}
+
+/**
+ * Where along a street its name goes, given where the camera is looking.
+ *
+ * Offset away from the focus, in whichever direction has the room for it, and
+ * never past the ends of the street itself. Falls back to the nearer end when
+ * a street is too short to hold the name anywhere else — a name slightly off
+ * its stripe still tells the reader which street it is.
+ */
+function offsetAlongRoad(focusAlong: number, min: number, max: number): number {
+  if (min >= max) return (min + max) / 2;
+  const roomAhead = max - focusAlong;
+  const roomBehind = focusAlong - min;
+  const target =
+    roomAhead >= roomBehind ? focusAlong + ROAD_LABEL_OFFSET : focusAlong - ROAD_LABEL_OFFSET;
+  return Math.min(Math.max(target, min), max);
+}
+
+/**
+ * The building's name and meeting time, on a plate above the pin.
+ *
+ * DOM rather than geometry, through drei's `<Html>`. Text is the one thing a
+ * canvas is worse at than the browser is: this way it is real type at the
+ * device's own resolution, it inherits the card's tokens so it flips with the
+ * theme for free, and it costs no draw call. `pointerEvents: none` because the
+ * plate sits over the middle of the frame and must never eat a drag.
+ *
+ * `aria-hidden`, deliberately: the canvas already carries the whole sentence as
+ * its `aria-label`, and a screen reader that met both would hear the building
+ * named twice.
+ */
+function PinLabel({
+  marker,
+  anchor,
+  height,
+}: {
+  marker: CampusMarker;
+  anchor: { x: number; z: number };
+  height: number;
+}) {
+  return (
+    <Html
+      position={[anchor.x, height, anchor.z]}
+      center
+      zIndexRange={[20, 0]}
+      style={{ pointerEvents: "none", userSelect: "none" }}
+    >
+      <div
+        aria-hidden
+        className="-translate-y-1/2 whitespace-nowrap rounded-lg border border-border-table bg-background-primary-default/92 px-2.5 py-1.5 text-center shadow-sm backdrop-blur-[2px]"
+      >
+        <p className="text-body-2-semibold text-text-primary">{marker.title}</p>
+        {marker.meta ? (
+          <p className="text-caption-2-regular text-text-secondary">{marker.meta}</p>
+        ) : null}
+        {marker.note ? (
+          <p className="text-caption-2-regular text-text-tertiary">{marker.note}</p>
+        ) : null}
+      </div>
+    </Html>
+  );
+}
+
+/**
+ * The other stops on the map: a dot each, and — when they are a sequence — a
+ * dashed path joining them.
+ *
+ * `connect` is what separates the two callers. A day's schedule IS an ordered
+ * walk, and the path is the point of drawing it. An instructor's buildings are
+ * a SET: they teach in Mudd and in Havemeyer, not from one to the other, and a
+ * line between them would draw a commute that nobody makes.
+ */
+function DayRoute({
+  route,
+  palette,
+  connect,
+}: {
+  route: ReadonlyArray<CampusRoutePoint>;
+  palette: CampusPalette;
+  connect: boolean;
+}) {
+  const linePoints = useMemo(
+    () => route.map((point) => [point.x, 0.35, point.z] as [number, number, number]),
+    [route],
+  );
+
+  if (linePoints.length === 0) return null;
+
+  return (
+    <>
+      {connect && linePoints.length >= 2 ? (
+        <Line points={linePoints} color={palette.marker} lineWidth={2} dashed dashScale={2} gapSize={0.4} />
+      ) : null}
+      {route.map((point, index) =>
+        point.highlighted ? null : (
+          <mesh
+            key={`stop-${index}`}
+            /*
+              A trail dot stays at ground level, where the dashed path is. A
+              building marker sits ABOVE the roof: the buildings are solid
+              extrusions, so a marker on a building's own footprint at ground
+              level is inside it and invisible. Uris Hall's neighbour is 2.1
+              units tall; the dot was being drawn six storeys under it.
+            */
+            position={[point.x, connect ? 0.28 : (point.height ?? 0) + 0.62, point.z]}
+          >
+            {/*
+              Bigger and in the marker colour when the stops are the subject
+              rather than the trail. On an instructor's map every one of these
+              IS a place they teach, so a dim grey speck reads as scenery when
+              it is meant to read as an answer.
+            */}
+            <sphereGeometry args={[connect ? 0.22 : 0.42, 14, 14]} />
+            <meshStandardMaterial
+              color={connect ? palette.building : palette.marker}
+              emissive={connect ? palette.building : palette.marker}
+              emissiveIntensity={connect ? 0.15 : 0.35}
+            />
+          </mesh>
+        ),
+      )}
+    </>
+  );
+}
+
 /** The highlighted building plus its marker. The only thing that animates. */
 function PinnedMarker({
   pinned,
@@ -423,28 +694,60 @@ function CampusModel({
   palette,
   focus,
   animate,
+  marker,
+  route,
+  connectStops = true,
 }: {
   plane: CampusPlaneId;
   pinned: CampusLayoutBuilding | null;
   palette: CampusPalette;
   focus: { x: number; z: number };
   animate: boolean;
+  marker: CampusMarker;
+  route?: ReadonlyArray<CampusRoutePoint> | null;
+  connectStops?: boolean;
 }) {
   const ground = campusPlane(plane);
   const roads = useMemo(() => roadsOnPlane(plane).map(roadBox), [plane]);
+
+  // Every building the card is about, beyond the one wearing the pin. A dot
+  // floating over a roof says "something is here"; the accent colour on the
+  // building itself says "this is one of yours", which is the thing a card
+  // headlined "2 buildings this term" has to make true at a glance.
+  const stopBuildingIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const point of route ?? []) {
+      if (point.buildingId && point.buildingId !== pinned?.buildingId) ids.add(point.buildingId);
+    }
+    return ids;
+  }, [route, pinned?.buildingId]);
 
   // Split by role rather than coloured per-vertex: two materials is one extra
   // draw call, and it keeps the palette readable as palette rather than as
   // colour attributes buried in a buffer.
   const onPlane = useMemo(
-    () => buildingsOnPlane(plane).filter((entry) => entry.buildingId !== pinned?.buildingId),
-    [plane, pinned?.buildingId],
+    () =>
+      buildingsOnPlane(plane).filter(
+        (entry) => entry.buildingId !== pinned?.buildingId && !stopBuildingIds.has(entry.buildingId),
+      ),
+    [plane, pinned?.buildingId, stopBuildingIds],
   );
   const muted = useDisposedShell(
     useMemo(() => mergedShell(onPlane.filter((entry) => !entry.isLandmark)), [onPlane]),
   );
   const landmarks = useDisposedShell(
     useMemo(() => mergedShell(onPlane.filter((entry) => entry.isLandmark)), [onPlane]),
+  );
+  // Welded into one shell, so however many stops a term has they cost the same
+  // single extra draw call the muted mass and the landmarks each cost.
+  const alsoTaught = useDisposedShell(
+    useMemo(
+      () =>
+        mergedShell(
+          buildingsOnPlane(plane).filter((entry) => stopBuildingIds.has(entry.buildingId)),
+        ),
+      [plane, stopBuildingIds],
+    ),
   );
   const context = useDisposedShell(useMemo(() => contextShell(plane), [plane]));
   // Built once per chunk and cached there, so this memo is only keeping the
@@ -537,6 +840,22 @@ function CampusModel({
         />
       ) : null}
 
+      {alsoTaught ? (
+        // Accent pulled partway back toward an ordinary Columbia building, and
+        // without the pinned one's emissive lift, edge lines or pulse. At full
+        // accent these out-shouted the pin — they are usually the bigger boxes,
+        // so equal saturation is not equal loudness.
+        <ShellMeshes
+          shell={alsoTaught}
+          color={blendToward(palette.highlight, palette.building, 0.42)}
+          ground={palette.ground}
+          roughness={0.85}
+          roofContrast={0.12}
+          facade={facade}
+          castShadow
+        />
+      ) : null}
+
       {landmarks ? (
         <ShellMeshes
           shell={landmarks}
@@ -549,7 +868,19 @@ function CampusModel({
         />
       ) : null}
 
+      <RoadLabels plane={plane} focus={focus} palette={palette} pinned={pinned} />
+
+      {route && route.length > 0 ? (
+        <DayRoute route={route} palette={palette} connect={connectStops} />
+      ) : null}
+
       <PinnedMarker pinned={pinned} focus={focus} palette={palette} animate={animate} />
+      <PinLabel
+        marker={marker}
+        anchor={pinned ? { x: pinned.x, z: pinned.z } : focus}
+        // Clear of the cone, which already reaches a unit above the roof.
+        height={(pinned?.height ?? 0) + 2.3}
+      />
       <StaticShadows signature={`${plane}:${pinned?.buildingId ?? "none"}`} />
     </>
   );
@@ -562,8 +893,11 @@ export default function CampusScene({
   palette,
   animate,
   description,
+  marker,
   onReady,
   onContextLost,
+  route,
+  connectStops,
 }: CampusSceneProps) {
   return (
     <Canvas
@@ -595,7 +929,16 @@ export default function CampusScene({
       }}
     >
       <CameraRig focus={focus} animate={animate} />
-      <CampusModel plane={plane} pinned={pinned} palette={palette} focus={focus} animate={animate} />
+      <CampusModel
+        plane={plane}
+        pinned={pinned}
+        palette={palette}
+        focus={focus}
+        animate={animate}
+        marker={marker}
+        route={route}
+        connectStops={connectStops}
+      />
       <OrbitControls
         makeDefault
         target={[focus.x, 0, focus.z]}

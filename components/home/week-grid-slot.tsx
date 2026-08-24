@@ -58,6 +58,8 @@ export interface WeekGridSlotProps {
   /** Minutes from midnight. Defaults to GRID_START_MINUTE/GRID_END_MINUTE. */
   startMinute?: number;
   endMinute?: number;
+  /** Columns to draw, when Monday-to-Friday is the wrong week. */
+  weekdays?: Weekday[];
   /** Narrow viewports degrade to an agenda list (spec §18). */
   compact?: boolean;
   className?: string;

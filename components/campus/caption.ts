@@ -10,7 +10,7 @@
 import { ZONE_LABEL } from "@/lib/constants";
 import { isLocationUnassigned, isRemoteLocation, resolveCampusLocation } from "@/lib/campus";
 import type { CampusLocation } from "@/lib/campus";
-import type { CampusCaption } from "./contracts";
+import type { CampusCaption, CampusMarker } from "./contracts";
 
 /**
  * First identifiable location, plus how many others the section also uses.
@@ -45,6 +45,8 @@ export function buildCampusCaption(args: {
   buildingNames: ReadonlyArray<string | null>;
   roomLabel?: string | null;
   label?: string | null;
+  /** Meeting day and time, printed under the building name on the map. */
+  meta?: string | null;
 }): CampusCaption & { location: CampusLocation } {
   const { location, additionalLocationCount } = pickPinnedLocation(args.buildingNames);
   const zoneLabel = ZONE_LABEL[location.campusZone];
@@ -64,6 +66,12 @@ export function buildCampusCaption(args: {
     headline = "Location not published yet";
   }
 
+  // The pin names the BUILDING and nothing else. A room number is the one thing
+  // a reader looking at a massing model cannot use — they cannot see inside —
+  // and the meetings table directly above the card already prints it. An
+  // explicit `label` is a deliberate caller override and outranks both.
+  const markerTitle = args.label ?? location.buildingLabel ?? headline;
+
   const description = buildDescription({
     headline,
     zoneLabel,
@@ -73,6 +81,12 @@ export function buildCampusCaption(args: {
 
   return {
     headline,
+    marker: buildMarker({
+      title: markerTitle,
+      location,
+      additionalLocationCount,
+      meta: args.meta ?? null,
+    }),
     zoneLabel,
     campusZone: location.campusZone,
     plane: location.plane,
@@ -80,6 +94,30 @@ export function buildCampusCaption(args: {
     description,
     location,
   };
+}
+
+/**
+ * Which single caveat the map prints, if any.
+ *
+ * Deliberately one line and not two. A section that meets in three places, in a
+ * building we cannot draw, has two true things to say and room for neither —
+ * "+2 other locations" wins because it is the one the reader can act on, and
+ * both survive in `description` for anyone listening rather than looking.
+ */
+function buildMarker(args: {
+  title: string;
+  location: CampusLocation;
+  additionalLocationCount: number;
+  meta: string | null;
+}): CampusMarker {
+  const { title, location, additionalLocationCount, meta } = args;
+  const note =
+    additionalLocationCount > 0
+      ? `+${additionalLocationCount} other location${additionalLocationCount === 1 ? "" : "s"}`
+      : location.buildingId != null && location.layout == null
+        ? "Not on the map"
+        : null;
+  return { title, meta, note };
 }
 
 function buildDescription(args: {

@@ -464,6 +464,45 @@ export type CustomBlockRow = {
   created_at: string;
 };
 
+/**
+ * The self-reported academic record behind `/profile` (migration 0017).
+ *
+ * NOTE the two absences, both load-bearing rather than incidental:
+ *
+ *   - **No grade or GPA column anywhere.** We cannot obtain grades without a
+ *     Vergil bearer token, and holding self-typed ones would turn a set of
+ *     course codes into an education record. The migration header spells this
+ *     out; the type is the enforcement.
+ *   - **`course_id` is not a foreign key.** Transfer credit and archived terms
+ *     we have not backfilled are legitimate rows our `courses` table does not
+ *     contain, so `Relationships` is empty on purpose.
+ */
+export type StudentProfileRow = {
+  user_id: string;
+  school: string | null;
+  program_ids: string[];
+  class_year: string | null;
+  attestations: Record<string, string>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type StudentProfileInsert = Partial<StudentProfileRow> &
+  Pick<StudentProfileRow, "user_id">;
+
+export type StudentCourseRow = {
+  user_id: string;
+  course_id: string;
+  term_code: string | null;
+  term_label: string | null;
+  points: number | null;
+  source: string;
+  added_at: string;
+};
+
+export type StudentCourseInsert = Partial<StudentCourseRow> &
+  Pick<StudentCourseRow, "user_id" | "course_id">;
+
 export type WatchRow = {
   user_id: string;
   section_id: string;
@@ -1100,6 +1139,19 @@ export type Database = {
         Update: Partial<CustomBlockInsert>;
         Relationships: [Rel<["plan_id"], "plans", ["plan_id"]>];
       };
+      student_profiles: {
+        Row: StudentProfileRow;
+        Insert: StudentProfileInsert;
+        Update: Partial<StudentProfileInsert>;
+        Relationships: [Rel<["user_id"], "users", ["user_id"]>];
+      };
+      student_courses: {
+        Row: StudentCourseRow;
+        Insert: StudentCourseInsert;
+        Update: Partial<StudentCourseInsert>;
+        // No relationship to `courses`: see StudentCourseRow.
+        Relationships: [Rel<["user_id"], "users", ["user_id"]>];
+      };
       watches: {
         Row: WatchRow;
         Insert: WatchInsert;
@@ -1136,6 +1188,10 @@ export type Database = {
       instructor_reputation: { Row: ReputationAggregateRow; Relationships: [] };
     };
     Functions: {
+      delete_my_academic_record: {
+        Args: Record<string, never>;
+        Returns: undefined;
+      };
       record_enrollment_reading: {
         Args: {
           p_section_id: string;

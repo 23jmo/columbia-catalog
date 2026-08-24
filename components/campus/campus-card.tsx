@@ -28,8 +28,9 @@ import dynamic from "next/dynamic";
 import { cx } from "@/utils/cx";
 import { focusPointFor } from "@/lib/campus";
 import { buildCampusCaption } from "./caption";
-import { CampusCaptionBlock, CampusCardFallback, CampusMiniMap } from "./campus-card-fallback";
+import { CampusCardFallback, CampusMiniMap } from "./campus-card-fallback";
 import type { CampusCardProps, CampusFallbackReason } from "./contracts";
+import { highlightedStopBuildings, routePointsOnPlane } from "./route";
 import { readCampusPalette } from "./palette";
 import type { CampusPalette } from "./palette";
 
@@ -176,6 +177,8 @@ export function CampusCard({
   meta,
   className,
   forceFallback = false,
+  routeStops,
+  connectStops = true,
 }: CampusCardProps) {
   const [container, setContainer] = useState<HTMLElement | null>(null);
   const [sceneReady, setSceneReady] = useState(false);
@@ -187,10 +190,22 @@ export function CampusCard({
   const palette = useCampusPalette(container);
 
   const caption = useMemo(
-    () => buildCampusCaption({ buildingNames, roomLabel, label }),
-    [buildingNames, roomLabel, label],
+    () =>
+      buildCampusCaption({
+        buildingNames: routeStops?.length
+          ? highlightedStopBuildings(routeStops)
+          : buildingNames,
+        roomLabel,
+        label,
+        meta,
+      }),
+    [buildingNames, roomLabel, label, meta, routeStops],
   );
   const focus = useMemo(() => focusPointFor(caption.location), [caption.location]);
+  const route = useMemo(
+    () => (routeStops?.length ? routePointsOnPlane(routeStops, caption.plane) : null),
+    [routeStops, caption.plane],
+  );
 
   // WebGL is probed lazily rather than in a hook so it never runs on a card
   // that is going to render flat anyway.
@@ -215,6 +230,8 @@ export function CampusCard({
         meta={meta}
         className={className}
         reason={fallbackReason ?? "loading"}
+        routeStops={routeStops}
+        connectStops={connectStops}
       />
     );
   }
@@ -225,6 +242,9 @@ export function CampusCard({
       pinnedBuildingId={caption.location.layout?.buildingId ?? null}
       focus={focus}
       description={caption.description}
+      marker={caption.marker}
+      routeStops={routeStops}
+      connectStops={connectStops}
       className="absolute inset-0 size-full"
     />
   );
@@ -260,6 +280,9 @@ export function CampusCard({
                 palette={palette}
                 animate={isVisible}
                 description={caption.description}
+                marker={caption.marker}
+                route={route}
+                connectStops={connectStops}
                 onReady={() => setSceneReady(true)}
                 onContextLost={() => {
                   setSceneReady(false);
@@ -276,14 +299,6 @@ export function CampusCard({
           </p>
         ) : null}
       </div>
-
-      <CampusCaptionBlock
-        headline={caption.headline}
-        zoneLabel={caption.zoneLabel}
-        meta={meta}
-        additionalLocationCount={caption.additionalLocationCount}
-        isPlaced={caption.location.layout != null}
-      />
     </figure>
   );
 }

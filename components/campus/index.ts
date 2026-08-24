@@ -9,7 +9,6 @@
 export { CampusCard, CampusCard as default } from "./campus-card";
 export {
   CampusCardFallback,
-  CampusCaptionBlock,
   CampusMiniMap,
   type CampusMiniMapProps,
 } from "./campus-card-fallback";

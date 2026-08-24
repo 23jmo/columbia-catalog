@@ -37,8 +37,11 @@ const STORAGE_KEY = "drawer-motion-dial";
 const SHIPPED = {
   enter: 90,
   exit: 60,
+  /* The dim runs on its own, longer clock -- see `scrimStyle` in the drawer. */
+  scrimEnter: 220,
+  scrimExit: 110,
   distance: 100,
-  easeEnter: "cubic-bezier(0.22, 1, 0.36, 1)",
+  easeEnter: "cubic-bezier(0.34, 1.35, 0.64, 1)",
   easeExit: "cubic-bezier(0.4, 0, 1, 1)",
 };
 
@@ -51,6 +54,7 @@ type Settings = typeof SHIPPED;
  * to the motion, which a string of four numbers does not.
  */
 const EASINGS = [
+  { label: "bounce (shipped)", value: "cubic-bezier(0.34, 1.35, 0.64, 1)" },
   { label: "soft settle", value: "cubic-bezier(0.22, 1, 0.36, 1)" },
   { label: "standard out", value: "cubic-bezier(0, 0, 0.2, 1)" },
   { label: "standard in", value: "cubic-bezier(0.4, 0, 1, 1)" },
@@ -62,6 +66,8 @@ function applyToDocument(next: Settings) {
   const root = document.documentElement.style;
   root.setProperty("--drawer-enter", `${next.enter}ms`);
   root.setProperty("--drawer-exit", `${next.exit}ms`);
+  root.setProperty("--drawer-scrim-enter", `${next.scrimEnter}ms`);
+  root.setProperty("--drawer-scrim-exit", `${next.scrimExit}ms`);
   root.setProperty("--drawer-distance", `${next.distance}%`);
   root.setProperty("--drawer-ease-enter", next.easeEnter);
   root.setProperty("--drawer-ease-exit", next.easeExit);
@@ -222,6 +228,8 @@ export function DrawerMotionDial() {
     const text = [
       `const DEFAULT_ENTER_MS = ${settings.enter};`,
       `const DEFAULT_EXIT_MS = ${settings.exit};`,
+      `const DEFAULT_SCRIM_ENTER_MS = ${settings.scrimEnter};`,
+      `const DEFAULT_SCRIM_EXIT_MS = ${settings.scrimExit};`,
       `--drawer-distance: ${settings.distance}%;`,
       `--drawer-ease-enter: ${settings.easeEnter};`,
       `--drawer-ease-exit: ${settings.easeExit};`,
@@ -235,6 +243,8 @@ export function DrawerMotionDial() {
   const isDirty =
     settings.enter !== SHIPPED.enter ||
     settings.exit !== SHIPPED.exit ||
+    settings.scrimEnter !== SHIPPED.scrimEnter ||
+    settings.scrimExit !== SHIPPED.scrimExit ||
     settings.distance !== SHIPPED.distance ||
     settings.easeEnter !== SHIPPED.easeEnter ||
     settings.easeExit !== SHIPPED.easeExit;
@@ -288,6 +298,24 @@ export function DrawerMotionDial() {
         step={10}
         unit="ms"
         onChange={(exit) => update({ exit })}
+      />
+      <Slider
+        label="dim in"
+        value={settings.scrimEnter}
+        min={0}
+        max={800}
+        step={10}
+        unit="ms"
+        onChange={(scrimEnter) => update({ scrimEnter })}
+      />
+      <Slider
+        label="dim out"
+        value={settings.scrimExit}
+        min={0}
+        max={800}
+        step={10}
+        unit="ms"
+        onChange={(scrimExit) => update({ scrimExit })}
       />
       <Slider
         label="distance"

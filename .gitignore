@@ -79,3 +79,8 @@ next-env.d.ts
 # supabase cli local state
 supabase/.temp/
 supabase/.branches/
+
+# editor + workspace scratch (local only)
+.cursor/
+/.superset/attachments/
+scratch-*.mts

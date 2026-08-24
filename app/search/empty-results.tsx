@@ -65,10 +65,10 @@ export function EmptyResults({
       <div className="flex items-start gap-3">
         <RiSearchEyeLine className="mt-0.5 size-5 shrink-0 text-foreground-icon-secondary" aria-hidden />
         <div className="min-w-0">
-          <h2 className="text-headline-semibold text-text-primary">
+          <h2 className="text-headline-semibold text-balance text-text-primary">
             {query ? `Nothing matches “${query}”` : "Nothing matches these filters"}
           </h2>
-          <p className="mt-1 text-body-regular text-text-secondary">
+          <p className="mt-1 text-body-regular text-pretty text-text-secondary">
             {totalCourses === 0
               ? "No courses are loaded for this term yet."
               : `The catalog holds ${totalCourses.toLocaleString()} ${
@@ -106,7 +106,7 @@ export function EmptyResults({
                 key={filter.id}
                 type="button"
                 onClick={() => onChange(filter.clear(filters))}
-                className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border-button-default px-2 py-1 text-body-2-medium text-text-primary transition-colors outline-none hover:bg-background-primary-hover focus-visible:ring-2 focus-visible:ring-border-focus-ring"
+                className="inline-flex min-h-10 cursor-pointer items-center gap-1.5 rounded-md border border-border-button-default px-2 py-1 text-body-2-medium text-text-primary transition-colors outline-none hover:bg-background-primary-hover focus-visible:ring-2 focus-visible:ring-border-focus-ring"
               >
                 <span className="text-text-tertiary">{GROUP_LABEL[filter.group]}</span>
                 {filter.label}

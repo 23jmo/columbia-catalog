@@ -202,7 +202,15 @@ function RailShell({
   return (
     <section
       className={cx(
-        "flex flex-col gap-3 rounded-3xl border border-border-table bg-background-secondary-default p-4",
+        /*
+          Radius and padding match `NoPlanState` — these two stack directly on
+          top of each other on the home page over the same background, and they
+          disagreed in both directions at once: this card had the LARGER radius
+          (24px vs 20px) and the SMALLER padding (16px vs 24px), so its content
+          started 7px left of the card above it while its corners were rounder.
+          Peer surfaces on one page get one shape.
+        */
+        "flex flex-col gap-3 rounded-[20px] border border-border-table bg-background-secondary-default p-5 sm:p-6",
         className,
       )}
     >

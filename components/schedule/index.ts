@@ -15,6 +15,8 @@ export { WeekGrid } from "./week-grid";
 export { AgendaList, type AgendaListProps } from "./agenda-list";
 export { PlanSummary, type PlanSummaryProps } from "./plan-summary";
 export { ScheduleView, PlanSnapshotView, type ScheduleViewProps } from "./schedule-view";
+export { CalendarShell } from "./calendar-shell";
+export { CalendarWeekPreview, type CalendarWeekPreviewProps } from "./calendar-week-preview";
 
 export {
   blockIdFor,

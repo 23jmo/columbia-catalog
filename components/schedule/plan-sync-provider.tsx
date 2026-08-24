@@ -6,7 +6,7 @@ import { useSessionAccount } from "@/hooks/use-session-account";
 import { CURRENT_TERM } from "@/lib/constants";
 import { isConfigured } from "@/lib/db/client";
 import { startPlanSync } from "@/lib/db/plan-sync";
-import { setAuthGuard } from "@/lib/schedule/plans";
+import { setSectionAuthGuard } from "@/lib/schedule/plans";
 import type { TermCode } from "@/lib/types";
 
 /**
@@ -26,29 +26,25 @@ export function PlanSyncProvider({ termCode = CURRENT_TERM }: { termCode?: TermC
   useEffect(() => startPlanSync(termCode), [termCode]);
 
   /*
-   * Spec §15: reads are free, writes need an account. `planStore` refuses a
-   * write when this guard says no, and the guard is installed here because
-   * this is the one component that is already mounted for the whole session
-   * and already knows who is signed in.
+   * Spec §15: reads are free; adding classes needs an account. Local plan
+   * structure (create, rename, commitments) stays editable while signed out —
+   * those edits live under `LOCAL_USER_ID` until sign-in claims them.
    *
    * Two deliberate choices:
    *
-   *   · While `isLoading`, writes are ALLOWED. The session arrives a beat
-   *     after first paint, and refusing during that window would reject the
-   *     click of someone who is signed in — the failure that looks like a bug
-   *     rather than a rule.
+   *   · While `isLoading`, section writes are ALLOWED. The session arrives a
+   *     beat after first paint, and refusing during that window would reject the
+   *     click of someone who is signed in.
    *
-   *   · With Supabase unconfigured, writes are allowed and stay local. A
-   *     deployment with no auth backend should still be a usable planner, not
-   *     a read-only catalog with buttons that can never work.
+   *   · With Supabase unconfigured, section writes are allowed and stay local.
    */
   useEffect(() => {
-    setAuthGuard(() =>
+    setSectionAuthGuard(() =>
       !isConfigured() || isLoading || account !== null
         ? { allowed: true }
-        : { allowed: false, reason: "Sign in with your Columbia or Barnard email to save a schedule." },
+        : { allowed: false, reason: "Sign in with your Columbia or Barnard email to add classes." },
     );
-    return () => setAuthGuard(() => ({ allowed: true }));
+    return () => setSectionAuthGuard(() => ({ allowed: true }));
   }, [account, isLoading]);
 
   return null;

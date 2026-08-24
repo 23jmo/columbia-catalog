@@ -76,8 +76,10 @@ export function SearchBar({
           type="search"
           autoComplete="off"
           spellCheck="false"
-          fieldClassName={cx(hero ? "h-14 rounded-2lg pr-11 pl-1" : "h-11 pr-9")}
-          inputClassName={cx(hero ? "text-headline-regular" : "text-body-regular")}
+          fieldClassName={cx(
+            hero ? "h-14 rounded-2lg p-0 pl-3.5 pr-12" : "h-11 pr-9",
+          )}
+          inputClassName={cx(hero ? "text-headline-regular pl-1.5" : "text-body-regular")}
         />
         {query.length > 0 && (
           <button
@@ -88,8 +90,8 @@ export function SearchBar({
               inputRef.current?.focus();
             }}
             className={cx(
-              "absolute top-1/2 -translate-y-1/2 rounded-lg p-1",
-              hero ? "right-3.5" : "right-2",
+              "absolute top-1/2 flex size-10 -translate-y-1/2 items-center justify-center rounded-lg",
+              hero ? "right-2.5" : "right-2",
               "text-text-tertiary transition-colors",
               "hover:bg-background-primary-hover hover:text-text-primary",
               "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
@@ -101,8 +103,14 @@ export function SearchBar({
       </div>
 
       {/* Live region so screen readers hear the count change as they type. */}
+      {/*
+        Flush with the field above it, not inset 4px. This caption is the third
+        item in a left-aligned column (title, field, count) and a 4px nudge on
+        the middle one is the kind of misalignment you feel without being able
+        to name it.
+      */}
       <div
-        className="flex items-baseline gap-2 px-1"
+        className="flex items-baseline gap-2"
         aria-live="polite"
         aria-atomic="true"
       >

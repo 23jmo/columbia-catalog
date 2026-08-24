@@ -48,6 +48,14 @@ export interface InstructorReviewsCardProps {
   reputation: ReputationSummary | null;
   /** Pre-resolved snapshot, e.g. in a test. Normally left undefined. */
   rmpSnapshot?: RmpSnapshot | null;
+  /**
+   * Draw the RateMyProfessor half. The instructor page sets this false: its
+   * hero already prints the RMP rating, difficulty, would-take-again and
+   * sample size, and repeating all four in a second card 400px lower does not
+   * make them truer — it just makes the reader check whether the two boxes
+   * disagree. The course drawer, which has no such hero, leaves it on.
+   */
+  showRmp?: boolean;
   className?: string;
 }
 
@@ -55,6 +63,7 @@ export function InstructorReviewsCard({
   instructorName,
   reputation,
   rmpSnapshot,
+  showRmp = true,
   className,
 }: InstructorReviewsCardProps) {
   /**
@@ -86,12 +95,20 @@ export function InstructorReviewsCard({
         </p>
         <p className="text-title-2-medium text-text-primary">Reviews</p>
         <p className="text-caption-1-regular text-pretty text-text-secondary">
-          Dimensions, not a verdict. These two sources are never averaged together — they
-          poll different students about different things. {UNREVIEWED_CAVEAT}
+          Dimensions, not a verdict.{" "}
+          {showRmp
+            ? "These two sources are never averaged together — they poll different students about different things."
+            : "Everything below comes from Columbia students; the RateMyProfessor figures are in the header and are never averaged with these."}{" "}
+          {UNREVIEWED_CAVEAT}
         </p>
       </div>
 
-      <div className="grid gap-2 rounded-2lg bg-background-primary-default p-3 lg:grid-cols-2">
+      <div
+        className={cx(
+          "grid gap-2 rounded-2lg bg-background-primary-default p-3",
+          showRmp && "lg:grid-cols-2",
+        )}
+      >
         <div className="flex min-w-0 flex-col gap-2">
           <ReputationBlock
             title="CULPA & Reddit"
@@ -118,11 +135,13 @@ export function InstructorReviewsCard({
           </div>
         </div>
 
-        <RmpBlock
-          instructorName={instructorName}
-          snapshot={rmpSnapshot}
-          lookup={rmpSnapshot === undefined ? lookupRmp : undefined}
-        />
+        {showRmp ? (
+          <RmpBlock
+            instructorName={instructorName}
+            snapshot={rmpSnapshot}
+            lookup={rmpSnapshot === undefined ? lookupRmp : undefined}
+          />
+        ) : null}
       </div>
     </section>
   );

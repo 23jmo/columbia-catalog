@@ -1,21 +1,15 @@
-import Link from "next/link";
 import {
   RiBookOpenLine,
   RiCalendarCheckLine,
-  RiChat3Line,
-  RiCompass3Line,
   RiErrorWarningLine,
   RiFileList2Line,
   RiGroupLine,
-  RiHistoryLine,
-  RiLineChartLine,
   RiRoadMapLine,
   RiScales2Line,
   RiShieldCheckLine,
 } from "@remixicon/react";
 
 import { Chip } from "@/components/base/badges/chip";
-import { CampusCard } from "@/components/campus/campus-card";
 import { sectionHasOpenSeats } from "@/components/catalog/search-source";
 import type {
   CourseDetailIntegrations,
@@ -24,21 +18,18 @@ import type {
 } from "@/components/course/contracts";
 import { guessCampusZone, meetingLines, prettyTitle } from "@/components/course/format";
 import type { CourseDetailData } from "@/components/course/load-course-detail";
+import { CourseLevelPanels } from "@/components/course/course-level-panels";
 import { EmptyNote, Fact, LanePlaceholder, Panel } from "@/components/course/panel";
 import { RegistrationHandoff } from "@/components/course/registration-handoff";
 import { AddToScheduleButton } from "@/components/schedule/add-to-schedule-button";
 import { WatchButton } from "@/components/watch/watch-button";
-import { ReputationBlock } from "@/components/course/reputation";
-import { InstructorLinks } from "@/components/instructor/instructor-link";
 import { REQUIREMENT_FILTERS, WEEKDAY_LABEL, ZONE_LABEL } from "@/lib/constants";
-import { getAllCourses } from "@/lib/data/catalog";
 import type { ScheduleConflict, Section } from "@/lib/types";
 import { cx } from "@/utils/cx";
 
 import { CourseSeatSummary } from "./course-seat-summary";
 import { loadPrimaryPlanSnapshot } from "@/lib/db/primary-plan-snapshot";
 import { courseDetailIntegrations } from "./integrations";
-import { InstructorsPanel } from "./instructors-panel";
 import { SectionsPanel } from "./sections-panel";
 
 /**
@@ -50,13 +41,38 @@ import { SectionsPanel } from "./sections-panel";
  * "what a link shows" and "what a click shows" is the exact bug that makes a
  * URL feel like a lie.
  *
- * Reading order is spec §7, verbatim: everything needed to decide sits above
- * the fold, then Description → Sections → Schedule preview → Seat history →
- * Instructor → Reviews → Workload/grading → Similar → Offering history.
+ * Reading order: everything needed to decide sits above the fold, then
+ * Description → Sections → Schedule preview → Reviews → Workload/grading →
+ * Similar → Offering history.
  *
- * This is a server component. The only client leaves are the two places that
- * genuinely need the browser: compare selection (`SectionsPanel`) and the live
- * RateMyProfessor read (`InstructorsPanel`).
+ * ── What this page deliberately does NOT show ──────────────────────────────
+ *
+ * Instructor, location and seat history used to sit in that list, between
+ * Schedule preview and Reviews. They are gone, because none of them is a fact
+ * about a course — they are facts about a section, and this page is the one
+ * surface that cannot name a section.
+ *
+ * The old versions papered over that by aggregating. The header printed every
+ * instructor across every section as if the course had them all; the "Where"
+ * fact joined every room with a middle dot; the seat chart drew a series per
+ * section under a single capacity line that only existed when the caps
+ * happened to agree. On a one-section course each was accidentally right, and
+ * on a twenty-four-section course each was a sentence no registrar would sign.
+ * `SectionDetail` answers all three per section, which is where the question
+ * was always aimed.
+ *
+ * That deletion also took the page's two most expensive awaits with it: a
+ * `loadReputation` per instructor, and `getAllCourses` — the whole term, ~4,600
+ * courses — which existed only to tell each instructor card what else that
+ * person teaches.
+ *
+ * Spec §7 still lists all nine panels in its old order. It describes a
+ * course-level drawer that no longer exists either (the drawer is section-
+ * scoped now; see `app/@drawer/(.)course/[courseId]/page.tsx`), so it is stale
+ * on both counts and should be rewritten rather than treated as the contract.
+ *
+ * This is a server component. The only client leaf left is compare selection
+ * (`SectionsPanel`).
  */
 
 const REQUIREMENT_LABEL_BY_KEY = new Map(REQUIREMENT_FILTERS.map((r) => [r.key, r.label]));
@@ -98,8 +114,6 @@ export async function CourseDetail({
         : null;
   const resolvedIntegrations: CourseDetailIntegrations = { ...integrations, primaryPlan };
   const sectionsWithSeats = sections.filter(sectionHasOpenSeats).length;
-  const gradingModes = distinct(sections.map((s) => s.gradingMode));
-  const formats = distinct(sections.flatMap((s) => [s.component, s.methodOfInstruction]));
   const restrictions = distinct(sections.map((s) => s.openTo));
   const notes = distinct(sections.map((s) => s.note));
   const requirementLabels = Object.entries(course.requirementFlags)
@@ -111,29 +125,6 @@ export async function CourseDetail({
       meetingLines(section.meetings).map((line) => `${line.daysLabel} ${line.timeLabel}`),
     ),
   );
-  const locations = distinct(
-    sections.flatMap((section) => meetingLines(section.meetings).map((line) => line.placeLabel)),
-  );
-  // Raw, unnormalised building strings in meeting order — what the campus card
-  // expects. `locations` above is the human-readable place label and is not a
-  // substitute: it folds in the room number and is formatted for reading.
-  // The chart lane's component, aliased so JSX can render it as a tag. Loading
-  // the series is awaited here rather than in the client: it is one read, and
-  // doing it on the server keeps Recharts off the critical path when a course
-  // has no history to draw at all.
-  const SeatHistory = integrations.seatHistoryChart;
-  // `termCode` lives on Section, not Course — a course record is term-agnostic.
-  // With no sections there is no term to ask about, so there is nothing to load.
-  const historyTermCode = sections[0]?.termCode ?? null;
-  const seatHistory =
-    integrations.loadSeatHistory && historyTermCode
-      ? await integrations.loadSeatHistory({
-          sectionIds: sections.map((section) => section.sectionId),
-          courseId: course.courseId,
-          termCode: historyTermCode,
-        })
-      : null;
-
   /*
    * Two summaries, fetched apart and rendered apart (spec §12). The instructor
    * half is keyed to the FIRST instructor because that is who the subtitle
@@ -146,48 +137,6 @@ export async function CourseDetail({
         instructorName: data.instructors[0] ?? null,
       })
     : null;
-
-  /*
-   * The instructor panel shows a card per instructor, so it needs a summary
-   * per instructor rather than the single one the Reviews panel renders. One
-   * `loadReputation` call each, in parallel — a course has a handful of
-   * instructors, not hundreds.
-   */
-  const reputationByInstructor = integrations.loadReputation
-    ? Object.fromEntries(
-        await Promise.all(
-          data.instructors.map(async (name) => {
-            const bundle = await integrations.loadReputation!({
-              courseId: course.courseId,
-              instructorName: name,
-            });
-            return [name, bundle.instructor] as const;
-          }),
-        ),
-      )
-    : undefined;
-
-  const meetingBuildingNames = distinct(
-    sections.flatMap((section) => section.meetings.map((meeting) => meeting.buildingName)),
-  ).filter((name): name is string => Boolean(name));
-
-  // Instructor → the sections they teach here, plus their other courses this
-  // term. `alsoTeaches` is read through the catalog seam rather than passed in,
-  // so both routes get it without either having to remember to compute it.
-  const catalog = await getAllCourses(data.termCode);
-  const instructors = data.instructors.map((name) => ({
-    name,
-    sectionCodes: sections
-      .filter((section) => section.instructors.includes(name))
-      .map((section) => section.sectionCode),
-    alsoTeaches: catalog
-      .filter(
-        (candidate) =>
-          candidate.courseId !== course.courseId &&
-          candidate.sections.some((section) => section.instructors.includes(name)),
-      )
-      .map((candidate) => `${candidate.subjectCode} ${candidate.number}`),
-  }));
 
   const conflictReport = evaluateAgainstPrimaryPlan(data, resolvedIntegrations);
 
@@ -224,10 +173,6 @@ export async function CourseDetail({
             {title}
           </h1>
 
-          <p className="text-headline-regular text-text-secondary">
-            <InstructorLinks names={data.instructors} separator=" · " />
-          </p>
-
           {requirementLabels.length > 0 ? (
             <div className="mt-1 flex flex-wrap gap-1.5">
               {requirementLabels.map((label) => (
@@ -244,13 +189,6 @@ export async function CourseDetail({
             <Fact label="Meets">
               {meetingsByPattern.length > 0 ? (
                 <span className="tabular-nums">{meetingsByPattern.join(" · ")}</span>
-              ) : (
-                <span className="text-text-tertiary">Not published</span>
-              )}
-            </Fact>
-            <Fact label="Where">
-              {locations.length > 0 ? (
-                locations.join(" · ")
               ) : (
                 <span className="text-text-tertiary">Not published</span>
               )}
@@ -371,211 +309,14 @@ export async function CourseDetail({
             <AgendaFallback sections={sections} />
           </LanePlaceholder>
         )}
-
-        {/* "When" is above; this answers "where". The card takes the raw
-            building strings straight off the parser — normalising them is the
-            campus lane's job, and it is the lane that knows the alias table.
-            It decides for itself between the 3D scene and the flat map based
-            on WebGL support and prefers-reduced-motion, and lazy-loads three.js
-            only if it picks the scene, so nothing here is on the search path. */}
-        {meetingBuildingNames.length > 0 ? (
-          <CampusCard
-            className="mt-4"
-            buildingNames={meetingBuildingNames}
-            meta={meetingsByPattern[0] ?? null}
-          />
-        ) : null}
       </Panel>
 
       {/* ------------------------------------------------------------------ */}
-      {/* 4. Seat history                                                     */}
+      {/* 4-7. Reviews, workload, neighbours, offering history                */}
       {/* ------------------------------------------------------------------ */}
-      <Panel id="seat-history" title="Seat history" icon={RiLineChartLine}>
-        {SeatHistory && seatHistory && seatHistory.series.length > 0 ? (
-          <SeatHistory
-            series={seatHistory.series}
-            milestones={seatHistory.milestones}
-            capacity={sharedCapacity(sections)}
-          />
-        ) : (
-          /* Not `EmptyNote` — that component IS a <p>, and this state needs
-             two paragraphs. The copy matters: the chart component ships, so
-             "not built yet" would be a lie, and saying nothing would imply
-             these sections never moved. Neither is true — the crawl simply
-             has not written a snapshot series for this term yet. */
-          <div className="flex flex-col gap-2">
-            <p className="text-body-regular text-text-secondary">
-              We already hold today’s reading for every section above, each with the
-              directory’s own “as of” stamp. History needs the snapshot series the crawl
-              writes over a term, and none has been recorded for this term yet.
-            </p>
-            {data.offeringHistory.some((record) => record.offered) ? (
-              <p className="text-caption-1-regular text-text-secondary">
-                Past offerings are listed at the bottom of this page.
-              </p>
-            ) : null}
-          </div>
-        )}
-      </Panel>
-
-      {/* ------------------------------------------------------------------ */}
-      {/* 5. Instructor profile                                               */}
-      {/* ------------------------------------------------------------------ */}
-      <Panel
-        id="instructors"
-        title={instructors.length > 1 ? "Instructors" : "Instructor"}
-        icon={RiCompass3Line}
-      >
-        <InstructorsPanel
-          instructors={instructors}
-          reputationByInstructor={reputationByInstructor}
-        />
-      </Panel>
-
-      {/* ------------------------------------------------------------------ */}
-      {/* 6. Reviews                                                          */}
-      {/* ------------------------------------------------------------------ */}
-      <Panel id="reviews" title="Reviews" icon={RiChat3Line}>
-        <div className="grid gap-3 lg:grid-cols-2">
-          {/*
-            Both halves come from `loadReputation`, which is wired to the real
-            aggregator. They are null today because no reviews have been
-            ingested — the same null a genuinely unreviewed course returns,
-            and `ReputationBlock` renders it as "no reviews matched" either way.
-          */}
-          <ReputationBlock
-            title="Course experience"
-            subtitle="Aggregated across everyone who has taught this course."
-            summary={reputation?.course ?? null}
-          />
-          <ReputationBlock
-            title="Instructor quality"
-            subtitle={
-              reputation?.instructorName
-                ? `Aggregated across every course ${reputation.instructorName} has taught.`
-                : "Aggregated per instructor."
-            }
-            summary={reputation?.instructor ?? null}
-          />
-        </div>
-      </Panel>
-
-      {/* ------------------------------------------------------------------ */}
-      {/* 7. Workload and grading signals                                     */}
-      {/* ------------------------------------------------------------------ */}
-      <Panel id="workload" title="Workload and grading" icon={RiScales2Line}>
-        <div className="flex flex-col gap-4">
-          <dl className="grid gap-4 sm:grid-cols-3">
-            <Fact label="Grading">
-              {gradingModes.length > 0 ? (
-                gradingModes.join(" · ")
-              ) : (
-                <span className="text-text-tertiary">Not published</span>
-              )}
-            </Fact>
-            <Fact label="Format">
-              {formats.length > 0 ? (
-                formats.join(" · ")
-              ) : (
-                <span className="text-text-tertiary">Not published</span>
-              )}
-            </Fact>
-            <Fact label="Credits">
-              {credits ?? <span className="text-text-tertiary">Not published</span>}
-            </Fact>
-          </dl>
-          <ReputationBlock
-            title="Reported workload"
-            subtitle="From CULPA and Reddit reviews matched to this course."
-            summary={null}
-            keys={["workload", "difficulty", "gradingFairness"]}
-          />
-        </div>
-      </Panel>
-
-      {/* ------------------------------------------------------------------ */}
-      {/* 8. Similar and alternative courses                                  */}
-      {/* ------------------------------------------------------------------ */}
-      <Panel id="similar" title="Similar courses" icon={RiShieldCheckLine}>
-        {data.similar.length === 0 ? (
-          <EmptyNote>Nothing else in this term’s catalog is a close neighbour.</EmptyNote>
-        ) : (
-          <ul className="flex list-none flex-col gap-1.5">
-            {data.similar.map((similar) => (
-              <li key={similar.courseId}>
-                <Link
-                  href={`/course/${similar.courseId}`}
-                  className="flex flex-col gap-0.5 rounded-lg border border-border-table px-3 py-2 transition-colors outline-none hover:bg-background-primary-hover focus-visible:ring-2 focus-visible:ring-border-focus-ring"
-                >
-                  <span className="flex flex-wrap items-baseline gap-x-2">
-                    <span className="text-caption-1-medium tabular-nums text-text-secondary">
-                      {similar.code}
-                    </span>
-                    <span className="text-body-medium text-text-primary">
-                      {prettyTitle(similar.title)}
-                    </span>
-                  </span>
-                  <span className="text-caption-2-regular text-text-tertiary">
-                    {similar.reason}
-                    {similar.credits ? ` · ${similar.credits}` : ""}
-                    {similar.instructors.length > 0 ? " · " : ""}
-                    {similar.instructors.length > 0 ? (
-                      <InstructorLinks names={similar.instructors} />
-                    ) : null}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Panel>
-
-      {/* ------------------------------------------------------------------ */}
-      {/* 9. Past-semester offering history                                   */}
-      {/* ------------------------------------------------------------------ */}
-      <Panel id="offering-history" title="Offering history" icon={RiHistoryLine}>
-        <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-          <table className="w-full min-w-max border-separate border-spacing-0 text-body-regular">
-            <caption className="sr-only">Past terms this course was offered</caption>
-            <thead>
-              <tr>
-                {["Term", "Sections", "Instructors", "Enrolled"].map((heading) => (
-                  <th
-                    key={heading}
-                    scope="col"
-                    className="border-b border-border-table px-3 py-2 text-left text-caption-2-medium tracking-wide text-text-tertiary uppercase"
-                  >
-                    {heading}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {data.offeringHistory.map((record) => (
-                <tr key={record.termCode} className={cx(!record.offered && "opacity-55")}>
-                  <th
-                    scope="row"
-                    className="border-b border-border-table px-3 py-2 text-left text-body-medium whitespace-nowrap text-text-primary"
-                  >
-                    {record.label}
-                  </th>
-                  <td className="border-b border-border-table px-3 py-2 tabular-nums text-text-primary">
-                    {record.offered ? record.sectionCount : "Not offered"}
-                  </td>
-                  <td className="border-b border-border-table px-3 py-2 text-text-secondary">
-                    <InstructorLinks names={record.instructors} fallback="—" />
-                  </td>
-                  <td className="border-b border-border-table px-3 py-2 tabular-nums text-text-secondary">
-                    {record.totalEnrolled !== null && record.totalCapacity !== null
-                      ? `${record.totalEnrolled} / ${record.totalCapacity}`
-                      : "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Panel>
+      {/* Shared verbatim with the single-section page, where `/course/[id]`
+          redirects and this is the only place these four still render. */}
+      <CourseLevelPanels data={data} reputation={reputation} variant="page" />
 
       {/* The last mile. We are a planner: this hands over a call number and a
           deep link and never writes anything to Columbia. */}
@@ -790,22 +531,4 @@ function AgendaFallback({ sections }: { sections: Section[] }) {
 
 function distinct(values: (string | null | undefined)[]): string[] {
   return [...new Set(values.filter((value): value is string => Boolean(value)))];
-}
-
-/**
- * The capacity line the chart draws as its ceiling.
- *
- * Only meaningful when every section agrees on one — sections of the same
- * course routinely have different caps, and drawing one section's cap across
- * all of them would invent a ceiling that does not exist. Disagreement returns
- * null and the chart simply omits the line.
- */
-function sharedCapacity(sections: readonly Section[]): number | null {
-  // `distinct` is a string helper; caps are numbers, so dedupe directly.
-  const caps = new Set(
-    sections
-      .map((section) => section.enrollmentCap)
-      .filter((cap): cap is number => typeof cap === "number"),
-  );
-  return caps.size === 1 ? [...caps][0] : null;
 }

@@ -7,6 +7,11 @@
  * dataset, the same pin, and the same caption as the 3D scene, just in plan
  * view instead of isometric.
  *
+ * "The same dataset" includes the route: a card given several stops draws all
+ * of them here too. It did not always — the props arrived and were dropped on
+ * the floor — which meant a reader on reduced motion was told an instructor
+ * teaches in one building when the 3D reader could see four.
+ *
  * No `"use client"`: it has no state and no effects, so the drawer can render
  * it on the server and let the 3D scene hydrate over the top. That is also what
  * makes it a legitimate `loading` state for the lazy boundary rather than a
@@ -27,7 +32,14 @@ import {
 } from "@/lib/campus";
 import type { CampusPlaneId, CampusRoad } from "@/lib/campus";
 import { buildCampusCaption } from "./caption";
-import type { CampusCardFallbackProps, CampusFallbackReason } from "./contracts";
+import { routePointsOnPlane } from "./route";
+import type {
+  CampusCardFallbackProps,
+  CampusFallbackReason,
+  CampusMarker,
+  CampusRoutePoint,
+  CampusRouteStop,
+} from "./contracts";
 
 /** Map viewport, in plane units. 16:10 to match the 3D card's frame exactly. */
 const VIEW_ASPECT = 10 / 16;
@@ -78,6 +90,28 @@ function computeViewBox(planeId: CampusPlaneId, focus: { x: number; z: number })
   };
 }
 
+/**
+ * Where to centre the frame.
+ *
+ * The caption's focus point is one building, which is the right answer for a
+ * card about one building. When the card is about several, centring on one of
+ * them can push the others off the edge — the frame is already as wide as the
+ * plane allows, so panning is the only freedom left. Centring the stops'
+ * bounding box spends that freedom on showing all of them.
+ */
+function framePoint(
+  focus: { x: number; z: number },
+  stops: ReadonlyArray<CampusRoutePoint>,
+): { x: number; z: number } {
+  if (stops.length < 2) return focus;
+  const xs = stops.map((stop) => stop.x);
+  const zs = stops.map((stop) => stop.z);
+  return {
+    x: (Math.min(...xs) + Math.max(...xs)) / 2,
+    z: (Math.min(...zs) + Math.max(...zs)) / 2,
+  };
+}
+
 function roadRect(road: CampusRoad) {
   return road.orientation === "north-south"
     ? { x: road.at - road.width / 2, y: road.from, width: road.width, height: road.to - road.from }
@@ -91,8 +125,10 @@ export function CampusCardFallback({
   meta,
   className,
   reason = "forced",
+  routeStops,
+  connectStops = true,
 }: CampusCardFallbackProps) {
-  const caption = buildCampusCaption({ buildingNames, roomLabel, label });
+  const caption = buildCampusCaption({ buildingNames, roomLabel, label, meta });
   const hint = REASON_HINT[reason];
 
   return (
@@ -108,6 +144,9 @@ export function CampusCardFallback({
           pinnedBuildingId={caption.location.layout?.buildingId ?? null}
           focus={focusPointFor(caption.location)}
           description={caption.description}
+          marker={caption.marker}
+          routeStops={routeStops}
+          connectStops={connectStops}
           className="absolute inset-0 size-full"
         />
         {hint ? (
@@ -116,14 +155,6 @@ export function CampusCardFallback({
           </p>
         ) : null}
       </div>
-
-      <CampusCaptionBlock
-        headline={caption.headline}
-        zoneLabel={caption.zoneLabel}
-        meta={meta}
-        additionalLocationCount={caption.additionalLocationCount}
-        isPlaced={caption.location.layout != null}
-      />
     </figure>
   );
 }
@@ -135,6 +166,15 @@ export interface CampusMiniMapProps {
   /** Plane-local point the viewport centres on. */
   focus: { x: number; z: number };
   description: string;
+  /** Printed over the pin. Omitted by callers that want a bare map. */
+  marker?: CampusMarker | null;
+  /**
+   * Every place this card is about, not just the pinned one. Stops that resolve
+   * to this plane get their footprint tinted and a dot dropped on them.
+   */
+  routeStops?: ReadonlyArray<CampusRouteStop> | null;
+  /** Join the stops with a dashed path. See `CampusCardProps.connectStops`. */
+  connectStops?: boolean;
   className?: string;
 }
 
@@ -150,12 +190,20 @@ export function CampusMiniMap({
   pinnedBuildingId,
   focus,
   description,
+  marker,
+  routeStops,
+  connectStops = true,
   className,
 }: CampusMiniMapProps) {
-  const view = computeViewBox(plane, focus);
+  const stops = routeStops ? routePointsOnPlane(routeStops, plane) : [];
+  const view = computeViewBox(plane, framePoint(focus, stops));
   const buildings = buildingsOnPlane(plane);
   const roads = roadsOnPlane(plane);
   const pinned = buildings.find((entry) => entry.buildingId === pinnedBuildingId) ?? null;
+  const stopBuildingIds = new Set(
+    stops.map((stop) => stop.buildingId).filter((id): id is string => Boolean(id)),
+  );
+  const ringRadius = pinned ? Math.max(pinned.width, pinned.depth) * 0.9 : 1.5;
 
   return (
     <svg
@@ -206,6 +254,10 @@ export function CampusMiniMap({
 
       {buildings.map((entry) => {
         const isPinned = pinned?.buildingId === entry.buildingId;
+        // A stop that is not the pinned one still gets accent ink, two steps
+        // down the ramp: enough to read as "one of ours" at a glance, not so
+        // much that the eye loses which building the card is actually about.
+        const isStop = !isPinned && stopBuildingIds.has(entry.buildingId);
         return (
           <rect
             key={entry.buildingId}
@@ -217,15 +269,45 @@ export function CampusMiniMap({
             className={cx(
               isPinned
                 ? "fill-accent-500"
-                : entry.isLandmark
-                  ? "fill-background-tertiary-default"
-                  : "fill-background-quaternary-default",
-              isPinned ? "stroke-accent-600" : "stroke-border-table",
+                : isStop
+                  ? "fill-accent-200"
+                  : entry.isLandmark
+                    ? "fill-background-tertiary-default"
+                    : "fill-background-quaternary-default",
+              isPinned ? "stroke-accent-600" : isStop ? "stroke-accent-400" : "stroke-border-table",
             )}
             strokeWidth={0.06 * INK}
           />
         );
       })}
+
+      {/* The walk between stops, when the stops are a walk. Dashed and drawn
+          under the dots, exactly as the 3D scene draws it. */}
+      {connectStops && stops.length >= 2 ? (
+        <polyline
+          points={stops.map((stop) => `${stop.x},${stop.z}`).join(" ")}
+          className="fill-none stroke-accent-500"
+          strokeWidth={0.1 * INK}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeDasharray={`${0.34 * INK} ${0.3 * INK}`}
+          opacity={0.7}
+        />
+      ) : null}
+
+      {stops.map((stop, index) => (
+        <circle
+          key={`${stop.buildingId ?? "stop"}-${index}`}
+          cx={stop.x}
+          cy={stop.z}
+          r={(stop.highlighted ? 0.28 : 0.2) * INK}
+          className={cx(
+            stop.highlighted ? "fill-accent-600" : "fill-accent-500",
+            "stroke-background-primary-default",
+          )}
+          strokeWidth={0.07 * INK}
+        />
+      ))}
 
       {/* Static ring — this renderer is the reduced-motion target, so nothing
           here may animate. When no building could be placed the ring still
@@ -234,61 +316,119 @@ export function CampusMiniMap({
       <circle
         cx={pinned ? pinned.x : focus.x}
         cy={pinned ? pinned.z : focus.z}
-        r={pinned ? Math.max(pinned.width, pinned.depth) * 0.9 : 1.5}
+        r={ringRadius}
         className="fill-none stroke-accent-500"
         strokeWidth={0.09 * INK}
         opacity={pinned ? 0.55 : 0.3}
         strokeDasharray={pinned ? undefined : `${0.4 * INK} ${0.3 * INK}`}
       />
-      {pinned ? (
-        <text
-          x={pinned.x}
-          y={pinned.z - Math.max(pinned.width, pinned.depth) * 0.9 - 0.28 * INK}
-          fontSize={0.48 * INK}
-          textAnchor="middle"
-          className="fill-text-primary"
-          style={{ fontWeight: 600 }}
-        >
-          {pinned.label}
-        </text>
+      {marker ? (
+        <MapMarker
+          marker={marker}
+          x={pinned ? pinned.x : focus.x}
+          z={pinned ? pinned.z - ringRadius : focus.z - ringRadius}
+          ringDiameter={ringRadius * 2}
+          view={view}
+        />
       ) : null}
     </svg>
   );
 }
 
+/** Type sizes for the marker's three lines, in ink units. */
+const MARKER_LINES = [
+  { size: 0.5, className: "fill-text-primary", weight: 600 },
+  { size: 0.38, className: "fill-text-secondary", weight: 400 },
+  { size: 0.34, className: "fill-text-tertiary", weight: 400 },
+] as const;
+
 /**
- * Shared by both renderers so the text under the map is identical whichever one
- * is on screen — swapping from flat to 3D must not change a single word.
+ * The pin's label, as SVG.
+ *
+ * Sized by counting characters rather than by measuring: SVG has no layout pass
+ * to ask, and this renderer has to work on the server where there is no text
+ * metrics API at all. 0.54em per character is the average advance of this
+ * weight over the alphabet, which is close enough for a plate that only has to
+ * be wider than its text and is deliberately translucent at the edges anyway.
  */
-export function CampusCaptionBlock({
-  headline,
-  zoneLabel,
-  meta,
-  additionalLocationCount,
-  isPlaced,
+function MapMarker({
+  marker,
+  x,
+  z,
+  ringDiameter,
+  view,
 }: {
-  headline: string;
-  zoneLabel: string;
-  meta?: string | null;
-  additionalLocationCount: number;
-  isPlaced: boolean;
+  marker: CampusMarker;
+  x: number;
+  z: number;
+  /** Full height of the ring `z` sits on top of — what a flipped plate must clear. */
+  ringDiameter: number;
+  view: { x: number; y: number; width: number; height: number };
 }) {
+  const lines = [marker.title, marker.meta, marker.note]
+    .map((text, index) => ({ text, ...MARKER_LINES[index] }))
+    .filter((line): line is { text: string } & (typeof MARKER_LINES)[number] => Boolean(line.text));
+
+  const gap = 0.16 * INK;
+  const padX = 0.42 * INK;
+  const padY = 0.3 * INK;
+  const textHeight =
+    lines.reduce((total, line) => total + line.size * INK, 0) + gap * (lines.length - 1);
+  const plateHeight = textHeight + padY * 2;
+  const plateWidth =
+    Math.max(...lines.map((line) => line.text.length * line.size * 0.54 * INK)) + padX * 2;
+
+  // Above the pin by default, below it when there is no room — a plate clipped
+  // by the top of the frame is worse than one on the other side of its own pin.
+  //
+  // `z` is the TOP of the ring, so flipping has to step over the ring's whole
+  // height to land underneath it. Stepping a stem's worth instead put the plate
+  // straight back down on the building it was labelling and hid it — which only
+  // became obvious on a card about several buildings, where the extra "+n other
+  // location" line makes the plate tall enough to trigger the flip in the first
+  // place.
+  const stem = 0.34 * INK;
+  const above = z - stem - plateHeight;
+  const flipped = above < view.y + 0.2 * INK;
+  const top = flipped ? z + ringDiameter + stem : above;
+
+  // Slide back inside the frame horizontally. The pin can sit anywhere, but the
+  // plate is chrome and chrome does not get cropped.
+  const left = Math.min(
+    Math.max(x - plateWidth / 2, view.x + 0.2 * INK),
+    view.x + view.width - plateWidth - 0.2 * INK,
+  );
+
+  let baseline = top + padY;
   return (
-    <figcaption className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 border-t border-border-table px-3 py-2">
-      <div className="min-w-0">
-        <p className="truncate text-body-2-semibold text-text-primary">{headline}</p>
-        {meta ? <p className="text-caption-2-regular text-text-secondary">{meta}</p> : null}
-      </div>
-      <div className="shrink-0 text-right">
-        <p className="text-caption-1-medium text-text-secondary">{zoneLabel}</p>
-        {additionalLocationCount > 0 ? (
-          <p className="text-caption-2-regular text-text-tertiary">
-            +{additionalLocationCount} other location{additionalLocationCount === 1 ? "" : "s"}
-          </p>
-        ) : !isPlaced ? (
-          <p className="text-caption-2-regular text-text-tertiary">Not on the map</p>
-        ) : null}
-      </div>
-    </figcaption>
+    <g>
+      <rect
+        x={left}
+        y={top}
+        width={plateWidth}
+        height={plateHeight}
+        rx={0.34 * INK}
+        className="fill-background-primary-default stroke-border-table"
+        opacity={0.92}
+        strokeWidth={0.05 * INK}
+      />
+      {lines.map((line) => {
+        const y = baseline + line.size * INK * 0.78;
+        baseline += line.size * INK + gap;
+        return (
+          <text
+            key={line.text}
+            x={left + plateWidth / 2}
+            y={y}
+            fontSize={line.size * INK}
+            textAnchor="middle"
+            className={line.className}
+            style={{ fontWeight: line.weight }}
+          >
+            {line.text}
+          </text>
+        );
+      })}
+    </g>
   );
 }

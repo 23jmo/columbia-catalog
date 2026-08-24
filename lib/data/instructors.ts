@@ -41,14 +41,9 @@ import { creditsLabel, meetingSummary, placeSummary, prettyTitle } from "@/compo
  * Diacritics are folded so a pasted URL survives a copy through a system that
  * mangles them, and everything non-alphanumeric collapses to a single hyphen.
  */
-export function instructorSlug(name: string): string {
-  return name
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
+import { instructorSlug } from "./instructor-slug";
+
+export { instructorSlug };
 
 // ---------------------------------------------------------------------------
 // Shapes

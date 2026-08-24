@@ -63,7 +63,7 @@ export function FilterPopover({
         dialogClassName="gap-0"
       >
         <div className="border-b border-border-table px-5 py-3">
-          <h2 className="text-headline-semibold text-text-primary">Filters</h2>
+          <h2 className="text-headline-semibold text-balance text-text-primary">Filters</h2>
         </div>
         <div className="px-5 py-3">
           <Filters

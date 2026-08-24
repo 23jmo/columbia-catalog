@@ -136,6 +136,20 @@ export interface WeekGridProps {
   /** Minutes from midnight. Defaults to GRID_START_MINUTE/GRID_END_MINUTE. */
   startMinute?: number;
   endMinute?: number;
+  /**
+   * Columns to draw, when Monday-to-Friday is the wrong week.
+   *
+   * The default base is every weekday, which is right for a plan: a blank
+   * Wednesday column is a true statement that Wednesday is free. It is wrong
+   * for a canvas showing ONE section against the days that section meets —
+   * there a blank Wednesday would say the reader's Wednesday is clear when in
+   * fact Wednesday was never being asked about. A caller narrowing the question
+   * narrows the columns with it.
+   *
+   * Days that blocks actually fall on are always added, so this can shrink the
+   * week but never hide a meeting.
+   */
+  weekdays?: Weekday[];
   /** Narrow viewports degrade to an agenda list (spec §18). */
   compact?: boolean;
   className?: string;

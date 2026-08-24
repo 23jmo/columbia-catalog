@@ -50,9 +50,7 @@ function Line({ className }: { className: string }) {
 
 export default function DrawerLoading() {
   return (
-    // An em dash holds the rail's slot at roughly the right width instead of
-    // collapsing it and then re-expanding when the real code arrives.
-    <DrawerFrame code="—" href="#">
+    <DrawerFrame>
       <div className="flex w-full flex-col gap-8" aria-busy="true" aria-live="polite">
         {/*
           Carries the id the panel's `aria-labelledby` points at. Every state of

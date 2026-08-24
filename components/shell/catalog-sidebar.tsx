@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useState, type ComponentType, type ReactNode } from "react";
-import { RiCloseLine, RiSearchLine, RiSideBarFill } from "@remixicon/react";
+import { RiCloseLine, RiSideBarFill } from "@remixicon/react";
 
 import { ThemeToggle } from "@/components/application/theme/theme-toggle";
 import { AccountMenu } from "@/components/shell/account-menu";
 import { SHELL_NAV_ITEMS, type ShellNavKey } from "@/components/shell/nav";
 import { TermSwitcher } from "@/components/shell/term-switcher";
+import { useDrawerPush } from "@/components/shell/use-drawer-push";
 import { cx } from "@/utils/cx";
 
 /**
@@ -104,8 +105,51 @@ export function CatalogSidebar({
   fluid = false,
   className,
 }: CatalogSidebarProps) {
-  const [collapsedState, setCollapsed] = useState(false);
-  const collapsed = mobile ? false : collapsedState;
+  /*
+    The rail collapses itself while a course drawer is pushing.
+
+    Opening a drawer takes ~454px off the page, and with the rail at its full
+    260px there was not enough left for the results to stay readable — the list
+    hit its 480px floor and the rest of it went under the panel. Collapsing to
+    the 60px icon rail hands back exactly 200px, which is the difference
+    between "beside the drawer" and "behind it" from 1152px up.
+
+    Clicking the toggle means two different things depending on when you do it,
+    so it is two pieces of state rather than one.
+
+    `userCollapsed` is a standing preference: collapse it with no drawer open
+    and it stays collapsed through as many drawers as you like. Folding that
+    into a single override would quietly break the toggle — the preference got
+    cleared the first time a drawer closed.
+
+    `episodeOverride` is a click made *while* a drawer is pushing, and it only
+    outlives that one drawer. Clearing it on the transition is what makes it an
+    episode: comparing the value against `drawerPushing` cannot, because the
+    two states alternate, so an override from one drawer session matches again
+    on the next and the rail silently stops collapsing. Comparing against the
+    previous render instead is React's own "adjusting state when a prop
+    changes" pattern — setState during render, which React re-runs before
+    committing, so there is no effect to lint and no frame at the wrong width.
+
+      standing collapse, then a whole drawer cycle -> still collapsed
+      expand while the drawer is open              -> expands, that drawer only
+      close and reopen                             -> collapses again
+  */
+  const drawerPushing = useDrawerPush();
+  const [userCollapsed, setUserCollapsed] = useState(false);
+  const [episodeOverride, setEpisodeOverride] = useState<boolean | null>(null);
+  const [lastPush, setLastPush] = useState(drawerPushing);
+  if (lastPush !== drawerPushing) {
+    setLastPush(drawerPushing);
+    setEpisodeOverride(null);
+  }
+  const collapsed = mobile ? false : (episodeOverride ?? (userCollapsed || drawerPushing));
+
+  const toggleCollapsed = () => {
+    const next = !collapsed;
+    if (drawerPushing) setEpisodeOverride(next);
+    else setUserCollapsed(next);
+  };
 
   return (
     <aside
@@ -114,7 +158,7 @@ export function CatalogSidebar({
         flat
           ? "border-r border-border-table bg-background-secondary-default"
           : "rounded-3xl border border-border-button-white bg-background-secondary-default shadow-sidebar",
-        "transition-[width] duration-300 ease-in-out motion-reduce:transition-none",
+        "transition-[width] ease-in-out motion-reduce:transition-none",
         collapsed
           ? "w-[60px] px-[11px] py-3"
           : fluid
@@ -122,6 +166,13 @@ export function CatalogSidebar({
             : "w-[260px] p-3",
         className,
       )}
+      style={{
+        // Ride the drawer's clock when the drawer is what moved us, so the rail
+        // and the panel settle together instead of the nav still easing 200ms
+        // after the panel has arrived. Absent on every page that has never
+        // opened one, which is where the 300ms manual-toggle feel comes from.
+        transitionDuration: "var(--drawer-push-duration, 300ms)",
+      }}
     >
       <div className="-m-2 flex min-h-0 w-[calc(100%+16px)] flex-col gap-3 overflow-y-auto p-2 [scrollbar-width:none]">
         {/* Account + collapse — mirrors BoardUI header row */}
@@ -149,7 +200,7 @@ export function CatalogSidebar({
               type="button"
               aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
               aria-expanded={!collapsed}
-              onClick={() => setCollapsed(!collapsedState)}
+              onClick={toggleCollapsed}
               className={cx(
                 "shrink-0 cursor-pointer text-foreground-icon-secondary outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
                 collapsed && "flex size-9 items-center justify-center",
@@ -171,20 +222,6 @@ export function CatalogSidebar({
         ) : (
           <TermSwitcher appearance="sidebar" />
         )}
-
-        {!collapsed ? (
-          <Link
-            href="/search"
-            className={cx(
-              "flex w-full items-center gap-2 rounded-full bg-background-tertiary-default p-2",
-              "text-body-medium text-text-secondary transition-colors duration-150 ease",
-              "hover:bg-background-tertiary-hover/55 outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
-            )}
-          >
-            <RiSearchLine className="size-5 shrink-0 text-foreground-icon-secondary" aria-hidden />
-            Search courses
-          </Link>
-        ) : null}
 
         <nav className={cx("flex w-full flex-col gap-1", !collapsed && "px-0.5")} aria-label="Primary">
           {SHELL_NAV_ITEMS.map((item) => (

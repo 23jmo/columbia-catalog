@@ -21,6 +21,15 @@ export type { ClassroomLoadCardProps } from "./classroom-load";
 export { CoursesTaught } from "./courses-taught";
 export type { CoursesTaughtProps } from "./courses-taught";
 
+export { InstructorRating } from "./rating-hero";
+export type { InstructorRatingProps } from "./rating-hero";
+
+export { InstructorFunFacts } from "./fun-facts";
+export type { InstructorFunFactsProps } from "./fun-facts";
+
+export { InstructorClassroomMap } from "./classroom-map";
+export type { InstructorClassroomMapProps } from "./classroom-map";
+
 export { InstructorDetailsCard } from "./details-card";
 export type { InstructorDetailsCardProps } from "./details-card";
 

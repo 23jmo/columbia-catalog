@@ -38,6 +38,8 @@ export interface CampusPalette {
   marker: string;
   /** Edge lines on the highlighted building. */
   outline: string;
+  /** Street names painted on the asphalt. */
+  roadLabel: string;
 }
 
 /**
@@ -66,6 +68,11 @@ const TOKEN_BY_ROLE: Record<keyof CampusPalette, string> = {
   highlight: "--color-accent-500",
   marker: "--color-accent-400",
   outline: "--color-border-button-default",
+  // Tertiary, not secondary: a street name is orientation, not information, and
+  // it is painted on a surface the eye should be moving across rather than
+  // reading. It also has to survive being laid over the road's own near-white,
+  // which rules out anything lighter.
+  roadLabel: "--color-text-secondary",
 };
 
 /**
@@ -83,6 +90,7 @@ const NEUTRAL_FALLBACK: CampusPalette = {
   highlight: "#3392ff",
   marker: "#5aa9ff",
   outline: "#c8c8c8",
+  roadLabel: "#6b6b6b",
 };
 
 let sharedProbe: CanvasRenderingContext2D | null | undefined;
@@ -187,4 +195,28 @@ export function shadeAgainst(base: string, ground: string, amount: number): stri
     Math.round(towardWhite ? channel + (255 - channel) * amount : channel * (1 - amount)),
   );
   return `#${shifted.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
+}
+
+/**
+ * `base` mixed `amount` of the way toward `target`, in sRGB.
+ *
+ * `shadeAgainst` pushes a colour AWAY from the ground to buy contrast. This is
+ * the opposite move, and the scene needs both: a card about several buildings
+ * has to say "these are yours" about all of them while still saying "this one"
+ * about the pinned one. Reaching down the accent ramp for the quieter ones does
+ * not work — accent-300 is quieter than accent-500 in a light theme and louder
+ * in a dark one — but mixing the accent toward the colour an ORDINARY Columbia
+ * building already wears lands between the two in whichever theme is on,
+ * because both endpoints are themselves tokens that flipped together.
+ */
+export function blendToward(base: string, target: string, amount: number): string {
+  const rgb = channels(base);
+  const targetRgb = channels(target);
+  if (!rgb || !targetRgb) return base;
+
+  const clamped = Math.min(Math.max(amount, 0), 1);
+  const mixed = rgb.map((channel, index) =>
+    Math.round(channel + (targetRgb[index] - channel) * clamped),
+  );
+  return `#${mixed.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
 }

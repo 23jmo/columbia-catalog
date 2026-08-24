@@ -4,53 +4,55 @@ import { useState } from "react";
 import { RiCheckLine, RiExternalLinkLine, RiShareForwardLine } from "@remixicon/react";
 
 import { Button, ButtonLink } from "@/components/base/buttons/button";
-import { initialsOf, provenanceLabel } from "@/components/course/format";
+import { initialsOf } from "@/components/course/format";
+import type { ReputationSummary, RmpSnapshot } from "@/lib/types";
 import type { InstructorPageData } from "@/lib/data/instructors";
 import { cx } from "@/utils/cx";
-import { ActivityHeatmap } from "./activity-heatmap";
 import { ProfileCover } from "./cover";
-import {
-  accentForSubject,
-  countLabel,
-  durationLabel,
-  percentLabel,
-  shortDateLabel,
-} from "./format";
+import { InstructorRating } from "./rating-hero";
 
 /**
- * The identity card — a direct clone of the BoardUI ai-profile hero.
+ * The identity card — the BoardUI ai-profile hero, with its headline figure
+ * replaced.
  *
- * Geometry is the template's, to the pixel: a 165px cover, a 124px top pad that
- * drops the 80px avatar so it straddles the cover edge, action buttons pulled
- * 34px up onto the cover, a headline figure with a status chip, a row of stat
- * tiles, and the activity heatmap.
+ * Geometry is still the template's: a 165px cover, a 124px top pad that drops
+ * the 80px avatar so it straddles the cover edge, and action buttons pulled
+ * 34px up onto the cover.
  *
- * What is NOT the template's is the provenance line under the headline figure.
- * Every seat number in this product renders with the directory's own "as of"
- * (spec §3), and the numbers on this card are sums of seat counts, so the
- * caveat travels with them. It is the one addition to the layout.
+ * What changed is what the hero SAYS. The template's headline figure was
+ * "students taught", a sum over the registrar's seat table, and the stat tiles
+ * and heatmap under it were more of the same. None of that is why anyone opens
+ * a professor's page. The headline is now the rating (`./rating-hero`) and the
+ * seat-derived figures moved to `./fun-facts` at the bottom of the page, where
+ * they read as the trivia they are.
+ *
+ * The top-right link out goes to CULPA rather than to the registrar's subject
+ * listing, for the same reason: a reader leaving this page is going to look up
+ * what students said, not to re-read the directory page they arrived from. The
+ * registrar link still exists on the course pages this one links to.
  */
-
-/** Template's stat tile. Four across on desktop, two-up on mobile. */
-function StatTile({ value, label }: { value: string; label: string }) {
-  return (
-    <div className="flex min-w-0 flex-col items-start rounded-2lg bg-background-secondary-default p-2.5 sm:flex-1">
-      <p className="w-full truncate text-body-medium tabular-nums text-text-primary">{value}</p>
-      <p className="w-full truncate text-body-2-medium text-text-secondary">{label}</p>
-    </div>
-  );
-}
 
 export interface InstructorProfileCardProps {
   data: InstructorPageData;
-  /** Link out to the registrar's own listing for the subject they teach. */
-  directoryUrl: string | null;
+  /**
+   * CULPA/Reddit aggregate, passed through to the rating hero. Null until a
+   * partnership feed lands — see `lib/reviews/sources/culpa.ts`.
+   */
+  reputation?: ReputationSummary | null;
+  /** Pre-resolved RMP snapshot, for tests. Normally left undefined. */
+  rmpSnapshot?: RmpSnapshot | null;
   className?: string;
+}
+
+/** CULPA is the primary source (spec §12), so it is the one on the hero. */
+function culpaSearchUrl(name: string): string {
+  return `https://culpa.info/search?entity=all&query=${encodeURIComponent(name)}`;
 }
 
 export function InstructorProfileCard({
   data,
-  directoryUrl,
+  reputation = null,
+  rmpSnapshot,
   className,
 }: InstructorProfileCardProps) {
   const [copied, setCopied] = useState(false);
@@ -68,8 +70,6 @@ export function InstructorProfileCard({
     }
   }
 
-  const accent = accentForSubject(data.subjects[0] ?? data.name);
-  const asOf = provenanceLabel(data.seatsAsOf);
   /*
    * The department name, or nothing.
    *
@@ -126,71 +126,24 @@ export function InstructorProfileCard({
             >
               {copied ? "Copied" : "Share"}
             </Button>
-            {directoryUrl ? (
-              <ButtonLink
-                size="small"
-                variant="secondary"
-                leadingIcon={RiExternalLinkLine}
-                href={directoryUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Directory
-              </ButtonLink>
-            ) : null}
+            <ButtonLink
+              size="small"
+              variant="secondary"
+              leadingIcon={RiExternalLinkLine}
+              href={culpaSearchUrl(data.name)}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              CULPA
+            </ButtonLink>
           </div>
         </div>
 
-        <div className="flex w-full flex-col gap-2">
-          <div className="flex flex-col gap-0.5">
-            <p className="text-body-medium text-text-secondary">
-              Students taught in {data.termLabel}
-            </p>
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-title-1-medium whitespace-nowrap tabular-nums text-text-primary">
-                {data.studentsTaught != null ? countLabel(data.studentsTaught) : "Not published"}
-              </p>
-              {data.fillRatio != null ? (
-                <span className="inline-flex items-center justify-center rounded-md bg-status-purple-background px-1.5 py-0.5 text-body-medium whitespace-nowrap text-status-purple-text">
-                  {percentLabel(data.fillRatio)} of seats
-                </span>
-              ) : null}
-            </div>
-            {/*
-              Not in the template. Non-negotiable here: these are registrar seat
-              counts and the directory's own timestamp travels with them.
-            */}
-            <p className="text-caption-2-regular text-text-tertiary">
-              {asOf
-                ? `Seat counts as published by the Directory of Classes on ${asOf}.`
-                : "The Directory of Classes did not publish an “as of” time for these seat counts."}
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-stretch">
-            <StatTile
-              value={String(data.courseCount)}
-              label={data.courseCount === 1 ? "Course" : "Courses"}
-            />
-            <StatTile
-              value={String(data.sectionCount)}
-              label={data.sectionCount === 1 ? "Section" : "Sections"}
-            />
-            <StatTile
-              value={
-                data.totalCapacity != null ? countLabel(data.totalCapacity) : "—"
-              }
-              label="Seats offered"
-            />
-            <StatTile value={durationLabel(data.weeklyMinutes)} label="Class time / week" />
-          </div>
-
-          <ActivityHeatmap
-            days={data.calendar}
-            accent={accent}
-            scopeLabel={`${data.termLabel} · ${shortDateLabel(data.bounds.startsOn)} – ${shortDateLabel(data.bounds.endsOn)}`}
-          />
-        </div>
+        <InstructorRating
+          name={data.name}
+          reputation={reputation}
+          rmpSnapshot={rmpSnapshot}
+        />
       </div>
     </section>
   );

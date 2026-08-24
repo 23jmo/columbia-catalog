@@ -64,6 +64,19 @@ const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : us
  */
 const SSR_ROW_COUNT = 14;
 
+/**
+ * Cancels the search screen's 12px gutter so row TEXT lands on the same
+ * vertical line as the page title and the search field, while each row's
+ * hairline and hover tint still run the full width of the container.
+ *
+ * The width has to grow with the negative margin. `-mx-3` alone would leave the
+ * box at `w-full` and shift it left, hanging 24px off the right edge and
+ * putting a horizontal scrollbar on the page.
+ *
+ * Paired with `px-3` in `search-screen.tsx` — the two have to move together.
+ */
+const LIST_BLEED = "-mx-3 w-[calc(100%+1.5rem)]";
+
 export function ResultsList({ rows, sectionScoped }: ResultsListProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
@@ -103,7 +116,7 @@ export function ResultsList({ rows, sectionScoped }: ResultsListProps) {
    */
   if (!hasMounted) {
     return (
-      <div ref={listRef} className="w-full">
+      <div ref={listRef} className={LIST_BLEED}>
         <ol className="relative w-full list-none" aria-label="Search results">
           {rows.slice(0, SSR_ROW_COUNT).map((row, index) => (
             <li key={row.course.courseId} data-index={index}>
@@ -122,7 +135,7 @@ export function ResultsList({ rows, sectionScoped }: ResultsListProps) {
   }
 
   return (
-    <div ref={listRef} className="w-full">
+    <div ref={listRef} className={LIST_BLEED}>
       <ol
         className="relative w-full list-none"
         style={{ height: virtualizer.getTotalSize() }}

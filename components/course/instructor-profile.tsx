@@ -51,7 +51,7 @@ export function InstructorCard({
             `/instructor/[slug]`, and a student who has just read two numbers
             about someone is exactly the person who wants it.
           */}
-          <p className="text-headline-semibold text-text-primary">
+          <p className="text-headline-semibold text-balance text-text-primary">
             <InstructorLink name={name} />
           </p>
           <p className="mt-0.5 text-caption-1-regular text-text-secondary">

@@ -72,6 +72,7 @@ export {
   LocalPlanStore,
   PlanWriteDeniedError,
   setAuthGuard,
+  setSectionAuthGuard,
   makeBlock,
   newPlanId,
   newBlockId,

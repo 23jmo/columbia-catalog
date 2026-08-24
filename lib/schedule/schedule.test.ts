@@ -19,7 +19,7 @@ import {
   enforceSinglePrimary,
   makeBlock,
   nextPlanName,
-  setAuthGuard,
+  setSectionAuthGuard,
 } from "./plans";
 import { DEMO_BUILDINGS, findBuilding, zoneOf } from "./buildings";
 import { buildTerm } from "../constants";
@@ -544,7 +544,7 @@ describe("plan store", () => {
   let store: LocalPlanStore;
 
   beforeEach(() => {
-    setAuthGuard(() => ({ allowed: true }));
+    setSectionAuthGuard(() => ({ allowed: true }));
     store = new LocalPlanStore();
     store.reset();
   });
@@ -621,14 +621,15 @@ describe("plan store", () => {
     expect(calls).toBe(2);
   });
 
-  // Spec §15: writes require an account. Reads stay free.
-  it("refuses writes when the auth guard denies, but still allows reads", () => {
+  // Spec §15: adding classes requires an account. Plan structure stays local.
+  it("refuses section writes when the section guard denies, but still allows plan edits", () => {
     const created = store.createPlan({ name: "Plan A", termCode: TERM });
-    setAuthGuard(() => ({ allowed: false, reason: "Sign in to save changes." }));
+    setSectionAuthGuard(() => ({ allowed: false, reason: "Sign in to add classes." }));
 
-    expect(() => store.renamePlan(created.planId, "Nope")).toThrow(PlanWriteDeniedError);
-    expect(store.getPlan(created.planId)?.name).toBe("Plan A");
-    expect(store.listPlans(TERM)).toHaveLength(1);
+    expect(() => store.addSection(created.planId, "COMS4113-001")).toThrow(PlanWriteDeniedError);
+    expect(store.getPlan(created.planId)?.sectionIds).toEqual([]);
+    expect(() => store.renamePlan(created.planId, "Dream schedule")).not.toThrow();
+    expect(store.getPlan(created.planId)?.name).toBe("Dream schedule");
   });
 
   it("self-heals storage that somehow declares two primaries", () => {

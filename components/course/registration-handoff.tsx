@@ -30,8 +30,24 @@ export interface RegistrationHandoffProps {
   section: Pick<Section, "sectionId" | "callNumber" | "sectionCode" | "termCode" | "instructors">;
   courseCode: string;
   courseTitle: string;
-  /** Compact layout for the sections list; full layout for the handoff panel. */
-  variant?: "full" | "inline";
+  /**
+   * `full` — the standalone page's Register panel, where the handoff is the
+   * whole point of the section and can afford the display-size number.
+   * `compact` — a single line under a heading that already identifies the
+   * class, so the number is a fact you copy rather than a billboard.
+   * `inline` — the sections list, where the row is already dense.
+   */
+  variant?: "full" | "compact" | "inline";
+  /**
+   * Extra section-level actions that ride at the end of the `compact` row.
+   *
+   * The drawer's Watch button belongs here rather than in a row of its own:
+   * copying the call number, opening Vergil, and asking to be told when a seat
+   * frees up are the three things you can *do* with this section, and a lone
+   * button floating below the seat card reads as a leftover rather than as the
+   * third member of that set.
+   */
+  actions?: React.ReactNode;
   className?: string;
 }
 
@@ -115,10 +131,33 @@ export function RegistrationHandoff({
   courseCode,
   courseTitle,
   variant = "full",
+  actions,
   className,
 }: RegistrationHandoffProps) {
   const [copied, copy] = useCopy();
   const href = vergilSectionUrl(section.termCode, section.callNumber);
+
+  if (variant === "compact") {
+    return (
+      <div className={cx("flex flex-wrap items-center gap-x-2 gap-y-1.5", className)}>
+        <span className="text-caption-2-medium tracking-[0.04em] text-text-tertiary uppercase">
+          Call number
+        </span>
+        <CallNumberCopy callNumber={section.callNumber} />
+        <ButtonLink
+          size="xs"
+          variant="secondary"
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          trailingIcon={RiArrowRightUpLine}
+        >
+          Open in Vergil
+        </ButtonLink>
+        {actions}
+      </div>
+    );
+  }
 
   if (variant === "inline") {
     return (

@@ -1,19 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import {
-  RiCheckLine,
-  RiInformationLine,
-  RiLoginBoxLine,
-  RiShieldCheckLine,
-} from "@remixicon/react";
+import { RiInformationLine, RiLoginBoxLine, RiShieldCheckLine } from "@remixicon/react";
 import {
   Dialog as AriaDialog,
   Modal as AriaModal,
   ModalOverlay as AriaModalOverlay,
 } from "react-aria-components";
 import { Avatar } from "@/components/base/avatar/avatar";
-import { Button } from "@/components/base/buttons/button";
 import { CloseButton } from "@/components/base/buttons/close-button";
 import { Divider } from "@/components/base/divider/divider";
 import {
@@ -29,6 +23,7 @@ import { ChevronUpDownSmall } from "@/components/foundations/icons/chevrons";
 import { useSessionAccount } from "@/hooks/use-session-account";
 import { isConfigured } from "@/lib/db/client";
 import { signIn, signOut } from "@/lib/db/auth";
+import { SignInPromptCard } from "@/components/shell/sign-in-prompt-card";
 import { cx } from "@/utils/cx";
 
 /**
@@ -72,12 +67,6 @@ export interface AccountMenuProps {
   appearance?: "default" | "sidebar";
   className?: string;
 }
-
-const WRITE_ACTIONS = [
-  "Save a plan and add sections to it",
-  "Watch a section and get an email when a seat opens",
-  "Connect an MCP client to your own schedule",
-];
 
 export function AccountMenu({
   account: accountOverride,
@@ -195,7 +184,8 @@ export function AccountMenu({
         <DropdownPopover
           aria-label="Account"
           placement={compact ? "bottom end" : sidebar ? "bottom start" : "top start"}
-          className="w-[288px]"
+          className={account ? "w-[288px]" : "w-[320px] p-1.5"}
+          dialogClassName={account ? undefined : "gap-0"}
         >
           {account ? (
             <>
@@ -223,39 +213,7 @@ export function AccountMenu({
               </DropdownItem>
             </>
           ) : (
-            <>
-              <DropdownGroup>
-                <div className="flex flex-col gap-1 px-2 pt-1 pb-2">
-                  <p className="text-body-medium text-text-primary">
-                    Everything you can read is free
-                  </p>
-                  <p className="text-caption-1-regular text-text-secondary">
-                    Search, course pages, ratings and seat history need no account. Sign
-                    in only when you want to save something.
-                  </p>
-                </div>
-              </DropdownGroup>
-              <DropdownDivider />
-              <DropdownGroup label="An account adds">
-                <ul className="flex flex-col gap-1 px-2 pb-1">
-                  {WRITE_ACTIONS.map((action) => (
-                    <li key={action} className="flex items-start gap-2">
-                      <RiCheckLine
-                        className="mt-0.5 size-4 shrink-0 text-foreground-icon-tertiary"
-                        aria-hidden
-                      />
-                      <span className="text-caption-1-regular text-text-secondary">{action}</span>
-                    </li>
-                  ))}
-                </ul>
-              </DropdownGroup>
-              <DropdownDivider />
-              <div className="px-1 pb-0.5">
-                <Button className="w-full" leadingIcon={RiLoginBoxLine} onClick={openSignIn}>
-                  Sign in with Columbia
-                </Button>
-              </div>
-            </>
+            <SignInPromptCard onSignIn={openSignIn} />
           )}
         </DropdownPopover>
       </Dropdown>

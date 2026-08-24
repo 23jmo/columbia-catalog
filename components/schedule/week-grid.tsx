@@ -37,6 +37,22 @@ import {
 
 /** Pixels per hour at the default density. Tall enough for a 50-minute label. */
 const HOUR_HEIGHT_PX = 56;
+
+/**
+ * The narrowest a day column may be squeezed before the week scrolls sideways.
+ *
+ * This used to be one flat `min-w-[42rem]` for the whole canvas, which assumed
+ * the five-day week: a two-day canvas reserved room for three columns that were
+ * not there, and a six-day one crushed all six into space sized for five.
+ * Deriving it from the column count keeps the density constant instead of the
+ * total, so a Tuesday/Thursday section fits inside a 480px drawer rail at full
+ * legibility — and Monday-to-Friday still comes out at exactly the 42rem this
+ * replaced.
+ */
+const MIN_COLUMN_REM = 7.65;
+
+/** The time gutter down the left, matching the `3.75rem` grid template below. */
+const GUTTER_REM = 3.75;
 const COMPACT_HOUR_HEIGHT_PX = 44;
 
 /**
@@ -184,6 +200,7 @@ export function WeekGrid({
   blocks,
   startMinute,
   endMinute,
+  weekdays,
   compact = false,
   className,
 }: WeekGridProps) {
@@ -191,7 +208,7 @@ export function WeekGrid({
   if (compact) return <AgendaList blocks={blocks} className={className} />;
 
   const bounds = fitGridBounds(blocks, startMinute, endMinute);
-  const days = gridWeekdays(blocks);
+  const days = gridWeekdays(blocks, weekdays);
   const marks = hourMarks(bounds);
   const laidOut = layoutWeek(blocks, days);
   const hourCount = (bounds.endMinute - bounds.startMinute) / 60;
@@ -222,9 +239,9 @@ export function WeekGrid({
         className,
       )}
     >
-      {/* Narrow screens scroll the week sideways rather than crushing five columns. */}
+      {/* Narrow screens scroll the week sideways rather than crushing the columns. */}
       <div className="overflow-x-auto">
-        <div className="min-w-[42rem]">
+        <div style={{ minWidth: `${GUTTER_REM + days.length * MIN_COLUMN_REM}rem` }}>
           <div
             className="grid border-b border-border-table bg-background-secondary-default"
             style={{ gridTemplateColumns: columns }}

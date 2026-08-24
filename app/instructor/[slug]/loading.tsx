@@ -15,7 +15,7 @@ export default function InstructorLoading() {
   return (
     <AppShell activeNav="search">
       <div
-        className="mx-auto flex w-full max-w-[680px] flex-col items-center gap-4"
+        className="mx-auto flex w-full max-w-4xl flex-col items-center gap-4"
         aria-busy="true"
       >
         <div className="mr-auto h-3 w-24 animate-pulse rounded-full bg-background-secondary-default" />

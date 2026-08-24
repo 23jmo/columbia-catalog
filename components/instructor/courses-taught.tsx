@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { PrefetchLink } from "@/components/catalog/prefetch-link";
 import { RiMapPin2Line, RiTimeLine } from "@remixicon/react";
 
 import { Chip } from "@/components/base/badges/chip";
@@ -72,12 +72,12 @@ export function CoursesTaught({ courses, termCode, termLabel, className }: Cours
                   {course.code}
                 </span>
                 <h3 className="text-headline-semibold text-pretty text-text-primary">
-                  <Link
+                  <PrefetchLink
                     href={`/course/${course.courseId}`}
                     className="rounded-lg outline-none transition-colors duration-150 ease hover:text-accent-600 focus-visible:ring-2 focus-visible:ring-border-focus-ring"
                   >
                     {course.title}
-                  </Link>
+                  </PrefetchLink>
                 </h3>
               </div>
               <div className="flex shrink-0 items-center gap-1.5">

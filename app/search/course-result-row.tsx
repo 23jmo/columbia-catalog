@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import { PrefetchLink } from "@/components/catalog/prefetch-link";
 import { RiArrowDownSLine, RiArrowRightSLine } from "@remixicon/react";
 
 import { Chip } from "@/components/base/badges/chip";
@@ -12,7 +12,7 @@ import {
   formatCredits,
   formatSectionMeetings,
 } from "@/components/catalog/meetings";
-import { prettyTitle } from "@/components/course/format";
+import { prettyTitle, sectionHeadline } from "@/components/course/format";
 import { InstructorLinks } from "@/components/instructor/instructor-link";
 import { REQUIREMENT_FILTERS } from "@/lib/constants";
 import type { CourseListItem, SectionListItem } from "@/lib/catalog-list-types";
@@ -142,7 +142,12 @@ export function CourseResultRow({
       */}
       <div className="relative flex items-start gap-3 px-3 py-2.5">
         <div className="min-w-0 flex-1">
-          <h2 className="text-body-semibold -tracking-[0.01em] text-text-primary">{title}</h2>
+          <h2
+            className="line-clamp-2 min-w-0 text-headline-semibold -tracking-[0.01em] text-text-primary"
+            title={title}
+          >
+            {title}
+          </h2>
 
           {/*
             Code sits UNDER the title, muted. The directory does it this way and
@@ -155,8 +160,12 @@ export function CourseResultRow({
             {credits ? <span>· {credits}</span> : null}
           </div>
 
+          {/* `title` carries the full list, since the line truncates at two. */}
           {instructors.length > 0 ? (
-            <p className="mt-0.5 truncate text-caption-1-medium text-text-secondary">
+            <p
+              className="mt-0.5 truncate text-caption-1-medium text-text-secondary"
+              title={instructors.join(", ")}
+            >
               <InstructorLinks names={instructors} max={2} />
             </p>
           ) : null}
@@ -220,6 +229,7 @@ export function CourseResultRow({
                 <SectionTableRow
                   key={section.sectionId}
                   section={section}
+                  courseTitle={title}
                   isMatch={matched?.has(section.sectionId) ?? false}
                 />
               ))}
@@ -231,9 +241,21 @@ export function CourseResultRow({
   );
 }
 
-function SectionTableRow({ section, isMatch }: { section: SectionListItem; isMatch: boolean }) {
+function SectionTableRow({
+  section,
+  courseTitle,
+  isMatch,
+}: {
+  section: SectionListItem;
+  courseTitle: string;
+  isMatch: boolean;
+}) {
   const meeting = formatSectionMeetings(section);
-  const sectionTitle = section.title ? prettyTitle(section.title) : null;
+  // Only a name of its own earns space here. The course title is already the
+  // header directly above this table, so a registrar abbreviation of it would
+  // restate that header once per row in a narrower font.
+  const { headline, isOwnName } = sectionHeadline(section.title, courseTitle);
+  const sectionTitle = isOwnName ? headline : null;
   const instructors = section.instructors.length > 0 ? section.instructors.join(", ") : null;
   const credits = formatCredits(section.minUnit, section.maxUnit);
 
@@ -270,7 +292,7 @@ function SectionTableRow({ section, isMatch }: { section: SectionListItem; isMat
           ) : (
             <span aria-hidden className="h-3 w-0.5" />
           )}
-          <Link
+          <PrefetchLink
             href={href}
             className={cx(
               "text-caption-1-medium text-text-primary",
@@ -304,7 +326,7 @@ function SectionTableRow({ section, isMatch }: { section: SectionListItem; isMat
               {instructors ? ` — ${instructors}` : ""}
               {isMatch ? " (matches your search)" : ""}
             </span>
-          </Link>
+          </PrefetchLink>
         </span>
       </td>
 
@@ -318,16 +340,26 @@ function SectionTableRow({ section, isMatch }: { section: SectionListItem; isMat
 
       <td className="min-w-0 py-1.5 pr-3">
         <div className="flex min-w-0 flex-col">
-          <span className="truncate text-caption-1-medium text-text-primary">
-            {instructors ?? "Instructor TBA"}
-          </span>
+          {/*
+            The row is one stretched link to the section, but this column's
+            whole content IS the instructor, so the names are links to the
+            people. `InstructorLink` carries the `relative` that keeps them
+            above the row overlay; the rest of the cell still opens the section.
+          */}
+          <InstructorLinks
+            names={section.instructors}
+            className="truncate text-caption-1-medium text-text-primary"
+          />
           {/*
             Only 1.1% of Fall 2026 sections carry a meeting pattern, so this
             line is usually absent. Absent is correct: printing "TBA" on 7,929
             rows would be noise, and printing a placeholder time would be a lie.
           */}
           {meeting ? (
-            <span className="truncate text-caption-2-regular tabular-nums text-text-tertiary">
+            <span
+              className="truncate text-caption-2-regular tabular-nums text-text-tertiary"
+              title={meeting}
+            >
               {meeting}
             </span>
           ) : null}
@@ -379,8 +411,10 @@ function SoleSectionRow({
   position: number;
   total: number;
 }) {
-  const ownTitle = section.title ? prettyTitle(section.title) : null;
-  const headline = ownTitle ?? courseTitle;
+  // `isOwnName` is false when the section's title turned out to be the
+  // registrar's abbreviation of the course's own name — in that case the
+  // context line below would print the same words twice.
+  const { headline, isOwnName } = sectionHeadline(section.title, courseTitle);
   const meeting = formatSectionMeetings(section);
   const instructors = section.instructors.length > 0 ? section.instructors.join(", ") : null;
   const credits = formatCredits(section.minUnit, section.maxUnit);
@@ -395,39 +429,53 @@ function SoleSectionRow({
       )}
       aria-label={`Result ${position} of ${total}: ${code} ${headline}`}
     >
-      <div className="flex items-start gap-3 px-3 py-2.5">
+      <div className="relative flex items-start gap-3 px-3 py-2.5">
         <div className="min-w-0 flex-1">
-          <h2 className="text-body-semibold -tracking-[0.01em] text-text-primary">
-            <Link
+          <h2 className="min-w-0 text-headline-semibold -tracking-[0.01em] text-text-primary">
+            <PrefetchLink
               href={href}
               className={cx(
-                "rounded outline-none transition-colors duration-100 ease hover:text-accent-600",
+                "block line-clamp-2 rounded outline-none transition-colors duration-100 ease hover:text-accent-600",
                 "focus-visible:ring-2 focus-visible:ring-border-focus-ring",
                 "after:absolute after:inset-0 after:content-['']",
               )}
+              title={headline}
             >
               {headline}
               <span className="sr-only">
-                {ownTitle ? ` — ${courseTitle}` : ""} — section {section.sectionCode}
+                {isOwnName ? ` — ${courseTitle}` : ""} — section {section.sectionCode}
                 {isMatch ? " (matches your search)" : ""}
               </span>
-            </Link>
+            </PrefetchLink>
           </h2>
 
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption-2-regular text-text-tertiary">
             {/* Only when the headline was the SECTION's name -- otherwise this
                 would print the same string twice in a row. */}
-            {ownTitle ? <span className="truncate">{courseTitle} ·</span> : null}
+            {isOwnName ? (
+              <span className="truncate" title={courseTitle}>
+                {courseTitle} ·
+              </span>
+            ) : null}
             <span className="tabular-nums tracking-[0.04em]">{code}</span>
             <span className="tabular-nums">· {section.sectionCode}</span>
             {credits ? <span>· {credits}</span> : null}
           </div>
 
+          {/* `title` carries the full list, since the line truncates. */}
           {instructors ? (
-            <p className="mt-0.5 truncate text-caption-1-medium text-text-secondary">{instructors}</p>
+            <p
+              className="mt-0.5 truncate text-caption-1-medium text-text-secondary"
+              title={instructors}
+            >
+              <InstructorLinks names={section.instructors} />
+            </p>
           ) : null}
           {meeting ? (
-            <p className="mt-0.5 truncate text-caption-2-regular tabular-nums text-text-tertiary">
+            <p
+              className="mt-0.5 truncate text-caption-2-regular tabular-nums text-text-tertiary"
+              title={meeting}
+            >
               {meeting}
             </p>
           ) : null}
@@ -441,20 +489,35 @@ function SoleSectionRow({
               ))}
             </div>
           ) : null}
+
         </div>
 
-        <div className="flex shrink-0 items-center gap-2 pt-0.5">
-          <EnrollmentBar
-            status={section.status}
-            enrollmentCount={section.enrollmentCount}
-            enrollmentCap={section.enrollmentCap}
-            waitlistCount={section.waitlistCount}
-          />
-          <RiArrowRightSLine
-            aria-hidden
-            className="size-4 text-text-tertiary transition-colors group-hover/row:text-text-primary"
-          />
-        </div>
+        {/*
+          The meter is a COLUMN, not a footer.
+
+          Under the text it was a 176px bar adrift in an 842px row: every row
+          put it at a different y (rows have one, two or three lines of context
+          above it), so comparing "which of these has room?" meant re-finding
+          the bar on each row. Moving it to a fixed-width right column is the
+          same argument this file already makes for the multi-section table --
+          a column-wise question wants a column -- and it uses the dead space
+          that ran between the text and the chevron.
+
+          `10.5rem` is the table's `Enrollment` column width, so a sole-section
+          row and an expanded section table line their meters up on one x.
+        */}
+        <EnrollmentBar
+          status={section.status}
+          enrollmentCount={section.enrollmentCount}
+          enrollmentCap={section.enrollmentCap}
+          waitlistCount={section.waitlistCount}
+          className="mt-0.5 w-24 shrink-0 sm:w-[10.5rem]"
+        />
+
+        <RiArrowRightSLine
+          aria-hidden
+          className="mt-0.5 size-4 shrink-0 text-text-tertiary transition-colors group-hover/row:text-text-primary"
+        />
       </div>
     </article>
   );

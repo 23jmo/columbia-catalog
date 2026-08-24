@@ -1,10 +1,12 @@
 import Link from "next/link";
 
+import { PrefetchLink } from "@/components/catalog/prefetch-link";
+
 import { loadSectionDetail } from "@/components/course/load-section-detail";
 import { meetingLines } from "@/components/course/format";
 import { CURRENT_TERM, termLabel } from "@/lib/constants";
 
-import { DRAWER_TITLE_ID, DrawerFrame } from "@/app/course/[courseId]/course-drawer";
+import { DRAWER_TITLE_ID, DrawerCloseButton, DrawerFrame } from "@/app/course/[courseId]/course-drawer";
 import { SectionDetail } from "@/app/course/[courseId]/section-detail";
 
 /**
@@ -71,11 +73,14 @@ export default async function InterceptedSectionPage({
    */
   if (!course) {
     return (
-      <DrawerFrame code="Not found" href={`/course/${encodeURIComponent(courseId)}`}>
+      <DrawerFrame>
         <div className="flex flex-col items-start gap-3">
-          <h1 id={DRAWER_TITLE_ID} className="text-title-2-semibold text-text-primary">
-            No such course in {termLabel(CURRENT_TERM)}
-          </h1>
+          <div className="flex w-full items-start justify-between gap-3">
+            <h1 id={DRAWER_TITLE_ID} className="text-title-2-semibold text-balance text-text-primary">
+              No such course in {termLabel(CURRENT_TERM)}
+            </h1>
+            <DrawerCloseButton className="shrink-0" />
+          </div>
           <p className="text-body-regular text-text-secondary">
             Nothing in this term matches{" "}
             <code className="font-mono text-text-primary">{courseId}</code>. Either the code
@@ -107,13 +112,14 @@ export default async function InterceptedSectionPage({
   if (!data) {
     const code = `${course.subjectCode} ${course.number}`;
     return (
-      <DrawerFrame code={code} href={`/course/${course.courseId}`}>
+      <DrawerFrame>
         <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1 flex flex-col gap-1.5">
             <span className="text-caption-1-semibold tracking-[0.04em] tabular-nums text-accent-600">
               {code}
             </span>
-            <h1 id={DRAWER_TITLE_ID} className="text-title-2-semibold text-text-primary">
+            <h1 id={DRAWER_TITLE_ID} className="text-title-2-semibold text-balance text-text-primary">
               {sectionCode ? `No section ${sectionCode}` : "Which section?"}
             </h1>
             <p className="text-body-regular text-text-secondary">
@@ -121,6 +127,8 @@ export default async function InterceptedSectionPage({
                 ? `${code} has no section ${sectionCode} in ${termLabel(CURRENT_TERM)}. Here are the ones it does have.`
                 : `${code} has ${sections.length} sections in ${termLabel(CURRENT_TERM)}. Pick the class you mean.`}
             </p>
+            </div>
+            <DrawerCloseButton className="shrink-0" />
           </div>
 
           {sections.length > 0 ? (
@@ -129,7 +137,7 @@ export default async function InterceptedSectionPage({
                 const when = meetingLines(section.meetings)[0];
                 return (
                   <li key={section.sectionId}>
-                    <Link
+                    <PrefetchLink
                       href={`/course/${course.courseId}?section=${encodeURIComponent(section.sectionCode)}`}
                       className="flex flex-col gap-0.5 rounded-lg px-2 py-2 transition-colors outline-none hover:bg-background-primary-hover focus-visible:ring-2 focus-visible:ring-border-focus-ring"
                     >
@@ -146,7 +154,7 @@ export default async function InterceptedSectionPage({
                           {when.daysLabel} {when.timeLabel}
                         </span>
                       ) : null}
-                    </Link>
+                    </PrefetchLink>
                   </li>
                 );
               })}
@@ -162,13 +170,8 @@ export default async function InterceptedSectionPage({
   }
 
   return (
-    <DrawerFrame
-      // The rail names the class, not just the course — this drawer is about
-      // one section and the header should not imply otherwise.
-      code={`${data.code} · ${data.section.sectionCode}`}
-      href={`/course/${data.course.courseId}?section=${encodeURIComponent(data.section.sectionCode)}`}
-    >
-      <SectionDetail data={data} titleId={DRAWER_TITLE_ID} />
+    <DrawerFrame>
+      <SectionDetail data={data} titleId={DRAWER_TITLE_ID} showClose />
     </DrawerFrame>
   );
 }

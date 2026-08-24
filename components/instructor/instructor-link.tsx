@@ -1,6 +1,6 @@
-import Link from "next/link";
+import { PrefetchLink } from "@/components/catalog/prefetch-link";
 
-import { instructorSlug } from "@/lib/data/instructors";
+import { instructorSlug } from "@/lib/data/instructor-slug";
 import { cx } from "@/utils/cx";
 
 /**
@@ -22,6 +22,18 @@ import { cx } from "@/utils/cx";
  *     rows, often several per line; a persistent underline turns the row into
  *     visual noise. The dotted underline on hover/focus is enough to say
  *     "clickable" at the moment the question is being asked.
+ *
+ *   · **`relative` is load-bearing, not styling.** Search results and section
+ *     rows are "stretched link" cards: one anchor grows `after:absolute
+ *     after:inset-0` over the whole row so the row is one big click target with
+ *     one accessible name. That pseudo-element is a POSITIONED box, and
+ *     positioned boxes paint above non-positioned inline content — so a name
+ *     rendered plainly inside such a row is covered by a transparent overlay
+ *     and cannot be clicked, while still looking and reading like a link.
+ *     Making the anchor positioned lifts it back into the same paint step as
+ *     the overlay, where tree order puts it on top. This is the standard
+ *     caveat of the pattern, and it belongs here rather than at each call site
+ *     because every future row will have the same trap.
  */
 
 /** Registrar placeholders that occupy the instructor field but name nobody. */
@@ -45,9 +57,12 @@ export function InstructorLink({ name, className }: InstructorLinkProps) {
     return <span className={className}>{name}</span>;
   }
   return (
-    <Link
+    <PrefetchLink
       href={`/instructor/${instructorSlug(name)}`}
       className={cx(
+        // See the header: this is what keeps the name clickable inside a
+        // stretched-link row, not decoration.
+        "relative z-[1]",
         "rounded outline-none transition-colors duration-150 ease",
         "hover:text-accent-600 hover:underline hover:decoration-dotted hover:underline-offset-2",
         "focus-visible:ring-2 focus-visible:ring-border-focus-ring",
@@ -55,7 +70,7 @@ export function InstructorLink({ name, className }: InstructorLinkProps) {
       )}
     >
       {name}
-    </Link>
+    </PrefetchLink>
   );
 }
 
