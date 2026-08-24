@@ -24,7 +24,7 @@ import {
   termBounds,
   type PlanAnalysisDetail,
 } from "@/lib/schedule";
-import type { Course, CustomBlock, Section, TermCode } from "@/lib/types";
+import type { Course, CustomBlock, Section, Term, TermCode } from "@/lib/types";
 import { cx } from "@/utils/cx";
 
 /**
@@ -37,6 +37,13 @@ import { cx } from "@/utils/cx";
 
 export interface PlanWorkspaceProps {
   termCode?: TermCode;
+  /**
+   * The term row, when the server has one. Carries the real first and last day
+   * of instruction, which a term code cannot imply — without it the `.ics`
+   * export bounds its recurrences with a per-season estimate that is several
+   * days out in both directions.
+   */
+  term?: Term;
   className?: string;
 }
 
@@ -48,7 +55,7 @@ interface Resolved {
 
 const EMPTY: Resolved = { sections: [], courses: [], typical: new Map() };
 
-export function PlanWorkspace({ termCode = CURRENT_TERM, className }: PlanWorkspaceProps) {
+export function PlanWorkspace({ termCode = CURRENT_TERM, term, className }: PlanWorkspaceProps) {
   const plans = usePlans(termCode);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [fetched, setFetched] = useState<{ key: string; data: Resolved }>({
@@ -165,7 +172,8 @@ export function PlanWorkspace({ termCode = CURRENT_TERM, className }: PlanWorksp
       setSelectedId(plan.planId);
     });
 
-  const bounds = termBounds(termCode, buildTerm(termCode));
+  const planTerm = term ?? buildTerm(termCode);
+  const bounds = termBounds(termCode, planTerm);
 
   return (
     <div className={cx("flex min-h-0 flex-1 flex-col", className)}>
@@ -234,7 +242,7 @@ export function PlanWorkspace({ termCode = CURRENT_TERM, className }: PlanWorksp
                 plan: { ...selected, sectionIds: withTimes.map((section) => section.sectionId) },
                 sections: withTimes,
                 courses: resolved.courses,
-                term: buildTerm(termCode),
+                term: planTerm,
               });
               downloadText(result.content, result.filename || icsFilename(selected), "text/calendar");
             }}

@@ -29,6 +29,7 @@ import {
   ZONE_LABEL,
 } from "@/lib/constants";
 import { listPendingProposalsForViewer } from "@/lib/db/proposal-reads";
+import { getTerm } from "@/lib/db/term-reads";
 import { ProposalReview } from "@/components/schedule/proposal-review";
 import { partitionConflicts, type PlanAnalysisDetail } from "@/lib/schedule";
 import { cx } from "@/utils/cx";
@@ -48,9 +49,13 @@ export default async function SchedulePage({
   const useSamplePlan = params.demo === "1";
   const termCode = CURRENT_TERM;
 
-  const [snapshot, proposals] = await Promise.all([
+  const [snapshot, proposals, term] = await Promise.all([
     loadPlanSnapshot({ termCode, useSamplePlan }),
     listPendingProposalsForViewer(),
+    // Only the row carries the term's real first and last day of instruction,
+    // and only the server can read it — the workspace is a client component
+    // that would otherwise bound its `.ics` export with a per-season estimate.
+    getTerm(termCode),
   ]);
 
   return (
@@ -61,7 +66,7 @@ export default async function SchedulePage({
             <ProposalReview proposals={proposals} />
           </div>
         ) : null}
-        <PlanWorkspace termCode={termCode} className="min-h-0 flex-1" />
+        <PlanWorkspace termCode={termCode} term={term ?? undefined} className="min-h-0 flex-1" />
 
         {snapshot.plan && snapshot.analysis && snapshot.isSample ? (
           <>

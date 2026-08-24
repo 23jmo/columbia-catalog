@@ -78,12 +78,22 @@ to a per-season month/day shape — Fall opening September 2 against a real
 September 8 (a phantom first week of meetings) and Spring opening January 20
 against a real January 19 (a dropped first Tuesday).
 
-**Still open, smaller:** the 30-second registration tier reads
-`RegistrationWindow[]`, and nothing yet loads those from
-`registration_milestones` into the scheduler — the windows exist in the
-database but the escalation path is not wired to them. Watched subjects run on
-the 2-minute hot tier meanwhile, which is the same documented degradation as
-before, now for a narrower reason.
+**Still open, smaller:**
+
+- The 30-second registration tier reads `RegistrationWindow[]`, and nothing yet
+  loads those from `registration_milestones` into the scheduler — the windows
+  exist in the database but the escalation path is not wired to them. Watched
+  subjects run on the 2-minute hot tier meanwhile, the same documented
+  degradation as before, now for a narrower reason.
+- `components/schedule/calendar-week-preview.tsx` still builds a synthetic term
+  internally, so its "first week of term" sample is picked from the fallback
+  shape. Left alone deliberately: it is consumed from `components/course/`,
+  which another session is editing, and the cost is a slightly different sample
+  week rather than a wrong exported file. The `.ics` path — the one that
+  produces an artifact a student keeps — reads the real bounds.
+- `terms.add_drop_deadline` is still null. Fall 2026 has three candidate rows
+  (end of Change of Program, last day to drop, last day of classes) and nothing
+  reads the column, so it was left unset rather than guessed.
 
 ---
 
