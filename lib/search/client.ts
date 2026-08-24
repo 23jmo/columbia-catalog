@@ -336,8 +336,12 @@ class SearchIndexLoader implements SearchIndexHandle {
 
   private adopt(index: SerializedIndex): void {
     const engine = new SearchEngine(index, this.options.engineOptions);
-    // Carry the query embedder across a hot swap so semantics survive an
-    // index update without the host having to re-register.
+    // Deliberately does NOT carry the previous query embedder over. The
+    // fold-in embedder is bound to the postings and document ordinals of the
+    // index it was built from, so reusing it against a swapped index would
+    // read the right postings for the wrong courses — a silent mis-ranking,
+    // not a crash. `loadEmbeddings` runs immediately after adoption and
+    // rebuilds it against the new pair.
     this.engine = engine;
     this.resolveReady(engine);
   }
