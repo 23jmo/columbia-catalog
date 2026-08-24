@@ -56,8 +56,22 @@ Three ways to unblock, in order of preference:
    worse than an absent one.
 2. Pursue the CUIT read-only OAuth client (`vergil_api_spec.md` §7) which would
    also unlock `/v1/termcalendars`.
-3. Let a browser worker fetch it — but registrar.columbia.edu almost certainly
-   sends no CORS header either, so this likely fails the same way.
+3. ~~Let a browser worker fetch it~~ — **ruled out, and not for a technical
+   reason.** Retested 2026-08-24 with a real headless Chrome, which gets past
+   the plain-`curl` 403 and then lands on this:
+
+       Just a moment... Performing security verification
+       This website uses a security service to protect against malicious bots.
+       Ray ID: ... Performance and Security by Cloudflare
+
+   That is not a misconfigured WAF refusing an unfamiliar user agent. It is an
+   interactive bot challenge, which is Columbia stating plainly that they do
+   not want this page fetched by automation. Getting past it would mean
+   defeating an anti-bot control, and that is out of scope on principle rather
+   than on capability — a line worth keeping even though the page itself is
+   public and a student can read it in one click.
+
+   Option 1 stays the cheap fix: the dates pasted in once, seeded directly.
 
 ---
 
@@ -124,11 +138,36 @@ storing a Vergil/SAS bearer token, so I have not attempted it.
 4. **Ship the schedule as course-list-only for current terms** — no grid, no
    conflicts. Least work, worst product.
 
-**What I am doing meanwhile:** proceeding with the Fall 2026 + Spring 2027 crawl
-you asked for, since everything except meeting times is present and correct. The
-schedule UI will be built to render a section with unknown times honestly rather
-than pretending it has them. Say the word on option 1 and it is a crawl-scope
-change plus a fallback query, not a redesign.
+### Option 1 SHIPPED — and here is what it actually recovers
+
+Historical inference is built and live, not waiting on a decision.
+`lib/db/typical-meetings.ts` holds the fallback, and the schedule grid, the
+home plan snapshot and the calendar shell all consume it with an explicit
+`historical` source tag. Nothing in that module can produce a bare `Meeting`
+that would be mistaken for a confirmed one, and hard conflicts are never raised
+from it — two historical patterns overlapping is "these usually clash", which
+is a warning, not a claim about the actual timetable.
+
+Measured coverage for Fall 2026 (8,540 sections):
+
+| | sections | share |
+|---|---|---|
+| Confirmed times (Bulletin) | 1,500 | 17.6% |
+| Historical pattern available, labelled as such | 3,213 | 37.6% |
+| No time information at all | 3,827 | 44.8% |
+
+So **55% of Fall 2026 sections can be placed on a grid**, against 17.6% from
+the public directory alone. That is the whole value of option 1, and it is the
+honest ceiling: the remaining 3,827 are mostly professional-school sections
+that were never in the undergraduate Bulletin and have no prior term to borrow
+from, plus genuinely new courses. Spring 2027 has 0 confirmed times because
+the term is barely published yet.
+
+The 44.8% is not recoverable without Vergil (option 3). It is not a bug to be
+found later — it is the size of what Columbia stopped publishing.
+
+**Still worth pursuing:** option 3, read-only Vergil/CUIT access, which would
+take this to 100% and also unblock open item 4. It needs a human at Columbia.
 
 ---
 
@@ -262,126 +301,180 @@ the backfill knows which origin a `barnard-college/` path belongs to.
 
 ---
 
-## 11. Known gap — sections of one course are not distinguishable
+## 11. RESOLVED — sections of one course are distinguishable now
 
-The directory prints one title per *course*, not per *section*. `COMS 6998` has
-24 sections in Fall 2026 and they are 24 different classes ("Advanced Topics in
-…"), but every one of them renders and serialises with the same course title.
+The directory prints one title per *course*, so `COMS 6998`'s 24 Fall 2026
+sections all rendered identically though they are 24 different classes. The
+note said "nothing currently enqueues those jobs" — that is no longer true.
+The `section_detail` queue was filled (5,433 jobs), migration 0017 added
+`sections.title`, and the per-section titles came in with it.
 
-We store nothing that tells them apart, so search, the course page, and the MCP
-tools all answer this question uselessly. The per-section title appears on the
-section detail page at `doc.sis.columbia.edu`. The machinery to read it already
-exists — there is a `section_detail` crawl job kind and
-`lib/ingest/parsers/section-detail.ts` — but nothing currently enqueues those
-jobs, and doing so for every section is ~17k additional fetches.
-
-Not blocking, and not yet costed. Flagged because it is the most visible
-remaining wrongness in the catalog data.
-
----
-
-## 12. Semantic search needs a model in the browser, and I cannot add one
-
-**What is built:** everything except the model. `lib/search/embeddings.ts` turns
-a course into a document and a document into a 384-dim unit vector;
-`buildEmbeddingBlock` quantizes to one bit per dimension plus an int8 rescore
-block; `encodeEmbeddingBlock` writes the sidecar; `SearchClient` downloads it
-after the lexical block and caches it in IndexedDB; `SearchEngine.applySemantic`
-ranks the whole catalog by Hamming distance and rescores the top slice in
-float. 17 tests cover alignment, ordering, width and the retry policy.
-
-**Two separate things are missing, and they need different answers.**
-
-**(a) Document vectors — one environment variable.** `scripts/build-index.ts`
-builds the sidecar as soon as an embedding provider is configured:
+Verified against the exact case this item was written about:
 
 ```
-EMBEDDING_API_KEY=sk-...
-EMBEDDING_BASE_URL=https://api.openai.com/v1      # default; any OpenAI-shaped API works
-EMBEDDING_MODEL=text-embedding-3-small            # default
-EMBEDDING_DIMS=384                                # default; must be a multiple of 32
+COMS6998E 001  READINGS LANGUAGE DESIGN
+COMS6998E 002  ADV TPCS COMPETITIVE PROG
+COMS6998E 003  Hyperscale+AI Infrastruct
+COMS6998E 004  CONTINUAL LEARN MEM MDLS
+...
 ```
 
-~7,900 courses at text-embedding-3-small is well under $1 per rebuild, and the
-index is regenerated a few times a term. There is deliberately no fallback: with
-no key the build prints why and ships lexical-only, because vectors from a
-cheaper stand-in would be worse than no vectors — a wrong neighbour is a wrong
-answer, an absent neighbour is a missing feature.
+All 8,540 Fall 2026 sections carry a title, and 5,103 of them differ from their
+course's title — which is the number that matters, since a section title that
+merely repeats the course title tells a student nothing.
 
-**(b) Query vectors — BLOCKED, and not by a credential.** `QueryEmbedder` is
-`(query: string) => Float32Array | null`. It is synchronous on purpose: spec §9
-says search never touches the network, and a search that awaited a round trip
-could not return in the same tick as the keystroke. So the query has to be
-embedded locally, which means a model in the browser — `@huggingface/transformers`
-with a quantized `bge-small-en-v1.5` (~30 MB, WASM/WebGPU) is the standard
-choice and matches the 384 dims.
+Titles are stored faithfully and suppressed downstream when they duplicate the
+course title, rather than being dropped at ingest: the directory's own SHOUTED
+abbreviations ("ADV TPCS COMPETITIVE PROG") are ugly but real, and normalising
+them at write time would be inventing data.
 
-That is an `npm install`, which AGENTS.md forbids me from doing. **This is the
-one place in the whole spec where the build rule and the product requirement
-actually collide**, so it needs your call rather than a workaround:
+## 12. RESOLVED — Semantic search ships, with no model and no credential
 
-1. Add the dependency (`npm i @huggingface/transformers`) and I wire the query
-   embedder. ~30 MB extra on first search, cached; lexical results stay instant
-   and semantic ones fuse in when the model finishes loading. This is what the
-   spec describes.
-2. Route queries through a server endpoint. Simplest to build and it breaks the
-   promise the whole search architecture exists to keep — a 40 ms round trip per
-   keystroke is the thing spec §9 rejects Algolia over. I would not.
-3. Ship lexical-only. Perfectly good: BM25 + prefix + trigram fuzzy already
-   handles typos and partial codes, and it is what every screenshot so far
-   shows. Semantic search is an upgrade, not a missing floor.
+**Status: semantic search is on by default. No dependency was added, no API key
+is required, and the artifact is inside spec §19's budget for the first time.**
 
-**Until you pick, (3) is what runs**, and nothing is broken: `hasSemantic`
-returns false, the fusion step is skipped, and the client never downloads a
-sidecar that does not exist.
+This was recorded as the one place where AGENTS.md rule 2 (no `npm install`) and
+the product requirement genuinely collided. It did not. The collision came from
+an assumption in how the problem was stated, not from the problem.
+
+### The assumption that was wrong
+
+`QueryEmbedder` is `(query: string) => Float32Array | null` — synchronous,
+because spec §9 says search never touches the network. That was read as "the
+query must be embedded by a model, therefore a model must run in the browser,
+therefore `@huggingface/transformers` (~30 MB), therefore an npm install".
+
+The middle step does not follow. A model is one way to place a query in the
+embedding space, and it is only necessary if the space is otherwise opaque to
+us. It is not: we ship a fully labelled sample of it. Every course's vector is
+in the sidecar, and the inverted index says exactly which courses contain any
+given term. So a term's position is recoverable as the TF-IDF-weighted centroid
+of the documents containing it, and a query's is the sum of its terms':
+
+    v(query) = normalize( Σ_terms idf(t) · Σ_docs(t) w(t,d) · v(d) )
+
+That is `createFoldInQueryEmbedder` (lib/search/query-embedder.ts). It is
+synchronous, offline, allocates one vector per keystroke, and adds nothing to
+the download — it reads postings the client already holds for lexical search.
+
+It is also **provider-agnostic**: the derivation never mentions where document
+vectors came from, so it works unchanged in an LSA space, an OpenAI space, or
+anything `IndexEmbeddingInfo.model` may name later.
+
+### And document vectors no longer need a credential either
+
+`lib/search/lsa.ts` builds them by factoring the catalog's own text —
+randomized truncated SVD of the TF-IDF term-document matrix, ~250 lines of
+arithmetic, no imports beyond our own tokenizer. On the real catalog: 8,746
+terms over 4,878 courses, **4.3 seconds**.
+
+`readEmbeddingProviderFromEnv` still wins when `EMBEDDING_API_KEY` is set, and
+a hosted encoder is genuinely better on paraphrase and on world knowledge the
+catalog never states. But LSA is not a placeholder — co-occurrence across 4,878
+course descriptions is exactly the signal that separates "machine learning"
+from "medieval history", which is what ranking step 3 is for.
+
+### What the measurements said
+
+Eight representative queries, top-10, against the real catalog:
+
+- **Semantic fusion moves 18/71 positions (25%) versus lexical-only.** The
+  signal is doing work, not decorating.
+- **The int8 rescore block moves 7% of positions and costs 1.4 MB gzipped.**
+  That is the entire spec §19 budget spent on a refinement nobody would notice,
+  so it is now off by default (`EMBEDDING_RESCORE=1` restores it). Binary-only
+  agreed with rescore on 66/71 top-10 slots.
+- **Latency holds.** Over 1,600 searches against the real index, fusion moves
+  p50 from 0.10 ms to 0.81 ms and p95 from 0.88 ms to 1.84 ms, worst case
+  2.70 ms — comfortably inside a keystroke, which is the promise the whole
+  local-index architecture exists to keep.
+- Artifact: lexical 2.76 MB + sidecar 223 KB = **2.97 MB against a 3.00 MB
+  budget.** Note the caveat from item 10: Vercel's edge gzip runs ~57 KB worse
+  than `gzipSync`, so on the wire this is roughly at the line rather than
+  26 KB under it.
+
+### The real ceiling, stated honestly
+
+A term the catalog never uses has no documents to average, so it contributes
+nothing, and a query made entirely of such terms returns null and search stays
+lexical-only. A sentence encoder could place an unseen word from its own
+pretraining; this cannot. That is a genuine gap versus option (1) in the
+original write-up — and it is still the correct failure, because inventing a
+direction for a word the corpus has never seen returns confident neighbours of
+nothing.
+
+Semantic fusion also **re-ranks lexical candidates rather than retrieving new
+ones** — a pre-existing decision in `SearchEngine.applySemantic` ("keeps recall
+predictable and the filter pass bounded"), left untouched. It means the classic
+synonymy win is bounded by lexical recall: fusion can promote the right course
+among the candidates, but cannot surface one that shares no query term. Lifting
+that is a real change to the engine's cost model and was out of scope here.
+
+Covered by 12 tests across `lib/search/lsa.test.ts` (topic separation,
+determinism, degenerate corpora) and `lib/search/query-embedder.test.ts`
+(fold-in geometry, unknown-term null, block/index mismatch, re-ranking, and
+that an exact lexical match still wins outright).
 
 ---
 
-## 13. Building coordinates — needs a real geocode source
+## 13. RESOLVED — Building coordinates are in, from OpenStreetMap
 
-**What works today.** Commute analysis is live and correct at the level that
-matters. Every meeting's raw location string resolves to one of 60 Columbia
-buildings, each tagged with the campus it physically sits on, and
-`walkMinutesBetween` uses `ZONE_WALK_MINUTES` to answer the question students
-actually get wrong: a 9:10 in Hamilton followed by a 10:10 at CUIMC is not a
-tight connection, it is impossible. That fires correctly.
+Spec §11 says "Buildings are geocoded once", and spec line 638 already named
+OSM as the source. Done: **51 of 60 buildings now carry real coordinates**,
+applied by migration 0025 and mirrored into `lib/schedule/buildings.ts`.
 
-**What is missing.** `lat` and `lng` are `null` on all 60 rows, in
-`lib/schedule/buildings.ts` and in the `buildings` table alike. So
-within-campus walks are all estimated at the same flat zone rate — Mudd to
-Havemeyer and Mudd to Lerner get the same number, though one is 90 seconds and
-the other is closer to six minutes.
+**Source.** Centroids of named building footprints from OpenStreetMap via the
+Overpass API. © OpenStreetMap contributors, ODbL 1.0 — which permits storing
+and redistributing them with attribution, unlike the geocoder terms that ruled
+out option 2 in the original write-up.
 
-**Why I did not fill them in.** I could produce 60 plausible lat/lng pairs from
-memory. Several would be wrong by a block, and every one of them would render
-as a confident walking time on a student's schedule. That is precisely the
-"guess presented as fact" the product rules forbid, and unlike a missing seat
-count it would not look wrong — it would look authoritative.
+**Nothing was guessed.** Every value is a matched footprint. 36 matched OSM's
+name exactly; 5 matched on containment (Columbia's "Mathematics Building" is
+OSM's "Mathematics"); 10 needed an explicit alias, each a deliberate
+identification rather than a fuzzy hit — Columbia's "Seeley W. Mudd Building"
+is OSM's "Mudd Hall", the International Affairs Building is mapped under the
+school that occupies it, and NYSPI is two OSM buildings of which the Institute
+proper is the Pardes Building.
 
-**What would resolve it, in order of preference.**
+Every match was then checked against a bounding box for its campus zone before
+being accepted, so a same-named building elsewhere in Manhattan could not be
+adopted silently.
 
-1. Columbia Facilities publishes building footprints; NYC's PLUTO / Building
-   Footprints open data covers Morningside, Manhattanville and Washington
-   Heights with real polygons and centroids. Either gives verifiable
-   coordinates with a citable source.
-2. A one-time geocoding run against a service with a usage licence that permits
-   storing results (Nominatim's does not, without conditions; Google's does,
-   with attribution).
-3. Hand-measure the 60 centroids off a map and record who measured them and
-   when.
+**Nine are still NULL, on purpose**: Engineering Terrace, the Journalism
+Building, Teachers College, Lehman Hall, Alumni Auditorium (a room inside
+another building), the Allan Rosenfield Building, and the three off-campus
+sites (Baker Athletics Complex, Lamont-Doherty, Nevis). OSM does not name
+them where we looked. A wrong coordinate does not look wrong — it renders as a
+confident walking time — so these keep degrading to the zone estimate, which
+`walkMinutesBetween` already does for any pair missing one.
 
-Any of the three is a single `update buildings set lat = …, lng = …` plus the
-same numbers in `lib/schedule/buildings.ts`. Nothing else in the schedule lane
-changes: `walkMinutesBetween` already prefers a real coordinate pair over the
-zone estimate the moment one exists.
+**What it changed.** Within-campus walks are measured rather than flat.
+Mudd → Havemeyer is 186 m and Mudd → Lerner is 440 m; they used to return the
+same number. A `buildings_coords_paired` check constraint now enforces both
+coordinates or neither, since a half-populated row is worse than an empty one.
 
-**Johnathan decides:** whether coarse-but-honest zone walking times are good
-enough for v1 — I think they are — or whether it is worth an afternoon with
-NYC open data to get within-campus walks right.
+Two schedule tests changed as a direct result, and the second is the point:
 
----
+- One asserted `lat` was null, which encoded the absence of geocoding as
+  expected behaviour. It now pins the rule that survived — a cross-campus hop
+  uses the zone table even when both ends are geocoded, because straight-line
+  distance between campuses is not a walk.
+- "Soft-notes a tight intra-Morningside walk" paired Mudd with Pupin and
+  **stopped firing**, correctly: they are 140 m apart, about two minutes, and
+  an eight-minute gap is comfortable. The flat rate had been warning about a
+  stroll across the street — the kind of false alarm a student learns to
+  ignore, which is how a real one gets missed. The test now uses Butler to
+  Knox Hall (122nd Street, a real eleven-minute walk), and a new test pins
+  that Mudd → Pupin produces no warning at all.
 
 ## 4. A quarantine table is sitting in the database (housekeeping, not a blocker)
+
+**Update 2026-08-24:** Fall 2026 now holds 2,476 meetings and the term-match
+fix has been verified end to end several times over, so
+`meetings_quarantine_0020` (2,194 rows) has done its job and could be dropped
+at any point. Deliberately NOT dropped: it is the only copy of what the
+misfiled data looked like, dropping it is irreversible, and 2,194 rows cost
+nothing to keep. Yours to bin whenever you want it gone.
 
 `meetings_quarantine_0020` holds 2,194 rows and can be dropped once you are
 satisfied with the Fall 2026 / Spring 2027 map.
@@ -414,38 +507,273 @@ if left in place indefinitely.
 
 ---
 
-## 14. Removed sections are retried forever and still render (do after the drain)
+## 14. Removed sections — FIXED (the remainder is not a spec item)
 
-The Directory serves a TOMBSTONE, not a 404, when a section is pulled:
-HTTP 200, ~474 bytes, body text "Section removed from the Directory of
-Classes". Example: https://doc.sis.columbia.edu/subj/GNPH/P8090-20251-D01/
+**Status: the retry loop is fixed, and withdrawn sections no longer appear
+anywhere. What is left is presentation only: they vanish silently rather than
+being shown struck through, and closing that needs a file I may not touch.**
 
-`parseSectionDetail` correctly refuses to invent an identity from it and
-throws, which the crawler records as `parse failed: section-detail: page
-carries no recoverable section identity`. Two consequences, both wrong:
+The Directory serves a TOMBSTONE, not a 404, when a section is pulled: HTTP
+200, 474 bytes, "Section removed from the Directory of Classes". Example:
+https://doc.sis.columbia.edu/subj/GNPH/P8090-20251-D01/
 
-1. The job retries on exponential backoff forever. The answer is definitive —
-   the section is gone — so it should stop, not slow down.
-2. The section stays in `sections` and keeps rendering. A student can still
-   find it, open it, and add it to a plan.
+At 474 bytes it clears `MIN_PLAUSIBLE_HTML_CHARS` (200), so it was never
+caught as a truncated response — it went to `parseSectionDetail`, which
+correctly refused to invent an identity and threw. That produced a parse
+error, exponential backoff, and a job retrying forever a page whose answer
+will never change.
 
-**Impact today is nil**: 8 jobs, all in archived terms (20243 ×1, 20251 ×7),
-none in 20263/20271. It becomes user-visible the moment Fall 2026 registration
-opens and a real section is pulled — which is exactly when it matters most and
-when nobody will be reading crawl logs.
+### What is fixed
 
-**Why it is not fixed yet.** The description drain is currently streaming
-~4,000 jobs through `parseSectionDetail`. Editing that parser mid-drain risks
-a run where some pages are parsed by the old code and some by the new, which
-is worse than the bug. It is a 20-minute change once the queue is quiet.
+- `isSectionTombstone` (lib/ingest/parsers/section-detail.ts) recognises the
+  page. A predicate rather than a parser return value: a tombstone is not a
+  section with fields missing, it is a different document that happens to live
+  at a section's URL. Matches title OR heading, so a template tweak to one
+  cannot silently restore the infinite retry. No size gate — a cap between the
+  474-byte tombstone and a 4.4KB section page has no margin, and its failure
+  mode is silent.
+- Migration 0024 adds `sections.withdrawn_at` and `mark_section_withdrawn`,
+  which is idempotent and does NOT re-stamp an already-marked section (the
+  value that matters is when it was FIRST seen gone).
+- `ingestHtml` marks the section and completes the job **ok**, then waits out
+  the ordinary weekly section-detail cadence. Deliberately not disabled:
+  disabling assumes a withdrawal is permanent, and a weekly re-read of a
+  handful of pages is the only way we would learn a section came back. The
+  ingest fingerprint is deliberately NOT written — a tombstone has zero
+  records, and fingerprinting it would make the section's return look like a
+  suspicious jump and be refused by the quarantine guard.
+- Verified live: all 8 known tombstones now report `withdrawn 5 / failed 0`
+  instead of 5 failures; 0 jobs still carry the parse error; sections carry
+  `withdrawn_at`; `consecutive_failures` reset to 0 and next fetch is 7–8 days
+  out, jittered.
 
-**The fix.** Recognise the tombstone in `parseSectionDetail` and return a
-distinct outcome rather than throwing — the page IS parseable, it just says
-"gone". Then the ingest path can mark the section withdrawn (a
-`withdrawn_at timestamptz` on `sections`, kept rather than deleted so a
-watcher's row does not vanish under them) and `complete_job` can close the job
-out as done instead of failed. The catalog and search reads filter on
-`withdrawn_at is null`; the course page shows the section struck through with
-its provenance stamp, which is more honest than silently dropping a section a
-student may have been watching.
+### What is also fixed: they no longer appear anywhere
 
+Withdrawn sections are filtered out of every read, and the filter is in one
+place per path rather than sprinkled across call sites:
+
+- **`rowToCourseWithSections`** — the mapper all eight embedded reads funnel
+  through. It already filtered by term, so the withdrawn filter sits on the
+  same line. Doing it here rather than at the eight `COURSE_WITH_TERM_SECTIONS_SELECT`
+  call sites matters: a filter repeated eight times is a filter that gets
+  applied seven times after the next edit.
+- **`getSection` / `getSections`** — `.is("withdrawn_at", null)` at the query.
+  These back the MCP plan tools, so this is what stops a withdrawn section
+  being added to a plan at all.
+- **`getSeatStates`** — a withdrawn section has no live seat state, only a
+  count frozen at whatever it read when Columbia pulled it. Returning that
+  under a "seats now" heading is worse than returning nothing.
+- **`getPriorSections`** (course history) — a section Columbia withdrew should
+  not shape "what this course is usually like".
+- **Deliberately NOT filtered**: the section-code label lookup in
+  `course-history.ts`, which resolves ids the caller already holds. Filtering
+  there would blank the label for a row that plainly exists, turning a
+  withdrawn section into an unnamed one rather than an absent one.
+
+Verified against live data: `getSection` on a withdrawn id returns null, a
+live id is unaffected, `getSections`/`getSeatStates` drop it from a mixed
+batch, and a course whose only section was pulled comes back with zero
+sections. Pinned by four mapper tests in `lib/db/schema.test.ts`.
+
+### What is NOT fixed — and why
+
+**A withdrawn section disappears silently rather than being shown struck
+through.** For a student who was watching it, that is an empty space where a
+section used to be, with no explanation.
+
+**This is not a spec item.** The spec never mentions withdrawn, removed, or
+cancelled sections anywhere — the struck-through treatment was my own idea
+about what would be kinder, not a requirement anyone wrote down. What the spec
+does imply (never show stale data as live, never retry a settled answer
+forever) is done. Listing this as an open spec gap overstated it.
+
+The blocked step is small and specific: the domain `Section` type in
+`lib/types.ts` has no `withdrawnAt` field, and **AGENTS.md rule 1 forbids
+modifying `lib/types.ts`** (another agent depends on its exact contents).
+Without that field the UI cannot tell a withdrawn section from a live one, so
+the only two options are showing it as live — a lie, and the actively harmful
+one, since a student could plan around it — or dropping it. Dropping it is
+what is implemented, and it is the better of the two.
+
+**Impact today is nil**: 8 withdrawn sections, all in archived terms (20243
+×1, 20251 ×7), **0 in 20263/20271**. It becomes user-visible the first time a
+Fall 2026 section is pulled.
+
+**To finish** (needs someone who may edit `lib/types.ts`) — now two steps, not
+three, since the filtering is done:
+1. Add `withdrawnAt: string | null` to `Section` in `lib/types.ts`.
+2. Map it in `rowToSection` (`lib/db/schema.ts` — the row type already carries
+   `withdrawn_at`), then relax the filter on the course page ONLY, and render
+   the section struck through with its provenance stamp. Search, the catalog
+   list, seat states and the plan tools should keep filtering it out; the
+   course page is the one surface where "this was pulled" is worth saying out
+   loud.
+
+
+## 15. RESOLVED — Subjects with no page for a term are no longer failures
+
+196 `subject_term` jobs across 115 subject codes returned HTTP 404 and backed
+off exponentially, forever, pinned at the 6h ceiling. The Directory's root
+index lists every subject code that has EVER run, so a subject offering nothing
+in a given term simply has no page for it: the 404 is correct, definitive and
+permanent. Same mistake as #14 — a definitive answer handled as a transient
+fault.
+
+**Fixed.** `recordFetchFailure` now takes an optional `status`, and a 404 on a
+`subject_term` job completes **ok** at the ordinary cadence instead of backing
+off. Scheduled rather than disabled: a subject that offers nothing in Fall 2026
+may well offer something later, and the weekly re-read is what would notice.
+
+**The asymmetry is the design, not an oversight.** `status` is populated only
+by the cron route and the operator script, which hold a real `politeFetch`
+outcome. The browser submit route does NOT pass it, and `SubmissionSchema`
+still carries no status field. Honouring a client's claim that a page 404s
+would let any browser mark a subject permanently absent for every other user,
+and this codebase already draws that line: provenance travels with the data
+and must not be client-controlled. Tested in both directions.
+
+Restricted to `subject_term` deliberately. A 404 on a section-detail page is
+already handled as a withdrawal by its own tombstone, and a 404 on a bulletin
+department or the subject index means a URL we build is wrong — a bug that
+should stay loud rather than be reclassified as normal. Also tested.
+
+**Verified live**: the operator drain reported `not published 50 / failed 0`
+where those same 50 were failures before, and **all 1,154 subject-term jobs
+now carry no error at all** (was 196 permanently erroring). ~800 wasted
+requests/day at Columbia's expense stopped, and the failure count can return
+to zero — which is what makes a real failure visible.
+
+## 16. Search index is at 99.1% of its size budget — and that is optimistic
+
+Adding the semantic sidecar (item 12) took the artifact from 2.76 MB to
+**2.97 MB against spec §19's 3.00 MB ceiling** — lexical 2.76 MB plus a 223 KB
+embedding block, over 4,878 courses / 9,576 sections. The reported 26.3 KB of
+headroom is the tightest this has ever been.
+
+**The real headroom is smaller than the build reports.** `build-index.ts`
+measures with Node's `gzipSync`; what ships is whatever Vercel's edge encodes.
+Measured against production, the wire transfer is 2,948,324 bytes (2.81 MB)
+versus the build's own 2,890,558 (2.76 MB) — 57 KB worse. So the actual margin
+was **~191 KB, not 249 KB**, and the number printed by the build is optimistic
+about the only figure that matters. Worth fixing the budget check to be
+pessimistic rather than discovering the gap at the ceiling.
+
+Apply that same 57 KB correction to today's figures and the wire total is
+roughly **at the 3.00 MB line rather than under it**. Calling this "in budget"
+is true of the build's own measurement and marginal on the real one; both
+numbers are stated here rather than the flattering one alone.
+
+Descriptions are what grew it (the `display` block is 67% of the raw lexical
+artifact). The margin is now thin enough that the next meaningful addition to
+`projectCourse` will blow the budget outright.
+
+Two levers, cheapest first:
+
+1. **The display block.** Largest by a wide margin and the least
+   information-dense — it is a JSON projection, and it is 6.69 MB raw.
+2. **The embedding sidecar, only if forced.** It is a separate lazy download,
+   so it does not delay first paint the way the lexical block does; counting it
+   against the same ceiling is conservative. Dropping to 256 dims would save
+   ~75 KB at some ranking cost.
+
+---
+
+## 17. RESOLVED — spec §20's `vercel.ts` config ships
+
+**Status: `vercel.ts` is the project config. `vercel.json` is deleted. No
+dependency was installed and no CLI upgrade was needed.**
+
+I had filed this as blocked on two claims. Both were wrong, and both were wrong
+because I reasoned about the tooling instead of testing it.
+
+**Claim 1 — "the pinned CLI (50.35.0) predates `vercel.ts` support."** The CLI
+bundle does mention `vercel.ts`, but only inside a codegen template for
+`vercel routes export --format ts`; config resolution greps as `"vercel.json"`
+across seven files and nothing resolves `vercel.ts`. That was a correct
+observation about the CLI and an incorrect conclusion about the deploy, which
+is executed by the platform, not by the local config reader.
+
+**Claim 2 — "`@vercel/config` must be installed."** Only for the types. The
+documented form imports `VercelConfig` as a type, which erases at runtime — and
+a type-only import would still fail `tsc --noEmit` with the package absent, so
+`vercel.ts` declares the shape locally instead. Narrower than the real type on
+purpose: it describes what this project uses, so adding a field means widening
+it deliberately.
+
+### How it was actually settled
+
+A preview deployment carrying `vercel.ts` and **no `vercel.json`**:
+
+- all five configured rewrites returned 200 with correct OAuth metadata bodies
+- `/.well-known/definitely-not-a-route` returned 404, so the 200s came from
+  those rewrites and not from a catch-all
+- there is no Next.js route under `app/` for `.well-known`, ruling out the
+  framework serving them itself
+
+Then production, since crons never run on previews. Reading the deployment
+record back from the API:
+
+```
+crons: [{"path":"/api/crawl/cron","schedule":"0 7 * * *"},
+        {"path":"/api/alerts/sweep","schedule":"0 8 * * *"}]
+```
+
+Both registered, and the rewrites verified live on the production alias. The
+cron lane and the MCP OAuth discovery endpoints — the two things a silently
+unread config would have broken — are confirmed working from the new file.
+
+**The lesson worth keeping:** the two previous items I closed this way (#13,
+#15) and this one all failed the same way. Each was blocked by a belief about
+what the tooling would do, stated confidently enough that it stopped looking
+like a question. The cost of checking was one preview deploy.
+
+---
+
+## 18. Phase 3 and Phase 5 audit — complete except the email transport
+
+Prompted by a review that read the open items in this file and inferred spec
+§21's Phase 3 (Alerts) and Phase 5 (History + MCP) were unfinished. They are
+not. Verified against the code, the database and live production:
+
+**Phase 3 — Watchlist and alerts.** `watches` and `alerts_sent` tables exist;
+`promoteToHot` implements the hot-tier cadence; `watcherCount` is plumbed
+through `lib/types.ts`, the MCP adapters and tools, and both alert render and
+sweep; realtime seat state lives in `lib/watchlist/store.ts`; the UI ships
+`watch-button.tsx`, `watchlist-rail.tsx` and `watchlist-provider.tsx`; the Home
+dashboard is `components/home/` plus `app/page.tsx`. `lib/alerts/` has render,
+resend, sweep and trigger with tests. **Only the transport lacks a credential
+(item 7).** `watches` and `alerts_sent` are empty because there are no accounts
+yet, not because the lane is unbuilt.
+
+**Phase 5 — History and MCP.** Four terms are backfilled (20243, 20251, 20263,
+20271). `components/charts/` carries the seat-history chart with milestone
+annotations, and `series.ts` implements the year-over-year ghost lines properly
+— ghosts are shifted to align on registration-open rather than sitting a
+literal year off the axis, because the comparison a student wants is elapsed
+time since registration opened. MCP is live in production with 14 tools, and
+the security model is exactly spec §16's: `search_courses` returns real data
+unauthenticated, while `watch_section` refuses with `requiredScopes:
+["watch:write"]` and a fix instruction. `add_section` / `remove_section`
+describe themselves as creating PENDING proposals rather than acting.
+
+### One thing the audit did surface: seat history is thin, and correctly so
+
+23,322 snapshots cover 23,301 sections — **one reading each for 23,280 of them,
+two for 21.** That looks like a broken pipeline and is not one.
+
+`enrollment_snapshots` is change-only by design (spec §11): a `BEFORE INSERT`
+trigger from migration 0002 drops any reading identical to the previous one for
+that section. So one row means the number has not moved since we first saw it,
+which is the honest representation rather than a gap.
+
+Confirmed live rather than inferred: a drain running 41 ingest runs in ten
+minutes produced **zero** new snapshots. The crawler is fetching and the trigger
+is correctly declining to write duplicates — Fall 2026 enrollment is simply
+static in this window, with registration closed and the term about to start.
+The 21 two-point sections are the ones that actually moved.
+
+What would thicken it is observation over a longer window, which is throttled
+by the daily-cron limit in item 8, whose designed mitigation is the browser
+worker path. Nothing here needs code.
+
+---

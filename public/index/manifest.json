@@ -1,17 +1,23 @@
 {
   "formatVersion": 2,
-  "version": "0mdf4yb",
-  "builtAt": "2026-08-23T21:43:54.729Z",
+  "version": "1tphgkr",
+  "builtAt": "2026-08-24T04:41:27.634Z",
   "terms": [
     "20263",
     "20271"
   ],
   "courseCount": 4878,
-  "sectionCount": 9543,
+  "sectionCount": 9576,
   "lexical": {
-    "url": "/index/catalog-0mdf4yb.bin",
-    "bytes": 8375872,
-    "gzipBytes": 2050135
+    "url": "/index/catalog-1tphgkr.bin",
+    "bytes": 10456980,
+    "gzipBytes": 2890634
   },
-  "embedding": null
+  "embedding": {
+    "url": "/index/catalog-1tphgkr.emb.bin",
+    "bytes": 234260,
+    "gzipBytes": 228145,
+    "dims": 384,
+    "model": "lsa-svd-384d-v8746"
+  }
 }

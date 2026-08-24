@@ -274,6 +274,20 @@ export type IngestPayload =
  */
 export interface CatalogWriter {
   applyIngest(payload: IngestPayload, observedAt: string): Promise<number>;
+
+  /**
+   * Record that Columbia has stopped publishing a section.
+   *
+   * Separate from `applyIngest` because it is not an ingest: there is no
+   * payload, nothing was parsed, and the page carried no catalog data. It is
+   * the opposite — a page that told us a row we already hold is no longer
+   * real. Folding it into `applyIngest` would mean inventing an empty payload
+   * to express "gone", and an empty payload is exactly what the quarantine
+   * guard is built to reject.
+   *
+   * Returns the number of rows changed. Zero is normal, not an error.
+   */
+  markSectionWithdrawn(sectionId: string, at: string): Promise<number>;
 }
 
 // ---------------------------------------------------------------------------

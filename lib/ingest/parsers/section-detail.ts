@@ -67,11 +67,57 @@ export interface ParsedSectionDetailWithExtras extends ParsedSectionDetail {
 }
 
 /**
+ * Does this page say the section has been withdrawn?
+ *
+ * ── Why this is a predicate and not a parse result ─────────────────────────
+ *
+ * When a section is pulled, the Directory does not 404. It serves HTTP 200
+ * and a 474-byte page titled "Section Removed". To `parseSectionDetail` that
+ * is indistinguishable from a page it failed to understand — no section code,
+ * no number, no key — so it throws, the crawler records a parse error, and the
+ * job backs off and retries a page whose answer will never change.
+ *
+ * The distinction that matters is not "did we parse it" but "what is it". A
+ * tombstone is not a section with its fields missing; it is a different
+ * document that happens to live at a section's URL, and it carries real
+ * information — the section is gone. Widening `parseSectionDetail`'s return
+ * type into a union would push that distinction into every caller of a
+ * function that has one job. Asking the question separately, before parsing,
+ * keeps the parser about sections.
+ *
+ * Both the `<title>` and the `<h1>` are checked, and either is enough. They
+ * are two independent renderings of the same fact, and a template tweak to one
+ * should not turn a definitive answer back into an infinite retry.
+ *
+ * Deliberately narrow: it matches this specific page and nothing else. A
+ * predicate that guessed would silently withdraw sections during an outage,
+ * which is far worse than the retry loop it replaces.
+ *
+ * There is deliberately no size gate. The tombstone is ~474 bytes and a real
+ * section page is ~4.4KB, so a cap between them would sit within a nav bar's
+ * worth of either — and the failure it introduces is silent: the page grows,
+ * the predicate stops matching, and the infinite retry quietly returns. Both
+ * patterns are anchored to wording no real section page contains, which is
+ * the actual discriminator; the length never was.
+ */
+export function isSectionTombstone(html: string): boolean {
+  if (typeof html !== "string" || html.length === 0) return false;
+
+  const title = /<title>\s*section\s+removed\s*<\/title>/i.test(html);
+  const heading = /section\s+removed\s+from\s+the\s+directory\s+of\s+classes/i.test(html);
+  return title || heading;
+}
+
+/**
  * Parse a section detail page.
  *
  * `subjectCode` and `termCode` are optional: they are only consulted when the
  * page's own `Section key` row is missing. Throws only when the page carries no
  * usable identity at all and no fallback was supplied.
+ *
+ * Callers should ask `isSectionTombstone` FIRST: a withdrawn section reaches
+ * here looking exactly like an unparseable page, and the two need opposite
+ * handling.
  */
 export function parseSectionDetail(
   html: string,

@@ -24,6 +24,7 @@
  */
 
 import { SearchEngine, type SearchEngineOptions } from "./engine";
+import { createFoldInQueryEmbedder } from "./query-embedder";
 import {
   IndexFormatError,
   decodeEmbeddingBlock,
@@ -335,8 +336,12 @@ class SearchIndexLoader implements SearchIndexHandle {
 
   private adopt(index: SerializedIndex): void {
     const engine = new SearchEngine(index, this.options.engineOptions);
-    // Carry the query embedder across a hot swap so semantics survive an
-    // index update without the host having to re-register.
+    // Deliberately does NOT carry the previous query embedder over. The
+    // fold-in embedder is bound to the postings and document ordinals of the
+    // index it was built from, so reusing it against a swapped index would
+    // read the right postings for the wrong courses — a silent mis-ranking,
+    // not a crash. `loadEmbeddings` runs immediately after adoption and
+    // rebuilds it against the new pair.
     this.engine = engine;
     this.resolveReady(engine);
   }
@@ -424,7 +429,20 @@ class SearchIndexLoader implements SearchIndexHandle {
           storedAt: Date.now(),
         } satisfies CachedArtifact);
       }
-      this.engine.attachEmbeddings(decodeEmbeddingBlock(bytes));
+      const block = decodeEmbeddingBlock(bytes);
+      this.engine.attachEmbeddings(block);
+
+      // The block alone is inert: `hasSemantic` needs a query embedder too.
+      // The fold-in embedder derives the query's direction from postings the
+      // lexical index already holds, so this needs no model, no download and
+      // no network — see lib/search/query-embedder.ts.
+      const embedder = createFoldInQueryEmbedder(this.engine.index, block);
+      if (!embedder) {
+        this.report("semantic-unavailable", null, "embedding block does not match the index");
+        this.resolveSemantic(false);
+        return;
+      }
+      this.engine.setQueryEmbedder(embedder);
       this.report("semantic-ready", 1);
       this.resolveSemantic(true);
     } catch (error) {

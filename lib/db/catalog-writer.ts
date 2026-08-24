@@ -98,6 +98,30 @@ export class SupabaseCatalogWriter implements CatalogWriter {
   }
 
   /**
+   * Stamp a section Columbia has stopped publishing.
+   *
+   * Does not go through `call`, because that helper is narrowed to the ingest
+   * writers on purpose and this is not one — no payload, no `p_observed_at`,
+   * and a return value that means "rows changed" rather than "records
+   * committed".
+   *
+   * A zero here is reported, not thrown. The section may already be marked, or
+   * we may never have carried a row for it: a section can be pulled between
+   * the subject page that listed it and the detail crawl that reached it, and
+   * a tombstone for a section we never had is not a failure of anything.
+   */
+  async markSectionWithdrawn(sectionId: string, at: string): Promise<number> {
+    const { data, error } = await this.db.rpc("mark_section_withdrawn", {
+      p_section_id: sectionId,
+      p_at: at,
+    });
+    if (error) {
+      throw new Error(`mark_section_withdrawn failed: ${error.message}`);
+    }
+    return typeof data === "number" ? data : 0;
+  }
+
+  /**
    * Narrowed to the five ingest writers rather than taking a bare `string`, so
    * a typo in a function name is a compile error instead of a runtime
    * `PGRST202` that would look, from the crawler's side, like a page that

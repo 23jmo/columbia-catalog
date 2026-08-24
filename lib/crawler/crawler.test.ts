@@ -6,6 +6,8 @@
  * the cron grace window, and the per-client hourly cap.
  */
 
+import { readFileSync } from "node:fs";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -39,7 +41,7 @@ import {
   parseRetryAfter,
   politeFetch,
 } from "./fetcher";
-import { ingestHtml } from "./ingest";
+import { ingestHtml, isAbsentReason, recordFetchFailure } from "./ingest";
 import {
   checkClientQuota,
   clampLeaseBatch,
@@ -197,8 +199,9 @@ function makeStore(options: {
 function makeRuntime(
   store: CrawlJobStore,
   overrides: { page?: ParsedSubjectPage; parseThrows?: boolean; writer?: CatalogWriter } = {},
-): { runtime: CrawlerRuntime; written: ParsedSubjectPage[] } {
+): { runtime: CrawlerRuntime; written: ParsedSubjectPage[]; withdrawn: string[] } {
   const written: ParsedSubjectPage[] = [];
+  const withdrawn: string[] = [];
   const parsers = {
     parseSubjectPage: () => {
       if (overrides.parseThrows) throw new Error("selector no longer matches");
@@ -221,9 +224,13 @@ function makeRuntime(
       }
       return 0;
     },
+    async markSectionWithdrawn(sectionId) {
+      withdrawn.push(sectionId);
+      return 1;
+    },
   };
 
-  return { runtime: { jobStore: store, parsers, writer }, written };
+  return { runtime: { jobStore: store, parsers, writer }, written, withdrawn };
 }
 
 afterEach(() => {
@@ -267,6 +274,49 @@ describe("cadence jitter", () => {
 
   it("jitterSeconds is symmetric around the input", () => {
     expect(jitterSeconds(100, () => 0.5)).toBeCloseTo(100, 6);
+  });
+
+  /**
+   * The load bug this guards against did not look like a bug. Every kind
+   * defaulted to `baseline`, baseline means hourly, and 5,433 section-detail
+   * jobs re-fetched unchanged pages every hour without a single error. These
+   * assert the multiplier both applies and knows when not to.
+   */
+  const midpoint = () => 0.5;
+  const secondsUntil = (iso: string) => (Date.parse(iso) - NOW.getTime()) / 1000;
+
+  it("stretches section detail to weekly while leaving the seat refresh hourly", () => {
+    const detail = secondsUntil(
+      computeNextFetchAt("baseline", NOW, midpoint, "section_detail"),
+    );
+    const seats = secondsUntil(
+      computeNextFetchAt("baseline", NOW, midpoint, "subject_term"),
+    );
+    expect(seats).toBeCloseTo(CADENCE_SECONDS.baseline, 6);
+    expect(detail).toBeCloseTo(CADENCE_SECONDS.baseline * 24 * 7, 6);
+  });
+
+  it("never stretches a promoted job — escalation must still mean sooner", () => {
+    for (const tier of ["hot", "registration"] as CrawlTier[]) {
+      const promoted = secondsUntil(
+        computeNextFetchAt(tier, NOW, midpoint, "section_detail"),
+      );
+      expect(promoted).toBeCloseTo(CADENCE_SECONDS[tier], 6);
+      // The point of the guard: promoting must not schedule further out than
+      // leaving the job at baseline would have.
+      expect(promoted).toBeLessThan(
+        secondsUntil(computeNextFetchAt("baseline", NOW, midpoint, "section_detail")),
+      );
+    }
+  });
+
+  it("omitting the kind changes nothing, so existing callers are unaffected", () => {
+    for (const tier of tiers) {
+      expect(secondsUntil(computeNextFetchAt(tier, NOW, midpoint))).toBeCloseTo(
+        CADENCE_SECONDS[tier],
+        6,
+      );
+    }
   });
 
   it("backs off exponentially, clamped, and never faster than the tier cadence", () => {
@@ -608,7 +658,7 @@ describe("ingest pipeline", () => {
       previousFingerprint: { recordCount: 138, filledFieldCount: 5_000, capturedAt: NOW.toISOString() },
     });
     const applyIngest = vi.fn(async () => 1);
-    const { runtime } = makeRuntime(store, { page: makePage(2), writer: { applyIngest } });
+    const { runtime } = makeRuntime(store, { page: makePage(2), writer: { applyIngest, markSectionWithdrawn: vi.fn(async () => 1) } });
 
     const result = await ingestHtml(
       { job: makeJob(), html, fetchedAt: NOW.toISOString(), source: "browser" },
@@ -623,10 +673,186 @@ describe("ingest pipeline", () => {
     expect(state.fingerprints.size).toBe(0);
   });
 
+  /*
+   * A section Columbia has pulled.
+   *
+   * The Directory does not 404 — it serves HTTP 200 and a ~474 byte "Section
+   * Removed" page, which clears the plausibility floor and then fails to
+   * parse. That combination produced a job that failed, backed off, and
+   * retried a permanently unchanging page forever, while the section itself
+   * stayed in the catalog and kept rendering.
+   */
+  describe("withdrawn sections", () => {
+    /*
+     * The REAL page, captured from the Directory, not a hand-written stand-in.
+     * The first draft of this test used an inline string and every assertion
+     * failed for one reason: it was under MIN_PLAUSIBLE_HTML_CHARS, so it was
+     * rejected as a truncated response and never reached the branch at all.
+     * The genuine tombstone is 474 bytes — comfortably over the floor, which
+     * is precisely why this bug existed in production instead of being caught
+     * by the short-response guard.
+     */
+    const TOMBSTONE = readFileSync(
+      new URL("../ingest/__fixtures__/doc-section-removed.html", import.meta.url),
+      "utf8",
+    );
+    const detailJob = () =>
+      makeJob({
+        jobId: "job-withdrawn",
+        kind: "section_detail",
+        targetKey: "20251GNPH8090PD01",
+        termCode: "20251",
+        url: "https://doc.sis.columbia.edu/subj/GNPH/P8090-20251-D01/",
+      });
+
+    it("marks the section withdrawn and closes the job as done, not failed", async () => {
+      const { store, state } = makeStore();
+      const { runtime, withdrawn } = makeRuntime(store);
+
+      const result = await ingestHtml(
+        { job: detailJob(), html: TOMBSTONE, fetchedAt: NOW.toISOString(), source: "cron" },
+        { runtime, now: NOW },
+      );
+
+      expect(withdrawn).toEqual(["20251GNPH8090PD01"]);
+      expect(state.runs[0].status).toBe("ok");
+      expect(state.runs[0].notes).toMatch(/no longer publishes/);
+      // The whole point: OK, so the job stops backing off exponentially
+      // against a page whose answer will never change.
+      expect(state.outcomes[0].ok).toBe(true);
+      expect(result.quarantined).toBe(false);
+    });
+
+    it("re-reads at the ordinary cadence rather than being disabled", async () => {
+      const { store, state } = makeStore();
+      const { runtime } = makeRuntime(store);
+
+      await ingestHtml(
+        { job: detailJob(), html: TOMBSTONE, fetchedAt: NOW.toISOString(), source: "cron" },
+        { runtime, now: NOW, random: () => 0.5 },
+      );
+
+      // Weekly, per KIND_CADENCE_MULTIPLIER — far enough out to be harmless,
+      // near enough that a restored section is noticed rather than never.
+      const waitSeconds =
+        (Date.parse(state.outcomes[0].nextFetchAt) - NOW.getTime()) / 1000;
+      expect(waitSeconds).toBeCloseTo(CADENCE_SECONDS.baseline * 24 * 7, 6);
+    });
+
+    it("does not overwrite the fingerprint of the real page it replaces", async () => {
+      const { store, state } = makeStore();
+      const { runtime } = makeRuntime(store);
+
+      await ingestHtml(
+        { job: detailJob(), html: TOMBSTONE, fetchedAt: NOW.toISOString(), source: "cron" },
+        { runtime, now: NOW },
+      );
+
+      /*
+       * A tombstone carries zero records. Fingerprinting it would give the
+       * quarantine guard a baseline of nothing, so a section coming back would
+       * read as a suspicious jump and be REFUSED — the guard would block the
+       * recovery it exists to protect.
+       */
+      expect(state.fingerprints.size).toBe(0);
+    });
+
+    it("leaves other job kinds alone even on an identical body", async () => {
+      const { store, state } = makeStore();
+      const { runtime, withdrawn } = makeRuntime(store);
+
+      // Same bytes, a subject_term job: nothing is withdrawn, and it fails to
+      // parse as it always would. The branch keys on kind, not on text alone.
+      await ingestHtml(
+        { job: makeJob(), html: TOMBSTONE, fetchedAt: NOW.toISOString(), source: "cron" },
+        { runtime, now: NOW },
+      );
+
+      expect(withdrawn).toEqual([]);
+      expect(state.outcomes[0].ok).toBe(true);
+    });
+  });
+
+  /*
+   * A subject that offers nothing in a term.
+   *
+   * The Directory's root index lists every subject code that has ever run, so
+   * 115 subjects legitimately have no page for a given term. Their 404 was
+   * being treated as a transient fault: 196 jobs pinned at the 6h backoff
+   * ceiling, retrying a question already answered, and a failure count that
+   * never returned to zero.
+   */
+  describe("subjects with no page for a term", () => {
+    it("treats an observed 404 on a subject page as a correct answer", async () => {
+      const { store, state } = makeStore();
+      const { runtime } = makeRuntime(store);
+
+      const result = await recordFetchFailure(makeJob(), "HTTP 404", "cron", {
+        runtime,
+        now: NOW,
+        random: () => 0.5,
+        status: 404,
+      });
+
+      expect(isAbsentReason(result.reason)).toBe(true);
+      expect(state.outcomes[0].ok).toBe(true);
+      // Scheduled, not disabled: a subject can start offering classes again,
+      // and the ordinary re-read is what would notice.
+      const waitSeconds = (Date.parse(state.outcomes[0].nextFetchAt) - NOW.getTime()) / 1000;
+      expect(waitSeconds).toBeCloseTo(CADENCE_SECONDS.baseline, 6);
+    });
+
+    it("does NOT trust a 404 the client merely reported", async () => {
+      const { store, state } = makeStore();
+      const { runtime } = makeRuntime(store);
+
+      // The browser submit route passes no status, by design: honouring a
+      // client's claim would let any browser mark a subject permanently
+      // absent for everyone.
+      const result = await recordFetchFailure(makeJob(), "HTTP 404", "browser", {
+        runtime,
+        now: NOW,
+      });
+
+      expect(isAbsentReason(result.reason)).toBe(false);
+      expect(state.outcomes[0].ok).toBe(false);
+    });
+
+    it("keeps a 404 loud on kinds where it means a URL we build is wrong", async () => {
+      for (const kind of ["bulletin_department", "subject_index"] as const) {
+        const { store, state } = makeStore();
+        const { runtime } = makeRuntime(store);
+
+        const result = await recordFetchFailure(makeJob({ kind }), "HTTP 404", "cron", {
+          runtime,
+          now: NOW,
+          status: 404,
+        });
+
+        expect(isAbsentReason(result.reason)).toBe(false);
+        expect(state.outcomes[0].ok).toBe(false);
+      }
+    });
+
+    it("leaves a 500 backing off exponentially", async () => {
+      const { store, state } = makeStore();
+      const { runtime } = makeRuntime(store);
+
+      const result = await recordFetchFailure(makeJob(), "HTTP 500", "cron", {
+        runtime,
+        now: NOW,
+        status: 500,
+      });
+
+      expect(isAbsentReason(result.reason)).toBe(false);
+      expect(state.outcomes[0].ok).toBe(false);
+    });
+  });
+
   it("records a parse failure without writing", async () => {
     const { store, state } = makeStore();
     const applyIngest = vi.fn(async () => 1);
-    const { runtime } = makeRuntime(store, { parseThrows: true, writer: { applyIngest } });
+    const { runtime } = makeRuntime(store, { parseThrows: true, writer: { applyIngest, markSectionWithdrawn: vi.fn(async () => 1) } });
 
     const result = await ingestHtml(
       { job: makeJob(), html, fetchedAt: NOW.toISOString(), source: "cron" },

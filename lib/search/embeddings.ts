@@ -9,7 +9,7 @@
  * fuses it. This module is the missing input — the thing that turns a course
  * into a vector.
  *
- * ── Why the query side is still dark ───────────────────────────────────────
+ * ── Where the query side went ──────────────────────────────────────────────
  *
  * `QueryEmbedder` in engine.ts is SYNCHRONOUS by design: `(query: string) =>
  * Float32Array | null`. That signature is the spec's zero-latency promise
@@ -17,26 +17,24 @@
  * return in the same tick as the keystroke, and spec §9 is explicit that
  * search never touches the network.
  *
- * So semantic search needs a model running IN THE BROWSER, and this repo
- * cannot add one (AGENTS.md forbids touching package.json). Document vectors
- * built here are therefore necessary but not sufficient: they ship, the client
- * caches them, and `hasSemantic` stays false until a query embedder appears.
- * See .plans/BLOCKERS.md item 12.
- *
- * Building them anyway is deliberate. The artifact is regenerated a few times
- * a term, not on demand; having the vectors already in it means the day a
- * browser model lands, semantic search is a one-line `setQueryEmbedder` away
- * rather than a rebuild-and-redeploy.
+ * That was read for a long time as requiring an embedding model in the
+ * browser, which this repo cannot add. It does not: `createFoldInQueryEmbedder`
+ * (query-embedder.ts) places a query in the space by averaging the vectors of
+ * the documents containing its terms, using the postings the lexical index
+ * already ships. It is synchronous, offline, and agnostic to where the
+ * document vectors came from — this provider or lsa.ts.
  *
  * ── Provider ───────────────────────────────────────────────────────────────
  *
  * The wire format is OpenAI's `/embeddings`, which is what nearly every hosted
  * embedder speaks — set `EMBEDDING_BASE_URL` and it points at any of them.
- * There is no default endpoint and no fallback: with no key configured the
- * builder returns null and the artifact ships lexical-only, exactly as it does
- * today. An embedding provider that silently degraded to something cheap would
- * put vectors in the index that mean nothing, and a wrong neighbour is worse
- * than no neighbour.
+ * There is no default endpoint: with no key configured the build falls back to
+ * `lsa.ts`, which factors the catalog's own text. That fallback is a different
+ * space, not a degraded version of this one, and the artifact records which
+ * via `IndexEmbeddingInfo.model` — an embedding provider that silently
+ * substituted something cheap while claiming to be this one would put vectors
+ * in the index that mean nothing, and a wrong neighbour is worse than no
+ * neighbour.
  */
 
 import type { CourseWithSections } from "@/lib/types";
