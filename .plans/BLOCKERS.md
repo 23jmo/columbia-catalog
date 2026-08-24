@@ -384,6 +384,10 @@ Eight representative queries, top-10, against the real catalog:
   That is the entire spec §19 budget spent on a refinement nobody would notice,
   so it is now off by default (`EMBEDDING_RESCORE=1` restores it). Binary-only
   agreed with rescore on 66/71 top-10 slots.
+- **Latency holds.** Over 1,600 searches against the real index, fusion moves
+  p50 from 0.10 ms to 0.81 ms and p95 from 0.88 ms to 1.84 ms, worst case
+  2.70 ms — comfortably inside a keystroke, which is the promise the whole
+  local-index architecture exists to keep.
 - Artifact: lexical 2.76 MB + sidecar 223 KB = **2.97 MB against a 3.00 MB
   budget.** Note the caveat from item 10: Vercel's edge gzip runs ~57 KB worse
   than `gzipSync`, so on the wire this is roughly at the line rather than
@@ -639,23 +643,63 @@ now carry no error at all** (was 196 permanently erroring). ~800 wasted
 requests/day at Columbia's expense stopped, and the failure count can return
 to zero — which is what makes a real failure visible.
 
-## 16. Search index is at 91.9% of its size budget
+## 16. Search index is at 99.1% of its size budget — and that is optimistic
 
-The rebuild after descriptions completed came in at 2.76 MB gzip against spec
-§19's 3.00 MB ceiling — 4,878 courses / 9,576 sections.
+Adding the semantic sidecar (item 12) took the artifact from 2.76 MB to
+**2.97 MB against spec §19's 3.00 MB ceiling** — lexical 2.76 MB plus a 223 KB
+embedding block, over 4,878 courses / 9,576 sections. The reported 26.3 KB of
+headroom is the tightest this has ever been.
 
 **The real headroom is smaller than the build reports.** `build-index.ts`
 measures with Node's `gzipSync`; what ships is whatever Vercel's edge encodes.
 Measured against production, the wire transfer is 2,948,324 bytes (2.81 MB)
 versus the build's own 2,890,558 (2.76 MB) — 57 KB worse. So the actual margin
-is **~191 KB, not 249 KB**, and the number printed by the build is optimistic
+was **~191 KB, not 249 KB**, and the number printed by the build is optimistic
 about the only figure that matters. Worth fixing the budget check to be
 pessimistic rather than discovering the gap at the ceiling.
 
-Descriptions are what grew it (the `display` block is now 67% of the raw
-artifact). Nothing is wrong today, but the margin is thin enough that it is
-worth knowing before anyone adds a field to the projected course shape: the
-next meaningful addition to `projectCourse` is likely to blow the budget.
+Apply that same 57 KB correction to today's figures and the wire total is
+roughly **at the 3.00 MB line rather than under it**. Calling this "in budget"
+is true of the build's own measurement and marginal on the real one; both
+numbers are stated here rather than the flattering one alone.
 
-If it does, the display block is the place to look first — it is the largest
-block by a wide margin and the least information-dense.
+Descriptions are what grew it (the `display` block is 67% of the raw lexical
+artifact). The margin is now thin enough that the next meaningful addition to
+`projectCourse` will blow the budget outright.
+
+Two levers, cheapest first:
+
+1. **The display block.** Largest by a wide margin and the least
+   information-dense — it is a JSON projection, and it is 6.69 MB raw.
+2. **The embedding sidecar, only if forced.** It is a separate lazy download,
+   so it does not delay first paint the way the lexical block does; counting it
+   against the same ceiling is conservative. Dropping to 256 dims would save
+   ~75 KB at some ranking cost.
+
+---
+
+## 17. `vercel.ts` config — spec §20 asks for it, the no-install rule forbids it
+
+**Impact: none functionally. The crons, rewrites and function settings the spec
+wants declared in `vercel.ts` are all declared and working in `vercel.json`.**
+
+Spec §20's tech-stack table says *Config: `vercel.ts` with `@vercel/config`
+(crons declared here)*. We ship `vercel.json` instead, carrying exactly the same
+content: two cron entries, five MCP OAuth well-known rewrites, and `maxDuration`
+for the four routes that need more than the default.
+
+Two things block the swap, and neither is worth breaking a rule over:
+
+1. **`@vercel/config` is not installed** and AGENTS.md rule 2 forbids
+   `npm install`. Without it there is no typed `VercelConfig` and no `routes`
+   helpers — the whole reason the spec prefers the TypeScript form.
+2. **The pinned Vercel CLI is 50.35.0** (current is 59.5.0, per the session
+   startup notice). `vercel.ts` support postdates it, so a `vercel.ts` in this
+   repo today would most likely be ignored rather than honoured — and a config
+   file that is silently not read is worse than one in the older format that
+   demonstrably is.
+
+**To close it:** `npm i -D @vercel/config`, upgrade the CLI, port `vercel.json`
+to `vercel.ts`, delete the JSON. Verify by confirming the crons still appear
+under the project's Cron Jobs tab — a ported config that parses but registers no
+crons would look fine locally and quietly stop the whole refresh lane.
