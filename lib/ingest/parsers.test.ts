@@ -21,6 +21,11 @@ import {
   parseTermLabel,
 } from "./parsers/bulletin";
 import { isSectionTombstone, parseSectionDetail } from "./parsers/section-detail";
+import {
+  calendarYearFor,
+  parseAcademicCalendar,
+  termCodeFromHeading,
+} from "./parsers/academic-calendar";
 import { parseSubjectIndex } from "./parsers/subject-index";
 import { parseSubjectPage, parseSubjectPageNotes } from "./parsers/subject-page";
 import {
@@ -55,6 +60,7 @@ const SUBJECT_HTML = fixture("doc-subject-COMS-Fall2026.html");
 const SECTION_HTML = fixture("doc-section-COMS4113-001.html");
 const BULLETIN_HTML = fixture("bulletin-cs.html");
 const ROOT_HTML = fixture("doc-root.html");
+const CALENDAR_HTML = fixture("bulletin-academic-calendar.html");
 
 const FALL_2026 = "20263";
 
@@ -869,5 +875,119 @@ describe("parseBulletinCourseBlocks — the prose the directory never publishes"
   it("covers most of the department", () => {
     expect(courses.length).toBeGreaterThan(100);
     expect(courses.filter((course) => course.description).length).toBeGreaterThan(90);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Academic calendar — Columbia College bulletin
+// ---------------------------------------------------------------------------
+
+describe("parseAcademicCalendar — Columbia College bulletin, 2026-2027", () => {
+  const CALENDAR_URL = "https://bulletin.columbia.edu/columbia-college/academic-calendar/";
+  const fall = parseAcademicCalendar(CALENDAR_HTML, { termCode: "20263", url: CALENDAR_URL });
+  const spring = parseAcademicCalendar(CALENDAR_HTML, { termCode: "20271", url: CALENDAR_URL });
+
+  const occursOn = (result: typeof fall, date: string) =>
+    result.milestones.filter((m) => m.occursAt.startsWith(date));
+
+  it("reads the month from the row above when the row leaves it blank", () => {
+    // The bulletin prints "August" once and leaves the cell empty for the rest
+    // of the month. Only the first row of August carries it, so every window
+    // below depends on the month carrying down.
+    const window = occursOn(fall, "2026-08-10");
+    expect(window).toHaveLength(1);
+    expect(window[0].kind).toBe("appointment_window");
+    expect(window[0].endsAt?.startsWith("2026-08-14")).toBe(true);
+  });
+
+  it("dates spring registration to the calendar year it actually happens in", () => {
+    // Registration for Spring 2027 runs in November and December 2026 and then
+    // again in January 2027. A single term-derived year puts one of those two
+    // groups a full year away from the truth.
+    expect(occursOn(spring, "2026-11-16")).toHaveLength(1);
+    expect(occursOn(spring, "2027-01-04")).toHaveLength(1);
+    expect(occursOn(spring, "2027-01-04")[0].endsAt?.startsWith("2027-01-15")).toBe(true);
+  });
+
+  it("keeps a deadline in its own term when the text mentions another one", () => {
+    // "End of Change of Program period ... Last day to uncover letter grade for
+    // Fall 2026 course taken Pass/D/Fail" is a SPRING deadline that names Fall.
+    const springDeadline = occursOn(spring, "2027-01-29").filter(
+      (m) => m.kind === "add_drop_deadline",
+    );
+    expect(springDeadline).toHaveLength(1);
+    expect(occursOn(fall, "2027-01-29")).toHaveLength(0);
+
+    // Its Fall counterpart names "Spring or Summer 2026" and must stay in Fall.
+    expect(occursOn(fall, "2026-09-18").some((m) => m.kind === "add_drop_deadline")).toBe(true);
+  });
+
+  it("files registration under the term being registered for, not the section it sits in", () => {
+    // April 2027 opens Fall 2027 registration but is printed in the Spring 2027
+    // section. Neither term in scope should claim it.
+    expect(occursOn(spring, "2027-04-12")).toHaveLength(0);
+    expect(occursOn(fall, "2027-04-12")).toHaveLength(0);
+    expect(parseAcademicCalendar(CALENDAR_HTML, { termCode: "20273" }).milestones).toHaveLength(1);
+  });
+
+  it("records the first day of classes for both terms", () => {
+    expect(occursOn(fall, "2026-09-08").some((m) => m.kind === "term_start")).toBe(true);
+    expect(occursOn(spring, "2027-01-19").some((m) => m.kind === "term_start")).toBe(true);
+  });
+
+  it("reports the first and last day of instruction for the .ics recurrence", () => {
+    // The per-season fallback in lib/schedule/term-dates.ts opens Fall on
+    // September 2 and Spring on January 20. Both are wrong here, in opposite
+    // directions: a phantom first week for Fall, a missing first Tuesday for
+    // Spring.
+    expect(fall.termStartsOn).toBe("2026-09-08");
+    expect(fall.termEndsOn).toBe("2026-12-14");
+    expect(spring.termStartsOn).toBe("2027-01-19");
+    expect(spring.termEndsOn).toBe("2027-05-03");
+  });
+
+  it("withholds term bounds from a whole-page parse", () => {
+    // Without a term filter the page covers an academic year, and pairing one
+    // term's first day with another's last would bound a recurrence across two
+    // semesters.
+    const wholePage = parseAcademicCalendar(CALENDAR_HTML, { url: CALENDAR_URL });
+    expect(wholePage.termStartsOn).toBeUndefined();
+    expect(wholePage.termEndsOn).toBeUndefined();
+  });
+
+  it("stamps every milestone with the page it came from", () => {
+    expect(fall.milestones.length).toBeGreaterThan(0);
+    expect(fall.milestones.every((m) => m.sourceUrl === CALENDAR_URL)).toBe(true);
+  });
+});
+
+describe("termCodeFromHeading", () => {
+  it("prefers a season adjacent to a year over the first season in the heading", () => {
+    // The bulletin's August table is titled "Late Summer Dates and Deadlines
+    // related to the Fall 2026 term". Scanning for the first season and the
+    // first year independently reads that as Summer 2026.
+    expect(termCodeFromHeading("Late Summer Dates and Deadlines related to the Fall 2026 term")).toBe(
+      "20263",
+    );
+    expect(termCodeFromHeading("Fall Term 2026")).toBe("20263");
+    expect(termCodeFromHeading("Spring Term 2027")).toBe("20271");
+    expect(termCodeFromHeading("2026 Fall")).toBe("20263");
+    expect(termCodeFromHeading("Academic Calendar")).toBeNull();
+  });
+});
+
+describe("calendarYearFor", () => {
+  it("splits an academic year at August for fall and spring terms", () => {
+    expect(calendarYearFor("20263", 8)).toBe(2026);
+    expect(calendarYearFor("20263", 1)).toBe(2027);
+    expect(calendarYearFor("20271", 11)).toBe(2026);
+    expect(calendarYearFor("20271", 1)).toBe(2027);
+  });
+
+  it("leaves summer inside its own calendar year", () => {
+    // Summer 2027 runs May-August 2027; the academic-year split would push its
+    // own months into 2028.
+    expect(calendarYearFor("20262", 5)).toBe(2026);
+    expect(calendarYearFor("20262", 8)).toBe(2026);
   });
 });

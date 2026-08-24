@@ -196,11 +196,13 @@ export async function loadCourseSeatHistory(args: {
 /**
  * Registration milestones for a term.
  *
- * Empty today, and that is a known upstream problem rather than a bug here:
- * registrar.columbia.edu answers server-side requests with a 403, so
- * `registration_milestones` has never been populated (.plans/BLOCKERS.md #4).
- * The chart draws without annotations, which is the documented degradation.
- * This reader exists so that the day a source appears, nothing else changes.
+ * Populated from the Columbia College bulletin's academic calendar, which
+ * publishes the same dates the registrar does without the bot challenge that
+ * made the registrar unreachable (.plans/BLOCKERS.md #4).
+ *
+ * Still returns an empty list rather than throwing for a term with no calendar
+ * ingested — every term before Fall 2026 is in that position, and an
+ * annotation layer must not be able to take the chart down.
  */
 export async function getRegistrationMilestones(
   termCode: TermCode,

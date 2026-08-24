@@ -206,6 +206,21 @@ export interface ParsedSubjectIndex {
  */
 export interface ParsedAcademicCalendar {
   termCode: TermCode | null;
+  /**
+   * First and last day of instruction, `YYYY-MM-DD`, when the calendar names
+   * them — the bounds an `.ics` recurrence repeats between.
+   *
+   * These are separate fields rather than milestone kinds because
+   * `registration_milestone_kind` has no member for the end of a term and its
+   * TypeScript union is owned elsewhere. Recognising "last day of classes" is
+   * keyword work either way, so it happens here with the rest of it rather
+   * than being pushed into SQL.
+   *
+   * Only populated for a single-term parse, since a page covering an academic
+   * year would otherwise mix one term's start with another's end.
+   */
+  termStartsOn?: string;
+  termEndsOn?: string;
   milestones: {
     kind: string;
     label: string;

@@ -34,44 +34,56 @@ unrated" defaulted ON so unreviewed courses never vanish. To turn data on later:
 - Reddit — needs `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` / `REDDIT_USER_AGENT`
 - Claude extraction — needs `ANTHROPIC_API_KEY` (heuristic extractor is default)
 
-### 4. **BLOCKING for spec §10 registration windows** — registrar.columbia.edu returns 403
-`https://registrar.columbia.edu/content/academic-calendar` refuses server-side
-requests (403 from a WAF, with both a polite UA and a browser UA). The SAS API
-alternative `/v1/termcalendars` returns 401 per `vergil_api_spec.md:342`.
+### 4. RESOLVED — registration milestones are in, from the bulletin
+`registration_milestones` holds 19 rows: 11 for Fall 2026, 8 for Spring 2027,
+ingested through the normal crawl lane (job → parse → quarantine →
+`ingest_academic_calendar`), not seeded by hand.
 
-Consequence: `registration_milestones` stays empty, so
-  - the seat-history chart renders without its milestone annotations (§13), and
-  - the 30-second registration tier never activates; watched subjects escalate
-    to the 2-minute hot tier instead (§10).
+**What was actually blocking.** Nothing about the data. This was recorded as
+"registrar.columbia.edu returns 403 / is behind a Cloudflare challenge", which
+was true and stayed true — that host is still not fetched, and the bot
+challenge is still not evaded. But the requirement was never "fetch that URL",
+it was "know when registration opens", and Columbia publishes those dates in
+more than one place. `bulletin.columbia.edu/columbia-college/academic-calendar/`
+answers a plain request with the full 2026-2027 calendar, and the crawler
+already talks to that host.
 
-This is the documented degradation path, not a break — refresh slows, it does
-not stop. The parser (`lib/ingest/parsers/academic-calendar.ts`) and the writer
-(`ingest_academic_calendar`) are both built and tested, so the moment a source
-exists it is one job-enqueue away.
+That makes three blockers in a row (#12, #17, this one) filed against a
+specific tool or URL rather than against the information being sought. The
+question that unstuck all three: *what do I actually need to know, and who
+else knows it?*
 
-Three ways to unblock, in order of preference:
-1. Paste the Fall 2026 / Spring 2027 registration dates and I will seed
-   `registration_milestones` directly. **Deliberately not guessed** — these
-   dates annotate charts and drive crawl escalation, and a fabricated date is
-   worse than an absent one.
-2. Pursue the CUIT read-only OAuth client (`vergil_api_spec.md` §7) which would
-   also unlock `/v1/termcalendars`.
-3. ~~Let a browser worker fetch it~~ — **ruled out, and not for a technical
-   reason.** Retested 2026-08-24 with a real headless Chrome, which gets past
-   the plain-`curl` 403 and then lands on this:
+**What it took.** The bulletin uses a third layout — a three-column
+Month / Day / Event grid — with three traps worth naming, each now covered by
+a contract test against the captured page:
 
-       Just a moment... Performing security verification
-       This website uses a security service to protect against malicious bots.
-       Ray ID: ... Performance and Security by Cloudflare
+1. **The month is sticky.** It is printed once per month and left blank on
+   every row after it, so a row read on its own is a bare day number with no
+   month. That parses as nothing, so the failure would have been an empty
+   table rather than a wrong one.
+2. **Headings name two seasons.** The August table is titled "Late Summer
+   Dates and Deadlines related to the Fall 2026 term" — first-season plus
+   first-year reads that as Summer 2026 and files every Fall registration date
+   under a term outside the crawl scope.
+3. **Rows mention terms they are not about.** "End of Change of Program
+   period ... Last day to uncover letter grade for Fall 2026 course" is a
+   *Spring* deadline. Only registration states its own term unambiguously, so
+   only registration re-attributes; everything else takes the heading's term.
 
-   That is not a misconfigured WAF refusing an unfamiliar user agent. It is an
-   interactive bot challenge, which is Columbia stating plainly that they do
-   not want this page fetched by automation. Getting past it would mean
-   defeating an anti-bot control, and that is out of scope on principle rather
-   than on capability — a line worth keeping even though the page itself is
-   public and a student can read it in one click.
+**What it unlocked beyond the annotations.** The calendar also names the first
+and last day of instruction, so `terms.starts_on` / `ends_on` are populated for
+both live terms (Fall 2026: Sep 8 – Dec 14; Spring 2027: Jan 19 – May 3). Those
+had been null since the schema was written, which meant `.ics` export fell back
+to a per-season month/day shape — Fall opening September 2 against a real
+September 8 (a phantom first week of meetings) and Spring opening January 20
+against a real January 19 (a dropped first Tuesday).
 
-   Option 1 stays the cheap fix: the dates pasted in once, seeded directly.
+**Still open, smaller:** the 30-second registration tier reads
+`RegistrationWindow[]`, and nothing yet loads those from
+`registration_milestones` into the scheduler — the windows exist in the
+database but the escalation path is not wired to them. Watched subjects run on
+the 2-minute hot tier meanwhile, which is the same documented degradation as
+before, now for a narrower reason.
 
 ---
 

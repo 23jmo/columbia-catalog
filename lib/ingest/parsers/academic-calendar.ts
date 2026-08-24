@@ -10,13 +10,18 @@
  *
  * ── Access ─────────────────────────────────────────────────────────────────
  *
- * `registrar.columbia.edu` currently returns 403 to server-side requests and
- * the SAS `/v1/termcalendars` endpoint requires credentials we do not hold, so
- * nothing enqueues an `academic_calendar` job today (see `.plans/BLOCKERS.md`).
- * This parser exists anyway, fully tested against synthetic fixtures of both
- * layouts the registrar has historically used, because the alternative — an
- * unimplemented member of `ParserRegistry` — is a runtime hole that only shows
- * up the day access is granted.
+ * `registrar.columbia.edu` sits behind an interactive Cloudflare challenge and
+ * the SAS `/v1/termcalendars` endpoint requires credentials we do not hold.
+ * Neither is the only place Columbia publishes the calendar: the Columbia
+ * College bulletin carries the same dates, on a host the crawler already talks
+ * to, and answers a plain request. That is the source in use.
+ *
+ * The lesson is worth keeping around — the blocker was recorded against a URL
+ * when the requirement was a fact, and the fact had another publisher.
+ *
+ * Three layouts are handled: the registrar's date/description table, its
+ * definition-list variant, and the bulletin's three-column Month / Day / Event
+ * grid, which is the one live today.
  *
  * ── Parsing posture ────────────────────────────────────────────────────────
  *
@@ -35,7 +40,7 @@ import { parse, type HTMLElement } from "node-html-parser";
 import type { TermCode } from "@/lib/types";
 import type { ParsedAcademicCalendar } from "@/lib/crawler/contracts";
 
-import { cleanText, campusWallClockToIso } from "./shared";
+import { cleanText, campusWallClockToIso, normalizeLabel } from "./shared";
 
 /** The four members of `registration_milestone_kind`. */
 export type MilestoneKind =
@@ -48,6 +53,14 @@ export type MilestoneKind =
  * Keyword tests, most specific first. Order matters: "last day to add or drop"
  * contains "add", and "registration appointments begin" contains "registration".
  */
+/**
+ * The row that bounds the term. Columbia prints it as "Last day of classes",
+ * usually followed by several grading deadlines, which is why it classifies as
+ * `add_drop_deadline` — that is correct for the annotation and useless for the
+ * `.ics` recurrence, so the end date is read separately.
+ */
+const LAST_DAY_OF_CLASSES = /\blast day of (classes|instruction)\b/i;
+
 const KIND_RULES: { kind: MilestoneKind; test: RegExp }[] = [
   { kind: "add_drop_deadline", test: /\b(last day|deadline).{0,40}\b(add|drop|change)\b/i },
   { kind: "add_drop_deadline", test: /\badd[/\s-]*drop\b.{0,30}\b(deadline|ends?|closes?)\b/i },
@@ -153,16 +166,63 @@ function toIso(year: number, month: number, day: number, endOfDay = false): stri
 
 const SEASON_DIGIT: Record<string, string> = { spring: "1", summer: "2", fall: "3" };
 
-/** "Fall 2026", "Fall Term 2026", "2026 Fall" → "20263". */
+function seasonDigit(season: string): string | undefined {
+  const key = season.toLowerCase() === "autumn" ? "fall" : season.toLowerCase();
+  return SEASON_DIGIT[key];
+}
+
+/**
+ * "Fall 2026", "Fall Term 2026", "2026 Fall" → "20263".
+ *
+ * A season adjacent to a year wins over a loose scan of the whole heading,
+ * because real headings mention more than one season. Columbia College titles
+ * its August table "Late Summer Dates and Deadlines related to the Fall 2026
+ * term" — first-season-plus-first-year reads that as Summer 2026 and files
+ * every Fall registration date under a term that does not exist in our crawl
+ * scope. The loose scan is kept as a fallback for headings that separate the
+ * two with words we do not anticipate.
+ */
 export function termCodeFromHeading(heading: string): TermCode | null {
   const text = cleanText(heading ?? "");
   if (!text) return null;
+
+  const adjacent =
+    /\b(spring|summer|fall|autumn)\s+(?:term\s+)?(20\d{2})\b/i.exec(text) ??
+    /\b(20\d{2})\s+(spring|summer|fall|autumn)\b/i.exec(text);
+  if (adjacent) {
+    const [season, year] = /^\d/.test(adjacent[1])
+      ? [adjacent[2], adjacent[1]]
+      : [adjacent[1], adjacent[2]];
+    const digit = seasonDigit(season);
+    if (digit) return `${year}${digit}` as TermCode;
+  }
+
   const season = /\b(spring|summer|fall|autumn)\b/i.exec(text);
   const year = /\b(20\d{2})\b/.exec(text);
   if (!season || !year) return null;
-  const key = season[1].toLowerCase() === "autumn" ? "fall" : season[1].toLowerCase();
-  const digit = SEASON_DIGIT[key];
+  const digit = seasonDigit(season[1]);
   return digit ? `${year[1]}${digit}` : null;
+}
+
+/**
+ * The calendar year a month belongs to, for a page that prints month names but
+ * not years — Columbia College's bulletin calendar being the case in hand.
+ *
+ * An academic year runs August through July, so within one term's section the
+ * autumn months belong to the earlier calendar year and everything from
+ * January belongs to the later one. Spring 2027 registration happens in
+ * November 2026; Fall 2026 grades are due in January 2027. Both fall out of
+ * the same rule once the academic year's opening year is known.
+ *
+ * Summer is exempt: it sits wholly inside one calendar year, so the split
+ * would push its own months into the year after it.
+ */
+export function calendarYearFor(term: TermCode, month: number): number {
+  const termYear = Number(term.slice(0, 4));
+  const season = term.slice(4);
+  if (season === "2") return termYear;
+  const academicStartYear = season === "1" ? termYear - 1 : termYear;
+  return month >= 8 ? academicStartYear : academicStartYear + 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -182,6 +242,42 @@ export interface AcademicCalendarOptions {
  * scope comes from the nearest preceding heading, so one page covering several
  * terms yields correctly attributed milestones for each.
  */
+/**
+ * The term a row is *about*, when it says so, versus the terms it merely
+ * mentions — which is most of them. Deadline rows reference neighbouring terms
+ * routinely: Columbia College's September 18 row ends "Last day to uncover
+ * grade for Spring or Summer 2026 course taken Pass/D/Fail", and its January 29
+ * row ends "...for Fall 2026 course". Treating any named term as the row's own
+ * subject files both under the wrong term — and because the wrong term is
+ * usually outside the crawl scope, the row is dropped rather than misdated, so
+ * the damage shows up as a short calendar rather than a wrong one.
+ *
+ * Only registration states its own term unambiguously, in either word order,
+ * so only registration re-attributes.
+ */
+function registrationTermInLabel(label: string): TermCode | null {
+  const text = cleanText(label);
+  const match =
+    /\bregistration\s+(?:for\s+)?(?:the\s+)?(spring|summer|fall|autumn)\s+(20\d{2})/i.exec(text) ??
+    /\b(spring|summer|fall|autumn)\s+(20\d{2})\s+(?:\w+\s+){0,2}registration\b/i.exec(text);
+  if (!match) return null;
+  const digit = seasonDigit(match[1]);
+  return digit ? (`${match[2]}${digit}` as TermCode) : null;
+}
+
+/**
+ * True for the three-column Month / Day / Event layout the Columbia College
+ * bulletin uses, where the date is split across two cells and the month is
+ * printed once per month rather than once per row.
+ */
+function isMonthDayTable(table: HTMLElement): boolean {
+  const headers = table.querySelectorAll("th").map((cell) => normalizeLabel(cell.text));
+  if (headers.length < 2) return false;
+  const month = headers.indexOf("month");
+  const day = headers.indexOf("day");
+  return month === 0 && day === 1;
+}
+
 export function parseAcademicCalendar(
   html: string,
   options: AcademicCalendarOptions = {},
@@ -197,8 +293,17 @@ export function parseAcademicCalendar(
 
   const seen = new Set<string>();
   let currentTerm: TermCode | null = options.termCode ?? null;
+  let termStartsOn: string | null = null;
+  let termEndsOn: string | null = null;
 
-  const push = (term: TermCode | null, label: string, dateText: string, audience: string | null) => {
+  const push = (
+    term: TermCode | null,
+    label: string,
+    dateText: string,
+    audience: string | null,
+    /** Exact year, when the layout gives the month and the term gives the rest. */
+    yearHint?: number,
+  ) => {
     if (!term) return;
     if (options.termCode && term !== options.termCode) return;
 
@@ -208,13 +313,26 @@ export function parseAcademicCalendar(
     const year = Number(term.slice(0, 4));
     // A Spring term's calendar dates fall in the previous calendar year for
     // anything before January — registration for Spring 2027 happens in 2026.
-    const parsed = parseCalendarDate(dateText, term.endsWith("1") ? year - 1 : year);
+    const fallbackYear = yearHint ?? (term.endsWith("1") ? year - 1 : year);
+    const parsed = parseCalendarDate(dateText, fallbackYear);
     if (!parsed) return;
 
     const cleanLabel = cleanText(label).slice(0, 200);
     const dedupe = `${term}|${kind}|${cleanLabel}`;
     if (seen.has(dedupe)) return;
     seen.add(dedupe);
+
+    // Campus midnight is 04:00/05:00Z on the SAME day, so the UTC prefix of a
+    // point-in-time milestone is already the right calendar day. Windows are
+    // stamped 23:59:59 and would roll over, which is why only `occursAt` is
+    // read here and only for rows that bound the term.
+    if (options.termCode) {
+      const day = parsed.startsAt.slice(0, 10);
+      if (kind === "term_start" && (!termStartsOn || day < termStartsOn)) termStartsOn = day;
+      if (LAST_DAY_OF_CLASSES.test(cleanLabel) && (!termEndsOn || day > termEndsOn)) {
+        termEndsOn = day;
+      }
+    }
 
     result.milestones.push({
       kind,
@@ -239,6 +357,53 @@ export function parseAcademicCalendar(
     if (tag === "table") {
       const caption = node.querySelector("caption");
       const scoped = (caption && termCodeFromHeading(caption.text)) || currentTerm;
+
+      if (isMonthDayTable(node)) {
+        // The month cell is populated on the first row of each month and left
+        // empty on every row after it, so it has to carry down. Reading rows
+        // independently yields a bare day number with no month, which parses
+        // as nothing — the whole table would come back empty rather than wrong,
+        // which is exactly the kind of silence that looks like a dead source.
+        let stickyMonth = "";
+        for (const row of node.querySelectorAll("tr")) {
+          const cells = row.querySelectorAll("td");
+          if (cells.length < 3) continue;
+
+          const monthCell = cleanText(cells[0].text);
+          if (monthCell) stickyMonth = monthCell;
+          const monthNumber = MONTHS[stickyMonth.toLowerCase()];
+          if (!monthNumber) continue;
+
+          const dayCell = cleanText(cells[1].text);
+          const label = cleanText(cells[2].text);
+          if (!dayCell || !label) continue;
+
+          // A window can cross a month boundary ("30–September 3"), in which
+          // case the day cell names the second month itself.
+          const leading = /^([A-Za-z]{3,9})\.?\s+\d/.exec(dayCell);
+          const dateText =
+            leading && MONTHS[leading[1].toLowerCase()] ? dayCell : `${stickyMonth} ${dayCell}`;
+
+          // Two different terms are in play and they are not interchangeable.
+          // The heading says where in the calendar we are, which is what dates
+          // the row ("April" under Spring Term 2027 means April 2027). The row
+          // itself says which term it is *about*, and a row can advertise a
+          // different one: "Online registration for Fall 2027" appears in the
+          // spring section. Dating it by the row's term would put it in 2028;
+          // filing it under the heading's term would annotate the Spring 2027
+          // chart with a window that has nothing to do with Spring 2027. So
+          // the year comes from the heading and the attribution from the label.
+          const attributed = registrationTermInLabel(label) ?? scoped;
+          push(
+            attributed,
+            label,
+            dateText,
+            null,
+            scoped ? calendarYearFor(scoped, monthNumber) : undefined,
+          );
+        }
+        continue;
+      }
 
       for (const row of node.querySelectorAll("tr")) {
         const cells = row.querySelectorAll("td");
@@ -268,5 +433,7 @@ export function parseAcademicCalendar(
   }
 
   if (!result.termCode && currentTerm) result.termCode = currentTerm;
+  if (termStartsOn) result.termStartsOn = termStartsOn;
+  if (termEndsOn) result.termEndsOn = termEndsOn;
   return result;
 }

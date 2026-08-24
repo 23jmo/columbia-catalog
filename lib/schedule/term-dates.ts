@@ -2,13 +2,17 @@
  * Schedule lane — term start/end bounds.
  *
  * The `.ics` export needs a real first and last day of instruction, otherwise a
- * weekly recurrence has nothing to repeat between. `Term` in `lib/types` already
- * carries optional `startsOn` / `endsOn`; nothing populates them yet because the
- * `academic_calendar` crawl job has not landed.
+ * weekly recurrence has nothing to repeat between. `Term.startsOn` / `endsOn`
+ * now carry them for any term whose academic calendar has been ingested, and
+ * `termBounds()` prefers those whenever the caller hands over a hydrated
+ * `Term`.
  *
- * TODO(ingest): when the academic-calendar parser lands, delete `FALLBACK_BOUNDS`
- * and read `Term.startsOn` / `Term.endsOn`. `termBounds()` already prefers a
- * supplied `Term`, so that change is a one-line deletion here and nothing else.
+ * `FALLBACK_BOUNDS` stays for the terms that have no calendar — every term
+ * before Fall 2026 — and `isAuthoritative` is what tells the two apart. It is
+ * a shape, not a date, and the gap is big enough to matter: it opens Fall on
+ * September 2 against a real September 8, and Spring on January 20 against a
+ * real January 19. Off in one direction that invents a week of meetings, and
+ * in the other that drops a class's first session.
  *
  * Dates are plain `YYYY-MM-DD` local calendar days. No timezone maths: a class
  * that meets at 10:10am meets at 10:10am wherever the calendar app is opened.
