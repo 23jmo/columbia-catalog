@@ -78,6 +78,26 @@ export interface CourseSelector {
   include?: BulletinCode[];
   /** Explicit codes that never match, even if the shape says they do. */
   exclude?: BulletinCode[];
+  /**
+   * Ids of groups in the SAME program whose matched courses cannot also count
+   * here.
+   *
+   * This is what stops an elective block from being satisfied by the courses
+   * that already satisfied the core. A CS major's "any four COMS courses at the
+   * 3000 level or above" is written in the Bulletin as a separate line of a
+   * curriculum table that sums to a degree total — so reading it as "any four,
+   * including the four you were already required to take" makes the requirement
+   * vacuous and the degree twelve points shorter than it is published to be.
+   *
+   * Crucially this excludes what a group **actually consumed**, not everything
+   * it could have drawn from. "Choose four of these twenty-one" consumes four;
+   * a student who takes six still has two left over, and those two legitimately
+   * count as electives. A static `exclude` list of all twenty-one could not
+   * express that, which is why this is a group reference and not more codes.
+   *
+   * Resolved in a single second pass, not to a fixpoint — see `evaluateProgram`.
+   */
+  excludeGroups?: string[];
 }
 
 export type RequirementRule =

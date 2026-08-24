@@ -32,7 +32,8 @@
  */
 
 import type { RequirementFlags } from "@/lib/types";
-import { formatCourseId, padSubjectCode, toCourseId, type CourseId } from "./code";
+import { formatCourseId, toCourseId, type CourseId } from "./code";
+import { compileSelector, matchesCompiledSelector } from "./selector";
 import {
   verificationOf,
   type CourseSelector,
@@ -99,54 +100,21 @@ function toMatch(entry: TakenCourseInput, facts: CourseFacts | undefined): Group
 /**
  * Does one course match a selector?
  *
- * `exclude` is checked before everything, and `include` after the shape, so an
- * explicitly listed course still matches a selector whose subject/level bounds
- * it falls outside — which is how the Bulletin's "…and COMS W3902" tails work.
+ * The predicate itself lives in `./selector.ts` because the SAME question is
+ * asked in the other direction by `./candidates.ts` ("what would satisfy this
+ * rule?"), and two implementations of it would eventually disagree — leaving
+ * the audit refusing to count a course the recommender had just recommended.
+ * This is the adapter from the audit's input shape onto that one definition.
  */
 function matchesSelector(
   entry: TakenCourseInput,
   facts: CourseFacts | undefined,
   select: CourseSelector,
 ): boolean {
-  const excluded = new Set(
-    (select.exclude ?? []).map(toCourseId).filter((id): id is string => id !== null),
+  return matchesCompiledSelector(
+    { courseId: entry.courseId, requirementFlags: facts?.requirementFlags ?? null },
+    compileSelector(select),
   );
-  if (excluded.has(entry.courseId)) return false;
-
-  const included = new Set(
-    (select.include ?? []).map(toCourseId).filter((id): id is string => id !== null),
-  );
-  if (included.has(entry.courseId)) return true;
-
-  // A selector with nothing but `include` matches only its listed courses.
-  const hasShape =
-    select.subjects != null || select.numberRange != null || select.flag != null;
-  if (!hasShape) return false;
-
-  if (select.subjects) {
-    const wanted = new Set(select.subjects.map(padSubjectCode));
-    const subject = /^([A-Z]{2,6}_*)/.exec(entry.courseId)?.[1];
-    if (!subject || !wanted.has(subject)) return false;
-  }
-
-  if (select.numberRange) {
-    const digits = /(\d{4})/.exec(entry.courseId)?.[1];
-    if (!digits) return false;
-    const number = Number(digits);
-    const [low, high] = select.numberRange;
-    if (number < low || number > high) return false;
-  }
-
-  if (select.flag) {
-    // No course record means no flag. A transcript-only course we have never
-    // seen in the catalog cannot be proved to satisfy a flagged requirement,
-    // and claiming otherwise is exactly the false green this module exists to
-    // avoid.
-    if (!facts) return false;
-    if (facts.requirementFlags[select.flag] !== true) return false;
-  }
-
-  return true;
 }
 
 /**
@@ -305,11 +273,89 @@ function statusOf(completed: number, required: number): GroupResult["status"] {
   return "unmet";
 }
 
+/**
+ * Group ids this group's rule refuses to double-count with.
+ *
+ * Only the two open-ended rule kinds carry a selector, so only they can name
+ * one. An `all_of` that overlapped another group would be a transcription
+ * error rather than a rule to model.
+ */
+function excludedGroupIds(group: RequirementGroup): string[] {
+  const rule = group.rule;
+  if (rule.kind !== "n_matching" && rule.kind !== "points_matching") return [];
+  return rule.select.excludeGroups ?? [];
+}
+
 export function evaluateProgram(
   program: Program,
   options: EvaluateOptions,
 ): ProgramResult {
-  const groups = program.groups.map((group) => evaluateGroup(group, options));
+  const firstPass = program.groups.map((group) => evaluateGroup(group, options));
+
+  /*
+   * Second pass for groups that exclude another group's matches.
+   *
+   * Needed because the first pass evaluates every group against the full
+   * record independently, so a course required by name in one group is still
+   * sitting in the pool when an elective block goes looking. The fix is not to
+   * make groups aware of each other — that would turn an order-independent
+   * evaluation into an order-dependent one — but to run them again with the
+   * courses their named predecessors actually consumed removed.
+   *
+   * ONE pass, deliberately, not a fixpoint. Two groups that exclude each other
+   * would oscillate, and no real curriculum expresses a requirement that way; a
+   * single pass terminates, and its result is the honest one for the shape that
+   * does occur — a later block excluding earlier, named requirements.
+   */
+  const consumed = new Map<string, Set<CourseId>>();
+  for (const result of firstPass) {
+    consumed.set(result.group.id, new Set(result.matched.map((match) => match.courseId)));
+  }
+
+  const groups: GroupResult[] = [];
+  for (const [index, group] of program.groups.entries()) {
+    const excludeGroups = excludedGroupIds(group);
+    if (excludeGroups.length === 0) {
+      groups.push(firstPass[index]);
+      continue;
+    }
+
+    const spent = new Set<CourseId>();
+    for (const groupId of excludeGroups) {
+      for (const courseId of consumed.get(groupId) ?? []) spent.add(courseId);
+    }
+    if (spent.size === 0) {
+      groups.push(firstPass[index]);
+      continue;
+    }
+
+    const result = evaluateGroup(group, {
+      ...options,
+      taken: options.taken.filter((entry) => !spent.has(entry.courseId)),
+    });
+    groups.push(result);
+
+    /*
+     * Write the corrected match back before moving on, so a later group
+     * excluding this one sees what it ACTUALLY took rather than its first-pass
+     * guess.
+     *
+     * This is what makes two sibling elective slots work. The CS minor has two
+     * "any 3000-level computer science course" groups, and in the first pass
+     * both grab the same course — the lowest-numbered one the student holds,
+     * which is usually a course a named requirement already claimed. Slot two
+     * must exclude what slot one settled on after ITS own exclusions were
+     * applied; excluding the first-pass value would hand both slots the same
+     * course again and report a minor complete a course early.
+     *
+     * The loop runs in declaration order, so a group may only rely on groups
+     * declared before it. A forward reference still resolves — to the first-pass
+     * value — which is why the field is documented as one pass and not a
+     * fixpoint. Curricula list prerequisites before electives, so this ordering
+     * is the natural one rather than a constraint anyone has to remember.
+     */
+    consumed.set(group.id, new Set(result.matched.map((match) => match.courseId)));
+  }
 
   let weighted = 0;
   let weight = 0;
