@@ -15,7 +15,8 @@
     "check": "npm run typecheck && npm run lint && npm run test",
     "seed:meetings": "tsx scripts/enrich-seed-meetings.ts",
     "profile:search": "tsx scripts/profile-search-load.ts",
-    "dump:program": "tsx --env-file=.env.local scripts/dump-program.ts"
+    "dump:program": "tsx --env-file=.env.local scripts/dump-program.ts",
+    "verify:model": "tsx --env-file=.env.local scripts/verify-model.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.46",

@@ -32,7 +32,7 @@
  */
 
 import { createOpenAI } from "@ai-sdk/openai";
-import { ToolLoopAgent, isStepCount } from "ai";
+import { ToolLoopAgent, isStepCount, type LanguageModel } from "ai";
 
 import { buildAgentTools, type AgentToolContext } from "./tools";
 
@@ -96,7 +96,7 @@ export function agentModelId(): string {
  * switch it — the exact failure mode of "I added the key and nothing
  * happened".
  */
-function resolveModel() {
+export function resolveAgentModel(): LanguageModel {
   const modelId = agentModelId();
   if (!usingOpenAI()) return modelId;
   // Explicit key rather than the ambient default: this branch is only reached
@@ -205,7 +205,7 @@ honest answer is "only two of these are worth your time", say two.
  */
 export function buildAgent(context: AgentToolContext) {
   return new ToolLoopAgent({
-    model: resolveModel(),
+    model: resolveAgentModel(),
     instructions: INSTRUCTIONS,
     tools: buildAgentTools(context),
     stopWhen: isStepCount(MAX_STEPS),
