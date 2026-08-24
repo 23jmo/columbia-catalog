@@ -56,8 +56,22 @@ Three ways to unblock, in order of preference:
    worse than an absent one.
 2. Pursue the CUIT read-only OAuth client (`vergil_api_spec.md` §7) which would
    also unlock `/v1/termcalendars`.
-3. Let a browser worker fetch it — but registrar.columbia.edu almost certainly
-   sends no CORS header either, so this likely fails the same way.
+3. ~~Let a browser worker fetch it~~ — **ruled out, and not for a technical
+   reason.** Retested 2026-08-24 with a real headless Chrome, which gets past
+   the plain-`curl` 403 and then lands on this:
+
+       Just a moment... Performing security verification
+       This website uses a security service to protect against malicious bots.
+       Ray ID: ... Performance and Security by Cloudflare
+
+   That is not a misconfigured WAF refusing an unfamiliar user agent. It is an
+   interactive bot challenge, which is Columbia stating plainly that they do
+   not want this page fetched by automation. Getting past it would mean
+   defeating an anti-bot control, and that is out of scope on principle rather
+   than on capability — a line worth keeping even though the page itself is
+   public and a student can read it in one click.
+
+   Option 1 stays the cheap fix: the dates pasted in once, seeded directly.
 
 ---
 
@@ -124,11 +138,36 @@ storing a Vergil/SAS bearer token, so I have not attempted it.
 4. **Ship the schedule as course-list-only for current terms** — no grid, no
    conflicts. Least work, worst product.
 
-**What I am doing meanwhile:** proceeding with the Fall 2026 + Spring 2027 crawl
-you asked for, since everything except meeting times is present and correct. The
-schedule UI will be built to render a section with unknown times honestly rather
-than pretending it has them. Say the word on option 1 and it is a crawl-scope
-change plus a fallback query, not a redesign.
+### Option 1 SHIPPED — and here is what it actually recovers
+
+Historical inference is built and live, not waiting on a decision.
+`lib/db/typical-meetings.ts` holds the fallback, and the schedule grid, the
+home plan snapshot and the calendar shell all consume it with an explicit
+`historical` source tag. Nothing in that module can produce a bare `Meeting`
+that would be mistaken for a confirmed one, and hard conflicts are never raised
+from it — two historical patterns overlapping is "these usually clash", which
+is a warning, not a claim about the actual timetable.
+
+Measured coverage for Fall 2026 (8,540 sections):
+
+| | sections | share |
+|---|---|---|
+| Confirmed times (Bulletin) | 1,500 | 17.6% |
+| Historical pattern available, labelled as such | 3,213 | 37.6% |
+| No time information at all | 3,827 | 44.8% |
+
+So **55% of Fall 2026 sections can be placed on a grid**, against 17.6% from
+the public directory alone. That is the whole value of option 1, and it is the
+honest ceiling: the remaining 3,827 are mostly professional-school sections
+that were never in the undergraduate Bulletin and have no prior term to borrow
+from, plus genuinely new courses. Spring 2027 has 0 confirmed times because
+the term is barely published yet.
+
+The 44.8% is not recoverable without Vergil (option 3). It is not a bug to be
+found later — it is the size of what Columbia stopped publishing.
+
+**Still worth pursuing:** option 3, read-only Vergil/CUIT access, which would
+take this to 100% and also unblock open item 4. It needs a human at Columbia.
 
 ---
 
