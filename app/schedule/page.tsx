@@ -29,7 +29,8 @@ import {
   ZONE_LABEL,
 } from "@/lib/constants";
 import { listPendingProposalsForViewer } from "@/lib/db/proposal-reads";
-import { ProposalReview } from "@/components/schedule/proposal-review";
+import { ProposalReview } from "@/components/proposals/proposal-review";
+import { isPlanKind } from "@/lib/mcp/proposals";
 import { partitionConflicts, type PlanAnalysisDetail } from "@/lib/schedule";
 import { cx } from "@/utils/cx";
 
@@ -48,10 +49,19 @@ export default async function SchedulePage({
   const useSamplePlan = params.demo === "1";
   const termCode = CURRENT_TERM;
 
-  const [snapshot, proposals] = await Promise.all([
+  const [snapshot, allProposals] = await Promise.all([
     loadPlanSnapshot({ termCode, useSamplePlan }),
     listPendingProposalsForViewer(),
   ]);
+
+  /*
+   * Only the plan kinds. A proposal to save a class is answered on `/saved`.
+   *
+   * One inbox rendered in two places would let the same card be accepted
+   * twice, and would put a decision about a shortlist on a page about a
+   * timetable.
+   */
+  const proposals = allProposals.filter((proposal) => isPlanKind(proposal.kind));
 
   return (
     <AppShell activeNav="schedule" contentClassName="flex min-h-0 flex-1 flex-col px-0 py-0 sm:px-0 sm:py-0 lg:px-0 lg:py-0">

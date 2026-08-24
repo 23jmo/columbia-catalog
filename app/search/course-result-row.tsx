@@ -17,6 +17,7 @@ import { InstructorLinks } from "@/components/instructor/instructor-link";
 import { REQUIREMENT_FILTERS } from "@/lib/constants";
 import type { CourseListItem, SectionListItem } from "@/lib/catalog-list-types";
 import { cx } from "@/utils/cx";
+import { BookmarkControls } from "@/components/bookmarks/bookmark-controls";
 
 /**
  * A single search result -- the section is the row.
@@ -219,6 +220,9 @@ export function CourseResultRow({
                 <th scope="col" className="py-1.5 pr-3 text-right font-medium">Cr</th>
                 <th scope="col" className="py-1.5 pr-3 font-medium">Instructor &amp; meeting</th>
                 <th scope="col" className="w-[10.5rem] py-1.5 font-medium">Enrollment</th>
+                <th scope="col" className="w-20 py-1.5">
+                  <span className="sr-only">Save</span>
+                </th>
                 <th scope="col" className="w-6 py-1.5">
                   <span className="sr-only">Open section</span>
                 </th>
@@ -230,6 +234,7 @@ export function CourseResultRow({
                   key={section.sectionId}
                   section={section}
                   courseTitle={title}
+                  courseCode={code}
                   isMatch={matched?.has(section.sectionId) ?? false}
                 />
               ))}
@@ -244,10 +249,12 @@ export function CourseResultRow({
 function SectionTableRow({
   section,
   courseTitle,
+  courseCode,
   isMatch,
 }: {
   section: SectionListItem;
   courseTitle: string;
+  courseCode: string;
   isMatch: boolean;
 }) {
   const meeting = formatSectionMeetings(section);
@@ -372,6 +379,24 @@ function SectionTableRow({
           enrollmentCount={section.enrollmentCount}
           enrollmentCap={section.enrollmentCap}
           waitlistCount={section.waitlistCount}
+        />
+      </td>
+
+      {/*
+        Saving lives here and NOT on the collapsed course header above.
+
+        A course row stands for up to 64 sections, and "save this course" would
+        have to pick one of them -- so expanding first is the price of the
+        bookmark meaning something exact. `relative z-10` lifts this cell out
+        from under the row's stretched link; without it every click on the star
+        would navigate to the course page instead.
+      */}
+      <td className="relative z-10 py-1.5">
+        <BookmarkControls
+          sectionId={section.sectionId}
+          sectionCode={section.sectionCode}
+          courseLabel={courseCode}
+          size="xs"
         />
       </td>
 
@@ -513,6 +538,28 @@ function SoleSectionRow({
           waitlistCount={section.waitlistCount}
           className="mt-0.5 w-24 shrink-0 sm:w-[10.5rem]"
         />
+
+        {/*
+          This row IS a section — it never expands, because there is nothing to
+          choose between — so the "expand before you can save" rule has nothing
+          to protect against here.
+
+          `w-20` is the table's Save column, for the same reason the meter above
+          carries the Enrollment column's width: a sole-section row and an
+          expanded section table have to line their controls up on one x, or
+          scanning down a page of results means re-finding the star per row.
+
+          `relative z-10` keeps it out from under the headline's stretched link.
+        */}
+        <span className="flex w-20 shrink-0 justify-center">
+          <BookmarkControls
+            sectionId={section.sectionId}
+            sectionCode={section.sectionCode}
+            courseLabel={code}
+            size="xs"
+            className="relative z-10"
+          />
+        </span>
 
         <RiArrowRightSLine
           aria-hidden

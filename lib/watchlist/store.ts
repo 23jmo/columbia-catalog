@@ -224,6 +224,41 @@ export async function toggleWatch(sectionId: string): Promise<void> {
   }
 }
 
+/**
+ * Drops watches locally, without a write.
+ *
+ * The database already did the delete: `watches` carries a composite foreign
+ * key into `bookmarks` with `on delete cascade`, so removing a bookmark takes
+ * its watch with it. This store has no way to hear about that — the cascade
+ * fires server-side and there is no realtime channel on `watches` — so the
+ * bookmark store tells it, and this reconciles the local view.
+ *
+ * Without it the bell keeps showing "on" for a section that has no watch row,
+ * and the next click tries to *delete* an already-deleted watch instead of
+ * creating one. That is the exact shape of "I turned alerts on and never got
+ * an email", which is the failure this feature cannot afford.
+ *
+ * Deliberately not exported as a general-purpose unwatch: it does not write,
+ * so calling it anywhere the row still exists would desync in the other,
+ * worse direction.
+ */
+export function forgetWatches(sectionIds: readonly string[]): void {
+  const watched = new Set(snapshot.watched);
+  let changed = false;
+
+  for (const sectionId of sectionIds) {
+    if (!watched.delete(sectionId)) continue;
+    changed = true;
+    nudgeCount(sectionId, -1);
+  }
+  if (!changed) return;
+
+  emit({ watched });
+  // The watched set shrank, so the realtime filter is now subscribing to
+  // sections nobody here is watching.
+  openRealtime();
+}
+
 function describe(cause: unknown): string {
   if (cause instanceof WatchNotAvailableError) return cause.message;
   return cause instanceof Error ? cause.message : String(cause);

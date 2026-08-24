@@ -5,8 +5,9 @@ import { RiRobot2Line, RiCheckLine, RiCloseLine } from "@remixicon/react";
 
 import { Button } from "@/components/base/buttons/button";
 import { getBrowserClient } from "@/lib/db/client";
-import type { Proposal } from "@/lib/mcp/proposals";
+import type { Proposal, ProposalKind } from "@/lib/mcp/proposals";
 import { planStore, PlanWriteDeniedError } from "@/lib/schedule";
+import { getBookmarkSnapshot, toggleBookmark } from "@/lib/bookmarks/store";
 
 /**
  * The human click that spec §16 makes the only source of authority.
@@ -30,6 +31,21 @@ import { planStore, PlanWriteDeniedError } from "@/lib/schedule";
  * proposal is spent — which is the right way round: a proposal is consumed by
  * being answered, not by succeeding.
  */
+
+/**
+ * What the card calls each kind.
+ *
+ * Spelled out rather than derived from the kind string, because "Save" and
+ * "Add" are genuinely different promises and a reader deciding whether to
+ * accept should not have to work out which list is about to change.
+ */
+const KIND_LABEL: Record<ProposalKind, string> = {
+  add_section: "Add to schedule",
+  remove_section: "Remove from schedule",
+  add_bookmark: "Save class",
+  remove_bookmark: "Remove saved class",
+};
+
 export function ProposalReview({ proposals }: { proposals: Proposal[] }) {
   const [pending, setPending] = useState(proposals);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -63,16 +79,34 @@ export function ProposalReview({ proposals }: { proposals: Proposal[] }) {
 
     if (accept) {
       try {
+        /*
+         * The proposal describes a diff; applying it is this click's job.
+         *
+         * Plan kinds and bookmark kinds go to different stores, and the
+         * `planId` non-null assertions below are safe because migration 0023
+         * added a CHECK constraint pairing kind with plan_id — a plan kind
+         * without a plan is not a row the database will hold.
+         */
         if (proposal.kind === "add_section") {
-          planStore.addSection(proposal.planId, proposal.sectionId);
+          planStore.addSection(proposal.planId!, proposal.sectionId);
+        } else if (proposal.kind === "remove_section") {
+          planStore.removeSection(proposal.planId!, proposal.sectionId);
         } else {
-          planStore.removeSection(proposal.planId, proposal.sectionId);
+          /*
+           * `toggleBookmark` flips; the proposal names an end state. So read
+           * first and only write if the two disagree — otherwise accepting
+           * "save COMS 4118 001" for a class the student already saved (quite
+           * likely, since they were looking at it) would silently unsave it.
+           */
+          const want = proposal.kind === "add_bookmark";
+          const saved = getBookmarkSnapshot().saved.has(proposal.sectionId);
+          if (saved !== want) await toggleBookmark(proposal.sectionId);
         }
       } catch (cause) {
         setError(
           cause instanceof PlanWriteDeniedError
             ? cause.message
-            : "Accepted, but the schedule could not be updated. The plan may have been deleted.",
+            : "Accepted, but the change could not be applied. Try it by hand.",
         );
       }
     }
@@ -94,8 +128,8 @@ export function ProposalReview({ proposals }: { proposals: Proposal[] }) {
       </div>
 
       <p className="text-caption-1-regular text-text-secondary">
-        Nothing below has been applied. An agent can propose a change to your schedule; only
-        you can make it.
+        Nothing below has been applied. An agent can propose a change to your schedule or
+        your saved classes; only you can make it.
       </p>
 
       <ul className="flex flex-col gap-2">
@@ -110,7 +144,7 @@ export function ProposalReview({ proposals }: { proposals: Proposal[] }) {
                 <p className="mt-0.5 text-caption-1-regular text-text-secondary">{proposal.note}</p>
               ) : null}
               <p className="mt-1 text-caption-2-regular text-text-tertiary">
-                {proposal.kind === "add_section" ? "Add" : "Remove"} · proposed by{" "}
+                {KIND_LABEL[proposal.kind] ?? proposal.kind} · proposed by{" "}
                 {proposal.originClientId}
               </p>
             </div>

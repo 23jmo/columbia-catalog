@@ -2,8 +2,10 @@ import type { ReactNode } from "react";
 import { CatalogSidebar } from "@/components/shell/catalog-sidebar";
 import { MobileNavBar } from "@/components/shell/mobile-nav";
 import type { ShellNavKey } from "@/components/shell/nav";
+import { BookmarkProvider } from "@/components/bookmarks/bookmark-provider";
 import { RefreshWorker } from "@/components/crawler/refresh-worker";
 import { PlanSyncProvider } from "@/components/schedule/plan-sync-provider";
+import { Toaster } from "@/components/toast/toaster";
 import { WatchlistProvider } from "@/components/watch/watchlist-provider";
 import { cx } from "@/utils/cx";
 
@@ -26,13 +28,16 @@ import { cx } from "@/utils/cx";
  *   CatalogSidebar (collapse state)
  *   MobileNavBar   (drawer state)
  *
- * Plus two components that render nothing at all. `PlanSyncProvider` owns the
- * lifecycle of plan write-through sync, which has to start once per browser
- * session and stop cleanly. `RefreshWorker` is the crawl engine itself (spec
- * §10 — browsers are the engine, cron is the safety net): on idle it fetches
- * due directory pages from the visitor's own browser and posts the bytes back.
- * It belongs here rather than on one route because the whole point is that it
- * runs wherever a reader happens to be, and it stops itself on page hide.
+ * Plus components that render nothing until something asks them to.
+ * `PlanSyncProvider` owns the lifecycle of plan write-through sync, which has
+ * to start once per browser session and stop cleanly. `RefreshWorker` is the
+ * crawl engine itself (spec §10 — browsers are the engine, cron is the safety
+ * net): on idle it fetches due directory pages from the visitor's own browser
+ * and posts the bytes back. It belongs here rather than on one route because
+ * the whole point is that it runs wherever a reader happens to be, and it
+ * stops itself on page hide. `Toaster` is the single toast surface — mounted
+ * once so a confirmation appears in the same place whichever screen raised it,
+ * and so two screens can never stack two competing stacks.
  *
  * `children` therefore stays a server subtree — a route's async data fetching
  * is not forced into the client by wrapping itself in the shell.
@@ -55,11 +60,17 @@ export function AppShell({ children, activeNav = "home", contentClassName }: App
           signed-in student, and claims anonymous plans on first sign-in. */}
       <PlanSyncProvider />
       <WatchlistProvider />
+      {/* Also nothing on screen. Keeps saved classes tied to the signed-in
+          identity, and mirrors the watch cascade into the watchlist store. */}
+      <BookmarkProvider />
       {/* Also renders nothing. Fetches due public directory pages on idle and
           relays them back — the seat data every other surface reads is kept
           fresh by the people reading it. Opt-out is honoured three ways; see
           the component. */}
       <RefreshWorker />
+      {/* The one toast surface. Top-center, portalled to <body>, so a
+          confirmation is in the same place whichever screen raised it. */}
+      <Toaster />
 
       {/* Desktop rail — floating panel with outer breathing room, like BoardUI. */}
       <div className="sticky top-0 hidden h-dvh shrink-0 p-3 lg:block">

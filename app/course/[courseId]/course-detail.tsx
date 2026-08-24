@@ -22,7 +22,7 @@ import { CourseLevelPanels } from "@/components/course/course-level-panels";
 import { EmptyNote, Fact, LanePlaceholder, Panel } from "@/components/course/panel";
 import { RegistrationHandoff } from "@/components/course/registration-handoff";
 import { AddToScheduleButton } from "@/components/schedule/add-to-schedule-button";
-import { WatchButton } from "@/components/watch/watch-button";
+import { BookmarkControls } from "@/components/bookmarks/bookmark-controls";
 import { REQUIREMENT_FILTERS, WEEKDAY_LABEL, ZONE_LABEL } from "@/lib/constants";
 import type { ScheduleConflict, Section } from "@/lib/types";
 import { cx } from "@/utils/cx";
@@ -223,9 +223,10 @@ export async function CourseDetail({
                 sectionCode={primarySection.sectionCode}
                 termCode={primarySection.termCode}
               />
-              <WatchButton
+              <BookmarkControls
                 sectionId={primarySection.sectionId}
                 sectionCode={primarySection.sectionCode}
+                courseLabel={code}
               />
             </>
           ) : null}

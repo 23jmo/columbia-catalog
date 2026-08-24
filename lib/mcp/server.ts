@@ -36,6 +36,7 @@ import { createServiceRoleClient } from "../db/client";
 import { getCourseReputation, getInstructorReputation } from "../db/reputation";
 
 import {
+  bookmarksAdapter,
   catalogAdapter,
   plansAdapter,
   scheduleAdapter,
@@ -100,6 +101,7 @@ export function mcpDeps(baseUrl: string): McpDeps {
     ratings: ratingsAdapter,
     seatHistory: seatHistoryAdapter,
     plans: plansAdapter,
+    bookmarks: bookmarksAdapter,
     proposals,
     rateLimiter,
     baseUrl,
