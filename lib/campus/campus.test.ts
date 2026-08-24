@@ -384,10 +384,11 @@ describe("campus layout", () => {
     // Named, not inferred: a building that lands west of Broadway without being
     // on this list is a bake that went wrong, and the test should say so.
     const WEST_OF_BROADWAY = new Set([
-      // 606 W 115th and 612 W 116th: Columbia's, on the west side of the
-      // street, inside the band, and not on the acropolis.
+      // 606 W 115th, 612 W 116th and 612 W 115th: Columbia's, on the west
+      // side of the street, inside the band, and not on the acropolis.
       "kraft",
       "casa-hispanica",
+      "watson",
     ]);
     const onTheBlock = buildingsOnPlane("morningside-heights").filter(
       (entry) =>

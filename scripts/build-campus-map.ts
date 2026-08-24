@@ -118,8 +118,19 @@ const PLANES: PlaneSource[] = [
 interface BuildingSource {
   buildingId: string;
   label: string;
-  osmName: string;
+  /**
+   * How OSM names it. Preferred, because OSM draws Columbia building-by-building
+   * with the names a student would say, and because `extra` can only merge
+   * named ways.
+   */
+  osmName?: string;
   extra?: string[];
+  /**
+   * `[lon, lat]` of a point inside the building, for the ones OSM does not name
+   * at all. The outline then comes from the survey polygon that contains this
+   * point — see `surveyBuildingAt` for why it insists on exactly one.
+   */
+  surveyPoint?: LonLat;
   isLandmark?: boolean;
 }
 
@@ -167,6 +178,12 @@ const BUILDINGS: Record<PlaneId, BuildingSource[]> = {
     { buildingId: "international-house", label: "International House", osmName: "International House" },
     { buildingId: "heyman", label: "Heyman Center", osmName: "Heyman Center for the Humanities" },
     { buildingId: "casa-hispanica", label: "Casa Hispánica", osmName: "Casa Hispánica" },
+    // Unnamed in OSM, so located by a point instead. Both are ordinary
+    // Columbia classroom buildings that the volunteer map simply has not
+    // labelled; the coordinates are the street addresses the registrar
+    // publishes, geocoded, each landing inside exactly one survey polygon.
+    { buildingId: "claremont-80", label: "80 Claremont", surveyPoint: [-73.96278, 40.81108] },
+    { buildingId: "watson", label: "Watson Hall", surveyPoint: [-73.96555, 40.8076] },
     // --- Barnard -------------------------------------------------------------
     { buildingId: "milstein", label: "Milstein Center", osmName: "Milstein Center for Teaching and Learning", isLandmark: true },
     { buildingId: "diana", label: "Diana Center", osmName: "The Diana Center", isLandmark: true },
@@ -502,9 +519,13 @@ function resolveHeight(
   centre: Point,
   footprints: { ring: Point[]; heightFeet: number }[],
   levels: number | null,
+  /** The survey row's own height, when `surveyPoint` already identified one. */
+  knownFeet: number | null,
 ): number {
   const override = HEIGHT_OVERRIDES_FEET[source.buildingId];
   if (override) return override.feet / FEET_PER_UNIT;
+
+  if (knownFeet !== null && knownFeet >= SUSPECT_HEIGHT_FEET) return knownFeet / FEET_PER_UNIT;
 
   const containing = footprints.filter((candidate) => containsPoint(candidate.ring, centre));
   // Several rings can contain the centre where a footprint was split into
@@ -528,6 +549,46 @@ function resolveHeight(
   // Footprint area is a weak proxy, but a big building with no height reads
   // less wrong as a mid-rise than as a slab.
   return Math.max(MINIMUM_HEIGHT_UNITS, Math.min(2.5, Math.sqrt(Math.abs(signedArea(ring))) * 0.9));
+}
+
+/**
+ * The outline for a building OpenStreetMap does not name.
+ *
+ * OSM is the preferred source because it draws Columbia building-by-building
+ * under the names the timetable uses. But it is volunteer data, and it stops
+ * short of a few real ones: 80 Claremont and Watson Hall are both unnamed ways
+ * with no address tags, so there is nothing to join on. The city survey has
+ * every roof in New York — it just has no idea which is which. Naming the
+ * building with one interior point is enough to bridge them.
+ *
+ * Exactly one containing polygon, or nothing. A point that lands in two (a
+ * building surveyed twice, an arcade over a neighbour) is a point that has not
+ * identified anything, and silently taking the first would draw a confident
+ * wrong outline — the failure this whole lane is built to avoid.
+ */
+function surveyBuildingAt(
+  source: BuildingSource,
+  footprints: Footprint[],
+): { building: OsmBuilding; heightFeet: number } | null {
+  if (!source.surveyPoint) return null;
+  const [lon, lat] = source.surveyPoint;
+  const hits = footprints.filter((footprint) =>
+    containsPoint(
+      footprint.ring.map(([ringLon, ringLat]) => ({ x: ringLon, z: ringLat })),
+      { x: lon, z: lat },
+    ),
+  );
+  if (hits.length !== 1) {
+    warnings.push(
+      `${source.buildingId}: surveyPoint falls inside ${hits.length} survey polygons, need exactly 1`,
+    );
+    return null;
+  }
+  // The height comes back with it. Containment against the ring's own centroid
+  // — what `resolveHeight` does otherwise — fails for a building whose centroid
+  // sits in its own light well, and 80 Claremont is one of those. Here we know
+  // the row, so there is nothing to infer.
+  return { building: { name: source.buildingId, ring: hits[0].ring, levels: null }, heightFeet: hits[0].heightFeet };
 }
 
 async function buildPlane(plane: PlaneSource) {
@@ -562,9 +623,13 @@ async function buildPlane(plane: PlaneSource) {
 
   const placed: PlacedBuilding[] = [];
   for (const source of BUILDINGS[plane.planeId]) {
-    const primary = osmByName.get(source.osmName);
+    const named = source.osmName ? osmByName.get(source.osmName) : undefined;
+    const located = named ? null : surveyBuildingAt(source, footprintsRaw);
+    const primary = named ?? located?.building;
     if (!primary) {
-      warnings.push(`${source.buildingId}: OSM has no building named "${source.osmName}" — not drawn`);
+      warnings.push(
+        `${source.buildingId}: ${source.osmName ? `OSM has no building named "${source.osmName}"` : "no surveyPoint"} — not drawn`,
+      );
       continue;
     }
     // Merged buildings contribute their bounds and their tallest height, but
@@ -584,7 +649,14 @@ async function buildPlane(plane: PlaneSource) {
       MINIMUM_HEIGHT_UNITS,
       ...rings.map((entry) => {
         const entryRing = entry.ring.map(project).map(place);
-        return resolveHeight(source, entryRing, centroidOf(entryRing), footprints, levels);
+        return resolveHeight(
+          source,
+          entryRing,
+          centroidOf(entryRing),
+          footprints,
+          levels,
+          located?.heightFeet ?? null,
+        );
       }),
     );
 

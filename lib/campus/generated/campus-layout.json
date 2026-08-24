@@ -371,6 +371,26 @@
       "height": 0.8
     },
     {
+      "buildingId": "claremont-80",
+      "label": "80 Claremont",
+      "plane": "morningside-heights",
+      "x": -7.33,
+      "z": -14.06,
+      "width": 2.26,
+      "depth": 5.26,
+      "height": 1.9
+    },
+    {
+      "buildingId": "watson",
+      "label": "Watson Hall",
+      "plane": "morningside-heights",
+      "x": -9.24,
+      "z": 4.81,
+      "width": 0.59,
+      "depth": 1.02,
+      "height": 1.15
+    },
+    {
       "buildingId": "milstein",
       "label": "Milstein Center",
       "plane": "morningside-heights",
