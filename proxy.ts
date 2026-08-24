@@ -32,7 +32,54 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+/**
+ * Rescue an OAuth code that Supabase dropped on the wrong path.
+ *
+ * `signIn()` asks for `/auth/callback`, but Supabase only honours a
+ * `redirectTo` that matches the Redirect URLs allow list. When it does not
+ * match, Supabase does not fail and does not warn — it silently substitutes
+ * the project's Site URL, whose factory default is `http://localhost:3000`.
+ * The student lands on the home page with `?code=...` in the address bar, the
+ * code is never exchanged, and the app renders them as signed out with nothing
+ * to explain why. That failure looks identical to "sign-in is broken".
+ *
+ * Forwarding the code to the route that knows what to do with it costs one
+ * redirect and makes the flow survive an allow list that is missing an entry —
+ * which every new Vercel preview URL is, until someone adds it.
+ *
+ * This is a safety net, NOT a substitute for the allow list. The Site URL must
+ * still point at production, or email confirmations and password resets — which
+ * have no `redirectTo` at all and always use the Site URL — will keep pointing
+ * at whatever it says.
+ *
+ * Narrow on purpose: only a GET navigation, only when `code` is present, never
+ * on `/auth/callback` itself (which would loop) and never under `/api`, whose
+ * MCP OAuth flow has its own `code` and its own handler. No other route in this
+ * app reads a `code` search param, so nothing legitimate is intercepted.
+ */
+function rescueStrandedAuthCode(request: NextRequest): NextResponse | null {
+  if (request.method !== "GET") return null;
+
+  const { pathname, searchParams } = request.nextUrl;
+  if (pathname === "/auth/callback" || pathname.startsWith("/api/")) return null;
+  if (!searchParams.get("code")) return null;
+
+  const target = new URL("/auth/callback", request.nextUrl);
+  // Carry the whole query through: the callback reads `code`, and `error` if
+  // the student declined Google's consent screen.
+  for (const [name, value] of searchParams) target.searchParams.set(name, value);
+  // Supabase discarded the original `redirectTo`, so the `next` it carried is
+  // gone. Send them back to where they landed rather than defaulting to home.
+  if (!target.searchParams.has("next") && pathname !== "/") {
+    target.searchParams.set("next", pathname);
+  }
+  return NextResponse.redirect(target);
+}
+
 export async function proxy(request: NextRequest) {
+  const rescued = rescueStrandedAuthCode(request);
+  if (rescued) return rescued;
+
   let response = NextResponse.next({ request });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
