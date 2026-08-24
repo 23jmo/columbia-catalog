@@ -95,6 +95,18 @@ against a real January 19 (a dropped first Tuesday).
   (end of Change of Program, last day to drop, last day of classes) and nothing
   reads the column, so it was left unset rather than guessed.
 
+### 5. Local `next build` is broken by an uninstalled dependency (not a code defect)
+`npx next build` fails on `components/progression/*` with
+`Module not found: @xyflow/react`. The package **is** declared in both
+`package.json` and `package-lock.json` and both are committed and clean — it is
+simply absent from this machine's `node_modules`, and AGENTS.md rule 2 forbids
+running `npm install`.
+
+Vercel installs from the lockfile, so this does not affect a deployment. It
+does mean local `next build` cannot be used as a gate here until someone runs
+an install. `npx tsc --noEmit` and `npx vitest run` both pass and are the
+working substitutes; `tsc` reports the same missing module and nothing else.
+
 ---
 
 ## 5. BLOCKING (product) — Columbia removed meeting times from the public directory
