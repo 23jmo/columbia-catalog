@@ -301,23 +301,32 @@ the backfill knows which origin a `barnard-college/` path belongs to.
 
 ---
 
-## 11. Known gap — sections of one course are not distinguishable
+## 11. RESOLVED — sections of one course are distinguishable now
 
-The directory prints one title per *course*, not per *section*. `COMS 6998` has
-24 sections in Fall 2026 and they are 24 different classes ("Advanced Topics in
-…"), but every one of them renders and serialises with the same course title.
+The directory prints one title per *course*, so `COMS 6998`'s 24 Fall 2026
+sections all rendered identically though they are 24 different classes. The
+note said "nothing currently enqueues those jobs" — that is no longer true.
+The `section_detail` queue was filled (5,433 jobs), migration 0017 added
+`sections.title`, and the per-section titles came in with it.
 
-We store nothing that tells them apart, so search, the course page, and the MCP
-tools all answer this question uselessly. The per-section title appears on the
-section detail page at `doc.sis.columbia.edu`. The machinery to read it already
-exists — there is a `section_detail` crawl job kind and
-`lib/ingest/parsers/section-detail.ts` — but nothing currently enqueues those
-jobs, and doing so for every section is ~17k additional fetches.
+Verified against the exact case this item was written about:
 
-Not blocking, and not yet costed. Flagged because it is the most visible
-remaining wrongness in the catalog data.
+```
+COMS6998E 001  READINGS LANGUAGE DESIGN
+COMS6998E 002  ADV TPCS COMPETITIVE PROG
+COMS6998E 003  Hyperscale+AI Infrastruct
+COMS6998E 004  CONTINUAL LEARN MEM MDLS
+...
+```
 
----
+All 8,540 Fall 2026 sections carry a title, and 5,103 of them differ from their
+course's title — which is the number that matters, since a section title that
+merely repeats the course title tells a student nothing.
+
+Titles are stored faithfully and suppressed downstream when they duplicate the
+course title, rather than being dropped at ingest: the directory's own SHOUTED
+abbreviations ("ADV TPCS COMPETITIVE PROG") are ugly but real, and normalising
+them at write time would be inventing data.
 
 ## 12. Semantic search needs a model in the browser, and I cannot add one
 
@@ -427,6 +436,13 @@ Two schedule tests changed as a direct result, and the second is the point:
   that Mudd → Pupin produces no warning at all.
 
 ## 4. A quarantine table is sitting in the database (housekeeping, not a blocker)
+
+**Update 2026-08-24:** Fall 2026 now holds 2,476 meetings and the term-match
+fix has been verified end to end several times over, so
+`meetings_quarantine_0020` (2,194 rows) has done its job and could be dropped
+at any point. Deliberately NOT dropped: it is the only copy of what the
+misfiled data looked like, dropping it is irreversible, and 2,194 rows cost
+nothing to keep. Yours to bin whenever you want it gone.
 
 `meetings_quarantine_0020` holds 2,194 rows and can be dropped once you are
 satisfied with the Fall 2026 / Spring 2027 map.
