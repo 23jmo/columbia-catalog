@@ -13,6 +13,7 @@ import {
   formatSectionMeetings,
 } from "@/components/catalog/meetings";
 import { prettyTitle } from "@/components/course/format";
+import { InstructorLinks } from "@/components/instructor/instructor-link";
 import { REQUIREMENT_FILTERS } from "@/lib/constants";
 import type { CourseListItem, SectionListItem } from "@/lib/catalog-list-types";
 import { cx } from "@/utils/cx";
@@ -156,8 +157,7 @@ export function CourseResultRow({
 
           {instructors.length > 0 ? (
             <p className="mt-0.5 truncate text-caption-1-medium text-text-secondary">
-              {instructors.slice(0, 2).join(", ")}
-              {instructors.length > 2 ? ` +${instructors.length - 2}` : ""}
+              <InstructorLinks names={instructors} max={2} />
             </p>
           ) : null}
 

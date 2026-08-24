@@ -4,9 +4,9 @@ import { RiCloseLine, RiScales3Line } from "@remixicon/react";
 import { Button } from "@/components/base/buttons/button";
 import { Chip } from "@/components/base/badges/chip";
 import type { ReputationSummary, Section } from "@/lib/types";
+import { InstructorLinks } from "@/components/instructor/instructor-link";
 import { cx } from "@/utils/cx";
 import {
-  instructorLabel,
   meetingLines,
   placeSummary,
   provenanceLabel,
@@ -63,7 +63,14 @@ export function SectionCompare({
     {
       label: "Instructor",
       sameValue: (s) => s.instructors.join("|"),
-      render: (s) => <span className="text-body-medium">{instructorLabel(s.instructors)}</span>,
+      render: (s) => (
+        <span className="text-body-medium">
+          {/* `instructorLabel` collapses 3+ names to "First +2 more"; linking
+              every name individually is the point of the row, so the compare
+              table prints the first two and counts the rest. */}
+          <InstructorLinks names={s.instructors} max={2} separator=" · " />
+        </span>
+      ),
     },
     {
       label: "Meets",

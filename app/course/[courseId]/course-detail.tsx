@@ -29,6 +29,7 @@ import { RegistrationHandoff } from "@/components/course/registration-handoff";
 import { AddToScheduleButton } from "@/components/schedule/add-to-schedule-button";
 import { WatchButton } from "@/components/watch/watch-button";
 import { ReputationBlock } from "@/components/course/reputation";
+import { InstructorLinks } from "@/components/instructor/instructor-link";
 import { REQUIREMENT_FILTERS, WEEKDAY_LABEL, ZONE_LABEL } from "@/lib/constants";
 import { getAllCourses } from "@/lib/data/catalog";
 import type { ScheduleConflict, Section } from "@/lib/types";
@@ -224,7 +225,7 @@ export async function CourseDetail({
           </h1>
 
           <p className="text-headline-regular text-text-secondary">
-            {data.instructors.length > 0 ? data.instructors.join(" · ") : "Instructor TBA"}
+            <InstructorLinks names={data.instructors} separator=" · " />
           </p>
 
           {requirementLabels.length > 0 ? (
@@ -517,9 +518,10 @@ export async function CourseDetail({
                   <span className="text-caption-2-regular text-text-tertiary">
                     {similar.reason}
                     {similar.credits ? ` · ${similar.credits}` : ""}
-                    {similar.instructors.length > 0
-                      ? ` · ${similar.instructors.join(", ")}`
-                      : ""}
+                    {similar.instructors.length > 0 ? " · " : ""}
+                    {similar.instructors.length > 0 ? (
+                      <InstructorLinks names={similar.instructors} />
+                    ) : null}
                   </span>
                 </Link>
               </li>
@@ -561,7 +563,7 @@ export async function CourseDetail({
                     {record.offered ? record.sectionCount : "Not offered"}
                   </td>
                   <td className="border-b border-border-table px-3 py-2 text-text-secondary">
-                    {record.instructors.length > 0 ? record.instructors.join(", ") : "—"}
+                    <InstructorLinks names={record.instructors} fallback="—" />
                   </td>
                   <td className="border-b border-border-table px-3 py-2 tabular-nums text-text-secondary">
                     {record.totalEnrolled !== null && record.totalCapacity !== null

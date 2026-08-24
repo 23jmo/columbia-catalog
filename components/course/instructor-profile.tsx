@@ -1,8 +1,11 @@
 "use client";
 
-import { RiGraduationCapLine } from "@remixicon/react";
+import Link from "next/link";
+import { RiArrowRightSLine, RiGraduationCapLine } from "@remixicon/react";
 import { Avatar } from "@/components/base/avatar/avatar";
 import { Chip } from "@/components/base/badges/chip";
+import { InstructorLink } from "@/components/instructor/instructor-link";
+import { instructorSlug } from "@/lib/data/instructors";
 import type { ReputationSummary } from "@/lib/types";
 import { cx } from "@/utils/cx";
 import type { RmpLookup } from "./contracts";
@@ -41,7 +44,16 @@ export function InstructorCard({
       <div className="flex items-start gap-3">
         <Avatar size="lg" initials={initialsOf(name)} color="blue" />
         <div className="min-w-0 flex-1">
-          <p className="text-headline-semibold text-text-primary">{name}</p>
+          {/*
+            The name is the way in. This card is a summary of one person on one
+            course; their full profile — every section, the term's teaching
+            calendar, classroom load, and both review sources — lives at
+            `/instructor/[slug]`, and a student who has just read two numbers
+            about someone is exactly the person who wants it.
+          */}
+          <p className="text-headline-semibold text-text-primary">
+            <InstructorLink name={name} />
+          </p>
           <p className="mt-0.5 text-caption-1-regular text-text-secondary">
             {sectionCodes.length > 0
               ? `Teaching section${sectionCodes.length > 1 ? "s" : ""} ${sectionCodes.join(", ")}`
@@ -66,6 +78,14 @@ export function InstructorCard({
               ) : null}
             </div>
           ) : null}
+
+          <Link
+            href={`/instructor/${instructorSlug(name)}`}
+            className="mt-2 inline-flex w-fit items-center gap-0.5 rounded-lg text-caption-1-medium text-accent-600 outline-none transition-colors duration-150 ease hover:text-accent-700 focus-visible:ring-2 focus-visible:ring-border-focus-ring"
+          >
+            View full profile
+            <RiArrowRightSLine aria-hidden className="size-3.5 shrink-0" />
+          </Link>
         </div>
       </div>
 
