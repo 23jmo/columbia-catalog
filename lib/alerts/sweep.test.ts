@@ -18,11 +18,11 @@ import type { CatalogClient } from "@/lib/db/client";
 import type { CourseRow, PendingSeatAlertRow, SectionRow } from "@/lib/db/schema";
 
 const sendEmailBatch = vi.fn();
-const isEmailConfigured = vi.fn();
+const emailConfigGap = vi.fn();
 
 vi.mock("./resend", async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
-  return { ...actual, sendEmailBatch, isEmailConfigured };
+  return { ...actual, sendEmailBatch, emailConfigGap };
 });
 
 const { runAlertSweep } = await import("./sweep");
@@ -118,8 +118,8 @@ function fakeDb(options: {
 describe("runAlertSweep", () => {
   beforeEach(() => {
     sendEmailBatch.mockReset();
-    isEmailConfigured.mockReset();
-    isEmailConfigured.mockReturnValue(true);
+    emailConfigGap.mockReset();
+    emailConfigGap.mockReturnValue(null);
   });
   afterEach(() => {
     vi.restoreAllMocks();
@@ -134,7 +134,7 @@ describe("runAlertSweep", () => {
   });
 
   describe("when email is not configured", () => {
-    beforeEach(() => isEmailConfigured.mockReturnValue(false));
+    beforeEach(() => emailConfigGap.mockReturnValue("both"));
 
     it("counts what it could not send instead of reporting success", async () => {
       const db = fakeDb({ pending: [pendingRow(), pendingRow({ user_id: "user-2" })] });
@@ -145,6 +145,15 @@ describe("runAlertSweep", () => {
       expect(summary.pending).toBe(2);
       expect(summary.failed).toBe(2);
       expect(summary.sent).toBe(0);
+    });
+
+    it("names which variable is missing, so the reason is actionable", async () => {
+      emailConfigGap.mockReturnValue("from_address");
+      const db = fakeDb({ pending: [pendingRow()] });
+      const summary = await runAlertSweep({ db: db.client });
+      // `stoppedBecause` says the sweep did nothing; this says why, and the
+      // two causes need different fixes in different dashboards.
+      expect(summary.emailConfigGap).toBe("from_address");
     });
 
     it("records nothing, so the next sweep still owes the alert", async () => {

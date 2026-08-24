@@ -261,23 +261,71 @@ cannot be finished from inside the repository.
 
 **The ask is smaller than this document previously claimed.** It said "API key
 + a DNS-verified sending domain". The domain is needed to reach *arbitrary*
-recipients — real students — but not to make alerts work:
+recipients — real students — but not to make alerts work. There are two routes,
+and they are not equivalent.
 
-1. Create a Resend account, generate an API key with Sending access.
-2. `RESEND_API_KEY=<key>` and `ALERT_FROM_EMAIL=onboarding@resend.dev` in
-   `.env.local`, and the same two in the Vercel project (Production).
+### Path A — 60 seconds, no DNS, delivers only to you
+
+1. resend.com → account → API key with Sending access.
+2. Set both in `.env.local` and in the Vercel project (Production):
+   `RESEND_API_KEY=<key>` and `ALERT_FROM_EMAIL=onboarding@resend.dev`.
 
 `onboarding@resend.dev` is Resend's shared sender: no DNS, no domain, and it
 delivers to the address that owns the Resend account. That is enough to
-exercise the entire path. `isEmailConfigured()` is `RESEND_API_KEY &&
-ALERT_FROM_EMAIL` and nothing validates the domain, so no code changes at
-either step. Add DNS verification later, when alerts go out to other people.
+exercise the entire path end to end. Nothing in the code validates the domain,
+so no code changes at either step. This is the right first move — it proves the
+transport before anyone commits a domain to it.
 
-**Why I cannot do it:** creating the account means agreeing to terms of service
-as the user, and the key would be theirs. Unlike #4, #12 and #17 — each of
-which turned out to be a belief about a tool rather than a fact about the
-world — restating this one does not dissolve it. Every route to delivering mail
-ends at an account somebody has to own.
+### Path B — production-grade, through the Vercel account that already exists
+
+The Vercel Marketplace carries Resend as `resend/resend-email`, which means the
+credential can be provisioned from the account already deployed to, with no
+separate signup:
+
+```
+vercel integration add resend/resend-email \
+  --scope johnathans-projects-b2a37f0a \
+  --metadata domain=<one-you-own> \
+  --metadata region=us-east-1 \
+  --environment production
+```
+
+It injects `RESEND_API_KEY` into the project automatically. **You still have to
+set `ALERT_FROM_EMAIL` yourself** — the integration does not create one, and
+that gap is now reported by name rather than as a generic
+`email_not_configured` (see below). Set it to something at the domain you
+chose, e.g. `alerts@drafted.college`.
+
+The product's schema **requires** `domain` and `region`, and its own field help
+says "you must own a domain to be able to send". Six domains sit on that Vercel
+account (`drafted.college`, `johnathanmo.com`, `tabby-ai.com`,
+`trylocked.in`, `trychance.me`, `secondselftwinnem.us`); `drafted.college` is
+the obvious fit for a course catalog and the only one not already fronting a
+live site. Region `us-east-1` matches where the app and Supabase already run.
+
+**Why I stopped short of running it.** Not because it is blocked — the CLI is
+authenticated and the command above would go through. Because choosing which of
+someone's six personal domains becomes an application's permanent sending
+identity, and letting a third party write SPF/DKIM/MX records into it, is a
+decision with consequences outside this repository. Path A needs none of that
+and answers the same question, so the honest order is A now, B when you have
+picked a domain.
+
+**Why I cannot do it.** Applying #4/#12/#17's lesson — name the fact, not the
+URL — did move this one: the fact needed is not "a Resend account" but "a
+`RESEND_API_KEY` reachable by production", and asking who *else* can produce
+one is what surfaced Path B. But it does not dissolve the blocker the way it
+dissolved those three. Every route still terminates at an account somebody has
+to own and a domain somebody has to choose. The lesson made the ask smaller and
+gave it a second shape; it did not make it mine to answer.
+
+**What changed in the code because of Path B.** The marketplace integration
+sets `RESEND_API_KEY` and nothing else, which lands the app in the one
+configuration that looks provisioned and sends nothing. `email_not_configured`
+was a single opaque reason for two different causes, so the sweep now reports
+`emailConfigGap: "api_key" | "from_address" | "both"` alongside it and logs the
+variable name. `/api/alerts/sweep` returns the whole summary, so the answer to
+"why is no mail going out" is in the cron response rather than in a code read.
 
 **Everything up to the transport is verified.** `runAlertSweep` has nine tests
 covering the invariant that matters — an alert is recorded as sent if and only

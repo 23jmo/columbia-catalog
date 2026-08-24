@@ -41,7 +41,8 @@ import type { PendingSeatAlertRow } from "@/lib/db/schema";
 import type { TermCode } from "@/lib/types";
 
 import { renderSeatOpenedEmail } from "./render";
-import { isEmailConfigured, sendEmailBatch, RESEND_BATCH_LIMIT } from "./resend";
+import type { EmailConfigGap } from "./resend";
+import { describeEmailConfigGap, emailConfigGap, sendEmailBatch, RESEND_BATCH_LIMIT } from "./resend";
 
 /**
  * How far back a sweep looks. Comfortably wider than the cron interval so a
@@ -63,6 +64,13 @@ export interface AlertSweepSummary {
   sections: number;
   elapsedMs: number;
   stoppedBecause: "complete" | "email_not_configured" | "deadline";
+  /**
+   * Set only alongside `stoppedBecause: "email_not_configured"`, naming which
+   * variable to go set. `stoppedBecause` stays a single value because the
+   * sweep's behaviour is identical either way — nothing sends, nothing is
+   * recorded — and the difference is purely operational.
+   */
+  emailConfigGap?: EmailConfigGap;
 }
 
 export interface AlertSweepOptions {
@@ -174,10 +182,15 @@ export async function runAlertSweep(options: AlertSweepOptions = {}): Promise<Al
   // Checked after reading rather than before, so an unconfigured deployment
   // still reports how much mail it is failing to send. Silence here would look
   // identical to "nothing opened".
-  if (!isEmailConfigured()) {
+  const configGap = emailConfigGap();
+  if (configGap) {
     summary.stoppedBecause = "email_not_configured";
+    summary.emailConfigGap = configGap;
     summary.failed = pending.length;
     summary.elapsedMs = Date.now() - startedAt;
+    console.error(
+      `alert sweep: ${pending.length} alert(s) owed but not sent — ${describeEmailConfigGap(configGap)}`,
+    );
     return summary;
   }
 

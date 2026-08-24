@@ -9,7 +9,7 @@
  *
  * ── Configuration is optional on purpose ───────────────────────────────────
  *
- * `RESEND_API_KEY` is not provisioned yet (see .plans/BLOCKERS.md #2). Every
+ * `RESEND_API_KEY` is not provisioned yet (see .plans/BLOCKERS.md #7). Every
  * entry point here answers honestly when it is missing instead of throwing:
  * the sweep reports `email_not_configured`, records nothing as sent, and the
  * pending alerts stay pending. When the key appears, the first sweep after it
@@ -34,8 +34,36 @@ export interface SendOutcome {
   error?: string;
 }
 
+/**
+ * Which half of the configuration is missing, or `null` when both are present.
+ *
+ * Two variables, so "not configured" has two causes, and an operator reading a
+ * single opaque `email_not_configured` cannot tell which one to go fix. That
+ * distinction stopped being academic once the Vercel Marketplace became a
+ * supported way to provision Resend: `vercel integration add
+ * resend/resend-email` injects `RESEND_API_KEY` into the project on its own and
+ * says nothing about a From header, so the *likely* production gap is
+ * `from_address` — the state that looks most like success and sends least.
+ */
+export type EmailConfigGap = "api_key" | "from_address" | "both";
+
+export function emailConfigGap(): EmailConfigGap | null {
+  const hasKey = Boolean(process.env.RESEND_API_KEY);
+  const hasFrom = Boolean(fromAddress());
+  if (hasKey && hasFrom) return null;
+  if (!hasKey && !hasFrom) return "both";
+  return hasKey ? "from_address" : "api_key";
+}
+
+/** The variable names behind each gap, for operator-facing messages. */
+export function describeEmailConfigGap(gap: EmailConfigGap): string {
+  if (gap === "api_key") return "RESEND_API_KEY is not set";
+  if (gap === "from_address") return "ALERT_FROM_EMAIL is not set";
+  return "RESEND_API_KEY and ALERT_FROM_EMAIL are not set";
+}
+
 export function isEmailConfigured(): boolean {
-  return Boolean(process.env.RESEND_API_KEY && fromAddress());
+  return emailConfigGap() === null;
 }
 
 /**
