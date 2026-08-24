@@ -411,3 +411,41 @@ right: `drop table meetings_quarantine_0020;`
 
 Nothing reads this table. It costs a few hundred KB and will not affect the app
 if left in place indefinitely.
+
+---
+
+## 14. Removed sections are retried forever and still render (do after the drain)
+
+The Directory serves a TOMBSTONE, not a 404, when a section is pulled:
+HTTP 200, ~474 bytes, body text "Section removed from the Directory of
+Classes". Example: https://doc.sis.columbia.edu/subj/GNPH/P8090-20251-D01/
+
+`parseSectionDetail` correctly refuses to invent an identity from it and
+throws, which the crawler records as `parse failed: section-detail: page
+carries no recoverable section identity`. Two consequences, both wrong:
+
+1. The job retries on exponential backoff forever. The answer is definitive —
+   the section is gone — so it should stop, not slow down.
+2. The section stays in `sections` and keeps rendering. A student can still
+   find it, open it, and add it to a plan.
+
+**Impact today is nil**: 8 jobs, all in archived terms (20243 ×1, 20251 ×7),
+none in 20263/20271. It becomes user-visible the moment Fall 2026 registration
+opens and a real section is pulled — which is exactly when it matters most and
+when nobody will be reading crawl logs.
+
+**Why it is not fixed yet.** The description drain is currently streaming
+~4,000 jobs through `parseSectionDetail`. Editing that parser mid-drain risks
+a run where some pages are parsed by the old code and some by the new, which
+is worse than the bug. It is a 20-minute change once the queue is quiet.
+
+**The fix.** Recognise the tombstone in `parseSectionDetail` and return a
+distinct outcome rather than throwing — the page IS parseable, it just says
+"gone". Then the ingest path can mark the section withdrawn (a
+`withdrawn_at timestamptz` on `sections`, kept rather than deleted so a
+watcher's row does not vanish under them) and `complete_job` can close the job
+out as done instead of failed. The catalog and search reads filter on
+`withdrawn_at is null`; the course page shows the section struck through with
+its provenance stamp, which is more honest than silently dropping a section a
+student may have been watching.
+
