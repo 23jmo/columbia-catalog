@@ -678,28 +678,102 @@ Two levers, cheapest first:
 
 ---
 
-## 17. `vercel.ts` config — spec §20 asks for it, the no-install rule forbids it
+## 17. RESOLVED — spec §20's `vercel.ts` config ships
 
-**Impact: none functionally. The crons, rewrites and function settings the spec
-wants declared in `vercel.ts` are all declared and working in `vercel.json`.**
+**Status: `vercel.ts` is the project config. `vercel.json` is deleted. No
+dependency was installed and no CLI upgrade was needed.**
 
-Spec §20's tech-stack table says *Config: `vercel.ts` with `@vercel/config`
-(crons declared here)*. We ship `vercel.json` instead, carrying exactly the same
-content: two cron entries, five MCP OAuth well-known rewrites, and `maxDuration`
-for the four routes that need more than the default.
+I had filed this as blocked on two claims. Both were wrong, and both were wrong
+because I reasoned about the tooling instead of testing it.
 
-Two things block the swap, and neither is worth breaking a rule over:
+**Claim 1 — "the pinned CLI (50.35.0) predates `vercel.ts` support."** The CLI
+bundle does mention `vercel.ts`, but only inside a codegen template for
+`vercel routes export --format ts`; config resolution greps as `"vercel.json"`
+across seven files and nothing resolves `vercel.ts`. That was a correct
+observation about the CLI and an incorrect conclusion about the deploy, which
+is executed by the platform, not by the local config reader.
 
-1. **`@vercel/config` is not installed** and AGENTS.md rule 2 forbids
-   `npm install`. Without it there is no typed `VercelConfig` and no `routes`
-   helpers — the whole reason the spec prefers the TypeScript form.
-2. **The pinned Vercel CLI is 50.35.0** (current is 59.5.0, per the session
-   startup notice). `vercel.ts` support postdates it, so a `vercel.ts` in this
-   repo today would most likely be ignored rather than honoured — and a config
-   file that is silently not read is worse than one in the older format that
-   demonstrably is.
+**Claim 2 — "`@vercel/config` must be installed."** Only for the types. The
+documented form imports `VercelConfig` as a type, which erases at runtime — and
+a type-only import would still fail `tsc --noEmit` with the package absent, so
+`vercel.ts` declares the shape locally instead. Narrower than the real type on
+purpose: it describes what this project uses, so adding a field means widening
+it deliberately.
 
-**To close it:** `npm i -D @vercel/config`, upgrade the CLI, port `vercel.json`
-to `vercel.ts`, delete the JSON. Verify by confirming the crons still appear
-under the project's Cron Jobs tab — a ported config that parses but registers no
-crons would look fine locally and quietly stop the whole refresh lane.
+### How it was actually settled
+
+A preview deployment carrying `vercel.ts` and **no `vercel.json`**:
+
+- all five configured rewrites returned 200 with correct OAuth metadata bodies
+- `/.well-known/definitely-not-a-route` returned 404, so the 200s came from
+  those rewrites and not from a catch-all
+- there is no Next.js route under `app/` for `.well-known`, ruling out the
+  framework serving them itself
+
+Then production, since crons never run on previews. Reading the deployment
+record back from the API:
+
+```
+crons: [{"path":"/api/crawl/cron","schedule":"0 7 * * *"},
+        {"path":"/api/alerts/sweep","schedule":"0 8 * * *"}]
+```
+
+Both registered, and the rewrites verified live on the production alias. The
+cron lane and the MCP OAuth discovery endpoints — the two things a silently
+unread config would have broken — are confirmed working from the new file.
+
+**The lesson worth keeping:** the two previous items I closed this way (#13,
+#15) and this one all failed the same way. Each was blocked by a belief about
+what the tooling would do, stated confidently enough that it stopped looking
+like a question. The cost of checking was one preview deploy.
+
+---
+
+## 18. Phase 3 and Phase 5 audit — complete except the email transport
+
+Prompted by a review that read the open items in this file and inferred spec
+§21's Phase 3 (Alerts) and Phase 5 (History + MCP) were unfinished. They are
+not. Verified against the code, the database and live production:
+
+**Phase 3 — Watchlist and alerts.** `watches` and `alerts_sent` tables exist;
+`promoteToHot` implements the hot-tier cadence; `watcherCount` is plumbed
+through `lib/types.ts`, the MCP adapters and tools, and both alert render and
+sweep; realtime seat state lives in `lib/watchlist/store.ts`; the UI ships
+`watch-button.tsx`, `watchlist-rail.tsx` and `watchlist-provider.tsx`; the Home
+dashboard is `components/home/` plus `app/page.tsx`. `lib/alerts/` has render,
+resend, sweep and trigger with tests. **Only the transport lacks a credential
+(item 7).** `watches` and `alerts_sent` are empty because there are no accounts
+yet, not because the lane is unbuilt.
+
+**Phase 5 — History and MCP.** Four terms are backfilled (20243, 20251, 20263,
+20271). `components/charts/` carries the seat-history chart with milestone
+annotations, and `series.ts` implements the year-over-year ghost lines properly
+— ghosts are shifted to align on registration-open rather than sitting a
+literal year off the axis, because the comparison a student wants is elapsed
+time since registration opened. MCP is live in production with 14 tools, and
+the security model is exactly spec §16's: `search_courses` returns real data
+unauthenticated, while `watch_section` refuses with `requiredScopes:
+["watch:write"]` and a fix instruction. `add_section` / `remove_section`
+describe themselves as creating PENDING proposals rather than acting.
+
+### One thing the audit did surface: seat history is thin, and correctly so
+
+23,322 snapshots cover 23,301 sections — **one reading each for 23,280 of them,
+two for 21.** That looks like a broken pipeline and is not one.
+
+`enrollment_snapshots` is change-only by design (spec §11): a `BEFORE INSERT`
+trigger from migration 0002 drops any reading identical to the previous one for
+that section. So one row means the number has not moved since we first saw it,
+which is the honest representation rather than a gap.
+
+Confirmed live rather than inferred: a drain running 41 ingest runs in ten
+minutes produced **zero** new snapshots. The crawler is fetching and the trigger
+is correctly declining to write duplicates — Fall 2026 enrollment is simply
+static in this window, with registration closed and the term about to start.
+The 21 two-point sections are the ones that actually moved.
+
+What would thicken it is observation over a longer window, which is throttled
+by the daily-cron limit in item 8, whose designed mitigation is the browser
+worker path. Nothing here needs code.
+
+---
