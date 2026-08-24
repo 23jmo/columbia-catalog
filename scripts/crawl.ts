@@ -37,7 +37,12 @@ import { ALL_TERMS, LEASE_SECONDS } from "@/lib/constants";
 import { parseBackfillArgs, runBackfill } from "@/lib/crawler/backfill";
 import { getCrawlerRuntime } from "@/lib/crawler/contracts";
 import { politeFetch } from "@/lib/crawler/fetcher";
-import { ingestHtml, isWithdrawnReason, recordFetchFailure } from "@/lib/crawler/ingest";
+import {
+  ingestHtml,
+  isAbsentReason,
+  isWithdrawnReason,
+  recordFetchFailure,
+} from "@/lib/crawler/ingest";
 import { requireServiceRoleClient } from "@/lib/db/client";
 import type { CrawlJobKind, TermCode } from "@/lib/types";
 import type { CrawlJobSpec } from "@/lib/crawler/contracts";
@@ -173,6 +178,8 @@ interface DrainTally {
   quarantined: number;
   /** Sections Columbia has stopped publishing. Not failures. */
   withdrawn: number;
+  /** Subjects with no page for this term. Correct answers, not failures. */
+  absent: number;
   failed: number;
   records: number;
 }
@@ -191,6 +198,7 @@ async function drain(): Promise<void> {
     ingested: 0,
     quarantined: 0,
     withdrawn: 0,
+    absent: 0,
     failed: 0,
     records: 0,
   };
@@ -227,9 +235,21 @@ async function drain(): Promise<void> {
 
       const outcome = await politeFetch(job.url, { timeoutMs: 20_000 });
       if (!outcome.ok || !outcome.html) {
-        await recordFetchFailure(job, outcome.error ?? `HTTP ${outcome.status}`, "backfill");
-        tally.failed += 1;
-        console.log(`  ✗ ${job.kind}/${job.targetKey} — ${outcome.error ?? outcome.status}`);
+        // `status` is OUR observation, from our own fetch — see the note on
+        // recordFetchFailure for why a browser's cannot be trusted the same way.
+        const failure = await recordFetchFailure(
+          job,
+          outcome.error ?? `HTTP ${outcome.status}`,
+          "backfill",
+          { status: outcome.status },
+        );
+        if (isAbsentReason(failure.reason)) {
+          tally.absent += 1;
+          console.log(`  · ${job.kind}/${job.targetKey} — not published for this term`);
+        } else {
+          tally.failed += 1;
+          console.log(`  ✗ ${job.kind}/${job.targetKey} — ${outcome.error ?? outcome.status}`);
+        }
         continue;
       }
 
@@ -274,6 +294,9 @@ async function drain(): Promise<void> {
   console.log(`  quarantined    ${tally.quarantined}`);
   if (tally.withdrawn > 0) {
     console.log(`  withdrawn      ${tally.withdrawn}`);
+  }
+  if (tally.absent > 0) {
+    console.log(`  not published  ${tally.absent}`);
   }
   console.log(`  failed         ${tally.failed}`);
 }

@@ -41,7 +41,7 @@ import {
   parseRetryAfter,
   politeFetch,
 } from "./fetcher";
-import { ingestHtml } from "./ingest";
+import { ingestHtml, isAbsentReason, recordFetchFailure } from "./ingest";
 import {
   checkClientQuota,
   clampLeaseBatch,
@@ -770,6 +770,82 @@ describe("ingest pipeline", () => {
 
       expect(withdrawn).toEqual([]);
       expect(state.outcomes[0].ok).toBe(true);
+    });
+  });
+
+  /*
+   * A subject that offers nothing in a term.
+   *
+   * The Directory's root index lists every subject code that has ever run, so
+   * 115 subjects legitimately have no page for a given term. Their 404 was
+   * being treated as a transient fault: 196 jobs pinned at the 6h backoff
+   * ceiling, retrying a question already answered, and a failure count that
+   * never returned to zero.
+   */
+  describe("subjects with no page for a term", () => {
+    it("treats an observed 404 on a subject page as a correct answer", async () => {
+      const { store, state } = makeStore();
+      const { runtime } = makeRuntime(store);
+
+      const result = await recordFetchFailure(makeJob(), "HTTP 404", "cron", {
+        runtime,
+        now: NOW,
+        random: () => 0.5,
+        status: 404,
+      });
+
+      expect(isAbsentReason(result.reason)).toBe(true);
+      expect(state.outcomes[0].ok).toBe(true);
+      // Scheduled, not disabled: a subject can start offering classes again,
+      // and the ordinary re-read is what would notice.
+      const waitSeconds = (Date.parse(state.outcomes[0].nextFetchAt) - NOW.getTime()) / 1000;
+      expect(waitSeconds).toBeCloseTo(CADENCE_SECONDS.baseline, 6);
+    });
+
+    it("does NOT trust a 404 the client merely reported", async () => {
+      const { store, state } = makeStore();
+      const { runtime } = makeRuntime(store);
+
+      // The browser submit route passes no status, by design: honouring a
+      // client's claim would let any browser mark a subject permanently
+      // absent for everyone.
+      const result = await recordFetchFailure(makeJob(), "HTTP 404", "browser", {
+        runtime,
+        now: NOW,
+      });
+
+      expect(isAbsentReason(result.reason)).toBe(false);
+      expect(state.outcomes[0].ok).toBe(false);
+    });
+
+    it("keeps a 404 loud on kinds where it means a URL we build is wrong", async () => {
+      for (const kind of ["bulletin_department", "subject_index"] as const) {
+        const { store, state } = makeStore();
+        const { runtime } = makeRuntime(store);
+
+        const result = await recordFetchFailure(makeJob({ kind }), "HTTP 404", "cron", {
+          runtime,
+          now: NOW,
+          status: 404,
+        });
+
+        expect(isAbsentReason(result.reason)).toBe(false);
+        expect(state.outcomes[0].ok).toBe(false);
+      }
+    });
+
+    it("leaves a 500 backing off exponentially", async () => {
+      const { store, state } = makeStore();
+      const { runtime } = makeRuntime(store);
+
+      const result = await recordFetchFailure(makeJob(), "HTTP 500", "cron", {
+        runtime,
+        now: NOW,
+        status: 500,
+      });
+
+      expect(isAbsentReason(result.reason)).toBe(false);
+      expect(state.outcomes[0].ok).toBe(false);
     });
   });
 

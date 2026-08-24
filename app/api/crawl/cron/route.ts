@@ -113,7 +113,11 @@ async function runCron(): Promise<CronSummary> {
 
       const outcome = await politeFetch(job.url, { timeoutMs: 15_000 });
       if (!outcome.ok || !outcome.html) {
-        await recordFetchFailure(job, outcome.error ?? `HTTP ${outcome.status}`, "cron");
+        // Our own fetch, so our own status: a 404 on a subject-term page is a
+        // correct answer (the subject offers nothing this term), not a fault.
+        await recordFetchFailure(job, outcome.error ?? `HTTP ${outcome.status}`, "cron", {
+          status: outcome.status,
+        });
         summary.failed += 1;
         continue;
       }

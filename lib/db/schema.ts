@@ -957,8 +957,22 @@ export function rowToCourseWithSections(
   row: CourseRowWithSections,
   termCode?: TermCode,
 ): Course & { sections: Section[] } {
+  /*
+   * Withdrawn sections are dropped here, alongside the term filter, because
+   * this is the one place every embedded read passes through — eight call
+   * sites use `COURSE_WITH_TERM_SECTIONS_SELECT`, and a filter repeated eight
+   * times is a filter that will be applied seven times after the next edit.
+   *
+   * Dropped rather than marked: showing a section Columbia has pulled as
+   * though it were live is the actively harmful option — a student can plan
+   * around it — and the honest middle ground (render it struck through with
+   * its provenance) needs a `withdrawnAt` field on the domain `Section` type,
+   * which lives in a file this lane may not modify. See BLOCKERS #14.
+   */
   const sectionRows = (row.sections ?? []).filter(
-    (s) => termCode === undefined || s.term_code === termCode,
+    (s) =>
+      s.withdrawn_at === null &&
+      (termCode === undefined || s.term_code === termCode),
   );
   return {
     ...rowToCourse(row),

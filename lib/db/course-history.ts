@@ -86,6 +86,10 @@ async function findGhostSections(
     .select("section_id, section_code, term_code, enrollment_count")
     .eq("course_id", courseId)
     .lt("term_code", termCode)
+    // A section Columbia withdrew should not shape "what this course is
+    // usually like": its enrollment is frozen at whatever it read when the
+    // section was pulled, which is not a term that ran.
+    .is("withdrawn_at", null)
     .order("term_code", { ascending: false });
 
   if (error || !data) return [];
@@ -118,6 +122,12 @@ async function sectionCodes(sectionIds: string[]): Promise<Map<string, string>> 
   const db = readClient();
   if (!db) return codes;
 
+  /*
+   * Deliberately NOT filtered on `withdrawn_at`. This resolves ids the caller
+   * already holds into labels; filtering here would blank the label for a row
+   * that plainly exists, turning a withdrawn section into an unnamed one
+   * rather than an absent one. Absence is decided by the queries above.
+   */
   const { data } = await db
     .from("sections")
     .select("section_id, section_code")

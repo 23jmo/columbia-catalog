@@ -337,49 +337,55 @@ sidecar that does not exist.
 
 ---
 
-## 13. Building coordinates — needs a real geocode source
+## 13. RESOLVED — Building coordinates are in, from OpenStreetMap
 
-**What works today.** Commute analysis is live and correct at the level that
-matters. Every meeting's raw location string resolves to one of 60 Columbia
-buildings, each tagged with the campus it physically sits on, and
-`walkMinutesBetween` uses `ZONE_WALK_MINUTES` to answer the question students
-actually get wrong: a 9:10 in Hamilton followed by a 10:10 at CUIMC is not a
-tight connection, it is impossible. That fires correctly.
+Spec §11 says "Buildings are geocoded once", and spec line 638 already named
+OSM as the source. Done: **51 of 60 buildings now carry real coordinates**,
+applied by migration 0025 and mirrored into `lib/schedule/buildings.ts`.
 
-**What is missing.** `lat` and `lng` are `null` on all 60 rows, in
-`lib/schedule/buildings.ts` and in the `buildings` table alike. So
-within-campus walks are all estimated at the same flat zone rate — Mudd to
-Havemeyer and Mudd to Lerner get the same number, though one is 90 seconds and
-the other is closer to six minutes.
+**Source.** Centroids of named building footprints from OpenStreetMap via the
+Overpass API. © OpenStreetMap contributors, ODbL 1.0 — which permits storing
+and redistributing them with attribution, unlike the geocoder terms that ruled
+out option 2 in the original write-up.
 
-**Why I did not fill them in.** I could produce 60 plausible lat/lng pairs from
-memory. Several would be wrong by a block, and every one of them would render
-as a confident walking time on a student's schedule. That is precisely the
-"guess presented as fact" the product rules forbid, and unlike a missing seat
-count it would not look wrong — it would look authoritative.
+**Nothing was guessed.** Every value is a matched footprint. 36 matched OSM's
+name exactly; 5 matched on containment (Columbia's "Mathematics Building" is
+OSM's "Mathematics"); 10 needed an explicit alias, each a deliberate
+identification rather than a fuzzy hit — Columbia's "Seeley W. Mudd Building"
+is OSM's "Mudd Hall", the International Affairs Building is mapped under the
+school that occupies it, and NYSPI is two OSM buildings of which the Institute
+proper is the Pardes Building.
 
-**What would resolve it, in order of preference.**
+Every match was then checked against a bounding box for its campus zone before
+being accepted, so a same-named building elsewhere in Manhattan could not be
+adopted silently.
 
-1. Columbia Facilities publishes building footprints; NYC's PLUTO / Building
-   Footprints open data covers Morningside, Manhattanville and Washington
-   Heights with real polygons and centroids. Either gives verifiable
-   coordinates with a citable source.
-2. A one-time geocoding run against a service with a usage licence that permits
-   storing results (Nominatim's does not, without conditions; Google's does,
-   with attribution).
-3. Hand-measure the 60 centroids off a map and record who measured them and
-   when.
+**Nine are still NULL, on purpose**: Engineering Terrace, the Journalism
+Building, Teachers College, Lehman Hall, Alumni Auditorium (a room inside
+another building), the Allan Rosenfield Building, and the three off-campus
+sites (Baker Athletics Complex, Lamont-Doherty, Nevis). OSM does not name
+them where we looked. A wrong coordinate does not look wrong — it renders as a
+confident walking time — so these keep degrading to the zone estimate, which
+`walkMinutesBetween` already does for any pair missing one.
 
-Any of the three is a single `update buildings set lat = …, lng = …` plus the
-same numbers in `lib/schedule/buildings.ts`. Nothing else in the schedule lane
-changes: `walkMinutesBetween` already prefers a real coordinate pair over the
-zone estimate the moment one exists.
+**What it changed.** Within-campus walks are measured rather than flat.
+Mudd → Havemeyer is 186 m and Mudd → Lerner is 440 m; they used to return the
+same number. A `buildings_coords_paired` check constraint now enforces both
+coordinates or neither, since a half-populated row is worse than an empty one.
 
-**Johnathan decides:** whether coarse-but-honest zone walking times are good
-enough for v1 — I think they are — or whether it is worth an afternoon with
-NYC open data to get within-campus walks right.
+Two schedule tests changed as a direct result, and the second is the point:
 
----
+- One asserted `lat` was null, which encoded the absence of geocoding as
+  expected behaviour. It now pins the rule that survived — a cross-campus hop
+  uses the zone table even when both ends are geocoded, because straight-line
+  distance between campuses is not a walk.
+- "Soft-notes a tight intra-Morningside walk" paired Mudd with Pupin and
+  **stopped firing**, correctly: they are 140 m apart, about two minutes, and
+  an eight-minute gap is comfortable. The flat rate had been warning about a
+  stroll across the street — the kind of false alarm a student learns to
+  ignore, which is how a real one gets missed. The test now uses Butler to
+  Knox Hall (122nd Street, a real eleven-minute walk), and a new test pins
+  that Mudd → Pupin produces no warning at all.
 
 ## 4. A quarantine table is sitting in the database (housekeeping, not a blocker)
 
@@ -414,10 +420,11 @@ if left in place indefinitely.
 
 ---
 
-## 14. Removed sections — crawler half FIXED, presentation half blocked
+## 14. Removed sections — FIXED except for one cosmetic touch
 
-**Status: the retry loop is fixed and shipped. The rendering is not, and the
-reason is a file I am not allowed to touch.**
+**Status: the retry loop is fixed, and withdrawn sections no longer appear
+anywhere. What is left is presentation only: they vanish silently rather than
+being shown struck through, and closing that needs a file I may not touch.**
 
 The Directory serves a TOMBSTONE, not a 404, when a section is pulled: HTTP
 200, 474 bytes, "Section removed from the Directory of Classes". Example:
@@ -453,85 +460,95 @@ will never change.
   `withdrawn_at`; `consecutive_failures` reset to 0 and next fetch is 7–8 days
   out, jittered.
 
+### What is also fixed: they no longer appear anywhere
+
+Withdrawn sections are filtered out of every read, and the filter is in one
+place per path rather than sprinkled across call sites:
+
+- **`rowToCourseWithSections`** — the mapper all eight embedded reads funnel
+  through. It already filtered by term, so the withdrawn filter sits on the
+  same line. Doing it here rather than at the eight `COURSE_WITH_TERM_SECTIONS_SELECT`
+  call sites matters: a filter repeated eight times is a filter that gets
+  applied seven times after the next edit.
+- **`getSection` / `getSections`** — `.is("withdrawn_at", null)` at the query.
+  These back the MCP plan tools, so this is what stops a withdrawn section
+  being added to a plan at all.
+- **`getSeatStates`** — a withdrawn section has no live seat state, only a
+  count frozen at whatever it read when Columbia pulled it. Returning that
+  under a "seats now" heading is worse than returning nothing.
+- **`getPriorSections`** (course history) — a section Columbia withdrew should
+  not shape "what this course is usually like".
+- **Deliberately NOT filtered**: the section-code label lookup in
+  `course-history.ts`, which resolves ids the caller already holds. Filtering
+  there would blank the label for a row that plainly exists, turning a
+  withdrawn section into an unnamed one rather than an absent one.
+
+Verified against live data: `getSection` on a withdrawn id returns null, a
+live id is unaffected, `getSections`/`getSeatStates` drop it from a mixed
+batch, and a course whose only section was pulled comes back with zero
+sections. Pinned by four mapper tests in `lib/db/schema.test.ts`.
+
 ### What is NOT fixed — and why
 
-**Withdrawn sections still render.** Nothing filters on `withdrawn_at`, so a
-section Columbia has pulled still appears in the catalog and in search, and a
-student can still add it to a plan.
+**A withdrawn section disappears silently rather than being shown struck
+through.** For a student who was watching it, that is an empty space where a
+section used to be, with no explanation.
 
 The blocked step is small and specific: the domain `Section` type in
-`lib/types.ts` has no `withdrawnAt` field, and **AGENTS.md forbids modifying
-`lib/types.ts`**. Without it the UI cannot tell a withdrawn section from a
-live one, so it can only show it as live (a lie) or drop it silently (which
-takes a watcher's section away with no explanation).
-
-Filtering was deliberately NOT half-applied. Sections are read through
-PostgREST embeds (`sections(...)`), so filtering means
-`.is("sections.withdrawn_at", null)` on each parent query — and filtering some
-paths but not others is worse than filtering none, because the same section
-then appears on one screen and not another.
+`lib/types.ts` has no `withdrawnAt` field, and **AGENTS.md rule 1 forbids
+modifying `lib/types.ts`** (another agent depends on its exact contents).
+Without that field the UI cannot tell a withdrawn section from a live one, so
+the only two options are showing it as live — a lie, and the actively harmful
+one, since a student could plan around it — or dropping it. Dropping it is
+what is implemented, and it is the better of the two.
 
 **Impact today is nil**: 8 withdrawn sections, all in archived terms (20243
 ×1, 20251 ×7), **0 in 20263/20271**. It becomes user-visible the first time a
 Fall 2026 section is pulled.
 
-**To finish** (needs someone who may edit `lib/types.ts`):
+**To finish** (needs someone who may edit `lib/types.ts`) — now two steps, not
+three, since the filtering is done:
 1. Add `withdrawnAt: string | null` to `Section` in `lib/types.ts`.
 2. Map it in `rowToSection` (`lib/db/schema.ts` — the row type already carries
-   `withdrawn_at`, added in the same commit as migration 0024).
-3. Filter search and the catalog list on it; on the course page render the
-   section struck through with its provenance stamp, so a watcher sees what
-   happened rather than finding an empty space.
+   `withdrawn_at`), then relax the filter on the course page ONLY, and render
+   the section struck through with its provenance stamp. Search, the catalog
+   list, seat states and the plan tools should keep filtering it out; the
+   course page is the one surface where "this was pulled" is worth saying out
+   loud.
 
 
-## 15. Subjects with no page for a term retry forever (same shape as #14)
+## 15. RESOLVED — Subjects with no page for a term are no longer failures
 
-196 `subject_term` jobs across 115 distinct subject codes return HTTP 404 and
-back off exponentially — forever. ANAA, ARAR, AEME, ADVR, AERO, AMHS, AMPO,
-ARCT and ~107 others, most in both crawled terms.
+196 `subject_term` jobs across 115 subject codes returned HTTP 404 and backed
+off exponentially, forever, pinned at the 6h ceiling. The Directory's root
+index lists every subject code that has EVER run, so a subject offering nothing
+in a given term simply has no page for it: the 404 is correct, definitive and
+permanent. Same mistake as #14 — a definitive answer handled as a transient
+fault.
 
-These are not broken. The Directory's root index lists every subject code that
-has *ever* run; a subject that offers nothing in Fall 2026 simply has no page
-for Fall 2026. The 404 is a correct, definitive, permanent answer.
+**Fixed.** `recordFetchFailure` now takes an optional `status`, and a 404 on a
+`subject_term` job completes **ok** at the ordinary cadence instead of backing
+off. Scheduled rather than disabled: a subject that offers nothing in Fall 2026
+may well offer something later, and the weekly re-read is what would notice.
 
-It is the same mistake #14 was: a definitive answer handled as a transient
-failure. The fetcher already knows 404 is non-retryable at the HTTP layer
-(`isRetryable` excludes it), but `recordFetchFailure` then treats it like any
-other fault and schedules a retry. Capped at the 6h backoff ceiling, that is
-~800 wasted requests/day at Columbia's expense, and it keeps the failure
-metrics permanently noisy — which is how a real failure gets missed.
+**The asymmetry is the design, not an oversight.** `status` is populated only
+by the cron route and the operator script, which hold a real `politeFetch`
+outcome. The browser submit route does NOT pass it, and `SubmissionSchema`
+still carries no status field. Honouring a client's claim that a page 404s
+would let any browser mark a subject permanently absent for every other user,
+and this codebase already draws that line: provenance travels with the data
+and must not be client-controlled. Tested in both directions.
 
-**Not fixed here because the right fix is not obvious.** A subject genuinely
-can start offering classes in a term it did not before, so "404 once, never
-ask again" is wrong. What is needed is a distinct outcome — "correctly absent"
-— that schedules a slow re-check (monthly?) instead of a failure backoff, and
-that does not count as a failure in the tally. That is a design decision about
-the crawl contract, not a bug fix, and #14's cadence work is the natural place
-to build it on.
+Restricted to `subject_term` deliberately. A 404 on a section-detail page is
+already handled as a withdrawal by its own tombstone, and a 404 on a bulletin
+department or the subject index means a URL we build is wrong — a bug that
+should stay loud rather than be reclassified as normal. Also tested.
 
-**Note the ordering trap**: `recordFetchFailure` receives an `error` STRING
-(`scripts/crawl.ts` passes `HTTP ${outcome.status}`), not the status code.
-Sniffing "404" out of that string would work today and break the first time
-the message is reworded. The status needs to be passed properly.
-
-**And the reason that is not merely plumbing.** `recordFetchFailure` has three
-callers. Two — `app/api/crawl/cron/route.ts` and `scripts/crawl.ts` — hold a
-real `politeFetch` outcome and can pass a status we observed ourselves. The
-third is `app/api/crawl/submit/route.ts`, where the fetch happened in a
-student's browser and `SubmissionSchema` carries only `{ok, html, error}` —
-**no status field at all**.
-
-So the fix cannot just be "add `status` to the schema". A client-reported 404
-is a claim, not an observation, and this codebase already draws that line
-explicitly ("Provenance travels with the data, so it must not be
-client-controlled"). Honouring one would let any browser mark a subject
-permanently absent for every user.
-
-Which means the real decision is: does a browser-sourced 404 count at all? The
-defensible answer is probably no — treat client failures as transient as they
-are today, and let only the cron and the operator script record "correctly
-absent". That is a small asymmetry with a good reason, and it should be
-written down rather than discovered later.
+**Verified live**: the operator drain reported `not published 50 / failed 0`
+where those same 50 were failures before, and **all 1,154 subject-term jobs
+now carry no error at all** (was 196 permanently erroring). ~800 wasted
+requests/day at Columbia's expense stopped, and the failure count can return
+to zero — which is what makes a real failure visible.
 
 ## 16. Search index is at 91.9% of its size budget
 

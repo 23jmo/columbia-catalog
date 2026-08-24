@@ -373,10 +373,18 @@ export async function getCourseAcrossTerms(
 export async function getSection(sectionId: string): Promise<Section | null> {
   const client = readClient();
 
+  /*
+   * `is("withdrawn_at", null)` rather than filtering after the fetch, so a
+   * section Columbia has pulled reads as absent to every caller — including
+   * the MCP plan tools, which use this to decide whether a section can be
+   * added to a plan at all. Answering "yes, here it is" for a section that no
+   * longer exists is the failure worth preventing. See BLOCKERS #14.
+   */
   const { data, error } = await client
     .from("sections")
     .select(SECTION_SELECT)
     .eq("section_id", sectionId)
+    .is("withdrawn_at", null)
     .maybeSingle()
     .overrideTypes<SectionRowWithRelations | null, { merge: false }>();
 
@@ -394,6 +402,7 @@ export async function getSections(sectionIds: string[]): Promise<Section[]> {
       .from("sections")
       .select(SECTION_SELECT)
       .in("section_id", ids)
+      .is("withdrawn_at", null)
       .overrideTypes<SectionRowWithRelations[], { merge: false }>();
 
     if (error) fail("getSections", error);
@@ -449,6 +458,10 @@ export async function getSeatStates(sectionIds: string[]): Promise<SeatState[]> 
         "section_id, enrollment_count, enrollment_cap, waitlist_count, status, source_as_of, source_as_of_raw",
       )
       .in("section_id", ids)
+      // A withdrawn section has no live seat state — only a count frozen at
+      // whatever it was when Columbia pulled it. Returning that under a
+      // "seats now" heading is worse than returning nothing.
+      .is("withdrawn_at", null)
       .overrideTypes<SeatRow[], { merge: false }>();
 
     if (error) fail("getSeatStates", error);

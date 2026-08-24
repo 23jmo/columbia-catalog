@@ -217,11 +217,30 @@ describe("commute", () => {
     expect(walkMinutesBetween(null, null)).toBeGreaterThan(0);
   });
 
-  it("uses zone estimates when buildings carry no geocode", () => {
+  /*
+   * This test used to assert `lat` was null, which encoded the ABSENCE of
+   * geocoding as the expected behaviour. Migration 0025 filled 51 of the 60
+   * from OpenStreetMap, so what is worth pinning now is the rule that
+   * survived: a cross-zone hop uses the zone table even when both ends have
+   * real coordinates. Straight-line distance between campuses is not a walk —
+   * Morningside to Manhattanville is a subway ride or a long march up
+   * Broadway, and haversine would flatter it badly.
+   */
+  it("uses the zone table across campuses even when both ends are geocoded", () => {
     const morningside = findBuilding("Seeley W. Mudd Building", DEMO_BUILDINGS);
     const manhattanville = findBuilding("Jerome L. Greene Science Center", DEMO_BUILDINGS);
-    expect(morningside?.lat).toBeNull();
+    expect(morningside?.lat).not.toBeNull();
+    expect(manhattanville?.lat).not.toBeNull();
     expect(walkMinutesBetween(morningside, manhattanville)).toBe(14);
+  });
+
+  it("still degrades to the zone table for a building OSM does not name", () => {
+    // Nine of the sixty have no confident OSM match and keep null coordinates
+    // on purpose. They must not crash or silently read as distance zero.
+    const ungeocoded = findBuilding("Engineering Terrace", DEMO_BUILDINGS);
+    const geocoded = findBuilding("Seeley W. Mudd Building", DEMO_BUILDINGS);
+    expect(ungeocoded?.lat).toBeNull();
+    expect(walkMinutesBetween(ungeocoded, geocoded)).toBeGreaterThan(0);
   });
 
   it("refines an intra-zone walk when both geocodes exist", () => {
@@ -301,7 +320,41 @@ describe("commute", () => {
     expect(warnings[0].severity).toBe("soft");
   });
 
+  /*
+   * Butler to Knox, not Mudd to Pupin.
+   *
+   * This test used to pair Mudd with Pupin and it stopped firing the moment
+   * real coordinates landed — correctly. Those two are 140 m apart, about two
+   * minutes, and an eight-minute gap between them is comfortable. The flat
+   * per-zone rate could not tell them apart from a walk five times as long, so
+   * it warned about a stroll across the street.
+   *
+   * Knox Hall is at 122nd, genuinely off the main quad: Butler to Knox is a
+   * real eleven-minute walk. Thirteen minutes to make it is feasible with two
+   * to spare — under TIGHT_BUFFER_MINUTES, so a soft note. (Eight minutes
+   * would be infeasible and would hard-warn, which is a different branch.)
+   */
   it("soft-notes a tight intra-Morningside walk", () => {
+    const butler = section({
+      sectionId: `${TERM}COMS4118W001`,
+      courseId: "COMS4118W",
+      meetings: [meeting("Mo", 600, 675, "Butler Library", "203")],
+    });
+    const knox = section({
+      sectionId: `${TERM}RELI3000W001`,
+      courseId: "RELI3000W",
+      meetings: [meeting("Mo", 688, 763, "Knox Hall", "509")],
+    });
+    const warnings = commuteConflicts(analyzeCommute([butler, knox], []));
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0].severity).toBe("soft");
+    expect(warnings[0].message).toContain("Tight");
+  });
+
+  it("no longer warns about a walk that real coordinates show is short", () => {
+    // The regression this guards: Mudd -> Pupin is 140 m. Under the flat zone
+    // rate an 8-minute gap looked tight and produced a warning a student would
+    // learn to ignore, which is how a real warning gets missed.
     const mudd = section({
       sectionId: `${TERM}COMS4118W001`,
       courseId: "COMS4118W",
@@ -312,10 +365,7 @@ describe("commute", () => {
       courseId: "PHYS1601W",
       meetings: [meeting("Mo", 683, 758, "Pupin Laboratories", "428")],
     });
-    const warnings = commuteConflicts(analyzeCommute([mudd, pupin], []));
-    expect(warnings).toHaveLength(1);
-    expect(warnings[0].severity).toBe("soft");
-    expect(warnings[0].message).toContain("Tight");
+    expect(commuteConflicts(analyzeCommute([mudd, pupin], []))).toHaveLength(0);
   });
 
   it("does not report a walk between two meetings in the same building", () => {
