@@ -1,41 +1,55 @@
 /**
- * Home — "the tab a student leaves open during registration week" (spec §5).
+ * Home — the feed, then the planner.
  *
- * A single-column workspace: the primary plan (week, credits, conflicts,
- * commute warnings) plus the watchlist rail. The agent handoff moved to
- * `/mcp-setup`; Home surfaces it through a compact BoardUI announcement
- * instead of a permanent sidebar column.
+ * ── What changed, and why the order is the whole point ─────────────────────
  *
- * Below `lg` nothing special happens — there is only one column.
+ * This page used to open with the week grid: a good planner, and a planner is
+ * what you use AFTER you have decided. The product's thesis is that Vergil
+ * cannot get you from "I'm a sophomore CS major interested in AI" to "here are
+ * six classes you should take", and a home page whose first screen assumes you
+ * already know what you are taking restates that same gap.
  *
- * This is a **server component**. The only JavaScript the page ships is the app
- * shell's interactive leaves plus the announcement card's dismiss/action
- * buttons, so the whole surface is meaningful markup on first paint.
+ * So `/` opens with the feed. **Nothing was deleted** — the schedule week grid
+ * and the watchlist rail are unchanged and sit directly below it, because they
+ * are the surfaces a student lives in during registration week and the feed is
+ * the surface that gets them there.
  *
- * The watchlist rail cannot be server-rendered — its whole purpose is to be
- * current, and a server-rendered seat count is a photograph of the moment the
- * request was served. It subscribes to Postgres realtime and repaints itself.
+ * ── The feed streams; the planner does not wait for it ─────────────────────
+ *
+ * `buildFeed` is by far the most expensive read on the page — a cold process
+ * pages the whole active catalog and builds a prerequisite graph over 8,189
+ * courses. Awaiting it inline would hold the week grid and the watchlist behind
+ * it, so it renders inside a `<Suspense>` boundary and streams in under a
+ * skeleton of its own shape. Everything below paints immediately.
+ *
+ * This remains a **server component**, and so is every part of the feed. The
+ * only JavaScript the feed adds is the shared sign-in button on the cold-start
+ * banner; the "and N other sections" disclosure is a native `<details>`.
  */
 
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { RiGraduationCapLine } from "@remixicon/react";
 import { Chip } from "@/components/base/badges/chip";
 import { AppShell } from "@/components/shell/app-shell";
+import { PageContent } from "@/components/shell/page-content";
 import { AuthErrorNotice } from "@/components/shell/auth-error-notice";
 import { PageHeader } from "@/components/shell/page-header";
 import { WeekGrid } from "@/components/schedule";
 import { AgentAnnouncement } from "@/components/home/agent-announcement";
 import { ScheduleColumn } from "@/components/home/schedule-column";
+import { FeedPanel, FeedSkeleton } from "@/components/feed";
 import { WatchlistRail } from "@/components/watch/watchlist-rail";
 import { isEmailConfigured } from "@/lib/alerts/resend";
 import { loadPlanSnapshot } from "@/components/home/load-plan-snapshot";
 import { CURRENT_TERM, buildTerm } from "@/lib/constants";
+import { buildFeed } from "@/lib/recommend/feed";
 import { getSessionUser } from "@/lib/db/auth";
 
 export const metadata: Metadata = {
   title: "Home · Columbia Catalog",
   description:
-    "Your Columbia schedule for the term, with conflicts and commute warnings.",
+    "Courses worth taking next term, chosen from what you have already taken and what your degree still needs.",
 };
 
 export default async function HomePage({
@@ -55,7 +69,7 @@ export default async function HomePage({
 
   return (
     <AppShell activeNav="home">
-      <div className="mx-auto flex w-full max-w-[900px] min-w-0 flex-col gap-5">
+      <PageContent className="max-w-[900px] gap-5">
         <AuthErrorNotice reason={params.auth_error} />
 
         <PageHeader
@@ -75,6 +89,10 @@ export default async function HomePage({
           }
         />
 
+        <Suspense fallback={<FeedSkeleton />}>
+          <Feed />
+        </Suspense>
+
         <AgentAnnouncement />
 
         <ScheduleColumn
@@ -92,7 +110,27 @@ export default async function HomePage({
         />
 
         <WatchlistRail termCode={termCode} emailAlertsEnabled={emailAlertsEnabled} />
-      </div>
+      </PageContent>
     </AppShell>
   );
+}
+
+/**
+ * The feed, isolated so its await sits inside the Suspense boundary.
+ *
+ * A failure renders nothing rather than taking the page down. Every source
+ * `buildFeed` reads already degrades on its own — a missing profile becomes a
+ * guest, a missing prerequisite graph becomes "unknown, with a caveat", a
+ * missing vector artifact becomes requirement-only ranking — so reaching this
+ * catch means something genuinely unexpected happened, and the right answer is
+ * still a working planner below rather than an error page.
+ */
+async function Feed() {
+  try {
+    const feed = await buildFeed();
+    return <FeedPanel feed={feed} />;
+  } catch (cause) {
+    console.error("home: the feed could not be built:", cause);
+    return null;
+  }
 }

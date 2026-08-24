@@ -44,6 +44,15 @@ export interface TakenCourse {
   termLabel: string | null;
   /** Points earned, when they differ from the catalog's range. */
   points: number | null;
+  /**
+   * The student's own opinion of the course (migration 0032), and NOT a grade.
+   *
+   * `null` means we never asked, which is the common case and must never be
+   * read as "disliked" — the taste vector weights a disliked course DOWN, so
+   * collapsing null into false would push a recommender away from everything a
+   * student took and never rated. See `lib/recommend/taste.ts`.
+   */
+  liked: boolean | null;
   source: CourseSource;
   addedAt: string;
 }
@@ -59,6 +68,13 @@ export interface StudentProfile {
   /** Expected graduation, e.g. `"2028"`. Free text, used only for display. */
   classYear: string | null;
   courses: TakenCourse[];
+  /**
+   * Declared interests, hand-authored and major-scoped (migration 0032). Each
+   * tag maps to a seed vector built from exemplar courses — so an unrecognised
+   * tag contributes nothing rather than erroring, and the list is bounded at 24
+   * by a database check rather than by hope.
+   */
+  interestTags: string[];
   /** `groupKey` → ISO timestamp the student ticked it. */
   attestations: Record<string, string>;
   updatedAt: string | null;
@@ -82,6 +98,7 @@ export const EMPTY_PROFILE: Omit<StudentProfile, "userId"> = {
   programIds: [],
   classYear: null,
   courses: [],
+  interestTags: [],
   attestations: {},
   updatedAt: null,
 };

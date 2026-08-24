@@ -95,9 +95,14 @@ function score(offering: Offering, requirement: RemainingRequirement): {
   const reasons: string[] = [];
   let value = 0;
 
-  // The whole point: it clears something.
+  /*
+   * The whole point: it clears something. No reason string — the card prints
+   * the requirement it would clear, and its program, on its own line directly
+   * under the title. "Counts toward Probability / Statistics" three millimetres
+   * above "Probability / Statistics · Computer Science" is the same sentence
+   * twice, and it pushed the reasons row past the point where anyone reads it.
+   */
   value += 100;
-  reasons.push(`Counts toward ${requirement.label}`);
 
   /*
    * A named candidate outranks a flag match.
@@ -107,9 +112,10 @@ function score(offering: Offering, requirement: RemainingRequirement): {
    * claim we are making — see the verification tiers in
    * `lib/requirements/types.ts`.
    */
+  // No reason string: the verification chip on the card already says this, in
+  // the same words, two lines up.
   if (requirement.verification === "exact") {
     value += 30;
-    reasons.push("Named in the Bulletin for this requirement");
   }
 
   // A requirement one course from done is worth more than one five courses out.
@@ -130,15 +136,26 @@ function score(offering: Offering, requirement: RemainingRequirement): {
     reasons.push("Cross-campus travel between classes");
   }
 
+  /*
+   * Seats affect the ranking, and the reason says which way — but never with a
+   * number in it.
+   *
+   * Two reasons. The card already prints the count once, with the directory's
+   * own "as of" beside it (spec §3, AGENTS.md), and printing it twice made the
+   * qualified copy look like the redundant one. And a bare "200 seats open" in
+   * a reasons list is a seat number rendered without provenance, which is the
+   * one thing that rule exists to forbid — the reasons row has no room for a
+   * timestamp and should not be carrying figures that need one.
+   */
   if (offering.seatsOpen != null) {
     if (offering.seatsOpen <= 0) {
       value -= 40;
       reasons.push("Full right now");
     } else if (offering.seatsTotal && offering.seatsOpen / offering.seatsTotal > 0.25) {
       value += 10;
-      reasons.push(`${offering.seatsOpen} seats open`);
+      reasons.push("Room at the moment");
     } else {
-      reasons.push(`${offering.seatsOpen} seats left`);
+      reasons.push("Filling up");
     }
   }
 
