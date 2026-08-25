@@ -16,6 +16,7 @@ import { Conversation } from "@/components/assistant/conversation";
 import { SignInFlair } from "@/components/assistant/sign-in-flair";
 import { Ornament } from "@/components/onboarding/screen";
 import { SignInPrompt } from "@/components/home/sign-in-prompt";
+import { seedOnboardingMessages, takeOnboardingHandoff } from "@/lib/onboarding/handoff";
 import { cx } from "@/utils/cx";
 
 /**
@@ -189,6 +190,17 @@ export function AssistantHome({
   });
 
   const isBusy = status === "submitted" || status === "streaming";
+
+  /*
+   * Onboarding lands here with the cards already chosen. Seed the thread
+   * once, from sessionStorage, without calling the model — restating those
+   * four sections would spend a prompt on work we just did.
+   */
+  useEffect(() => {
+    const cards = takeOnboardingHandoff();
+    if (!cards?.length) return;
+    setMessages(seedOnboardingMessages(cards));
+  }, [setMessages]);
 
   const ask = useCallback(
     (text: string) => {
@@ -365,9 +377,26 @@ export function AssistantHome({
  * already asking, so the empty field below reads as an invitation rather than
  * as a search box they have to think of a query for.
  *
- * Both at the same size, the second in grey. That is a deliberate copy of the
- * reference: matching the sizes makes them one sentence in two parts, where
- * shrinking the second would make it a subtitle and subtitles get skipped.
+ * Both at the same size, the second in grey and one weight lighter. Matching
+ * the sizes is what makes them one sentence in two parts — shrinking the second
+ * would turn it into a subtitle, and subtitles get skipped. Grey and 500 carry
+ * the hierarchy instead, which is enough: at 40px, semibold grey was the
+ * heaviest thing on the page and it competed with the line above it.
+ *
+ * ── The leading is overridden, and it had to be ────────────────────────────
+ *
+ * `styles/typography.css` gives the whole display ramp paragraph leading —
+ * display-3 is 2.5rem of type on 3.375rem of line, a ratio of 1.35. That is
+ * right for a display line sitting alone in a layout and wrong for two stacked
+ * lines meant to read as one block: 54px of leading under 40px letters that are
+ * themselves tracked in by 0.8px reads as slack, and it is what made this look
+ * off next to the settings modal, which is set in the body ramp at normal
+ * ratios.
+ *
+ * 1.1 is the display figure. It is set here rather than fixed in the theme
+ * because `styles/**` is shared and frozen (AGENTS.md rule 1) — and because the
+ * ramp is not wrong, it is tuned for one line at a time, which is how the rest
+ * of the app uses it.
  *
  * ── The gradient is on the line that is about a person ─────────────────────
  *
@@ -386,6 +415,9 @@ export function AssistantHome({
  * sentence the whole product exists to answer — and the same instruction under
  * it, so the page has a subject either way.
  */
+/** Display leading. See the note above — the type ramp ships 1.35. */
+const HERO_LEADING = "leading-[1.1]";
+
 function Hero({ name }: { name: string | null }) {
   return (
     <header className="flex flex-col px-1">
@@ -419,6 +451,7 @@ function Hero({ name }: { name: string | null }) {
           "from-accent-700 via-accent-500 to-rose-500",
           "dark:from-accent-400 dark:via-accent-300 dark:to-rose-300",
           "text-display-4-semibold -tracking-[0.02em] sm:text-display-3-semibold",
+          HERO_LEADING,
         )}
       >
         {name ? `Welcome back, ${name}` : "What should you take?"}
@@ -432,7 +465,8 @@ function Hero({ name }: { name: string | null }) {
       <p
         className={cx(
           "text-balance text-text-tertiary",
-          "text-display-4-semibold -tracking-[0.02em] sm:text-display-3-semibold",
+          "text-display-4-medium -tracking-[0.02em] sm:text-display-3-medium",
+          HERO_LEADING,
         )}
       >
         {name ? "What should you take next semester?" : "Ask below, or start from what is on offer."}
