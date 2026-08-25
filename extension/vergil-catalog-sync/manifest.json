@@ -37,7 +37,7 @@
     }
   ],
   "externally_connectable": {
-    "matches": ["https://columbia-catalog.vercel.app/*"]
+    "matches": ["https://www.lionplan.org/*"]
   },
-  "homepage_url": "https://columbia-catalog.vercel.app"
+  "homepage_url": "https://www.lionplan.org"
 }

@@ -18,13 +18,22 @@ const CARRIED_PARAMS = ["auth_error"] as const;
  * `/onboarding` is the destination. `/auth/` is the OAuth round-trip.
  * `/api/` authorizes itself per route; a HTML-only gate must not sit in front
  * of the crawler or the agent.
+ *
+ * `/.well-known/` is here because the gate cannot see the rewrite. `vercel.ts`
+ * maps those paths onto `/api/mcp/oauth/...`, but rewrites resolve after this
+ * runs, so the path we match is still `/.well-known/...` and the `/api/` clause
+ * above never fires. Without this an unauthenticated MCP client asking where to
+ * authenticate is answered with a 307 to the wizard — and an OAuth discovery
+ * document is by definition fetched by something that has no session yet, so
+ * gating it makes the endpoint useless to the only caller it has.
  */
 export function isGuestAllowedPath(pathname: string): boolean {
   return (
     pathname === "/onboarding" ||
     pathname.startsWith("/onboarding/") ||
     pathname.startsWith("/auth/") ||
-    pathname.startsWith("/api/")
+    pathname.startsWith("/api/") ||
+    pathname.startsWith("/.well-known/")
   );
 }
 

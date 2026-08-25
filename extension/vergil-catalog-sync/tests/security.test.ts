@@ -26,7 +26,7 @@ describe("extension security boundary", () => {
     expect(manifest.permissions).toEqual(["storage"]);
     expect(manifest.host_permissions).toBeUndefined();
     expect(manifest.externally_connectable).toEqual({
-      matches: ["https://columbia-catalog.vercel.app/*"],
+      matches: ["https://www.lionplan.org/*"],
     });
     expect(manifest.web_accessible_resources).toBeUndefined();
   });
@@ -67,7 +67,7 @@ describe("extension security boundary", () => {
 
   it("requires opt-in and verifies the exact catalog origin before sharing", async () => {
     const source = await readFile(path.join(root, "service-worker.js"), "utf8");
-    expect(source).toContain('const CATALOG_ORIGIN = "https://columbia-catalog.vercel.app"');
+    expect(source).toContain('const CATALOG_ORIGIN = "https://www.lionplan.org"');
     expect(source).toContain("if (!prefs.enabled)");
     expect(source).toContain("senderOrigin !== CATALOG_ORIGIN");
   });

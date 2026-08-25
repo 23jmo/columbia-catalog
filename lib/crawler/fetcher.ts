@@ -72,7 +72,7 @@ export const FORBIDDEN_HOST_PREFIXES: readonly string[] = [
  */
 export const CRAWLER_USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) " +
-  "Chrome/140.0.0.0 Safari/537.36 LionPlan/1.0 (+https://columbia-catalog.vercel.app/about)";
+  "Chrome/140.0.0.0 Safari/537.36 LionPlan/1.0 (+https://www.lionplan.org/about)";
 
 /**
  * The default gap between two requests to the same host: 1.2–3.5s, so a
