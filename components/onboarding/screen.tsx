@@ -176,7 +176,11 @@ export function OnboardingScreen({
       */}
       <div
         className={cx(
-          "mx-auto flex w-full min-w-0 flex-col items-center px-4 pt-[13vh] sm:px-5 sm:pt-[15vh]",
+          "mx-auto flex w-full min-w-0 flex-col items-center px-4 sm:px-5",
+          // The locked feed has to fit a Columbia button under the peek on a
+          // phone. 13vh of top padding plus the ornament is what pushed that
+          // button into the fold on an iPhone 14; sm keeps the original air.
+          lockViewport ? "pt-14 sm:pt-[15vh]" : "pt-[13vh] sm:pt-[15vh]",
           wide ? "max-w-[760px]" : "max-w-[620px]",
           // Deep enough to clear the toast card at its two-line worst, which is
           // what a 390px viewport gives it. The locked feed has no advance
@@ -217,10 +221,13 @@ export function OnboardingScreen({
           >
             <TypewriterQuestion
               text={question}
-              className="mt-7 w-full min-w-0 text-center text-display-4-regular -tracking-[0.02em] text-text-primary sm:mt-9 sm:text-display-3-regular"
+              className={cx(
+                "w-full min-w-0 text-center text-display-4-regular -tracking-[0.02em] text-text-primary sm:text-display-3-regular",
+                lockViewport ? "mt-4 sm:mt-9" : "mt-7 sm:mt-9",
+              )}
             />
 
-            <div className="mt-8 w-full min-w-0 sm:mt-10">
+            <div className={cx("w-full min-w-0", lockViewport ? "mt-5 sm:mt-10" : "mt-8 sm:mt-10")}>
               {children}
             </div>
           </motion.div>
