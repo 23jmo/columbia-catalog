@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { RiCheckLine, RiFileCopyLine } from "@remixicon/react";
 import { Button } from "@/components/base/buttons/button";
+import { haptic } from "@/lib/haptics";
 import { cx } from "@/utils/cx";
 
 type CopyState = "idle" | "copied" | "failed";
@@ -38,8 +39,10 @@ export function CopyPromptButton({
     if (resetTimer.current) clearTimeout(resetTimer.current);
     try {
       await navigator.clipboard.writeText(value);
+      haptic("success");
       setCopyState("copied");
     } catch {
+      haptic("error");
       setCopyState("failed");
     }
     resetTimer.current = setTimeout(() => setCopyState("idle"), 2400);

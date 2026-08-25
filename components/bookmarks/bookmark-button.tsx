@@ -7,6 +7,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useBookmark } from "@/hooks/use-bookmark";
 import { useWatchlist } from "@/hooks/use-watchlist";
 import { toggleBookmark } from "@/lib/bookmarks/store";
+import { haptic } from "@/lib/haptics";
 import { cx } from "@/utils/cx";
 
 import { announceRemoval, announceSave, showSignInToast } from "./bookmark-toasts";
@@ -68,6 +69,8 @@ export function BookmarkButton({
 
   const onPress = useCallback(async () => {
     if (signedOut) {
+      // Light tick so the press registers before the sign-in toast appears.
+      haptic("selection");
       showSignInToast();
       return;
     }
@@ -77,6 +80,9 @@ export function BookmarkButton({
     // means the two agree; a rollback simply un-fills an icon whose sparks
     // have already faded.
     const willSave = !saved;
+    // Haptic lands with the press. Save gets the success double-pulse; remove
+    // stays a short tick — celebrating an un-save is the wrong note.
+    haptic(willSave ? "success" : "selection");
     if (willSave && !reduceMotion) setBurstKey((key) => key + 1);
 
     // Read before the write: removing a bookmark cascades its watch away, so

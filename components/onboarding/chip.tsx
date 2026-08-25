@@ -3,6 +3,7 @@
 import type { HTMLAttributes, ReactNode } from "react";
 import { RiAddLine, RiCloseLine } from "@remixicon/react";
 
+import { haptic } from "@/lib/haptics";
 import { cx } from "@/utils/cx";
 
 /**
@@ -84,7 +85,11 @@ export function OptionChip({
         aria-pressed={isSelected}
         aria-label={label}
         disabled={disabled}
-        onClick={onPress}
+        onClick={() => {
+          // Select is the affirmative tap; re-press to clear stays a quiet tick.
+          haptic(isSelected ? "selection" : "impact");
+          onPress();
+        }}
         className={cx(
           CHIP_BASE,
           sublabel && "py-2",
@@ -149,7 +154,10 @@ export function RemovableChip({
       </span>
       <button
         type="button"
-        onClick={onRemove}
+        onClick={() => {
+          haptic("selection");
+          onRemove();
+        }}
         aria-label={removeLabel}
         className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-full text-accent-500 transition-colors hover:bg-accent-500/20 sm:size-8 pointer-coarse:size-7 sm:pointer-coarse:size-9"
       >
@@ -175,7 +183,11 @@ export function AddChip({
     <li>
       <button
         type="button"
-        onClick={onPress}
+        onClick={() => {
+          // Adding a course to the record is a completed act, not a toggle.
+          haptic("success");
+          onPress();
+        }}
         aria-label={label}
         className={cx(COURSE_CHIP, "cursor-pointer px-2.5 pl-2 transition-colors sm:px-4 sm:pl-3", CHIP_IDLE)}
       >

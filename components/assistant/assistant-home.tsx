@@ -387,12 +387,19 @@ export function AssistantHome({
       {/*
         Sticky to the viewport bottom. The hamburger bar is at the top now, so
         this no longer has to clear a tab bar.
+
+        When the sign-in flair is up, the dock goes slightly translucent with a
+        light backdrop blur so feed cards soft-focus under the card instead of
+        meeting a hard opaque cut. Signed-in stays solid — no flair to separate.
       */}
       <div
         data-assistant-dock
         className={cx(
-          "sticky bottom-0 z-10 -mx-1 bg-background-full px-1 pt-4",
+          "sticky bottom-0 z-10 -mx-1 px-1 pt-4",
           "pb-[max(0.25rem,env(safe-area-inset-bottom,0px))]",
+          isSignedIn
+            ? "bg-background-full"
+            : "bg-background-full/80 backdrop-blur-md",
         )}
       >
         {/*

@@ -5,6 +5,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { RiArrowLeftLine, RiArrowRightLine } from "@remixicon/react";
 
 import { OrnamentAvatar } from "@/components/ornament/ornament-avatar";
+import { haptic } from "@/lib/haptics";
 import { cx } from "@/utils/cx";
 
 import { TypewriterQuestion } from "./typewriter-question";
@@ -162,8 +163,11 @@ export function OnboardingScreen({
   return (
     <div
       className={cx(
-        "relative flex w-full flex-col bg-background-secondary-default",
-        lockViewport ? "h-dvh overflow-hidden overscroll-none" : "min-h-dvh",
+        // `min-w-0`: the feed step mounts wide section cards; without a
+        // shrink floor they push this shell past 100vw and the locked
+        // viewport shears the sign-in card on the right.
+        "relative flex w-full min-w-0 flex-col bg-background-secondary-default",
+        lockViewport ? "h-dvh overflow-hidden overscroll-none" : "min-h-dvh overflow-x-clip",
       )}
     >
       {onBack ? <BackArrow onClick={onBack} /> : null}
@@ -180,7 +184,7 @@ export function OnboardingScreen({
       */}
       <div
         className={cx(
-          "mx-auto flex w-full flex-1 flex-col items-center px-5 pt-[13vh] sm:pt-[15vh]",
+          "mx-auto flex w-full min-w-0 flex-1 flex-col items-center px-4 pt-[13vh] sm:px-5 sm:pt-[15vh]",
           wide ? "max-w-[760px]" : "max-w-[620px]",
           // Deep enough to clear the toast card at its two-line worst, which is
           // what a 390px viewport gives it.
@@ -212,18 +216,18 @@ export function OnboardingScreen({
             exit={{ opacity: 0, transform: `translateX(${-direction * offset}px)` }}
             transition={STEP_TRANSITION}
             className={cx(
-              "flex w-full flex-col items-center",
+              "flex w-full min-w-0 flex-col items-center",
               lockViewport && "min-h-0 flex-1",
             )}
           >
             <TypewriterQuestion
               text={question}
-              className="mt-7 text-center text-display-4-regular -tracking-[0.02em] text-text-primary sm:mt-9 sm:text-display-3-regular"
+              className="mt-7 w-full min-w-0 text-center text-display-4-regular -tracking-[0.02em] text-text-primary sm:mt-9 sm:text-display-3-regular"
             />
 
             <div
               className={cx(
-                "mt-8 w-full sm:mt-10",
+                "mt-8 w-full min-w-0 sm:mt-10",
                 lockViewport && "min-h-0 flex-1 overflow-hidden",
               )}
             >
@@ -394,7 +398,10 @@ function SignInChip({ onClick, error }: { onClick: () => void; error?: string | 
     <div className="absolute top-4 right-4 z-10 flex flex-col items-end sm:top-6 sm:right-6">
       <button
         type="button"
-        onClick={onClick}
+        onClick={() => {
+          haptic("impact");
+          onClick();
+        }}
         className="flex h-10 cursor-pointer items-center rounded-xl border border-border-button-default bg-background-full px-3.5 text-body-medium text-text-secondary transition-colors hover:bg-background-secondary-hover hover:text-text-primary pointer-coarse:h-11"
       >
         Log in
@@ -415,7 +422,10 @@ function BackArrow({ onClick }: { onClick: () => void }) {
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={() => {
+        haptic("selection");
+        onClick();
+      }}
       aria-label="Back"
       className="absolute top-4 left-4 z-10 flex size-10 cursor-pointer items-center justify-center rounded-xl border border-border-button-default bg-background-full text-text-secondary transition-colors hover:bg-background-secondary-hover hover:text-text-primary sm:top-6 sm:left-6 pointer-coarse:size-11"
     >
@@ -450,7 +460,11 @@ function AdvanceArrow({
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={() => {
+        // Advancing is the completed beat of each screen.
+        haptic("success");
+        onClick();
+      }}
       disabled={disabled}
       aria-label={label}
       className={cx(

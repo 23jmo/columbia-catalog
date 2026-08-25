@@ -8,6 +8,7 @@ import { searchCoursesAction, warmCourseSearchAction } from "@/app/onboarding/ac
 // Type-only: `server.ts` reaches the database and must not enter this bundle.
 import type { CourseHit } from "@/lib/onboarding/server";
 import { displayCourseTitle } from "@/lib/onboarding/course-title";
+import { haptic } from "@/lib/haptics";
 
 /**
  * The release valve on the guesses.
@@ -149,7 +150,10 @@ export function CourseSearch({ confirmedIds, onAdd }: CourseSearchProps) {
                 <button
                   type="button"
                   disabled={isAdded}
-                  onClick={() => onAdd(hit)}
+                  onClick={() => {
+                    haptic("success");
+                    onAdd(hit);
+                  }}
                   className={
                     isAdded
                       ? "flex w-full min-h-10 cursor-default items-center gap-2 rounded-lg px-2 text-left text-text-tertiary pointer-coarse:min-h-11"
