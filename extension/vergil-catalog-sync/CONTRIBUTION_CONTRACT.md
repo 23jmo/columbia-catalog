@@ -6,7 +6,7 @@ the Vergil credential completely outside Columbia Catalog.
 
 ## Browser handshake
 
-The production page `https://columbia-catalog.vercel.app/contribute/vergil`
+The production page `https://lionplan.org/contribute/vergil`
 connects to the published extension ID with `chrome.runtime.sendMessage`.
 
 1. Send `{ "type": "GET_VERGIL_CONTRIBUTION_SUMMARY" }`.

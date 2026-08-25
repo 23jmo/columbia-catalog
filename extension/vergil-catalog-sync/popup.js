@@ -112,7 +112,7 @@ contributionEnabled.addEventListener("change", async () => {
 });
 
 contributeButton.addEventListener("click", () => {
-  chrome.tabs.create({ url: "https://columbia-catalog.vercel.app/contribute/vergil", active: true });
+  chrome.tabs.create({ url: "https://lionplan.org/contribute/vergil", active: true });
 });
 
 exportButton.addEventListener("click", () => {
