@@ -5,6 +5,7 @@ import { RiMenuLine } from "@remixicon/react";
 
 import { CatalogSidebar } from "@/components/shell/catalog-sidebar";
 import type { ShellNavKey } from "@/components/shell/nav";
+import { haptic } from "@/lib/haptics";
 import { cx } from "@/utils/cx";
 
 const PAGE_NAME: Record<ShellNavKey, string> = {
@@ -119,7 +120,11 @@ export function MobileShell({
           activeNav={activeNav}
           mobile
           flat
-          onNavigate={() => setIsOpen(false)}
+          onNavigate={() => {
+            // Tick as the rail closes behind a destination tap.
+            haptic("selection");
+            setIsOpen(false);
+          }}
           className="h-full w-[260px]"
         />
       </div>
@@ -154,7 +159,10 @@ export function MobileShell({
             aria-label={isOpen ? "Close navigation" : "Open navigation"}
             aria-expanded={isOpen}
             aria-controls="mobile-catalog-nav"
-            onClick={() => setIsOpen((open) => !open)}
+            onClick={() => {
+              haptic("selection");
+              setIsOpen((open) => !open);
+            }}
             className={cx(
               "flex size-9 shrink-0 items-center justify-center rounded-full",
               "border border-border-button-default bg-background-primary-default shadow-xs",
