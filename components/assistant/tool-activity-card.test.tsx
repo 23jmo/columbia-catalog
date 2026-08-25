@@ -38,4 +38,9 @@ describe("ThinkingLine", () => {
     expect(html).toContain("text-headline-regular");
     expect(html).toContain("size-10");
   });
+
+  it("shimmers the label while the agent is working", () => {
+    const html = renderToStaticMarkup(<ThinkingLine label="Thinking" />);
+    expect(html).toContain("agent-progress-loading-text");
+  });
 });

@@ -199,14 +199,14 @@ export function ThinkingLine({
       className={cx(
         ENTER,
         "flex items-center gap-2.5 overflow-visible",
-        "text-headline-regular text-text-secondary",
+        "text-headline-regular",
         className,
       )}
     >
       <span className="flex size-10 shrink-0 items-center justify-center overflow-visible">
         <OrnamentAvatar size={28} mood="thinking" className="shrink-0" />
       </span>
-      {label}
+      <span className="agent-progress-loading-text">{label}</span>
     </p>
   );
 }
