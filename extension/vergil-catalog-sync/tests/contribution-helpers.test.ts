@@ -81,9 +81,9 @@ beforeAll(async () => {
   }
   helpers = (
     globalThis as typeof globalThis & {
-      ColumbiaCatalogContributionHelpers: ContributionHelpers;
+      LionPlanContributionHelpers: ContributionHelpers;
     }
-  ).ColumbiaCatalogContributionHelpers;
+  ).LionPlanContributionHelpers;
 });
 
 describe("full-scan contribution handoff", () => {
@@ -94,7 +94,7 @@ describe("full-scan contribution handoff", () => {
     expect(payload).toMatchObject({
       schemaVersion: 1,
       exportedAt: "2026-08-24T18:00:00.000Z",
-      source: "Vergil course search via Columbia Catalog Chrome extension",
+      source: "Vergil course search via LionPlan Chrome extension",
       scan: { termCode: "20263" },
     });
     expect(payload?.sections.map((value) => value.termCode)).toEqual(["20263"]);

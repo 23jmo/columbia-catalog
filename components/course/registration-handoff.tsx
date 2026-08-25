@@ -224,7 +224,7 @@ export function RegistrationHandoff({
       <div className="flex items-start gap-2.5 text-caption-1-regular text-text-secondary">
         <RiShieldCheckLine className="mt-px size-4 shrink-0 text-foreground-icon-tertiary" aria-hidden />
         <p>
-          Columbia Catalog is a planner. We never register, drop, or waitlist anyone — the
+          LionPlan is a planner. We never register, drop, or waitlist anyone — the
           link above opens Vergil in a new tab, where your UNI login and your own click do
           the actual work. Nothing here is sent to Columbia.
         </p>

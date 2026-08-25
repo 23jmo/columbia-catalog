@@ -1,5 +1,5 @@
 /**
- * Columbia Catalog — local crawl operator.
+ * LionPlan — local crawl operator.
  *
  *   npx tsx --env-file=.env.local scripts/crawl.ts seed --terms=20263,20271
  *   npx tsx --env-file=.env.local scripts/crawl.ts status

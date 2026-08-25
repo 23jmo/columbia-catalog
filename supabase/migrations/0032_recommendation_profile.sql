@@ -1,7 +1,7 @@
 -- =============================================================================
 -- 0032_recommendation_profile.sql — the storage the recommender needs
 --
--- Spec: "Repositioning Columbia Catalog around profile-driven course
+-- Spec: "Repositioning LionPlan around profile-driven course
 -- recommendation" (2026-08-24), §"Schema changes".
 --
 -- Five independent additions, grouped here because they land together and each

@@ -6,7 +6,7 @@ import { Badge } from "@/components/base/badges/badge";
 import { Button } from "@/components/base/buttons/button";
 import { signIn } from "@/lib/db/auth";
 
-const SOURCE = "Vergil course search via Columbia Catalog Chrome extension" as const;
+const SOURCE = "Vergil course search via LionPlan Chrome extension" as const;
 const CHUNK_SIZE = 200;
 
 interface VergilMeeting {
@@ -96,7 +96,7 @@ function extensionMessage(extensionId: string, type: string): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const runtime = runtimeApi();
     if (!runtime) {
-      reject(new Error("Open this page in Chrome with the Columbia Catalog extension installed."));
+      reject(new Error("Open this page in Chrome with the LionPlan extension installed."));
       return;
     }
     try {
@@ -348,7 +348,7 @@ export function VergilContributionClient({
         </h1>
         <p className="max-w-[620px] text-body-regular text-text-secondary">
           Review the sanitized result of your completed term refresh, then choose whether to add it
-          to Columbia Catalog. Course schedules only—never your classes, token, UNI, or Vergil account.
+          to LionPlan. Course schedules only—never your classes, token, UNI, or Vergil account.
         </p>
       </header>
 

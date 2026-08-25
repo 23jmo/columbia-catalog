@@ -2,17 +2,17 @@
 
 ## Name
 
-Columbia Catalog Schedule Refresh
+LionPlan Schedule Refresh
 
 ## Summary
 
-Refresh Columbia Catalog with sanitized course times and locations already loaded by Vergil.
+Refresh LionPlan with sanitized course times and locations already loaded by Vergil.
 
 ## Detailed description
 
 Keep Columbia course schedules current without sharing your Vergil login.
 
-Columbia Catalog Schedule Refresh observes only the public course-search results
+LionPlan Schedule Refresh observes only the public course-search results
 that Vergil has already loaded in your browser. It extracts course identifiers,
 call numbers, meeting days, times, locations, and an observation timestamp into
 a sanitized local capture.
@@ -24,7 +24,7 @@ Use it in two ways:
   for the active term, 100 courses at a time.
 
 You can inspect counts, export JSON, clear everything immediately, or explicitly
-enable a signed-in Columbia Catalog page to review a sanitized, single-term
+enable a signed-in LionPlan page to review a sanitized, single-term
 full-scan contribution. Passive or incomplete captures cannot be submitted.
 Sharing is disabled by default.
 
@@ -39,7 +39,7 @@ Productivity
 
 ## Single purpose
 
-Help keep Columbia Catalog course meeting times and locations current by
+Help keep LionPlan course meeting times and locations current by
 capturing sanitized public course-search data already returned by Vergil.
 
 ## Permission justification

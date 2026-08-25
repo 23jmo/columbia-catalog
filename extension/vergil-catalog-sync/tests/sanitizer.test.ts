@@ -40,13 +40,13 @@ beforeAll(async () => {
     runInThisContext(source, { filename: file });
   }
   sanitizer = (
-    globalThis as typeof globalThis & { ColumbiaCatalogVergilSanitizer: Sanitizer }
-  ).ColumbiaCatalogVergilSanitizer;
+    globalThis as typeof globalThis & { LionPlanVergilSanitizer: Sanitizer }
+  ).LionPlanVergilSanitizer;
   captureSchema = (
     globalThis as typeof globalThis & {
-      ColumbiaCatalogCaptureSchema: typeof captureSchema;
+      LionPlanCaptureSchema: typeof captureSchema;
     }
-  ).ColumbiaCatalogCaptureSchema;
+  ).LionPlanCaptureSchema;
 });
 
 function responseWith(sectionOverrides: Record<string, unknown> = {}): unknown {

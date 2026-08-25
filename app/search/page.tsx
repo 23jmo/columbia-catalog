@@ -16,7 +16,7 @@ import { SearchScreen } from "./search-screen";
  */
 
 export const metadata: Metadata = {
-  title: "Search — Columbia Catalog",
+  title: "Search — LionPlan",
   description:
     "Search every Columbia and Barnard course instantly. Filters apply locally, so results update within a frame of every keystroke.",
 };

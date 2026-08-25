@@ -5,7 +5,7 @@
   const BRIDGE_READY_EVENT = "columbia-catalog:vergil-bridge-ready:v1";
   const OBSERVER_READY_EVENT = "columbia-catalog:vergil-observer-ready:v1";
   const MAX_BATCH_SIZE = 500;
-  const captureSchema = globalThis.ColumbiaCatalogCaptureSchema;
+  const captureSchema = globalThis.LionPlanCaptureSchema;
 
   function isObject(value) {
     return value !== null && typeof value === "object" && !Array.isArray(value);

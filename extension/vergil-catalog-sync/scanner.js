@@ -1,7 +1,7 @@
 (function installVergilScanner() {
   "use strict";
 
-  const helpers = globalThis.ColumbiaCatalogScanHelpers;
+  const helpers = globalThis.LionPlanScanHelpers;
   if (!helpers) return;
 
   let running = false;

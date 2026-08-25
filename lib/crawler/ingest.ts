@@ -1,5 +1,5 @@
 /**
- * Columbia Catalog — the server-side ingest pipeline.
+ * LionPlan — the server-side ingest pipeline.
  *
  * One function, three callers: a browser submission, a cron fetch, and the
  * backfill runner all land here. Keeping it single-sourced is what guarantees

@@ -90,7 +90,7 @@ export function ProfileHero({
       aria-labelledby="profile-hero-name"
     >
       <div className={pageHeroCoverClass()}>
-        <ProfileCover seed={name ?? "columbia-catalog-profile"} className="min-h-full min-w-full" />
+        <ProfileCover seed={name ?? "lionplan-profile"} className="min-h-full min-w-full" />
       </div>
 
       <div className={pageHeroBodyClass()}>

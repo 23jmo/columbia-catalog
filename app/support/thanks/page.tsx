@@ -4,8 +4,8 @@ import { AppShell } from "@/components/shell/app-shell";
 import { PageContent } from "@/components/shell/page-content";
 
 export const metadata: Metadata = {
-  title: "Thank you · Columbia Catalog",
-  description: "Your support helps keep Columbia Catalog running.",
+  title: "Thank you · LionPlan",
+  description: "Your support helps keep LionPlan running.",
 };
 
 export default function SupportThanksPage() {

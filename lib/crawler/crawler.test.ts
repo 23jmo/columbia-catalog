@@ -1,5 +1,5 @@
 /**
- * Columbia Catalog — crawler runtime tests.
+ * LionPlan — crawler runtime tests.
  *
  * These cover the properties whose failure makes the product *wrong* rather
  * than merely down: jitter bounds, lease-token forgery, the quarantine guard,

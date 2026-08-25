@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const VERGIL_SOURCE =
-  "Vergil course search via Columbia Catalog Chrome extension" as const;
+  "Vergil course search via LionPlan Chrome extension" as const;
 
 const TimestampSchema = z.string().datetime({ offset: true });
 

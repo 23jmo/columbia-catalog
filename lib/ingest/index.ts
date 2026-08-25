@@ -1,5 +1,5 @@
 /**
- * Columbia Catalog — ingest lane public surface.
+ * LionPlan — ingest lane public surface.
  *
  * The parsers are pure `(html) => data` functions with no I/O: the crawler
  * fetches, this module parses, `quarantine.ts` decides whether the result is

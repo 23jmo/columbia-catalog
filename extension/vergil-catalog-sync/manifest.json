@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Columbia Catalog — Vergil Schedule Capture",
-  "description": "Refresh Columbia Catalog with sanitized course times and locations already loaded by Vergil.",
+  "name": "LionPlan — Vergil Schedule Capture",
+  "description": "Refresh LionPlan with sanitized course times and locations already loaded by Vergil.",
   "version": "0.3.0",
   "minimum_chrome_version": "114",
   "permissions": ["storage"],

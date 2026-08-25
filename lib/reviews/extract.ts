@@ -1,5 +1,5 @@
 /**
- * Columbia Catalog — review dimension extraction (spec §12).
+ * LionPlan — review dimension extraction (spec §12).
  *
  * Every ingested review runs through this exactly ONCE, at ingest time, and
  * the structured result is stored. That is the whole economic argument for the

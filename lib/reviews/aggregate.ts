@@ -1,5 +1,5 @@
 /**
- * Columbia Catalog — reputation aggregation (spec §12).
+ * LionPlan — reputation aggregation (spec §12).
  *
  * Four rules govern this file. They are product decisions, not implementation
  * details, and every one of them is load-bearing:

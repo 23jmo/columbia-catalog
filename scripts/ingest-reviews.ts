@@ -1,5 +1,5 @@
 /**
- * Columbia Catalog — review ingest operator.
+ * LionPlan — review ingest operator.
  *
  *   npx tsx --env-file=.env.local scripts/ingest-reviews.ts status
  *   npx tsx --env-file=.env.local scripts/ingest-reviews.ts run --source=reddit --courses=20

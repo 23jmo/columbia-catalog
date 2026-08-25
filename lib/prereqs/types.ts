@@ -1,5 +1,5 @@
 /**
- * Columbia Catalog — prerequisite structure.
+ * LionPlan — prerequisite structure.
  *
  * `Course.prerequisiteText` in `@/lib/types` is prose: what a human reads on
  * the bulletin. This module is the structured half — the boolean expression a

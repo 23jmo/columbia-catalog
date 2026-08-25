@@ -1,5 +1,5 @@
 /**
- * Columbia Catalog — review coverage (spec §6 and §12, "Coverage honesty").
+ * LionPlan — review coverage (spec §6 and §12, "Coverage honesty").
  *
  * Most Columbia courses have no reviews. That is not a defect to be hidden; it
  * is the single most important thing to be honest about, because the failure

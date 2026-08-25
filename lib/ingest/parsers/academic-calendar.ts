@@ -1,5 +1,5 @@
 /**
- * Columbia Catalog — academic calendar parser (spec §10, §13).
+ * LionPlan — academic calendar parser (spec §10, §13).
  *
  * The calendar is what makes the seat-history line mean anything: "it filled in
  * 90 seconds during senior registration" is the insight, and without milestone

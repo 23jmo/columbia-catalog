@@ -218,7 +218,7 @@ export function CatalogSettingsAccount({ onClose }: CatalogSettingsAccountProps)
       >
         <div className="flex flex-col gap-3">
           <p className="text-body-regular text-pretty text-text-secondary">
-            Your Columbia Catalog account and everything saved to it will be erased — schedule
+            Your LionPlan account and everything saved to it will be erased — schedule
             plans, bookmarks, seat watches, self-reported coursework, and assistant conversations.
           </p>
           <p className="text-caption-1-regular text-pretty text-text-tertiary">

@@ -2,7 +2,7 @@
 
 The production site owns authentication and database writes. The extension owns
 capture, validation, explicit consent, and the local review payload. This keeps
-the Vergil credential completely outside Columbia Catalog.
+the Vergil credential completely outside LionPlan.
 
 ## Browser handshake
 
@@ -17,7 +17,7 @@ connects to the published extension ID with `chrome.runtime.sendMessage`.
    Review contribution.
 5. Display the returned term, section, meeting, location, and observation-time
    range. A contribution contains exactly one completed full-scan term.
-6. Require a signed-in Columbia Catalog account and a final Submit click.
+6. Require a signed-in LionPlan account and a final Submit click.
 
 The summary response adds these fields to the consent and scan state:
 
@@ -40,7 +40,7 @@ The payload is:
 interface VergilContributionV1 {
   schemaVersion: 1;
   exportedAt: string;
-  source: "Vergil course search via Columbia Catalog Chrome extension";
+  source: "Vergil course search via LionPlan Chrome extension";
   scan: null | {
     status: string;
     termCode: string;
@@ -93,7 +93,7 @@ full-term database ingest.
 
 ## Required server checks
 
-- Require a Columbia Catalog account; never accept an anonymous write.
+- Require a LionPlan account; never accept an anonymous write.
 - Enforce the exact schema and cap payload size, section count, meeting count,
   string lengths, and observation-time skew.
 - Match sections by term + course + section and verify call numbers against the

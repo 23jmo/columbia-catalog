@@ -93,7 +93,7 @@ export const CULPA_PACING: PacingPolicy = {
  * when the other side can see who has been knocking and how to reach them.
  */
 export const CULPA_USER_AGENT =
-  "ColumbiaCatalog/0.1 (student course catalog; partnership inquiries welcome)";
+  "LionPlan/0.1 (student course catalog; partnership inquiries welcome)";
 
 // ---------------------------------------------------------------------------
 // Selectors — the entire surface that a CULPA redesign can break.

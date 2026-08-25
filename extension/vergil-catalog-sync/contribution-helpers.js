@@ -1,9 +1,9 @@
 (function installContributionHelpers(root) {
   "use strict";
 
-  const SOURCE = "Vergil course search via Columbia Catalog Chrome extension";
+  const SOURCE = "Vergil course search via LionPlan Chrome extension";
   const TERM_CODE = /^\d{5}$/;
-  const captureSchema = root.ColumbiaCatalogCaptureSchema;
+  const captureSchema = root.LionPlanCaptureSchema;
 
   function isObject(value) {
     return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -119,7 +119,7 @@
     };
   }
 
-  root.ColumbiaCatalogContributionHelpers = Object.freeze({
+  root.LionPlanContributionHelpers = Object.freeze({
     contributionPayload,
     contributionSummary,
   });

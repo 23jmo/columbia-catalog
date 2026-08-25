@@ -13,7 +13,7 @@ export function ShellWordmark({
   return (
     <Link
       href="/"
-      aria-label="Columbia Catalog — home"
+      aria-label="LionPlan — home"
       className={cx(
         "flex min-w-0 items-center gap-2 rounded-2lg p-1 outline-none",
         // 36px tall from `p-1` around a 28px glyph. It is the only "back to the
@@ -29,7 +29,7 @@ export function ShellWordmark({
         <RiBookShelfLine className="size-4 text-white" aria-hidden />
       </span>
       <span className="flex min-w-0 flex-col">
-        <span className="text-body-medium truncate text-text-primary">Columbia Catalog</span>
+        <span className="text-body-medium truncate text-text-primary">LionPlan</span>
       </span>
     </Link>
   );

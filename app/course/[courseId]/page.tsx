@@ -44,7 +44,7 @@ export async function generateMetadata({ params }: CoursePageProps): Promise<Met
   const course = await resolveCourse(courseId, CURRENT_TERM);
   if (!course) {
     return {
-      title: "Course not found — Columbia Catalog",
+      title: "Course not found — LionPlan",
       description: "No course in this term matches that code.",
     };
   }
@@ -80,7 +80,7 @@ export async function generateMetadata({ params }: CoursePageProps): Promise<Met
       )}. Seats, instructors, meeting times and reviews.`;
 
   return {
-    title: `${code} ${title} — Columbia Catalog`,
+    title: `${code} ${title} — LionPlan`,
     description,
     alternates: { canonical },
     openGraph: {

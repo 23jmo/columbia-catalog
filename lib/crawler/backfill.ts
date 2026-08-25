@@ -1,5 +1,5 @@
 /**
- * Columbia Catalog — the one-shot backfill runner.
+ * LionPlan — the one-shot backfill runner.
  *
  *   npx tsx lib/crawler/backfill.ts --dry-run
  *   npx tsx lib/crawler/backfill.ts --terms=20263,20271 --spacing=4

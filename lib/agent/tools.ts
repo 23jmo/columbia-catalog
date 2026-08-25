@@ -91,7 +91,7 @@ export interface AgentToolContext {
 function sessionAuth(userId: string, email: string): McpAuthInfo {
   return {
     token: "in-app-session",
-    clientId: "columbia-catalog-web",
+    clientId: "lionplan-web",
     scopes: ["catalog:read", "schedule:read", "schedule:write", "watch:write", "bookmarks:rw"],
     extra: { userId, email },
   };

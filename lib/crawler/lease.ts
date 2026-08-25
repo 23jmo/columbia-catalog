@@ -1,5 +1,5 @@
 /**
- * Columbia Catalog — job leasing.
+ * LionPlan — job leasing.
  *
  * ---------------------------------------------------------------------------
  * THREAT MODEL

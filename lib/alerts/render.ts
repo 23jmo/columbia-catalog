@@ -117,7 +117,7 @@ export function renderSeatOpenedEmail(input: SeatOpenedEmailInput): RenderedEmai
     "",
     watcherLine(input.watcherCount),
     "",
-    "You are receiving this because you watched this section on Columbia Catalog.",
+    "You are receiving this because you watched this section on LionPlan.",
   ]
     .filter((line) => line !== null)
     .join("\n");
@@ -139,7 +139,7 @@ export function renderSeatOpenedEmail(input: SeatOpenedEmailInput): RenderedEmai
   }
   <hr style="border:none;border-top:1px solid #e4e4e7;margin:24px 0;" />
   <p style="margin:0 0 8px;font-size:13px;line-height:1.5;color:#71717a;">${escapeHtml(watcherLine(input.watcherCount))}</p>
-  <p style="margin:0;font-size:13px;line-height:1.5;color:#a1a1aa;">You are receiving this because you watched this section on Columbia Catalog.</p>
+  <p style="margin:0;font-size:13px;line-height:1.5;color:#a1a1aa;">You are receiving this because you watched this section on LionPlan.</p>
 </div>`;
 
   return { subject, html, text };

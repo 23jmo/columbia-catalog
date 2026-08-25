@@ -2,7 +2,7 @@
 -- 0033_onboarding_guest_migration.sql — flushing a guest's onboarding into the
 -- database in ONE transaction.
 --
--- Spec: "Repositioning Columbia Catalog around profile-driven course
+-- Spec: "Repositioning LionPlan around profile-driven course
 -- recommendation" (2026-08-24), §"Schema changes":
 --
 --   "Guest→user migration: onboarding state in localStorage under a versioned

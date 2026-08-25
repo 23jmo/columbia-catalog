@@ -120,7 +120,7 @@ exportButton.addEventListener("click", () => {
   const payload = {
     schemaVersion: 1,
     exportedAt: new Date().toISOString(),
-    source: "Vergil course search via Columbia Catalog Chrome extension",
+    source: "Vergil course search via LionPlan Chrome extension",
     scan: currentState?.scan ?? null,
     sections: currentSections,
   };

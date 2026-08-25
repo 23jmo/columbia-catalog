@@ -1,5 +1,5 @@
 /**
- * Columbia Catalog — search performance guardrail.
+ * LionPlan — search performance guardrail.
  *
  * The product thesis is "the index ships to the browser, so search is
  * instant". This file is what keeps that claim true. It builds a synthetic

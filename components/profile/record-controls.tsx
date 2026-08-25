@@ -69,7 +69,7 @@ export function RecordControls({ profile, signedIn = true }: RecordControlsProps
      */
     const payload = {
       exportedAt: new Date().toISOString(),
-      note: "Self-reported academic record from Columbia Catalog. Not a registrar document.",
+      note: "Self-reported academic record from LionPlan. Not a registrar document.",
       school: profile.school,
       classYear: profile.classYear,
       programIds: profile.programIds,
@@ -81,7 +81,7 @@ export function RecordControls({ profile, signedIn = true }: RecordControlsProps
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "columbia-catalog-record.json";
+    link.download = "lionplan-record.json";
     link.click();
     URL.revokeObjectURL(url);
   };

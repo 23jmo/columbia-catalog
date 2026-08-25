@@ -7,9 +7,9 @@ const CONTRIBUTION_PREFS_KEY = "vergilContributionPrefsV1";
 const MAX_SECTION_COUNT = 25000;
 const MAX_BATCH_SIZE = 500;
 const CATALOG_ORIGIN = "https://www.lionplan.org";
-const captureSchema = globalThis.ColumbiaCatalogCaptureSchema;
-const scanHelpers = globalThis.ColumbiaCatalogScanHelpers;
-const contributionHelpers = globalThis.ColumbiaCatalogContributionHelpers;
+const captureSchema = globalThis.LionPlanCaptureSchema;
+const scanHelpers = globalThis.LionPlanScanHelpers;
+const contributionHelpers = globalThis.LionPlanContributionHelpers;
 
 function isObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);

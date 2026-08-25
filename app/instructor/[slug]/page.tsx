@@ -76,7 +76,7 @@ export async function generateMetadata({ params }: InstructorPageProps): Promise
   const data = await loadInstructorProfile(slug, CURRENT_TERM);
   if (!data) {
     return {
-      title: "Instructor not found — Columbia Catalog",
+      title: "Instructor not found — LionPlan",
       description: `No one by that name is teaching in ${termLabel(CURRENT_TERM)}.`,
     };
   }
@@ -87,7 +87,7 @@ export async function generateMetadata({ params }: InstructorPageProps): Promise
   } in ${data.termLabel}${courses ? ` — ${courses}` : ""}. Sections, seats, meeting times and reviews.`;
 
   return {
-    title: `${data.name} — Columbia Catalog`,
+    title: `${data.name} — LionPlan`,
     description,
     openGraph: { title: data.name, description, type: "profile" },
   };

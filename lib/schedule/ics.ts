@@ -108,7 +108,7 @@ function locationOf(buildingName: string | null, room: string | null): string | 
 
 /** Uid stable across exports, so re-importing updates events instead of duplicating them. */
 function uid(planId: string, itemId: string, weekday: Weekday, startMinute: number): string {
-  return `${planId}-${itemId}-${weekday}-${startMinute}@columbia-catalog`;
+  return `${planId}-${itemId}-${weekday}-${startMinute}@lionplan`;
 }
 
 /**
@@ -205,8 +205,8 @@ export function planEvents(input: PlanIcsInput): EventAttributes[] {
       endOutputType: "local",
       recurrenceRule: weeklyRule(block.weekday, bounds.endsOn),
       description: bounds.isAuthoritative
-        ? "Personal commitment, planned in Columbia Catalog."
-        : `Personal commitment, planned in Columbia Catalog.\n\n${ESTIMATED_DATES_NOTE}`,
+        ? "Personal commitment, planned in LionPlan."
+        : `Personal commitment, planned in LionPlan.\n\n${ESTIMATED_DATES_NOTE}`,
       categories: ["Personal"],
       busyStatus: "BUSY",
       calName: plan.name,
@@ -248,7 +248,7 @@ export function planToIcs(input: PlanIcsInput): PlanIcsResult {
   }
 
   const { error, value } = createEvents(events, {
-    productId: "-//Columbia Catalog//Schedule//EN",
+    productId: "-//LionPlan//Schedule//EN",
     calName: input.plan.name,
   });
   if (error || !value) {
@@ -268,7 +268,7 @@ function emptyCalendar(calName: string): string {
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
     "CALSCALE:GREGORIAN",
-    "PRODID:-//Columbia Catalog//Schedule//EN",
+    "PRODID:-//LionPlan//Schedule//EN",
     `X-WR-CALNAME:${calName}`,
     "END:VCALENDAR",
   ].join("\r\n");

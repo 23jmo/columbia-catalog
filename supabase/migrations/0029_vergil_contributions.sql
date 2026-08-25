@@ -14,7 +14,7 @@ alter table meetings
 comment on column meetings.source is
   'Provenance for this meeting observation. Vergil contributions use vergil_extension.';
 comment on column meetings.observed_at is
-  'When the source observed this meeting, not when Columbia Catalog received it.';
+  'When the source observed this meeting, not when LionPlan received it.';
 
 create index if not exists idx_meetings_observed_at on meetings (observed_at desc);
 
@@ -25,7 +25,7 @@ create table if not exists vergil_contributions (
   payload_hash          text not null check (payload_hash ~ '^[0-9a-f]{64}$'),
   schema_version        integer not null check (schema_version = 1),
   source                text not null check (
-                          source = 'Vergil course search via Columbia Catalog Chrome extension'
+                          source = 'Vergil course search via LionPlan Chrome extension'
                         ),
   status                text not null default 'uploading' check (
                           status in ('uploading', 'accepted', 'partial', 'rejected')
@@ -119,7 +119,7 @@ declare
   v_id uuid;
 begin
   if p_schema_version <> 1
-     or p_source <> 'Vergil course search via Columbia Catalog Chrome extension'
+     or p_source <> 'Vergil course search via LionPlan Chrome extension'
      or p_term_code !~ '^[0-9]{4}[123]$'
      or p_payload_hash !~ '^[0-9a-f]{64}$'
      or p_expected_sections not between 1 and 20000

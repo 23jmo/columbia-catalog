@@ -1,4 +1,4 @@
-# Columbia Catalog — Vergil Schedule Refresh
+# LionPlan — Vergil Schedule Refresh
 
 A Manifest V3 extension that captures only sanitized, public course meeting data
 already returned by Vergil course search. It never reads or exports a Columbia
@@ -15,7 +15,7 @@ credential and never sends a request to a Columbia API.
 - Quality-aware merging that refuses to replace a richer meeting/location record
   with an emptier observation.
 - Session-only capture storage with an immediate Clear action.
-- Opt-in, origin-pinned sharing with the signed-in Columbia Catalog website.
+- Opt-in, origin-pinned sharing with the signed-in LionPlan website.
   Sharing is disabled by default and only a completed single-term full scan is
   eligible for contribution.
 

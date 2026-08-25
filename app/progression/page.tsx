@@ -40,7 +40,7 @@ import { getPrereqCatalog, getProgressionGraph } from "@/lib/progression/catalog
 import { CURRENT_TERM, parseTermCode } from "@/lib/constants";
 
 export const metadata: Metadata = {
-  title: "Progression · Columbia Catalog",
+  title: "Progression · LionPlan",
   description:
     "What each course unlocks, read out of the bulletin's own prerequisite text, and a four-year plan checked against it.",
 };

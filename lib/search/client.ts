@@ -1,5 +1,5 @@
 /**
- * Columbia Catalog — browser-side index loading.
+ * LionPlan — browser-side index loading.
  *
  * The one honest cost of local search is the first download (spec §19), so
  * this module is built around three ideas:

@@ -1,7 +1,7 @@
 import type { CourseListItem } from "../catalog-list-types";
 
 /**
- * Columbia Catalog — serialized search index format.
+ * LionPlan — serialized search index format.
  *
  * ---------------------------------------------------------------------------
  * WHY A BINARY FORMAT

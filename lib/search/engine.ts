@@ -1,5 +1,5 @@
 /**
- * Columbia Catalog — the query engine.
+ * LionPlan — the query engine.
  *
  * This class runs IN THE BROWSER, on every keystroke, against the local index.
  * The budget is one frame: 16 ms from keystroke to results (spec §19). Two

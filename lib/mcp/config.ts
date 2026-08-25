@@ -17,8 +17,8 @@ export const PROPOSAL_REVIEW_PATH = "/schedule";
 /** Where a student sets up an MCP client. */
 export const SETUP_PATH = "/mcp-setup";
 
-export const SERVER_NAME = "columbia-catalog";
-export const SERVER_TITLE = "Columbia Catalog";
+export const SERVER_NAME = "lionplan";
+export const SERVER_TITLE = "LionPlan";
 export const SERVER_VERSION = "1.0.0";
 
 /**

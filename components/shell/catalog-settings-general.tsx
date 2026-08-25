@@ -66,7 +66,7 @@ export function CatalogSettingsGeneral({ onSupport }: { onSupport: () => void })
         <div className="relative flex flex-col gap-2.5 py-3 pr-2.5 pl-3">
           <div className="flex flex-col gap-2">
             <span className="inline-flex w-fit items-center rounded-md bg-background-tertiary-default px-1.5 py-0.5 text-body-2-medium text-text-secondary">
-              Columbia Catalog
+              LionPlan
             </span>
             <div className="flex flex-col gap-0.5">
               <p className="text-headline-medium text-text-primary">Free to browse</p>

@@ -1,5 +1,5 @@
 /**
- * Columbia Catalog — shared pacing primitives for review-source adapters.
+ * LionPlan — shared pacing primitives for review-source adapters.
  *
  * Every review source we touch belongs to somebody else: CULPA is a small
  * student-run site running on a student-run budget, and Reddit meters us by
