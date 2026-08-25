@@ -3,6 +3,7 @@
 import { Button } from "@/components/base/buttons/button";
 import { GoogleMarkIcon } from "@/components/shell/sign-in-prompt-card";
 import { SignInPromptArt } from "@/components/shell/sign-in-prompt-art";
+import { haptic } from "@/lib/haptics";
 import { cx } from "@/utils/cx";
 
 export interface FeedSignInPanelProps {
@@ -44,7 +45,9 @@ export function FeedSignInPanel({ onSignIn, disabled, error, className }: FeedSi
           className="w-full"
           disabled={disabled}
           onClick={() => {
-            if (!disabled) onSignIn();
+            if (disabled) return;
+            haptic("success");
+            onSignIn();
           }}
         >
           Sign in with Columbia

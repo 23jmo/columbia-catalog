@@ -8,6 +8,7 @@ import { FeedCardView } from "@/components/feed/feed-card";
 import { loadFeedPreviewCached, peekCachedFeedPreview } from "@/lib/onboarding/feed-preview-cache";
 import type { FeedCard } from "@/lib/recommend/feed";
 import type { GuestOnboardingState } from "@/lib/onboarding/state";
+import { haptic } from "@/lib/haptics";
 import { cx } from "@/utils/cx";
 
 import { FeedSignInPanel } from "./feed-sign-in-panel";
@@ -155,7 +156,13 @@ export function FeedPreviewGate({
           {previewError ? (
             <p className="text-center text-caption-1-regular text-text-error-primary">{previewError}</p>
           ) : null}
-          <Button variant="secondary" onClick={() => onFinish(displayCards)}>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              haptic("success");
+              onFinish(displayCards);
+            }}
+          >
             Take me to the catalog
           </Button>
         </div>
