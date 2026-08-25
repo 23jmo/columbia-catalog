@@ -4,6 +4,8 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { RiMenuLine } from "@remixicon/react";
 
 import { CatalogSidebar } from "@/components/shell/catalog-sidebar";
+import { MobileHeaderSlotProvider } from "@/components/shell/mobile-header-slot";
+import { ProgressiveBlur } from "@/components/shell/progressive-blur";
 import type { ShellNavKey } from "@/components/shell/nav";
 import { haptic } from "@/lib/haptics";
 import { cx } from "@/utils/cx";
@@ -60,6 +62,12 @@ export function MobileShell({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const pageName = PAGE_NAME[activeNav];
+
+  /*
+   * The bar's own contents are owned by whichever page claims them. `Home` is
+   * the fallback, not the default — see `mobile-header-slot.tsx`.
+   */
+  const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
     const media = window.matchMedia(DESKTOP_MQ);
@@ -141,19 +149,47 @@ export function MobileShell({
         }}
       >
         {/*
-          Hamburger + the page name, optically centred. The trailing size-9
-          spacer matches the button so "Home" sits in the real middle, not
-          shifted toward the control. Not sticky: the page scroller is the
-          column below, so this bar is just out of that flow.
+          Hamburger, then whatever the page put here — falling back to the page
+          name, optically centred, with a trailing size-9 spacer matching the
+          button so the label sits in the real middle rather than shifted toward
+          the control.
+
+          ── Why this overlays rather than stacks ────────────────────────────
+          It used to be a `shrink-0` flex row above the scroller, which meant
+          nothing ever passed behind it and an opaque fill was the only way to
+          hide the content it did not overlap. A blur needs a backdrop to bend,
+          so the bar is now lifted out of the flow and the scroller reclaims the
+          full height with an equal `padding-top`. Same geometry, but the thread
+          now runs underneath and softens as it goes.
         */}
         <header
           className={cx(
-            "z-30 flex w-full shrink-0 items-center gap-2 bg-background-full px-3 xl:hidden",
+            "absolute inset-x-0 top-0 z-30 flex items-center gap-2 px-3 xl:hidden",
             "h-[calc(3.5rem+env(safe-area-inset-top,0px))] pt-[env(safe-area-inset-top,0px)]",
             "transition-[border-radius] duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none",
             isOpen ? "rounded-tl-3xl" : "rounded-none",
           )}
         >
+          {/*
+            Tint first, blur second, both behind the controls. The tint is what
+            keeps a dense paragraph from reading as grey mush under the
+            hamburger; the blur is what removes the bar's own edge. Painted in
+            this order the blur samples the tint too, which is what stops the
+            gradient from banding against the sharp content below it.
+          */}
+          <span
+            aria-hidden
+            className={cx(
+              "absolute inset-0 -z-10",
+              "bg-linear-to-b from-background-full via-background-full/72 to-transparent",
+              isOpen ? "rounded-tl-3xl" : "rounded-none",
+            )}
+          />
+          <ProgressiveBlur
+            side="top"
+            className={cx("-z-10", isOpen ? "rounded-tl-3xl" : "rounded-none")}
+          />
+
           <button
             type="button"
             aria-label={isOpen ? "Close navigation" : "Open navigation"}
@@ -176,10 +212,30 @@ export function MobileShell({
           >
             <RiMenuLine className="size-5" aria-hidden />
           </button>
-          <p className="min-w-0 flex-1 truncate text-center text-title-3-semibold -tracking-[0.01em] text-text-primary">
+          {/*
+            `contents` so a claiming page's own children become flex items of
+            the bar directly, and lay out against the hamburger without an
+            intermediate box to fight over width.
+          */}
+          <div ref={setHeaderSlot} data-mobile-header-slot className="peer contents" />
+
+          {/*
+            The fallback, and it hides itself. `peer-[:not(:empty)]` reads the
+            slot's own child list, so the page name disappears in the very
+            commit that fills the slot rather than an effect later — which is
+            the difference between a clean swap and one frame of "Home" wedged
+            against a breadcrumb. Both halves need the class: `~` only reaches
+            forward, and the spacer is a separate sibling.
+          */}
+          <p
+            className={cx(
+              "min-w-0 flex-1 truncate text-center text-title-3-semibold -tracking-[0.01em] text-text-primary",
+              "peer-[:not(:empty)]:hidden",
+            )}
+          >
             {pageName}
           </p>
-          <span className="size-9 shrink-0" aria-hidden />
+          <span className="size-9 shrink-0 peer-[:not(:empty)]:hidden" aria-hidden />
         </header>
         {/*
           The page. `min-h-0` is the flex shrink so this column, not the
@@ -189,11 +245,15 @@ export function MobileShell({
         <div
           className={cx(
             "flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overscroll-none",
+            // Exactly the overlaid bar's height, so the resting layout is
+            // unchanged and only the scrolled-under state differs. Zeroed at
+            // `xl`, where the bar is hidden and the desktop rail takes over.
+            "pt-[calc(3.5rem+env(safe-area-inset-top,0px))] xl:pt-0",
             className,
           )}
           style={style}
         >
-          {children}
+          <MobileHeaderSlotProvider node={headerSlot}>{children}</MobileHeaderSlotProvider>
         </div>
       </div>
     </div>

@@ -8,7 +8,7 @@ import {
   RiChat1Line,
   RiErrorWarningLine,
   RiLockLine,
-  RiRestartLine,
+  RiQuillPenLine,
 } from "@remixicon/react";
 
 import { describeFailure, planSubmission, type Gate } from "@/lib/agent/gate";
@@ -22,8 +22,11 @@ import { Conversation } from "@/components/assistant/conversation";
 import { SignInFlair } from "@/components/assistant/sign-in-flair";
 import { OrnamentAvatar } from "@/components/ornament/ornament-avatar";
 import { ChatHistoryModal } from "@/components/shell/chat-history-modal";
+import { MobileHeaderPortal } from "@/components/shell/mobile-header-slot";
+import { ProgressiveBlur } from "@/components/shell/progressive-blur";
 import { SignInPrompt } from "@/components/home/sign-in-prompt";
 import { seedOnboardingMessages, takeOnboardingHandoff } from "@/lib/onboarding/handoff";
+import { haptic } from "@/lib/haptics";
 import { cx } from "@/utils/cx";
 
 /**
@@ -349,7 +352,36 @@ export function AssistantHome({
      * below `lg`, and `py-7` (3.5rem) at desktop where the bar is gone.
      */
     <div className="flex min-h-[calc(100dvh-6rem-env(safe-area-inset-top,0px))] w-full min-w-0 flex-col xl:min-h-[calc(100dvh-3.5rem)]">
-      {hasThread ? <ThreadHeader messages={messages} onNewThread={startNewThread} /> : null}
+      {/*
+        One header, two homes, exactly one of them visible at any width.
+
+        On a phone it goes into the shell's top bar, beside the hamburger,
+        because that bar is already the place a reader looks to find out where
+        they are — and while a thread is open the answer is the thread, not
+        "Home". Above `xl` that bar is display:none and the desktop rail takes
+        over, so the header renders inline instead and sticks to the top of the
+        scroller on its own.
+      */}
+      {hasThread ? (
+        <>
+          <MobileHeaderPortal>
+            <ThreadHeader variant="bar" messages={messages} onNewThread={startNewThread} />
+          </MobileHeaderPortal>
+
+          <div
+            className={cx(
+              "sticky top-0 z-20 -mx-1 hidden px-1 pt-1 pb-3 xl:block",
+            )}
+          >
+            <span
+              aria-hidden
+              className="absolute inset-0 -z-10 bg-linear-to-b from-background-full via-background-full/75 to-transparent"
+            />
+            <ProgressiveBlur side="top" className="-z-10" />
+            <ThreadHeader variant="inline" messages={messages} onNewThread={startNewThread} />
+          </div>
+        </>
+      ) : null}
 
       {/*
         Two states, one column.
@@ -388,20 +420,32 @@ export function AssistantHome({
         Sticky to the viewport bottom. The hamburger bar is at the top now, so
         this no longer has to clear a tab bar.
 
-        When the sign-in flair is up, the dock goes slightly translucent with a
-        light backdrop blur so feed cards soft-focus under the card instead of
-        meeting a hard opaque cut. Signed-in stays solid — no flair to separate.
+        ── Why there is no fill here any more ──────────────────────────────
+        It used to be an opaque slab the width of the column, which gave the
+        composer a hard horizontal cut to sit on: the last card in the thread
+        did not fade under the box, it was guillotined by it. The box already
+        carries its own rim, fill and shadow, so it reads as a floating object
+        without help — what it needed was for the thing behind it to stop being
+        a rectangle.
+
+        A ramped blur does that. Content softens as it approaches the box and is
+        untouched a couple of centimetres up, so there is no edge to notice. The
+        tint rides on top of it at low opacity purely for legibility of the
+        controls; it is a wash, not a background.
       */}
       <div
         data-assistant-dock
         className={cx(
-          "sticky bottom-0 z-10 -mx-1 px-1 pt-4",
+          "sticky bottom-0 z-10 -mx-1 px-1 pt-6",
           "pb-[max(0.25rem,env(safe-area-inset-bottom,0px))]",
-          isSignedIn
-            ? "bg-background-full"
-            : "bg-background-full/80 backdrop-blur-md",
         )}
       >
+        <span
+          aria-hidden
+          className="absolute inset-0 -z-10 bg-linear-to-t from-background-full via-background-full/70 to-transparent"
+        />
+        <ProgressiveBlur side="bottom" className="-z-10" />
+
         {/*
           The sign-in bar sits inside the sticky wrapper, above the box, so it
           is the same width as the box and travels with it. It is a label for
@@ -548,9 +592,16 @@ function Hero({ name }: { name: string | null }) {
  * one place a reader is already looking to find out where they are.
  */
 function ThreadHeader({
+  variant,
   messages,
   onNewThread,
 }: {
+  /**
+   * `bar` is portalled into the phone shell's top bar and has to live beside
+   * the hamburger in 3.5rem; `inline` is the desktop row that sticks to the top
+   * of its own scroller. Same content, different budget.
+   */
+  variant: "bar" | "inline";
   messages: readonly { role: string; parts: unknown[] }[];
   onNewThread: () => void;
 }) {
@@ -564,18 +615,83 @@ function ThreadHeader({
       )
     : "New question";
 
+  const isBar = variant === "bar";
+
+  /*
+   * "Assistant ›" is the trail, and a trail of one is not worth a phone's
+   * width — the title is the part that answers "where am I". So the prefix is
+   * dropped below `sm` in the bar and always present inline. The title also
+   * carries more weight in the bar, because there it is replacing the page
+   * name rather than sitting under one.
+   */
+  const breadcrumb = (
+    <nav aria-label="Breadcrumb" className="flex min-w-0 flex-1 items-center gap-1.5">
+      <RiChat1Line aria-hidden className="size-4 shrink-0 text-foreground-icon-quaternary" />
+      <span
+        className={cx(
+          "shrink-0 text-body-medium text-text-secondary",
+          isBar && "max-sm:hidden",
+        )}
+      >
+        Assistant
+      </span>
+      <span
+        aria-hidden
+        className={cx("shrink-0 text-foreground-icon-quaternary", isBar && "max-sm:hidden")}
+      >
+        ›
+      </span>
+      <span
+        className={cx(
+          "min-w-0 flex-1 truncate",
+          isBar
+            ? "text-body-semibold text-text-primary"
+            : "text-body-medium text-text-secondary",
+        )}
+      >
+        {title}
+      </span>
+    </nav>
+  );
+
+  if (isBar) {
+    return (
+      <>
+        {breadcrumb}
+        {/*
+          Deliberately the hamburger's exact costume — same size, rim, fill and
+          press. They are the only two controls in the bar and they bracket the
+          title, so anything less than identical reads as a mistake rather than
+          a pair.
+        */}
+        <button
+          type="button"
+          onClick={() => {
+            haptic("selection");
+            onNewThread();
+          }}
+          aria-label="Start a new question"
+          title="Start a new question"
+          className={cx(
+            "flex size-9 shrink-0 items-center justify-center rounded-full",
+            "border border-border-button-default bg-background-primary-default shadow-xs",
+            "text-foreground-icon-secondary",
+            "transition-[color,background-color,border-color,box-shadow,transform,scale] duration-150 ease-out",
+            "hover:bg-background-primary-hover hover:border-border-button-hover",
+            "active:scale-[0.97] active:duration-[160ms]",
+            "motion-reduce:transition-none motion-reduce:active:scale-100",
+            "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
+          )}
+        >
+          <RiQuillPenLine className="size-5" aria-hidden />
+        </button>
+      </>
+    );
+  }
+
   return (
     <div className="flex min-w-0 items-center gap-3 px-1">
-      <nav aria-label="Breadcrumb" className="flex min-w-0 flex-1 items-center gap-1.5">
-        <RiChat1Line aria-hidden className="size-4 shrink-0 text-foreground-icon-quaternary" />
-        <span className="shrink-0 text-body-medium text-text-secondary">Assistant</span>
-        <span aria-hidden className="shrink-0 text-foreground-icon-quaternary">
-          ›
-        </span>
-        <span className="min-w-0 flex-1 truncate text-body-medium text-text-secondary">
-          {title}
-        </span>
-      </nav>
+      {breadcrumb}
 
       <button
         type="button"
@@ -588,7 +704,7 @@ function ThreadHeader({
           "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
         )}
       >
-        <RiRestartLine aria-hidden className="size-3.5 shrink-0" />
+        <RiQuillPenLine aria-hidden className="size-3.5 shrink-0" />
         New chat
       </button>
     </div>
