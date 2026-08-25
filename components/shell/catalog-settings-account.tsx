@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { RiDeleteBin6Line, RiLoginBoxLine } from "@remixicon/react";
 
 import { deleteAccountAction } from "@/app/settings/actions";
+import { SETTINGS_CARD_MOBILE } from "@/components/shell/catalog-settings-layout";
 import {
   SettingsCard,
   SettingsRow,
@@ -79,19 +80,21 @@ export function CatalogSettingsAccount({ onClose }: CatalogSettingsAccountProps)
 
   return (
     <div className="flex w-full flex-col gap-6">
-      <SettingsCard>
+      <SettingsCard className={SETTINGS_CARD_MOBILE}>
         {isLoading ? (
           <SettingsRow label="Account" description="Checking your session…" />
         ) : account ? (
           <>
             <SettingsRow label="Signed in as">
-              <div className="flex items-center gap-2">
+              <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
                 <Avatar size="sm" src={account.avatarUrl} initials={initials ?? undefined} alt={account.name} />
-                <SettingsValueField className="w-auto max-w-[220px]">{account.email}</SettingsValueField>
+                <SettingsValueField className="w-full min-w-0 max-w-full sm:w-auto sm:max-w-[220px]">
+                  {account.email}
+                </SettingsValueField>
               </div>
             </SettingsRow>
             <SettingsRow label="Name">
-              <SettingsValueField>{account.name}</SettingsValueField>
+              <SettingsValueField className="w-full max-w-full sm:w-[202px]">{account.name}</SettingsValueField>
             </SettingsRow>
           </>
         ) : (
@@ -107,7 +110,7 @@ export function CatalogSettingsAccount({ onClose }: CatalogSettingsAccountProps)
             {isConfigured() ? (
               <SettingsRow label="Sign in">
                 <SocialButton
-                  className="shrink-0"
+                  className="w-full shrink-0 sm:w-auto"
                   brand="google"
                   onClick={() => void startSignIn()}
                   disabled={signingIn}
@@ -129,7 +132,7 @@ export function CatalogSettingsAccount({ onClose }: CatalogSettingsAccountProps)
         <>
           <div className="flex w-full flex-col gap-2">
             <SettingsSectionLabel>Session</SettingsSectionLabel>
-            <SettingsCard>
+            <SettingsCard className={SETTINGS_CARD_MOBILE}>
               <SettingsRow
                 label="Sign out"
                 description="Your saved courses and plans stay on this account until you delete it."
@@ -151,7 +154,7 @@ export function CatalogSettingsAccount({ onClose }: CatalogSettingsAccountProps)
 
           <div className="flex w-full flex-col gap-2">
             <SettingsSectionLabel>Danger zone</SettingsSectionLabel>
-            <SettingsCard>
+            <SettingsCard className={SETTINGS_CARD_MOBILE}>
               <SettingsRow
                 label="Delete account"
                 description="Permanently removes your account, schedules, bookmarks, coursework, and agent history."
@@ -182,7 +185,7 @@ export function CatalogSettingsAccount({ onClose }: CatalogSettingsAccountProps)
         </>
       ) : null}
 
-      <SettingsCard>
+      <SettingsCard className={SETTINGS_CARD_MOBILE}>
         <SettingsRow
           label="Columbia Google only"
           description="We restrict sign-in to @columbia.edu and @barnard.edu addresses."

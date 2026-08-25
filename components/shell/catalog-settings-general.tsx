@@ -18,6 +18,7 @@ import {
   setCrawlWorkerEnabled,
   WORKER_PREFERENCE_EVENT,
 } from "@/components/crawler/refresh-worker";
+import { SETTINGS_CARD_MOBILE } from "@/components/shell/catalog-settings-layout";
 import { TermSwitcher } from "@/components/shell/term-switcher";
 
 function subscribeCrawlWorker(onStoreChange: () => void): () => void {
@@ -49,7 +50,8 @@ export function CatalogSettingsGeneral({ onSupport }: { onSupport: () => void })
   return (
     <div className="flex w-full flex-col gap-6">
       <div className="relative w-full overflow-hidden rounded-2xl bg-background-secondary-default">
-        <div aria-hidden className="absolute -top-[11px] left-[328px] size-[277px]">
+        {/* Decorative art — desktop only; fixed left offset overflows on phone */}
+        <div aria-hidden className="absolute -top-[11px] right-0 hidden size-[200px] sm:block sm:left-[328px] sm:size-[277px]">
           <PlanArtFlame className="size-full object-cover" />
           <div
             className="absolute inset-0"
@@ -83,7 +85,7 @@ export function CatalogSettingsGeneral({ onSupport }: { onSupport: () => void })
 
       <div className="flex w-full flex-col gap-2">
         <SettingsSectionLabel>Appearance</SettingsSectionLabel>
-        <SettingsCard>
+        <SettingsCard className={SETTINGS_CARD_MOBILE}>
           <SettingsRow label="Theme" description="Light or dark — matches the sidebar toggle">
             <ThemeToggle appearance="sidebar-segmented" />
           </SettingsRow>
@@ -92,16 +94,16 @@ export function CatalogSettingsGeneral({ onSupport }: { onSupport: () => void })
 
       <div className="flex w-full flex-col gap-2">
         <SettingsSectionLabel>Catalog</SettingsSectionLabel>
-        <SettingsCard>
+        <SettingsCard className={SETTINGS_CARD_MOBILE}>
           <SettingsRow label="Registering term" description="Which term search and schedules default to">
-            <TermSwitcher appearance="sidebar" className="w-[202px]" />
+            <TermSwitcher appearance="sidebar" className="w-full max-w-full sm:w-[202px]" />
           </SettingsRow>
         </SettingsCard>
       </div>
 
       <div className="flex w-full flex-col gap-2">
         <SettingsSectionLabel>Seat data</SettingsSectionLabel>
-        <SettingsCard>
+        <SettingsCard className={SETTINGS_CARD_MOBILE}>
           <SettingsRow
             label="Background refresh"
             description={
@@ -118,7 +120,7 @@ export function CatalogSettingsGeneral({ onSupport }: { onSupport: () => void })
             />
           </SettingsRow>
           <SettingsRow label="How it works" description="Read-only GETs to doc.sis — never registers anyone">
-            <SettingsValueField className="w-auto max-w-[202px] px-2">
+            <SettingsValueField className="w-full max-w-full px-2 sm:w-auto sm:max-w-[202px]">
               <Link href="/mcp-setup" className="text-accent-600 hover:underline">
                 Agent setup
               </Link>
@@ -129,7 +131,7 @@ export function CatalogSettingsGeneral({ onSupport }: { onSupport: () => void })
 
       <div className="flex w-full flex-col gap-2">
         <SettingsSectionLabel>Links</SettingsSectionLabel>
-        <SettingsCard>
+        <SettingsCard className={SETTINGS_CARD_MOBILE}>
           <SettingsRow label="Bring your own agent" description="Connect Claude, Cursor, or any MCP client">
             <ButtonLink variant="secondary" size="small" href="/mcp-setup">
               MCP setup
