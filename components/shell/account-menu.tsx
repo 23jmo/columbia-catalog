@@ -129,16 +129,16 @@ export function AccountMenu({
         <DropdownTrigger
           aria-label={account ? `Account: ${account.name}` : "Account — not signed in"}
           className={cx(
-            "flex min-w-0 items-center gap-2 transition-colors duration-150 ease outline-none",
+            "flex min-w-0 touch-manipulation items-center gap-2 transition-colors duration-150 outline-none",
             "focus-visible:ring-2 focus-visible:ring-border-focus-ring",
             sidebar
               ? cx(
                   "rounded-full p-1 hover:bg-background-secondary-hover",
-                  compact ? "size-9 justify-center p-0" : "min-w-0 flex-1",
+                  compact ? "size-9 justify-center p-0 pointer-coarse:size-11" :"min-w-0 flex-1",
                 )
               : cx(
                   "rounded-2lg p-1.5 hover:bg-background-secondary-hover",
-                  compact ? "size-9 justify-center p-0" : "w-full",
+                  compact ? "size-9 justify-center p-0 pointer-coarse:size-11" :"w-full",
                 ),
             className,
           )}
@@ -212,9 +212,9 @@ export function AccountMenu({
                 <span className="text-body-medium text-text-primary">Sign out</span>
               </DropdownItem>
             </>
-          ) : (
+          ) : isMenuOpen ? (
             <SignInPromptCard onSignIn={openSignIn} />
-          )}
+          ) : null}
         </DropdownPopover>
       </Dropdown>
 
@@ -261,6 +261,14 @@ function SignInModal({
           "transition duration-200 ease-out",
           "data-[entering]:scale-95 data-[entering]:opacity-0 data-[entering]:blur-[3px]",
           "data-[exiting]:scale-95 data-[exiting]:opacity-0 data-[exiting]:blur-[3px]",
+          /*
+           * Reduced motion neutralises the scale and the blur and keeps the
+           * fade. `transition-none` would be wrong here -- it would drop the
+           * opacity too, and the dialog would hard-cut into view over the page
+           * it is covering. Same shape as HOVER_CARD_SURFACE.
+           */
+          "motion-reduce:data-[entering]:scale-100 motion-reduce:data-[exiting]:scale-100",
+          "motion-reduce:data-[entering]:blur-none motion-reduce:data-[exiting]:blur-none",
         )}
       >
         <AriaDialog

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { IBM_Plex_Mono, Inter } from "next/font/google";
 import { Agentation } from "agentation";
 
 import { DrawerMotionDial } from "@/components/dev/drawer-motion-dial";
@@ -14,8 +14,9 @@ const inter = Inter({
 });
 
 /** Code blocks — exposed as `--font-mono-source` for `styles/theme.css`. */
-const jetbrainsMono = JetBrains_Mono({
+const ibmPlexMono = IBM_Plex_Mono({
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
   variable: "--font-mono-source",
   display: "swap",
 });
@@ -46,7 +47,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${jetbrainsMono.variable} h-dvh antialiased`}
+      className={`${inter.variable} ${ibmPlexMono.variable} h-dvh antialiased`}
     >
       <body className="flex min-h-dvh flex-col bg-background-full font-sans text-text-primary">
         {children}

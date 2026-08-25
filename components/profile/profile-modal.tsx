@@ -32,6 +32,21 @@ export interface ProfileModalProps {
   footer?: ReactNode;
   /** Wider than the default 480px, for the transcript review table. */
   size?: "default" | "wide";
+  /**
+   * Which stacking tier the overlay sits in.
+   *
+   * `page` (z-50) is right for a dialog opened from the page itself, which is
+   * every profile-screen editor.
+   *
+   * `above-surface` (z-200) is REQUIRED when the trigger lives inside one of
+   * the app's z-100 top surfaces — the settings modal, the course drawer. Both
+   * that surface and this overlay portal to `<body>`, so they are siblings in
+   * one stacking context and the z-indexes compete directly: at z-50 this
+   * dialog opens, takes focus and traps the keyboard while rendering entirely
+   * underneath the surface's opaque scrim. The user sees a frozen page and no
+   * dialog. There is no visual cue that anything opened at all.
+   */
+  layer?: "page" | "above-surface";
 }
 
 export function ProfileModal({
@@ -42,6 +57,7 @@ export function ProfileModal({
   children,
   footer,
   size = "default",
+  layer = "page",
 }: ProfileModalProps) {
   return (
     <AriaModalOverlay
@@ -51,7 +67,8 @@ export function ProfileModal({
       }}
       isDismissable
       className={cx(
-        "fixed inset-0 z-50 flex items-center justify-center bg-black/20 p-4 backdrop-blur-[2px]",
+        "fixed inset-0 flex items-center justify-center bg-black/20 p-4 backdrop-blur-[2px]",
+        layer === "above-surface" ? "z-200" : "z-50",
         "transition-opacity duration-200 ease-out",
         "data-[entering]:opacity-0 data-[exiting]:opacity-0",
       )}
@@ -63,6 +80,14 @@ export function ProfileModal({
           "transition duration-200 ease-out",
           "data-[entering]:scale-95 data-[entering]:opacity-0 data-[entering]:blur-[3px]",
           "data-[exiting]:scale-95 data-[exiting]:opacity-0 data-[exiting]:blur-[3px]",
+          /*
+           * Reduced motion neutralises the scale and the blur and keeps the
+           * fade. `transition-none` would be wrong here -- it would drop the
+           * opacity too, and the dialog would hard-cut into view over the page
+           * it is covering. Same shape as HOVER_CARD_SURFACE.
+           */
+          "motion-reduce:data-[entering]:scale-100 motion-reduce:data-[exiting]:scale-100",
+          "motion-reduce:data-[entering]:blur-none motion-reduce:data-[exiting]:blur-none",
         )}
       >
         <AriaDialog

@@ -67,13 +67,15 @@ export function unpadSubjectCode(subject: string): string {
  *
  * Sourced from the Fall 2026 qualifier census recorded in migration 0011:
  * UN, N, BC, A, GR, GU, B, PS, CC, GS — plus the older single letters
- * (W, V, E, C, D, F, K, Y) still present on archived terms and in the Bulletin's
- * own prose, which lags the registrar by years.
+ * (W, V, E, C, D, F, K, X, Y) still present on archived terms and in the Bulletin's
+ * own prose, which lags the registrar by years. `X` is Barnard's.
  */
 const KNOWN_QUALIFIERS = [
   "UN", "GR", "GU", "BC", "CC", "GS", "PS", "PH", "OT",
-  "A", "B", "C", "D", "E", "F", "G", "K", "N", "V", "W", "Y",
+  "A", "B", "C", "D", "E", "F", "G", "K", "N", "V", "W", "X", "Y",
 ].sort((a, b) => b.length - a.length);
+
+const KNOWN_QUALIFIER_SET = new Set(KNOWN_QUALIFIERS);
 
 export interface ParsedCode {
   /** Padded, directory-shaped: `"MATH"`, `"PE__"`. */
@@ -96,6 +98,7 @@ export interface ParsedCode {
  *   "MATHUN1201"    no space (some inline links)
  *   "MATH UN 1201"  space before the number
  *   "COMS W3157"    single-letter qualifier
+ *   "COMS4115W"     directory / Vergil unofficial-record form
  *   "ECON 3213"     no qualifier at all
  *
  * Returns `null` rather than guessing when the string is not a course code —
@@ -118,6 +121,14 @@ export function parseBulletinCode(raw: string): ParsedCode | null {
   if (spaced) {
     const [, subject, qualifier, digits, trailing] = spaced;
     return build(subject, digits, qualifier || trailing || null);
+  }
+
+  // Directory form: subject + number + qualifier. Vergil prints this
+  // (`COMS4115W`). The Bulletin form puts the qualifier *before* the digits
+  // (`COMSW3157`); digits in the middle are what make this unambiguous.
+  const directory = /^([A-Z]{2,6})(\d{4})([A-Z]{1,3})$/.exec(text);
+  if (directory && KNOWN_QUALIFIER_SET.has(directory[3])) {
+    return build(directory[1], directory[2], directory[3]);
   }
 
   // Unspaced form, e.g. "MATHUN1201" from a stripped inline link.

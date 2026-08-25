@@ -1,18 +1,22 @@
 import { cx } from "@/utils/cx";
 
+import { FEED_CARD_SLOT, FeedRailScroller } from "./feed-rail";
+
 /**
  * What the feed looks like while it is being computed.
  *
  * The feed is the slowest thing on the home page by a wide margin — a cold
  * process pages the whole active catalog and builds a prerequisite graph over
  * 8,189 courses, which is measured in seconds, and the memoised path is still a
- * database round trip. Awaiting it inline would hold back the week grid and the
- * watchlist too, so `/` streams it behind a `<Suspense>` boundary and this is
- * the boundary's fallback.
+ * database round trip. Awaiting it inline would hold back the greeting and the
+ * box too, so `/` streams it behind a `<Suspense>` boundary and this is the
+ * boundary's fallback.
  *
- * Deliberately a skeleton of the real card rather than a spinner: the layout
+ * Deliberately a skeleton of the real rail rather than a spinner: the layout
  * does not jump when the content lands, and the reader can already see that
- * what is coming is a list of courses.
+ * what is coming is a row of courses. Four cards is enough to fill the measure
+ * and peek the next one — the same affordance the live rail uses to say there
+ * is more.
  *
  * Every block here paints a token that exists. `bg-background-secondary-default`
  * rather than `bg-background-secondary` — the latter looks like a real class,
@@ -20,8 +24,26 @@ import { cx } from "@/utils/cx";
  * as a drawer skeleton of nine invisible blocks, which is why
  * `lib/design-tokens.test.ts` exists.
  */
+
+/** Four fills the ~1030px home column and peeks the next card. */
+const DEFAULT_CARDS = 4;
+
+/**
+ * Title and instructor widths, cycled so four identical pulses do not read as
+ * one card stamped across. The live cards vary; a row of clones would.
+ *
+ * One title bar: the live title is a single truncated line, so a two-line
+ * skeleton would be the jump that pushes everything below it.
+ */
+const CARD_SHAPES = [
+  { title: "w-4/5", instructor: "w-48", time: "w-40" },
+  { title: "w-3/5", instructor: "w-36", time: "w-32" },
+  { title: "w-11/12", instructor: "w-44", time: "w-48" },
+  { title: "w-[70%]", instructor: "w-40", time: "w-36" },
+] as const;
+
 export function FeedSkeleton({
-  cards = 3,
+  cards = DEFAULT_CARDS,
   className,
 }: {
   cards?: number;
@@ -31,34 +53,77 @@ export function FeedSkeleton({
     <section
       aria-busy="true"
       aria-label="Loading your recommendations"
-      className={cx("flex flex-col gap-4", className)}
+      className={cx("flex flex-col gap-2.5", className)}
     >
-      <div className="flex items-start gap-3">
-        <div className="size-8 shrink-0 animate-pulse rounded-2lg bg-background-secondary-default" />
-        <div className="flex min-w-0 flex-1 flex-col gap-2">
-          <div className="h-5 w-52 animate-pulse rounded-md bg-background-secondary-default" />
-          <div className="h-3 w-full max-w-[46ch] animate-pulse rounded-md bg-background-secondary-default" />
-        </div>
-      </div>
-
-      <ul className="flex flex-col gap-3.5">
+      <FeedRailScroller>
         {Array.from({ length: cards }, (_, index) => (
-          <li
-            key={index}
-            className="flex flex-col gap-3.5 rounded-[20px] border border-border-table bg-background-primary-default p-4 shadow-card sm:p-5"
-          >
-            <div className="flex items-start gap-3">
-              <div className="size-9 shrink-0 animate-pulse rounded-xl bg-background-secondary-default" />
-              <div className="flex min-w-0 flex-1 flex-col gap-2">
-                <div className="h-3 w-24 animate-pulse rounded-md bg-background-secondary-default" />
-                <div className="h-4 w-3/5 animate-pulse rounded-md bg-background-secondary-default" />
-              </div>
-            </div>
-            <div className="h-5 w-48 animate-pulse rounded-md bg-background-secondary-default" />
-            <div className="h-24 w-full animate-pulse rounded-2lg bg-background-secondary-default" />
+          <li key={index} className={FEED_CARD_SLOT} aria-hidden>
+            <FeedCardSkeleton shape={CARD_SHAPES[index % CARD_SHAPES.length]} />
           </li>
         ))}
-      </ul>
+      </FeedRailScroller>
     </section>
+  );
+}
+
+/**
+ * One placeholder card, in the same geometry as `FeedCardView`.
+ *
+ * Eyebrow, title, reason, week strip, instructor chip, then the meter pinned
+ * to the bottom with `mt-auto` so a rail of stretched cards keeps the bars
+ * on one line — the same trick the live card uses.
+ */
+function FeedCardSkeleton({
+  shape,
+}: {
+  shape: (typeof CARD_SHAPES)[number];
+}) {
+  return (
+    <article
+      className={cx(
+        "flex h-full w-full flex-col gap-3 rounded-2xl border border-border-table",
+        "bg-background-primary-default p-4",
+      )}
+    >
+      <header className="flex min-w-0 items-start gap-2">
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <Bar className="h-4 w-40" />
+          <Bar className={cx("h-5.5", shape.title)} />
+          <Bar className="h-4 w-36" />
+        </div>
+        {/* Bookmark + Vergil sit in the corner as two 28px icons. */}
+        <div className="flex shrink-0 items-center gap-0.5">
+          <Bar className="size-7 rounded-lg" />
+          <Bar className="size-7 rounded-lg" />
+        </div>
+      </header>
+
+      <div className="flex items-center gap-2.5">
+        {Array.from({ length: 5 }, (_, index) => (
+          <Bar key={index} className="size-7 rounded-md" />
+        ))}
+        <Bar className={cx("h-5", shape.time)} />
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Bar className="size-8 shrink-0 rounded-full" />
+        <Bar className={cx("h-4", shape.instructor)} />
+      </div>
+
+      {/* EnrollmentChip fill is `h-7`. `mt-auto` matches the live card. */}
+      <Bar className="mt-auto h-7 w-full rounded-lg" />
+    </article>
+  );
+}
+
+function Bar({ className }: { className?: string }) {
+  return (
+    <div
+      className={cx(
+        "animate-pulse bg-background-secondary-default motion-reduce:animate-none",
+        "rounded-md",
+        className,
+      )}
+    />
   );
 }

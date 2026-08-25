@@ -221,7 +221,7 @@ export function FolderCover({ folderId, className }: FolderCoverProps) {
     >
       <canvas
         ref={canvasRef}
-        className="size-full transition-opacity duration-500 ease"
+        className="size-full transition-opacity duration-500 ease-out"
         style={{ opacity: isPainting ? 1 : 0 }}
       />
     </div>

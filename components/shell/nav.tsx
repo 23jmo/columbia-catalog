@@ -5,7 +5,6 @@ import {
   RiCalendarScheduleLine,
   RiGraduationCapLine,
   RiHome5Line,
-  RiNodeTree,
   RiSearchLine,
 } from "@remixicon/react";
 import { cx } from "@/utils/cx";
@@ -33,6 +32,10 @@ import { cx } from "@/utils/cx";
  * Route ownership note: `/search` and `/schedule` are built by other lanes.
  * This module only ever links at them, so it stays correct whether or not
  * those routes exist yet.
+ *
+ * Progression is off this list on purpose. The `/progression` route still
+ * exists — the page, the graph, the plan — but it is not a destination the
+ * rail or the mobile sheet offers. Putting it back is adding one object here.
  */
 
 export type ShellNavKey =
@@ -81,12 +84,6 @@ export const SHELL_NAV_ITEMS: ShellNavItem[] = [
     icon: RiCalendarScheduleLine,
   },
   {
-    key: "progression",
-    label: "Progression",
-    href: "/progression",
-    icon: RiNodeTree,
-  },
-  {
     key: "profile",
     label: "Profile",
     href: "/profile",
@@ -117,7 +114,7 @@ export function ShellNav({ activeNav, onNavigate, className }: ShellNavProps) {
             onClick={onNavigate}
             aria-current={selected ? "page" : undefined}
             className={cx(
-              "flex w-full items-center gap-2 rounded-2lg p-2 transition-colors duration-150 ease",
+              "flex w-full items-center gap-2 rounded-2lg p-2 transition-colors duration-150",
               "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
               selected
                 ? "bg-linear-to-b from-accent-500 to-accent-600 shadow-nav-selected"

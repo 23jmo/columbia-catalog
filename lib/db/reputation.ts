@@ -26,6 +26,7 @@
  */
 
 import { summarizeCourse, summarizeInstructor } from "@/lib/reviews/aggregate";
+import { canonicalCulpaProfessorUrl } from "@/lib/reviews/culpa-links";
 import type { ReputationSummary, ReviewRecord, ReviewSourceKind } from "@/lib/types";
 
 import { createAnonServerClient, getBrowserClient, isConfigured } from "./client";
@@ -133,4 +134,24 @@ export async function getInstructorReputation(
   const reviews = (data as unknown as RawRow[]).map(toRecord);
   if (reviews.length === 0) return null;
   return summarizeInstructor(reviews, instructorName);
+}
+
+/**
+ * Canonical CULPA professor page for an instructor, when one of our attributed
+ * CULPA reviews proves the numeric profile id. Never manufacture CULPA's old
+ * `/search` URL: its SPA routes profiles only as `/professor/:id`.
+ */
+export async function getInstructorCulpaUrl(instructorName: string): Promise<string | null> {
+  const db = readClient();
+  if (!db || instructorName.trim().length === 0) return null;
+
+  const { data, error } = await db
+    .from("reviews_raw")
+    .select("url")
+    .ilike("subject_ref", instructorName.trim())
+    .like("url", "https://culpa.info/professor/%")
+    .limit(1);
+
+  if (error || !data?.[0]) return null;
+  return canonicalCulpaProfessorUrl(data[0].url);
 }

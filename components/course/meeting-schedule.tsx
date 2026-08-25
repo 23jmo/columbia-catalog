@@ -103,7 +103,12 @@ function PlaceLine({ place }: { place: string | null }) {
 
 function ScheduleRow({ line }: { line: MeetingLine }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+    <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
+      {/*
+        Top-align the strip with the time headline so a chip in the same row
+        can share the strip's top edge instead of floating against the row's
+        vertical center (which includes the room line below).
+      */}
       <WeekStrip days={line.days} />
       <div className="flex min-w-0 flex-col gap-0.5">
         <p className="text-headline-medium tabular-nums text-text-primary">{line.timeLabel}</p>

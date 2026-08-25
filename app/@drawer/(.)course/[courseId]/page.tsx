@@ -143,7 +143,7 @@ export default async function InterceptedSectionPage({
                     >
                       <span className="text-body-medium text-text-primary">
                         <span className="tabular-nums">{section.sectionCode}</span>
-                        <span className="ml-2 font-normal text-text-secondary">
+                        <span className="ml-2 text-body-regular text-text-secondary">
                           {section.instructors.length > 0
                             ? section.instructors.join(" · ")
                             : "Instructor TBA"}

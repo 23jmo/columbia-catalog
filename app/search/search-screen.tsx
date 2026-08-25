@@ -11,6 +11,7 @@ import {
 } from "@/components/catalog/filter-params";
 import { SearchBar } from "@/components/catalog/search-bar";
 import { PageHeader } from "@/components/shell/page-header";
+import { PageContent } from "@/components/shell/page-content";
 import {
   hasSectionLevelFilter,
   type CatalogSearchFilters,
@@ -24,6 +25,7 @@ import { EmptyResults } from "./empty-results";
 import { FilterPopover } from "./filter-popover";
 import { IndexStatus } from "./index-status";
 import { ResultsList, type ResultRow } from "./results-list";
+import { SearchResultsSkeleton } from "./search-results-skeleton";
 
 /**
  * The Search screen.
@@ -160,7 +162,7 @@ export function SearchScreen({ initialFilters, termCode }: SearchScreenProps) {
     ? `${result.total.toLocaleString()} ${result.total === 1 ? "course" : "courses"}${
         result.total === totalCatalogCourses ? "" : ` of ${totalCatalogCourses.toLocaleString()}`
       }`
-    : "Loading catalog index…";
+    : "Loading…";
 
   return (
     /*
@@ -171,7 +173,7 @@ export function SearchScreen({ initialFilters, termCode }: SearchScreenProps) {
       12px right of the page title and the search field, which sit flush
       against this container — three different left edges in one column.
 
-      Putting the gutter HERE and letting `ResultsList` cancel it with `-mx-3`
+      Putting the gutter in `PageContent` and letting `ResultsList` cancel it with `-mx-3`
       gives the screen exactly two vertical edges: text on 12px, and row
       surfaces on 0. The rows still bleed, they just bleed into padding that
       exists instead of past the container.
@@ -183,7 +185,7 @@ export function SearchScreen({ initialFilters, termCode }: SearchScreenProps) {
       overflow into the strip the fixed panel covers instead of making the page
       scrollable. See the note there.
     */
-    <div className="mx-auto flex w-full max-w-[1320px] flex-col gap-6 px-3">
+    <PageContent>
       <PageHeader title="Search">
         <div className="flex items-start gap-2">
           <SearchBar
@@ -208,9 +210,11 @@ export function SearchScreen({ initialFilters, termCode }: SearchScreenProps) {
       <div className="flex min-w-0 flex-col gap-3">
         <ActiveFilterChips filters={filters} onChange={onFiltersChange} />
 
-        <IndexStatus progress={progress} isEngineLive={engine !== null} />
+        <IndexStatus progress={progress} />
 
-        {!engine ? null : rows.length === 0 ? (
+        {!engine ? (
+          <SearchResultsSkeleton status="Loading catalog index" />
+        ) : rows.length === 0 ? (
           <EmptyResults
             filters={filters}
             onChange={onFiltersChange}
@@ -222,7 +226,7 @@ export function SearchScreen({ initialFilters, termCode }: SearchScreenProps) {
         )}
       </div>
 
-    </div>
+    </PageContent>
   );
 }
 

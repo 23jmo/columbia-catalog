@@ -53,7 +53,10 @@ export function EventChip({
             : undefined
       }
       className={cx(
-        "flex min-w-0 select-none items-center gap-1.5 rounded-full px-1.5 py-0.5 text-start text-xs transition-colors",
+        "flex min-w-0 select-none items-center gap-1.5 rounded-full px-1.5 py-0.5 text-start text-caption-1-regular",
+        "transition-[color,background-color,border-color,transform,scale] ease-out",
+        "active:scale-[0.97] active:duration-[160ms]",
+        "motion-reduce:transition-none motion-reduce:active:scale-100",
         "focus-visible:outline-3",
         clickable && "cursor-pointer",
         event.allDay
@@ -66,9 +69,9 @@ export function EventChip({
       {event.allDay ? null : (
         <span className={cx("size-2 max-lg:hidden shrink-0 rounded-full", calendarDotClasses[color])} />
       )}
-      <span className="truncate font-medium">{event.title}</span>
+      <span className="truncate text-caption-1-medium">{event.title}</span>
       {showTime && !event.allDay ? (
-        <span data-time className="ms-auto shrink-0 text-[11px] text-text-tertiary tabular-nums">
+        <span data-time className="ms-auto shrink-0 text-caption-2-regular text-text-tertiary tabular-nums">
           {formatTime(new Date(event.start))}
         </span>
       ) : null}
@@ -110,7 +113,7 @@ export function EventBlock({
             : undefined
       }
       className={cx(
-        "absolute z-5 flex flex-col items-start overflow-hidden rounded-xs px-3 py-1 text-start text-xs select-none",
+        "absolute z-5 flex flex-col items-start overflow-hidden rounded-xs px-3 py-1 text-start text-caption-1-regular select-none",
         "transition-colors focus-visible:outline-3",
         (commitment || classEvent) && "cursor-pointer hover:brightness-[1.03]",
         surfaceForEvent(event),
@@ -121,7 +124,7 @@ export function EventBlock({
       <span
         className={cx("absolute inset-s-1 inset-y-1 w-1 rounded-full", dotForEvent(event))}
       />
-      <span className="w-full truncate font-medium">{event.title}</span>
+      <span className="w-full truncate text-caption-1-medium">{event.title}</span>
       {compact ? null : <span className="w-full truncate tabular-nums opacity-80">{times}</span>}
     </button>
   );
@@ -160,7 +163,7 @@ export function PreviewEventBlock({ positioned }: { positioned: PositionedEvent 
     <div
       data-event
       className={cx(
-        "absolute z-5 flex flex-col items-start overflow-hidden rounded-xs px-3 py-1 text-start text-xs select-none",
+        "absolute z-5 flex flex-col items-start overflow-hidden rounded-xs px-3 py-1 text-start text-caption-1-regular select-none",
         surfaceForEvent(event),
       )}
       style={eventBlockStyle(positioned)}
@@ -176,7 +179,7 @@ export function PreviewEventBlock({ positioned }: { positioned: PositionedEvent 
       <span
         className={cx("absolute inset-s-1 inset-y-1 w-1 rounded-full", dotForEvent(event))}
       />
-      <span className="relative w-full truncate font-medium">{event.title}</span>
+      <span className="relative w-full truncate text-caption-1-medium">{event.title}</span>
       {compact ? null : (
         <>
           <span className="relative w-full truncate tabular-nums opacity-80">{times}</span>

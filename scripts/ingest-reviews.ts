@@ -50,7 +50,7 @@ import {
   type ReviewFetchResult,
   type ReviewSourceAdapter,
 } from "@/lib/reviews/sources/contract";
-import { CulpaAdapter } from "@/lib/reviews/sources/culpa";
+import { CulpaApiAdapter } from "@/lib/reviews/sources/culpa-api";
 import { RedditAdapter, readRedditCredentialsFromEnv } from "@/lib/reviews/sources/reddit";
 
 function flag(name: string, fallback: string): string {
@@ -95,7 +95,7 @@ function culpaStatus(): SourceStatus {
 function adapterFor(kind: "reddit" | "culpa"): ReviewSourceAdapter {
   return kind === "reddit"
     ? new RedditAdapter()
-    : new CulpaAdapter({ fetcher: createFetchPageFetcher() });
+    : new CulpaApiAdapter({ fetcher: createFetchPageFetcher() });
 }
 
 /**

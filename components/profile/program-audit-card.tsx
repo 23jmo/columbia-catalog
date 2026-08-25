@@ -7,7 +7,7 @@ import { AttestToggle } from "./attest-toggle";
 import { CandidateChips } from "./candidate-chips";
 import {
   STATUS_LABEL,
-  VERIFICATION_CHIP_COLOR,
+  VERIFICATION_TEXT_COLOR,
   percentLabel,
   progressLabel,
   statusFillClass,
@@ -32,8 +32,22 @@ import {
  *
  * See `./format`. Three different claims — "the Bulletin names these courses
  * and you have them", "this course carried the flag when we last crawled it",
- * and "you ticked a box" — must not render as three identical green ticks. The
- * chip is the tier in words; the colour only reinforces it.
+ * and "you ticked a box" — must not render as three identical green ticks. Each
+ * row still says which it is, in words; the colour only reinforces it.
+ *
+ * ── Why the explanation is a legend and not a line under every row ──────────
+ *
+ * The tier is a property of the *rule*, and a program has two or three distinct
+ * rules across a dozen requirements. Printed per row, the Core card repeated
+ * "The Bulletin lists these exact courses…" seven times verbatim and the flag
+ * caveat three times — a hundred and sixty words of duplicate fine print, in
+ * the middle of the one card a student reads closely. A caveat printed seven
+ * times is read zero times.
+ *
+ * So the row keeps the label, which is the part that differs, and the wording
+ * that explains what the label means appears once per card, at the bottom,
+ * under a hairline. Nothing was cut: every tier present in the card is still
+ * explained in full, verbatim, exactly once.
  */
 
 export interface ProgramAuditCardProps {
@@ -41,8 +55,40 @@ export interface ProgramAuditCardProps {
   className?: string;
 }
 
+/**
+ * One entry per distinct verification wording used in this card, in the order
+ * the reader meets it.
+ *
+ * Keyed by label rather than by tier: `flagged` covers both "matched on a
+ * curriculum flag" and "matched by subject and level", which are different
+ * claims with different caveats, and collapsing them would print one of the two
+ * explanations over a rule it is not true of.
+ *
+ * Attested groups are absent by design — they carry `AttestToggle`, which says
+ * what it means to tick the box at the moment of ticking it.
+ */
+function legendFor(result: ProgramResult) {
+  const seen = new Set<string>();
+  const entries: { label: string; note: string; verification: GroupResult["verification"] }[] = [];
+
+  for (const group of result.groups) {
+    if (group.verification === "attested") continue;
+    const label = verificationLabelFor(group.group.rule);
+    if (seen.has(label)) continue;
+    seen.add(label);
+    entries.push({
+      label,
+      note: verificationNoteFor(group.group.rule),
+      verification: group.verification,
+    });
+  }
+
+  return entries;
+}
+
 export function ProgramAuditCard({ result, className }: ProgramAuditCardProps) {
   const { program } = result;
+  const legend = legendFor(result);
 
   return (
     <section
@@ -82,8 +128,8 @@ export function ProgramAuditCard({ result, className }: ProgramAuditCardProps) {
           aria-label={`${percentLabel(result.fraction)} of ${program.name} complete`}
         >
           <div
-            className="h-full rounded-full bg-accent-500 transition-[width] duration-300 ease"
-            style={{ width: `${Math.round(result.fraction * 100)}%` }}
+            className="h-full w-full origin-left rounded-full bg-accent-500 transition-transform duration-300 ease-out motion-reduce:transition-none"
+            style={{ transform: `scaleX(${result.fraction})` }}
           />
         </div>
 
@@ -97,7 +143,7 @@ export function ProgramAuditCard({ result, className }: ProgramAuditCardProps) {
             href={program.sourceUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 rounded-md px-1 py-0.5 text-caption-1-medium text-text-secondary outline-none transition-colors duration-150 ease hover:text-accent-600 focus-visible:ring-2 focus-visible:ring-border-focus-ring"
+            className="inline-flex items-center gap-1 rounded-md px-1 py-0.5 text-caption-1-medium text-text-secondary outline-none transition-colors duration-150 hover:text-accent-600 focus-visible:ring-2 focus-visible:ring-border-focus-ring"
           >
             Check us against the Bulletin
             <RiExternalLinkLine className="size-3.5" aria-hidden />
@@ -112,6 +158,26 @@ export function ProgramAuditCard({ result, className }: ProgramAuditCardProps) {
           </li>
         ))}
       </ul>
+
+      {legend.length > 0 ? (
+        <dl className="flex flex-col gap-2 border-t border-border-table px-1.5 pt-2.5">
+          {legend.map((entry) => (
+            <div key={entry.label} className="flex flex-col gap-0.5">
+              <dt
+                className={cx(
+                  "text-caption-2-regular",
+                  VERIFICATION_TEXT_COLOR[entry.verification],
+                )}
+              >
+                {entry.label}
+              </dt>
+              <dd className="max-w-[68ch] text-caption-2-regular text-pretty text-text-tertiary">
+                {entry.note}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
     </section>
   );
 }
@@ -156,18 +222,24 @@ function RequirementRow({ programId, group }: { programId: string; group: GroupR
         <div className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-background-tertiary-default">
           <div
             className={cx(
-              "h-full rounded-full transition-[width] duration-300 ease",
+              "h-full w-full origin-left rounded-full",
+              "transition-transform duration-300 ease-out motion-reduce:transition-none",
               statusFillClass(group.status, group.verification),
             )}
-            style={{ width: `${Math.round(fraction * 100)}%` }}
+            style={{ transform: `scaleX(${fraction})` }}
           />
         </div>
         <span className="shrink-0 text-caption-2-regular text-text-tertiary">
           {STATUS_LABEL[group.status]}
         </span>
-        <Chip variant="caption" color={VERIFICATION_CHIP_COLOR[group.verification]}>
+        <span
+          className={cx(
+            "shrink-0 text-caption-2-regular",
+            VERIFICATION_TEXT_COLOR[group.verification],
+          )}
+        >
           {verificationLabelFor(group.group.rule)}
-        </Chip>
+        </span>
       </div>
 
       {group.matched.length > 0 ? (
@@ -182,7 +254,7 @@ function RequirementRow({ programId, group }: { programId: string; group: GroupR
                   href={`/course/${match.courseId}`}
                   title={match.title ?? undefined}
                   className={cx(
-                    "inline-flex items-center gap-1 rounded-md border px-1.5 py-1 text-caption-1-medium tabular-nums outline-none transition-colors duration-150 ease",
+                    "inline-flex items-center gap-1 rounded-md border px-1.5 py-1 text-caption-1-medium tabular-nums outline-none transition-colors duration-150",
                     "focus-visible:ring-2 focus-visible:ring-border-focus-ring",
                     match.planned
                       ? "border-status-cyan-text/40 bg-status-cyan-background text-status-cyan-text"
@@ -218,17 +290,17 @@ function RequirementRow({ programId, group }: { programId: string; group: GroupR
         </div>
       ) : null}
 
+      {/*
+        The wording that explains this row's tier is in the card's legend, once.
+        See the file header.
+      */}
       {group.verification === "attested" ? (
         <AttestToggle
           programId={programId}
           groupId={group.group.id}
           attestedAt={group.attestedAt ?? null}
         />
-      ) : (
-        <p className="text-caption-2-regular text-pretty text-text-tertiary">
-          {verificationNoteFor(group.group.rule)}
-        </p>
-      )}
+      ) : null}
     </article>
   );
 }

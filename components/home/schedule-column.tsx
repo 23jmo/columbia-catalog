@@ -125,7 +125,7 @@ export function ScheduleColumn({
 
         <Link
           href="/schedule"
-          className="text-body-medium inline-flex shrink-0 items-center gap-1 rounded-lg px-1 py-0.5 text-text-secondary outline-none transition-colors duration-150 ease hover:text-text-primary focus-visible:ring-2 focus-visible:ring-border-focus-ring"
+          className="text-body-medium inline-flex shrink-0 items-center gap-1 rounded-lg px-1 py-0.5 text-text-secondary outline-none transition-colors duration-150 hover:text-text-primary focus-visible:ring-2 focus-visible:ring-border-focus-ring"
         >
           Open schedule
           <RiArrowRightUpLine className="size-4" aria-hidden />
@@ -212,7 +212,7 @@ export function ScheduleColumn({
           {hard.length + soft.length > 4 && (
             <Link
               href="/schedule"
-              className="text-caption-1-medium rounded text-text-secondary underline underline-offset-2 outline-none transition-colors duration-150 ease hover:text-text-primary focus-visible:ring-2 focus-visible:ring-border-focus-ring"
+              className="text-caption-1-medium rounded text-text-secondary underline underline-offset-2 outline-none transition-colors duration-150 hover:text-text-primary focus-visible:ring-2 focus-visible:ring-border-focus-ring"
             >
               {hard.length + soft.length - 4} more on the schedule
             </Link>

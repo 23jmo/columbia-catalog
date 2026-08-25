@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { PrefetchLink } from "@/components/catalog/prefetch-link";
 import { RiArrowDownSLine, RiArrowRightSLine } from "@remixicon/react";
 
@@ -125,7 +125,23 @@ export function CourseResultRow({
   return (
     <article
       className={cx(
-        "group/row border-b border-border-table transition-colors duration-100 ease",
+        "group/row border-b border-border-table",
+        // Press feedback. The property list is spelled out rather than left as
+        // `transition-colors` + `transition-transform`: `cx` is tailwind-merge,
+        // so a second `transition-*` utility would replace the first instead of
+        // adding to it.
+        //
+        // `scale` is named explicitly, and it is not optional. Tailwind v4 emits
+        // `scale-[0.97]` as a standalone `scale:` property, NOT inside
+        // `transform:`, so a list naming only `transform` compiles fine and then
+        // silently snaps. Same trap as the `translate-y-*` slide documented at
+        // app/course/[courseId]/course-drawer.tsx:1513.
+        //
+        // 0.99 because a full-width row at 0.97 reads as the page lurching
+        // rather than the row acknowledging a tap.
+        "transition-[color,background-color,border-color,transform,scale] duration-100 ease-out",
+        "active:scale-[0.99] active:duration-[160ms]",
+        "motion-reduce:transition-none motion-reduce:active:scale-100",
         isExpanded ? "bg-background-secondary-default/40" : "hover:bg-background-primary-hover",
       )}
       aria-label={`Result ${position} of ${total}: ${code} ${title}`}
@@ -204,22 +220,22 @@ export function CourseResultRow({
           </span>
           <RiArrowDownSLine
             aria-hidden
-            className={cx("size-3.5 transition-transform duration-150 ease", isExpanded && "rotate-180")}
+            className={cx("size-3.5 transition-transform duration-150 ease-out motion-reduce:transition-none", isExpanded && "rotate-180")}
           />
         </button>
       </div>
 
       {/* ── Section table ──────────────────────────────────────────────── */}
       {isExpanded ? (
-        <div id={panelId} className="overflow-x-auto border-t border-border-table px-3 pb-2.5">
+        <SectionPanel id={panelId}>
           <table className="w-full min-w-[34rem] border-collapse text-left">
             <thead>
               <tr className="text-caption-2-medium tracking-[0.06em] text-text-tertiary uppercase">
-                <th scope="col" className="py-1.5 pr-3 font-medium">Section</th>
-                <th scope="col" className="py-1.5 pr-3 font-medium">Call</th>
-                <th scope="col" className="py-1.5 pr-3 text-right font-medium">Cr</th>
-                <th scope="col" className="py-1.5 pr-3 font-medium">Instructor &amp; meeting</th>
-                <th scope="col" className="w-[10.5rem] py-1.5 font-medium">Enrollment</th>
+                <th scope="col" className="py-1.5 pr-3">Section</th>
+                <th scope="col" className="py-1.5 pr-3">Call</th>
+                <th scope="col" className="py-1.5 pr-3 text-right">Cr</th>
+                <th scope="col" className="py-1.5 pr-3">Instructor &amp; meeting</th>
+                <th scope="col" className="w-[10.5rem] py-1.5">Enrollment</th>
                 <th scope="col" className="w-20 py-1.5">
                   <span className="sr-only">Save</span>
                 </th>
@@ -240,7 +256,7 @@ export function CourseResultRow({
               ))}
             </tbody>
           </table>
-        </div>
+        </SectionPanel>
       ) : null}
     </article>
   );
@@ -284,7 +300,9 @@ function SectionTableRow({
     <tr
       className={cx(
         "group/section relative border-t border-border-table/60 align-middle",
-        "transition-colors duration-100 ease hover:bg-background-primary-hover",
+        "transition-[color,background-color,border-color,transform,scale] duration-100 ease-out hover:bg-background-primary-hover",
+        "active:scale-[0.97] active:duration-[160ms]",
+        "motion-reduce:transition-none motion-reduce:active:scale-100",
         // The match highlight is a left rule plus a tint, never a tint alone --
         // a background wash is exactly the cue that vanishes in greyscale. It
         // now also fires when the QUERY named this section by title, not only
@@ -303,7 +321,7 @@ function SectionTableRow({
             href={href}
             className={cx(
               "text-caption-1-medium text-text-primary",
-              "rounded outline-none transition-colors duration-100 ease hover:text-accent-600",
+              "rounded outline-none transition-colors duration-100 hover:text-accent-600",
               "focus-visible:ring-2 focus-visible:ring-border-focus-ring",
               "after:absolute after:inset-0 after:content-['']",
             )}
@@ -322,7 +340,7 @@ function SectionTableRow({
             {sectionTitle ? (
               <>
                 <span>{sectionTitle}</span>
-                <span className="ml-1.5 font-normal tabular-nums text-text-tertiary">
+                <span className="ml-1.5 text-body-regular tabular-nums text-text-tertiary">
                   {section.sectionCode}
                 </span>
               </>
@@ -448,19 +466,42 @@ function SoleSectionRow({
   return (
     <article
       className={cx(
-        "group/row relative border-b border-border-table transition-colors duration-100 ease",
+        "group/row relative border-b border-border-table",
+        "transition-[color,background-color,border-color,transform,scale] duration-100 ease-out",
+        "active:scale-[0.99] active:duration-[160ms]",
+        "motion-reduce:transition-none motion-reduce:active:scale-100",
         "hover:bg-background-primary-hover",
         isMatch && "bg-accent-500/[0.07]",
       )}
       aria-label={`Result ${position} of ${total}: ${code} ${headline}`}
     >
-      <div className="relative flex items-start gap-3 px-3 py-2.5">
+      {/*
+        ── Why this stacks below `sm` ────────────────────────────────────────
+
+        The three right-hand columns are fixed-width: a 96px meter, an 80px
+        save column and a 16px chevron, plus three 12px gaps. On a 390px phone
+        that is 240px of the 366px content box spoken for before the title gets
+        a pixel, and the title — the only thing anyone scans a result list for —
+        was left with 138px. Every row rendered as "Prepara / Colle…" over four
+        stacked fragments of metadata.
+
+        So below `sm` the row is two bands: everything you read, then everything
+        you compare. The meter goes full-width, which is strictly better than
+        the 96px version anyway — it is a proportion, and a wider bar resolves
+        the proportion more finely.
+
+        `sm:contents` dissolves the second band at ≥sm so the meter, the save
+        control and the chevron become direct children of this flex row again,
+        exactly as before. One element, no duplicated subtree, and the desktop
+        layout is untouched.
+      */}
+      <div className="relative flex flex-col gap-2 px-3 py-3 sm:flex-row sm:items-start sm:gap-3 sm:py-2.5">
         <div className="min-w-0 flex-1">
           <h2 className="min-w-0 text-headline-semibold -tracking-[0.01em] text-text-primary">
             <PrefetchLink
               href={href}
               className={cx(
-                "block line-clamp-2 rounded outline-none transition-colors duration-100 ease hover:text-accent-600",
+                "block line-clamp-2 rounded outline-none transition-colors duration-100 hover:text-accent-600",
                 "focus-visible:ring-2 focus-visible:ring-border-focus-ring",
                 "after:absolute after:inset-0 after:content-['']",
               )}
@@ -531,46 +572,96 @@ function SoleSectionRow({
           `10.5rem` is the table's `Enrollment` column width, so a sole-section
           row and an expanded section table line their meters up on one x.
         */}
-        <EnrollmentBar
-          status={section.status}
-          enrollmentCount={section.enrollmentCount}
-          enrollmentCap={section.enrollmentCap}
-          waitlistCount={section.waitlistCount}
-          className="mt-0.5 w-24 shrink-0 sm:w-[10.5rem]"
-        />
-
-        {/*
-          This row IS a section — it never expands, because there is nothing to
-          choose between — so the "expand before you can save" rule has nothing
-          to protect against here.
-
-          `w-20` is the table's Save column, for the same reason the meter above
-          carries the Enrollment column's width: a sole-section row and an
-          expanded section table have to line their controls up on one x, or
-          scanning down a page of results means re-finding the star per row.
-
-          `relative z-10` keeps it out from under the headline's stretched link.
-        */}
-        <span className="flex w-20 shrink-0 justify-center">
-          <BookmarkControls
-            sectionId={section.sectionId}
-            sectionCode={section.sectionCode}
-            courseLabel={code}
-            size="xs"
-            className="relative z-10"
+        <div className="flex items-center gap-3 sm:contents">
+          <EnrollmentBar
+            status={section.status}
+            enrollmentCount={section.enrollmentCount}
+            enrollmentCap={section.enrollmentCap}
+            waitlistCount={section.waitlistCount}
+            className="min-w-0 flex-1 sm:mt-0.5 sm:w-[10.5rem] sm:flex-none sm:shrink-0"
           />
-        </span>
 
-        <RiArrowRightSLine
-          aria-hidden
-          className="mt-0.5 size-4 shrink-0 text-text-tertiary transition-colors group-hover/row:text-text-primary"
-        />
+          {/*
+            This row IS a section — it never expands, because there is nothing
+            to choose between — so the "expand before you can save" rule has
+            nothing to protect against here.
+
+            `w-20` is the table's Save column, for the same reason the meter
+            above carries the Enrollment column's width: a sole-section row and
+            an expanded section table have to line their controls up on one x,
+            or scanning down a page of results means re-finding the star per
+            row. That alignment only matters where the table exists, so the
+            fixed width is `sm:` and the stacked row lets the control size
+            itself.
+
+            `relative z-10` keeps it out from under the headline's stretched
+            link.
+          */}
+          <span className="flex shrink-0 justify-center sm:w-20">
+            <BookmarkControls
+              sectionId={section.sectionId}
+              sectionCode={section.sectionCode}
+              courseLabel={code}
+              size="xs"
+              className="relative z-10"
+            />
+          </span>
+
+          {/*
+            Affordance only, and only where there is a pointer to afford it —
+            the whole row is already a link. On a phone it was 16px of the
+            title's width spent on a decoration nobody taps.
+          */}
+          <RiArrowRightSLine
+            aria-hidden
+            className="mt-0.5 hidden size-4 shrink-0 text-text-tertiary transition-colors group-hover/row:text-text-primary sm:block"
+          />
+        </div>
       </div>
     </article>
   );
 }
 
 /** Sections that satisfied the active filters come first; then section code. */
+/**
+ * The expanded section table, with its own entrance.
+ *
+ * The row's HEIGHT changes in one frame, deliberately. This list is virtualized
+ * (app/search/results-list.tsx:97) and each row measures itself through
+ * `virtualizer.measureElement`, which is ResizeObserver-backed -- animating the
+ * height would re-measure every row below this one on every frame and the list
+ * would fight its own scroll anchoring. So the space appears at once and only
+ * the content animates into it.
+ *
+ * The flag lives here rather than in the parent so it is created fresh on each
+ * open and never needs resetting on close. It has to flip in a LATER frame than
+ * the mount or there is no from-state to animate out of -- the same reason the
+ * drawer defers its own visibility flag (course-drawer.tsx:1249-1270).
+ */
+function SectionPanel({ id, children }: { id: string; children: ReactNode }) {
+  const [hasEntered, setEntered] = useState(false);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setEntered(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  return (
+    <div
+      id={id}
+      className={cx(
+        "overflow-x-auto border-t border-border-table px-3 pb-2.5",
+        // `translate` is named, not `transform`: Tailwind v4 emits
+        // `-translate-y-1` as a standalone `translate:` property. See the
+        // corrected list at app/course/[courseId]/course-drawer.tsx:1513.
+        "transition-[opacity,translate] duration-150 ease-out motion-reduce:transition-none",
+        hasEntered ? "translate-y-0 opacity-100" : "-translate-y-1 opacity-0",
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
 function orderSections(
   sections: SectionListItem[],
   matchedSectionIds: string[] | null,

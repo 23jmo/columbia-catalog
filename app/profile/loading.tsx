@@ -1,4 +1,11 @@
 import { AppShell } from "@/components/shell/app-shell";
+import {
+  pageHeroBodyClass,
+  pageHeroCoverClass,
+  pageHeroSectionClass,
+  pageIdentityContentClass,
+} from "@/components/shell/page-hero-layout";
+import { PageContent } from "@/components/shell/page-content";
 
 /**
  * Server-render wait for the profile.
@@ -15,13 +22,10 @@ const CARD_HEIGHTS = [200, 260, 320, 280, 180];
 export default function ProfileLoading() {
   return (
     <AppShell activeNav="profile">
-      <div
-        className="mx-auto flex w-full max-w-4xl flex-col items-center gap-4"
-        aria-busy="true"
-      >
-        <section className="relative w-full overflow-hidden rounded-3xl border border-border-ai-profile-card">
-          <div className="absolute inset-x-0 top-0 h-[165px] animate-pulse rounded-t-[23px] bg-background-tertiary-default" />
-          <div className="relative flex w-full flex-col gap-[15px] px-4 pt-[124px] pb-4">
+      <PageContent className={pageIdentityContentClass()} aria-busy="true">
+        <section className={pageHeroSectionClass("card")}>
+          <div className={`${pageHeroCoverClass()} animate-pulse bg-background-tertiary-default`} />
+          <div className={pageHeroBodyClass()}>
             <span className="size-20 animate-pulse rounded-full bg-background-tertiary-default ring-4 ring-background-primary-default" />
             <div className="flex flex-col gap-2">
               <div className="h-5 w-48 animate-pulse rounded-full bg-background-secondary-default" />
@@ -62,7 +66,7 @@ export default function ProfileLoading() {
         <p className="sr-only" role="status">
           Loading your degree audit
         </p>
-      </div>
+      </PageContent>
     </AppShell>
   );
 }

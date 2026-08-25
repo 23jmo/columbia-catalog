@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo } from "react";
+import { useReducedMotion } from "motion/react";
 import {
   Background,
   BackgroundVariant,
@@ -108,6 +109,7 @@ function PrereqMapCanvas({
   const [nodes, setNodes, onNodesChange] = useNodesState<CourseFlowNode>(layoutNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(flowEdges);
   const { fitView } = useReactFlow();
+  const shouldReduceMotion = useReducedMotion();
 
   // The layout is recomputed from scratch on every focus change, so the flow
   // state is replaced rather than merged — merging would preserve stale
@@ -116,10 +118,19 @@ function PrereqMapCanvas({
     setNodes(layoutNodes);
     setEdges(flowEdges);
     const frame = requestAnimationFrame(() => {
-      void fitView({ padding: 0.14, duration: 320, minZoom: MIN_FIT_ZOOM, maxZoom: 1 });
+      // The camera tween pans and zooms the whole graph under the cursor, which
+      // is exactly the large-area movement `prefers-reduced-motion` exists to
+      // suppress. Zero duration keeps the framing identical and arrives at it
+      // in one cut.
+      void fitView({
+        padding: 0.14,
+        duration: shouldReduceMotion ? 0 : 320,
+        minZoom: MIN_FIT_ZOOM,
+        maxZoom: 1,
+      });
     });
     return () => cancelAnimationFrame(frame);
-  }, [layoutNodes, flowEdges, setNodes, setEdges, fitView]);
+  }, [layoutNodes, flowEdges, setNodes, setEdges, fitView, shouldReduceMotion]);
 
   const handleNodeClick = useCallback<NodeMouseHandler<CourseFlowNode>>(
     (_event, node) => {

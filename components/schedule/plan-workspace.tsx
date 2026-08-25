@@ -82,7 +82,6 @@ export function PlanWorkspace({ termCode = CURRENT_TERM, term, className }: Plan
   const sectionKey = sectionIds.join(",");
   const resolved = fetched.key === sectionKey ? fetched.data : EMPTY;
   const loadError = failure?.key === sectionKey ? failure.message : null;
-  const isLoading = sectionIds.length > 0 && fetched.key !== sectionKey && loadError === null;
 
   useEffect(() => {
     if (sectionIds.length === 0) return;
@@ -224,12 +223,7 @@ export function PlanWorkspace({ termCode = CURRENT_TERM, term, className }: Plan
             termEnd={bounds.endsOn}
             sections={resolved.sections}
             courses={resolved.courses}
-            typical={resolved.typical}
-            isLoading={isLoading}
             customBlocks={selected.customBlocks}
-            onRemoveSection={(sectionId) =>
-              guard(() => planStore.removeSection(selected.planId, sectionId))
-            }
             savedPicker={
               /*
                 The shortlist, one click from the canvas.
@@ -281,13 +275,6 @@ export function PlanWorkspace({ termCode = CURRENT_TERM, term, className }: Plan
             }
             onMakePrimary={() => guard(() => planStore.setPrimaryPlan(selected.planId))}
             isPrimary={selected.isPrimary}
-            name={selected.name}
-            onRename={(name) =>
-              guard(() => {
-                if (!name.trim()) return;
-                planStore.renamePlan(selected.planId, name.trim());
-              })
-            }
           />
       )}
     </div>

@@ -1,78 +1,159 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { RiMenuLine } from "@remixicon/react";
-import { Modal as AriaModal, ModalOverlay as AriaModalOverlay } from "react-aria-components";
 
-import { AccountMenu } from "@/components/shell/account-menu";
 import { CatalogSidebar } from "@/components/shell/catalog-sidebar";
 import type { ShellNavKey } from "@/components/shell/nav";
-import { TermSwitcher } from "@/components/shell/term-switcher";
-import { ShellWordmark } from "@/components/shell/wordmark";
 import { cx } from "@/utils/cx";
 
+const PAGE_NAME: Record<ShellNavKey, string> = {
+  home: "Home",
+  search: "Search",
+  saved: "Saved",
+  schedule: "Schedule",
+  progression: "Progression",
+  profile: "Profile",
+};
+
+/** Matches the parked rail. Keep this in lockstep with the width class below. */
+const RAIL_PX = 260;
+
 /**
- * The phone/tablet half of the app chrome: a sticky bar plus a slide-in sheet
- * carrying the same three destinations as the desktop rail. Rendered below
- * `lg`; the rail takes over above it.
+ * Desktop floating rail starts at `xl` (1280px), not `lg` (1024px).
+ *
+ * 1024 is iPad Pro portrait — still a tablet. Gating the push/radius on
+ * `max-lg` made that size snap to the desktop rail and skip the join.
  */
-export function MobileNavBar({ activeNav }: { activeNav: ShellNavKey }) {
+const DESKTOP_MQ = "(min-width: 1280px)";
+
+/**
+ * Phone and tablet chrome — BoardUI AI Chat's slide, with a slim top bar.
+ *
+ * The rail is parked under the page, always 260px. Opening does not shrink
+ * the content column (that would reflow every card). It translates the whole
+ * card right, same width, so the extra 260px just leaves the screen.
+ *
+ * Transform is set as `translate3d` on the element itself, both open and
+ * closed. Toggling a Tailwind `translate-x-*` class (or toggling
+ * `overflow-hidden` with it) goes from `transform: none` to a list, which
+ * most engines cannot interpolate — that is the snap. The header gets the
+ * same left radius so its opaque fill does not square off the join.
+ *
+ * The shell behind the card is the sidebar grey. That is what shows in the
+ * card's left radius — a white page behind it would read as a hole, not a join.
+ *
+ * At `xl` this is a passthrough: the bar and the rail both hide, and the
+ * desktop floating sidebar (a sibling in `AppShell`) takes over.
+ */
+export function MobileShell({
+  activeNav,
+  children,
+  className,
+  style,
+}: {
+  activeNav: ShellNavKey;
+  children: ReactNode;
+  className?: string;
+  style?: CSSProperties;
+}) {
   const [isOpen, setIsOpen] = useState(false);
+  const pageName = PAGE_NAME[activeNav];
+
+  useEffect(() => {
+    const media = window.matchMedia(DESKTOP_MQ);
+    const onChange = () => {
+      if (media.matches) setIsOpen(false);
+    };
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isOpen]);
 
   return (
-    <>
-      <header className="sticky top-0 z-30 flex h-14 w-full shrink-0 items-center justify-between gap-2 border-b border-border-table bg-background-full px-3 pt-[env(safe-area-inset-top,0px)] lg:hidden">
-        <div className="flex min-w-0 items-center gap-2">
+    <div
+      className={cx(
+        "relative min-h-dvh min-w-0 flex-1 overflow-x-clip",
+        "max-xl:bg-background-secondary-default",
+      )}
+    >
+      <div
+        id="mobile-catalog-nav"
+        inert={!isOpen ? true : undefined}
+        aria-hidden={!isOpen}
+        className="absolute inset-y-0 left-0 z-0 w-[260px] xl:hidden"
+      >
+        <CatalogSidebar
+          activeNav={activeNav}
+          mobile
+          flat
+          onNavigate={() => setIsOpen(false)}
+          className="h-full w-[260px]"
+        />
+      </div>
+
+      <div
+        className={cx(
+          "relative z-10 flex min-h-dvh w-full flex-col bg-background-full",
+          "transition-[transform,border-radius,box-shadow] duration-400 motion-reduce:transition-none",
+          "ease-[cubic-bezier(0.32,0.72,0,1)]",
+          // No overflow-hidden: toggling it cancelled the transform, and
+          // leaving it on clips the join shadow. Round the header instead.
+          isOpen ? "rounded-l-3xl shadow-sidebar" : "rounded-none shadow-none",
+        )}
+        style={{
+          transform: isOpen ? `translate3d(${RAIL_PX}px,0,0)` : "translate3d(0,0,0)",
+        }}
+      >
+        {/*
+          Hamburger + the page name, optically centred. The trailing size-9
+          spacer matches the button so "Home" sits in the real middle, not
+          shifted toward the control.
+        */}
+        <header
+          className={cx(
+            "sticky top-0 z-30 flex w-full shrink-0 items-center gap-2 bg-background-full px-3 xl:hidden",
+            "h-[calc(3.5rem+env(safe-area-inset-top,0px))] pt-[env(safe-area-inset-top,0px)]",
+            "transition-[border-radius] duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none",
+            isOpen ? "rounded-tl-3xl" : "rounded-none",
+          )}
+        >
           <button
             type="button"
-            aria-label="Open navigation"
+            aria-label={isOpen ? "Close navigation" : "Open navigation"}
             aria-expanded={isOpen}
-            onClick={() => setIsOpen(true)}
+            aria-controls="mobile-catalog-nav"
+            onClick={() => setIsOpen((open) => !open)}
             className={cx(
-              "flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-2lg",
-              "text-foreground-icon-secondary transition-colors duration-150 ease",
-              "hover:bg-background-secondary-hover hover:text-foreground-icon-primary",
+              "flex size-9 shrink-0 items-center justify-center rounded-full",
+              "border border-border-button-default bg-background-primary-default shadow-xs",
+              "text-foreground-icon-secondary",
+              "transition-[color,background-color,border-color,box-shadow,transform,scale] duration-150 ease-out",
+              "hover:bg-background-primary-hover hover:border-border-button-hover",
+              "active:scale-[0.97] active:duration-[160ms]",
+              "motion-reduce:transition-none motion-reduce:active:scale-100",
               "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
             )}
           >
             <RiMenuLine className="size-5" aria-hidden />
           </button>
-          <ShellWordmark compact />
+          <p className="min-w-0 flex-1 truncate text-center text-title-3-semibold -tracking-[0.01em] text-text-primary">
+            {pageName}
+          </p>
+          <span className="size-9 shrink-0" aria-hidden />
+        </header>
+        <div className={cx("flex min-h-0 min-w-0 flex-1 flex-col", className)} style={style}>
+          {children}
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <TermSwitcher compact />
-          <AccountMenu compact />
-        </div>
-      </header>
-
-      <AriaModalOverlay
-        isOpen={isOpen}
-        onOpenChange={setIsOpen}
-        isDismissable
-        className={cx(
-          "fixed inset-0 z-50 flex bg-black/20 backdrop-blur-[2px] lg:hidden",
-          "transition-opacity duration-200 ease-out",
-          "data-[entering]:opacity-0 data-[exiting]:opacity-0",
-        )}
-      >
-        <AriaModal
-          className={cx(
-            "h-full w-[288px] max-w-[86vw] outline-none pl-[env(safe-area-inset-left,0px)]",
-            "transition-transform duration-200 ease-out",
-            "data-[entering]:-translate-x-full data-[exiting]:-translate-x-full",
-          )}
-        >
-          <CatalogSidebar
-            activeNav={activeNav}
-            mobile
-            flat
-            fluid
-            onClose={() => setIsOpen(false)}
-            onNavigate={() => setIsOpen(false)}
-            className="h-full"
-          />
-        </AriaModal>
-      </AriaModalOverlay>
-    </>
+      </div>
+    </div>
   );
 }

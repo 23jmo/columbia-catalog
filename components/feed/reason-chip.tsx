@@ -59,8 +59,7 @@ export function ReasonChip({ children, className }: { children: string; classNam
         className={cx(
           "relative isolate inline-flex max-w-full items-center overflow-hidden",
           "rounded-full px-2 py-0.5",
-          "ring-1 ring-inset ring-accent-200 dark:ring-accent-900",
-          "text-caption-2-medium text-accent-700 dark:text-accent-300",
+          "bg-badge-new-background text-caption-2-medium text-badge-new-text",
           className,
         )}
       >

@@ -1,0 +1,117 @@
+{
+  "number_of_reviews": 18,
+  "reviews": [
+    {
+      "agree_count": 4,
+      "content": "A lot of people throughout the semester complained that even though the class is called an “Honors Intro” class, they felt like it was not an intro class because what is asked of them is really hard. They took their complaints to Piazza almost every time an assignment was released. Although I personally disagree and think it’s fine as an intro class because it is an HONORS class, I want to point out what the students felt like at the time. So do expect the class to be really challenging. The assignments will take a huge amount of time. It is almost impossible to do them a night before (unless your goal is to only pass). The exams are not particularly easy but they’re not insanely hard either. If you just study the lecture notes and skim the book and assignments you’ll be fine. My only complaint is that sometimes the questions on the exams are vague or open to interpretation but the professor wants a specific answer in mind, and if you don’t write what he wants, then he marks it wrong. However, like other reviewers pointed out, the curve is enormous. A raw final grade in the high seventies will land you an A or A- depending on that year’s curve. He’s also not that intimidating as he seems, but actually very approachable and nice. He always asks for feedback and even gave the class an extension once (don’t push it though). ",
+      "course_header": {
+        "course_code": "COMS W1009",
+        "course_id": 995,
+        "course_name": "Honors Introduction to Computer Science (Java)"
+      },
+      "disagree_count": 3,
+      "funny_count": 0,
+      "professor_header": {
+        "first_name": "John",
+        "last_name": "Kender",
+        "nugget": 1,
+        "professor_id": 42,
+        "uni": null
+      },
+      "rating": 4,
+      "review_id": 81865,
+      "submission_date": "2020-01-27T02:19:07",
+      "workload": "A LOT. Like a lot (mainly assignments)."
+    },
+    {
+      "agree_count": 0,
+      "content": "Terrible class. Half of the lectures are spent reviewing the useless material from the previous lecture. You don't learn anything about actual coding in lecture, just theory that will only be useful on the homework. The bigger problem is that you are given 30-hour assignment with \"2-4 weeks\" to complete them, but only learn the first half of relevant material the lecture before they are due. The professor doesn't know how to write notes on the whiteboard (you can't understand what he's saying simply by copying him). 1007 is more (tedious and difficult) work than 1004 or Data Structures, but you're learning less. I can't emphasize this enough: TAKE 1004 or DATA STRUCTURES. Professor is not helpful in Piazza either.",
+      "course_header": {
+        "course_code": "COMS W1007",
+        "course_id": 2906,
+        "course_name": "Object-Oriented Programming and Design in Java"
+      },
+      "disagree_count": 2,
+      "funny_count": 0,
+      "professor_header": {
+        "first_name": "John",
+        "last_name": "Kender",
+        "nugget": 1,
+        "professor_id": 42,
+        "uni": null
+      },
+      "rating": 1,
+      "review_id": 80962,
+      "submission_date": "2018-10-15T19:43:02",
+      "workload": "2 hours per week for a 2-3 week cycle, and then 30 hours in 3 days. Don't blame this on lack of organization; you don't learn the relevant material until 2-3 days before the due dates. You will have to figure out half of the problem set online and guess what the professor wants."
+    },
+    {
+      "agree_count": 0,
+      "content": "This review may not speak to the content of 1007 so much as the culture, but I would like to note to incoming students that this class has a surprisingly pre-professional and competitive atmosphere. I remember on the first day, Kender listed a number of languages - Perl, Python, C++, and asked students to raise their hands whenever they heard a language with which they had experience. I immediately felt so lost; I'd signed up for the course knowing just what was required to take it. I was, in fact, prepared for the course. I'd taken AP Java in high school; I'd done well; I for the most part continued that trend in 1007. But there wasn't a moment of this class I didn't spend questioning my abilities or worth as a CS student, even when I did quite well on the assignments. \r\n\r\nThere were a lot of things Kender could have done to abate or eliminate this competitive aspect of the class, but instead he seemed to constantly make choices that worsened it. First of all, he'd post a list of the naked grades (everyone in the class' grades stripped of names) after every assignment. Seems whatever, but he did it in a way that each row would represent a person, and each column their grades on a particular assignment. To me, this seemed like an overabundance of information; Kender could have released the mean and perhaps standard deviation for each assignment, like most CS classes do, and that would've been enough information to know your approximate standing in the class. Second of all, after every naked grade set was posted, some guy would post in-depth stats on Piazza on the grade distribution, which was pretty unhealthy, grade-focused BS. I wish Kender had shut that down.  Third, at the end of the class, Kender sent an email to all students naming those who got an A+, as well as saluting certain members of the class who he felt had made significant contributions (like Piazza posts etc.). This is something I've never seen a professor do before -- if you do well in a class, you should know it without the professor emailing all your peers. The email also privileged certain modes of achievement in a field that, right now, desperately needs a diversity of thinkers and personality types. I'm not saying those students that Kender singled out don't deserve praise; but it would have been much more appropriate had Kender kept those thank-yous and A+s confidential. \r\n\r\nThose are just, to be clear, a few select examples of a trend of competitiveness that pervaded this class. Oh, and by the way, after all of this Kender had the nerve to complain (in that same final email) about how our class seemed more pre-professional than usual, as if he hadn't contributed at all to the atmosphere. When I read that, I actually laughed out loud. \r\n\r\nIn terms of the course itself, I have few complaints. The material was truly interesting, and genuinely helpful to me as a programmer. Kender was a great lecturer, happily supplied all kinds of interesting supplementary information on Courseworks, and patiently explained concepts in person and on Piazza (even on the weekends). The class was difficult at times, but I learned so much about good design and feel like I have a great grasp of object-oriented programming now. I find myself applying design patterns + strategies I learned in this class all the time. In fact, I can't imagine where I'd be as a programmer without 1007. That's why it's such a shame that the class atmosphere was so unwelcoming. I'm not asking for hand-holding, but I don't think it's unreasonable to request an environment where the professor isn't implicitly supporting a culture of \"who's best\" or \"who's worst\" or \"what's the grade distribution\" or \"who wants a professorially-sanctioned way to brag about how much they know about multithreading even though it's mostly irrelevant to this class.\" Anyone who signs up for Kender's class and sticks with it has already demonstrated they deserve to be in 1007, even if they didn't get an A+ on homework 3 or couldn't work up the nerve to raise their hands that one time in lecture.\r\n\r\nTake this class and ask a lot of questions; what you'll learn is worth it. But do your best to block out the competitiveness, and know the class is not representative of what CS culture should be.\r\n",
+      "course_header": {
+        "course_code": "COMS W1009",
+        "course_id": 995,
+        "course_name": "Honors Introduction to Computer Science (Java)"
+      },
+      "disagree_count": 0,
+      "funny_count": 0,
+      "professor_header": {
+        "first_name": "John",
+        "last_name": "Kender",
+        "nugget": 1,
+        "professor_id": 42,
+        "uni": null
+      },
+      "rating": 3,
+      "review_id": 79266,
+      "submission_date": "2016-07-06T02:12:07",
+      "workload": "Four or five time-intensive homework assignments, a midterm, and a final. I for one did very badly on the first homework – I found the instructions confusing and didn't know what was expected of me (heck, I didn't even know you had to compile javadoc; nobody told me! I thought it was enough to leave it in the code). My main advice for that would be to ask a lot of questions on Piazza and to the TAs. Don't feel embarrassed for not knowing some things. After that first homework, the other homework assignments were challenging, but doable, especially if you sought help. \r\n\r\nThe midterm was difficult, but fair if you paid attention in class and studied your notes (he'll say he might pull concepts from the textbook, but your notes are really all that matters). The final was a little harder but also fine. "
+    }
+  ],
+  "reviews_spotlight": {
+    "agreed_review": {
+      "agree_count": 26,
+      "content": "I have to disagree with the review below me on multiple accounts.\r\n\r\nFirst, workload: There are five assignments, a midterm, and a final. For each assignment, we were given at least two weeks if not more. Kender, though as inscrutable as Dumbledore in his answers, will point you in the general right direction through discussion boards, and office hours with the TAs and Kender himself will help you if you're ever feeling totally lost--but to take advantage of this, you MUST start the assignment earlier than the weekend before they're due. They can take up to a whole weekend to do but often much less. They are difficult, but they can be fun and you'll learn something from each one.\r\n\r\nSecond, as for the phrasing of questions, he just likes for you to state the reason behind the answer rather than rote memorization. To reiterate what previous reviews have said, he seems grumpy but he's really a sweet, witty, silver nugget-worthy guy.\r\n\r\nHe's like an m&m with a hard crunchy outer coating but is really just a sweet, melty, softy on the inside. If you really took his exasperation to heart, then do yourself a favor and get over yourself. He's not a kindergarten teacher who will hug you and listen to your feelings but he will go well out of his way to help you as much as he can without straight up giving you the answer. He wants you to oh my god forbid learn something instead of cruising out with a B+.\r\n \r\nThe grading was very reasonable(not EASY, reasonable), he explained how and why the grades were the way they were, acknowledged when things were unfair, took our feedback into account very well, and if you had a problem with this good luck at Columbia because the fact he even TOOK feedback was like, shocking, at this school. ",
+      "course_header": {
+        "course_code": "COMS W1007",
+        "course_id": 2906,
+        "course_name": "Object-Oriented Programming and Design in Java"
+      },
+      "disagree_count": 5,
+      "funny_count": 6,
+      "professor_header": {
+        "first_name": "John",
+        "last_name": "Kender",
+        "nugget": 1,
+        "professor_id": 42,
+        "uni": null
+      },
+      "rating": 4,
+      "review_id": 26824,
+      "submission_date": "2012-01-04T22:55:04",
+      "workload": "takes an average amount of work, read the book to help keep up with the lectures(which is in fact an assignment!!!), if you're really struggling then consider dropping back down to 1004 or something because you do need strong basic programming skills to do the assignment. if you don't have them, it will make a moderately difficult class way harder. "
+    },
+    "controversial_review": {
+      "agree_count": 14,
+      "content": "I have no idea why this guy has a silver nugget. He's not a good teacher. At all.\r\n\r\nHe always has a very, very specific answer in mind when he asks questions. In class, this leads to him calling on several people before he hears exactly what he wants to hear. He often gets exasperated at people not saying the right answer immediately. What's important to note is that often the right answer has been said, but he just didn't notice because he was too fixated on having it said exactly how he thinks it should be.\r\n\r\nThat's how it was on the exams as well. Clearly, he thought of the answers before he thought of the questions, and didn't spend much time thinking about how to phrase the questions. They were completely incomprehensible. On the midterm, he even gave us all an extra 8 points because he admitted that one question was so terribly convoluted. On the final, the chalk boards were covered by the end of the exam because of how many changes he made to the directions. I must have lost 20 minutes going back and redoing stuff because he was redefining the questions as we were taking the exam!\r\n\r\nThe work load is enormous in this class. Again, the questions were often ambiguous. If you badgered him on the discussion board, he'd sometimes clarify things. He also didn't check the API before assigning some of the graphics stuff. I must have spent 20+ hours combined trying to work around bugs in the API to try to make my designs the way he wanted them. I even sat down with him once in office hours to read through some unofficial API source code, given that his response to one of these bugs was, \"Hmmm...that's unexpected...\"\r\n\r\nOverall, this class was the most frustrating experience of my semester. If I didn't have to take it, I wouldn't have. I don't feel like I learned that much (except for some interesting stuff in chapter 7 about generics). I feel like if Kender had been focused, it might have been a semi-enjoyable experience. He was too much in his own head and didn't interact well with students, though.",
+      "course_header": {
+        "course_code": "COMS W1007",
+        "course_id": 2906,
+        "course_name": "Object-Oriented Programming and Design in Java"
+      },
+      "disagree_count": 30,
+      "funny_count": 1,
+      "professor_header": {
+        "first_name": "John",
+        "last_name": "Kender",
+        "nugget": 1,
+        "professor_id": 42,
+        "uni": null
+      },
+      "rating": 3,
+      "review_id": 26641,
+      "submission_date": "2011-12-21T02:39:16",
+      "workload": "Unreasonable. In fact, on the course evaluation one of the check boxes was next to \"So much I didn't learn anything.\" The fact that he would even consider this to be an acceptable option speaks volumes about how he approaches this class. "
+    }
+  }
+}

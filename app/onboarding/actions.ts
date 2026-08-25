@@ -5,11 +5,14 @@ import { cookies } from "next/headers";
 import { createServerSupabaseClient } from "@/lib/db/client";
 import {
   loadGuessDeck,
+  loadOnboardingFeedPreview,
   resolveCourseCodes,
   searchCourses,
+  warmCourseSearch,
   type CourseHit,
   type ResolvedCourse,
 } from "@/lib/onboarding/server";
+import type { FeedCard } from "@/lib/recommend/feed";
 import { hasAnythingToMigrate, toMigrationPayload } from "@/lib/onboarding/migrate";
 import {
   guestOnboardingStateSchema,
@@ -61,11 +64,9 @@ export interface DeckResult extends ActionResult {
 /**
  * Rank (or re-rank) the guess-and-confirm deck.
  *
- * Called once when the student reaches the grid and then only on a BATCH
- * boundary — every fourth confirmation, per `RERANK_BATCH_SIZE`. The client
- * owns that cadence because it is the client that knows when a card is under
- * the student's finger, and re-ranking mid-tap is how a grid starts feeling
- * like it is fighting the person using it.
+ * Called when the student reaches the grid and again after every confirmation
+ * (debounced on the client). Implications of a tap — "you took Intro if you
+ * took Data Structures" — apply locally and do not wait for this.
  */
 export async function guessDeckAction(rawState: unknown): Promise<DeckResult> {
   const parsed = guestOnboardingStateSchema.safeParse(rawState);
@@ -74,11 +75,35 @@ export async function guessDeckAction(rawState: unknown): Promise<DeckResult> {
   try {
     return { ok: true, deck: await loadGuessDeck(parsed.data) };
   } catch (cause) {
+    const detail = cause instanceof Error ? cause.message : String(cause);
     console.error("onboarding: guess deck failed:", cause);
     return {
       ok: false,
-      error: "We could not work out what you might have taken. Search for your courses instead.",
+      error:
+        process.env.NODE_ENV === "development"
+          ? `Guess deck failed: ${detail}`
+          : "We could not work out what you might have taken. Search for your courses instead.",
     };
+  }
+}
+
+/* ==========================================================================
+ * Feed preview (guest, read-only)
+ * ========================================================================== */
+
+export interface FeedPreviewResult extends ActionResult {
+  cards?: FeedCard[];
+}
+
+export async function onboardingFeedPreviewAction(rawState: unknown): Promise<FeedPreviewResult> {
+  const parsed = guestOnboardingStateSchema.safeParse(rawState);
+  if (!parsed.success) return { ok: false, error: "We lost track of your answers. Start again?" };
+
+  try {
+    return { ok: true, cards: await loadOnboardingFeedPreview(parsed.data) };
+  } catch (cause) {
+    console.error("onboarding: feed preview failed:", cause);
+    return { ok: false, error: "We could not rank recommendations right now." };
   }
 }
 
@@ -98,6 +123,17 @@ export async function searchCoursesAction(query: string): Promise<SearchResult> 
   } catch (cause) {
     console.error("onboarding: course search failed:", cause);
     return { ok: false, error: "Search is not answering right now." };
+  }
+}
+
+/** Warm the listing cache during degree questions so the first search is a scan. */
+export async function warmCourseSearchAction(): Promise<ActionResult> {
+  try {
+    await warmCourseSearch();
+    return { ok: true };
+  } catch (cause) {
+    console.error("onboarding: course search warm failed:", cause);
+    return { ok: false };
   }
 }
 

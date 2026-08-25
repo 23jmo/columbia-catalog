@@ -27,10 +27,8 @@
    * ghost + link buttons, checkbox, radio, switch, slider, tabs, sidebar
    * selected, focus ring, date-range selection) reference accent-* instead of
    * a raw hue, so the whole system re-tints by overriding these eleven
-   * variables at runtime (see components/application/theme/accent.ts) or in
-   * a customer project after importing this file. Defaults to the blue
-   * primitives above. Content/data blues (charts, status chips, calendar
-   * events, info notifications) deliberately keep referencing blue-*.
+   * variables at runtime or in a customer project after importing this file.
+   * Defaults to the blue primitives above.
    * --------------------------------------------------------------------------*/
   --color-accent-50:  var(--color-blue-50);
   --color-accent-100: var(--color-blue-100);
@@ -53,9 +51,8 @@
                "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",
                "Noto Color Emoji";
 
-  /* Monospace ramp for code blocks. Loaded via next/font in app/layout.tsx
-   * (--font-mono-source → JetBrains Mono). Figma's spec uses IBM Plex Mono;
-   * JetBrains Mono is the closest already-bundled face. */
+  /* Monospace ramp for code blocks. IBM Plex Mono is loaded via next/font in
+   * app/layout.tsx and exposed as --font-mono-source. */
   --font-mono: var(--font-mono-source), ui-monospace, "SFMono-Regular", Menlo,
                Consolas, "Liberation Mono", monospace;
 
@@ -278,8 +275,8 @@
   --color-pill-tab-blue-hover-background: var(--color-neutral-100);
 
   /* Notification status-icon surfaces. */
-  --color-notification-information-background: var(--color-blue-100);
-  --color-notification-information-foreground: var(--color-blue-600);
+  --color-notification-information-background: var(--color-accent-100);
+  --color-notification-information-foreground: var(--color-accent-600);
   --color-notification-success-background:     var(--color-lime-100);
   --color-notification-success-foreground:     var(--color-lime-600);
   --color-notification-error-background:       var(--color-rose-100);
@@ -310,9 +307,9 @@
 
   /* Calendar event chips. Title/time stay separate so the original light
    * hierarchy remains intact while dark mode can normalize both to /300. */
-  --color-calendar-event-blue-background:    var(--color-blue-100);
-  --color-calendar-event-blue-title:         var(--color-blue-700);
-  --color-calendar-event-blue-time:          var(--color-blue-700);
+  --color-calendar-event-blue-background:    var(--color-accent-100);
+  --color-calendar-event-blue-title:         var(--color-accent-700);
+  --color-calendar-event-blue-time:          var(--color-accent-700);
   --color-calendar-event-pink-background:    var(--color-pink-100);
   --color-calendar-event-pink-title:         var(--color-pink-700);
   --color-calendar-event-pink-time:          var(--color-pink-700);
@@ -349,8 +346,8 @@
   --color-chart-4-active: var(--color-sky-500);
   --color-chart-5:        var(--color-purple-400);
   --color-chart-5-active: var(--color-purple-500);
-  --color-chart-6:        var(--color-blue-400);
-  --color-chart-6-active: var(--color-blue-500);
+  --color-chart-6:        var(--color-accent-400);
+  --color-chart-6-active: var(--color-accent-500);
   --color-chart-7:        var(--color-emerald-400);
   --color-chart-7-active: var(--color-emerald-500);
   --color-chart-8:        var(--color-yellow-400);
@@ -472,8 +469,8 @@
 
   /* Dark status discs use /800 surfaces with /300 foregrounds so the icon
    * remains crisp without reverting to a bright pastel circle. */
-  --color-notification-information-background: color-mix(in srgb, var(--color-blue-800) 50%, transparent);
-  --color-notification-information-foreground: var(--color-blue-300);
+  --color-notification-information-background: color-mix(in srgb, var(--color-accent-800) 50%, transparent);
+  --color-notification-information-foreground: var(--color-accent-300);
   --color-notification-success-background:     color-mix(in srgb, var(--color-lime-800) 50%, transparent);
   --color-notification-success-foreground:     var(--color-lime-300);
   --color-notification-error-background:       color-mix(in srgb, var(--color-rose-800) 50%, transparent);
@@ -521,9 +518,9 @@
   --color-pill-tab-blue-hover-background: var(--color-neutral-800);
 
   /* Calendar event families share the same dark-mode depth/contrast recipe. */
-  --color-calendar-event-blue-background:    var(--color-blue-950);
-  --color-calendar-event-blue-title:         var(--color-blue-300);
-  --color-calendar-event-blue-time:          var(--color-blue-300);
+  --color-calendar-event-blue-background:    var(--color-accent-950);
+  --color-calendar-event-blue-title:         var(--color-accent-300);
+  --color-calendar-event-blue-time:          var(--color-accent-300);
   --color-calendar-event-pink-background:    var(--color-pink-950);
   --color-calendar-event-pink-title:         var(--color-pink-300);
   --color-calendar-event-pink-time:          var(--color-pink-300);
@@ -756,6 +753,32 @@
  * `border-radius: inherit` + `overflow: hidden` keeps it within the rounded
  * corners.
  * --------------------------------------------------------------------------- */
+/* ----- Motion curves ---------------------------------------------------------
+ * These override Tailwind v4's built-in `--ease-out` / `--ease-in-out` theme
+ * keys, so every existing `ease-out` and `ease-in-out` utility in the repo
+ * resolves to these curves. That is deliberate: it upgrades ~51 call sites in
+ * one edit rather than hand-typing a bezier at each one. 36 of those sites are
+ * inside components/base/** and components/application/**, which are frozen --
+ * the whole point is to reach them without opening them.
+ *
+ * The stock CSS easings barely deviate from linear, which is why deliberate UI
+ * motion needs stronger curves than `ease-out` gives you by default.
+ *
+ * Two things this deliberately does NOT do:
+ *   - There is no `--ease` key, so the bare `ease` class stays dead. Those call
+ *     sites never had an easing decision made; reviving them with a token would
+ *     hide that rather than fix it.
+ *   - `--default-transition-timing-function` is untouched, so a bare
+ *     `transition-colors` with no easing class keeps cubic-bezier(.4, 0, .2, 1).
+ *
+ * Raw CSS `ease-out` keywords inside `animation:` / `transition:` shorthands in
+ * globals.css are unaffected -- a keyword is not a custom property.
+ * --------------------------------------------------------------------------*/
+@theme {
+  --ease-out:    cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+}
+
 @theme {
   --button-transition-ms: 150ms;
   --input-transition-ms:  150ms;

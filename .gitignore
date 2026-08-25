@@ -84,3 +84,8 @@ supabase/.branches/
 .cursor/
 /.superset/attachments/
 scratch-*.mts
+
+# CULPA backfill checkpoint — local run state, not source
+.culpa-backfill.json
+.culpa-backfill.json.tmp
+.culpa-backfill.log

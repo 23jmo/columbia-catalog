@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { RiAddLine, RiSearchLine } from "@remixicon/react";
 
 import { Input } from "@/components/base/input/input";
-import { searchCoursesAction } from "@/app/onboarding/actions";
+import { searchCoursesAction, warmCourseSearchAction } from "@/app/onboarding/actions";
 // Type-only: `server.ts` reaches the database and must not enter this bundle.
 import type { CourseHit } from "@/lib/onboarding/server";
 import { displayCourseTitle } from "@/lib/onboarding/course-title";
@@ -74,6 +74,10 @@ export function CourseSearch({ confirmedIds, onAdd }: CourseSearchProps) {
    */
   const visibleHits = isSearchable ? hits : [];
   const visibleError = isSearchable ? error : null;
+
+  useEffect(() => {
+    void warmCourseSearchAction();
+  }, []);
 
   useEffect(() => {
     const next = query.trim();

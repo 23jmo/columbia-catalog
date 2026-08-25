@@ -90,7 +90,61 @@ export async function appendMessage(
     content: message.content,
     parts: (message.parts ?? []) as Json,
   });
-  if (error) console.error("agent: could not persist a message:", error.message);
+  if (error) {
+    console.error("agent: could not persist a message:", error.message);
+    return;
+  }
+
+  // Recency is what the sidebar sorts on. Without this bump, a thread you
+  // just continued would sit wherever it was created, under older chats.
+  const { error: touchError } = await db
+    .from("agent_conversations")
+    .update({ updated_at: new Date().toISOString() })
+    .eq("conversation_id", conversationId)
+    .eq("user_id", userId);
+  if (touchError) {
+    console.error("agent: could not bump conversation recency:", touchError.message);
+  }
+}
+
+/**
+ * Rebuild UIMessages from stored rows so a reloaded thread still has cards.
+ *
+ * Empty `parts` degrades to a single text part from `content`. That is the
+ * old shape, and it is better to render the prose than to drop the turn.
+ */
+export function messagesFromRows(
+  rows: ReadonlyArray<{
+    message_id: string;
+    role: "user" | "assistant";
+    content: string;
+    parts: Json;
+  }>,
+): UIMessage[] {
+  return rows.map((row) => toUIMessage(row));
+}
+
+function partsOf(parts: Json, fallback: string): UIMessage["parts"] {
+  if (Array.isArray(parts) && parts.length > 0) {
+    // The SDK's own parts, stored as JSON. The cast is the load path the
+    // column exists for — see the file header.
+    return parts as UIMessage["parts"];
+  }
+  return [{ type: "text", text: fallback }];
+}
+
+/** One stored row → one UIMessage. `messagesFromRows` is this, mapped. */
+export function toUIMessage(row: {
+  message_id: string;
+  role: "user" | "assistant";
+  content: string;
+  parts: Json;
+}): UIMessage {
+  return {
+    id: row.message_id,
+    role: row.role,
+    parts: partsOf(row.parts, row.content),
+  };
 }
 
 /** Flatten a UIMessage's text parts, for the `content` column. */

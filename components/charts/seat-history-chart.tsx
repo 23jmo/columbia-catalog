@@ -210,7 +210,7 @@ export function SeatHistoryChart({ series, milestones, capacity, className }: Se
     return (
       <NoHistory
         className={className}
-        reason="We are watching this section, but its seat count has not moved since we started."
+        reason="We are watching this section, but have not recorded a reading yet."
       />
     );
   }
@@ -298,7 +298,7 @@ export function SeatHistoryChart({ series, milestones, capacity, className }: Se
       if (points.length === 0) return `${plot.series.label}: no observations.`;
       const first = points[0];
       const last = points[points.length - 1];
-      return `${plot.series.label}${plot.isGhost ? " (prior term)" : ""}: ${first.enrollmentCount} seats taken at the start of the window, ${last.enrollmentCount} at the end, across ${points.length} recorded ${points.length === 1 ? "change" : "changes"}.`;
+      return `${plot.series.label}${plot.isGhost ? " (prior term)" : ""}: ${first.enrollmentCount} seats taken at the start of the window, ${last.enrollmentCount} at the end, across ${points.length} recorded ${points.length === 1 ? "look" : "looks"}.`;
     })
     .join(" ");
 

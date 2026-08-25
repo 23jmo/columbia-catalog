@@ -89,8 +89,18 @@ export function ProgressionScreen({ startYear, initialCourseId }: ProgressionScr
             if (next === "map" || next === "plan") setView(next);
           }}
         >
-          <SegmentedControlItem id="map">Prerequisite map</SegmentedControlItem>
-          <SegmentedControlItem id="plan">Four-year plan</SegmentedControlItem>
+          {/*
+            The control's own `py-1` is 28px — two adjacent targets, and this
+            pair is how the whole screen changes mode. The base component is
+            shared, so the touch height is asked for here rather than widened
+            for every surface that uses it.
+          */}
+          <SegmentedControlItem id="map" className="pointer-coarse:py-2.5">
+            Prerequisite map
+          </SegmentedControlItem>
+          <SegmentedControlItem id="plan" className="pointer-coarse:py-2.5">
+            Four-year plan
+          </SegmentedControlItem>
         </SegmentedControl>
 
         <div className="flex flex-wrap items-center gap-2">

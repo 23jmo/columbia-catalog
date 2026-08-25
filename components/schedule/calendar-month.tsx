@@ -57,7 +57,7 @@ export function CalendarMonth({
         {weekdays.map((weekday, index) => (
           <span
             key={weekday}
-            className={`flex items-center justify-end pe-2 text-sm text-text-tertiary ${index !== 0 ? "border-s border-border-table" : ""}`}
+            className={`flex items-center justify-end pe-2 text-body-regular text-text-tertiary ${index !== 0 ? "border-s border-border-table" : ""}`}
           >
             {weekday}
           </span>

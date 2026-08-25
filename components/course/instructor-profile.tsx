@@ -81,7 +81,7 @@ export function InstructorCard({
 
           <Link
             href={`/instructor/${instructorSlug(name)}`}
-            className="mt-2 inline-flex w-fit items-center gap-0.5 rounded-lg text-caption-1-medium text-accent-600 outline-none transition-colors duration-150 ease hover:text-accent-700 focus-visible:ring-2 focus-visible:ring-border-focus-ring"
+            className="mt-2 inline-flex w-fit items-center gap-0.5 rounded-lg text-caption-1-medium text-accent-600 outline-none transition-colors duration-150 hover:text-accent-700 focus-visible:ring-2 focus-visible:ring-border-focus-ring"
           >
             View full profile
             <RiArrowRightSLine aria-hidden className="size-3.5 shrink-0" />

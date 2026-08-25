@@ -69,8 +69,10 @@ export function CalendarToolbar({
         leave behind. See the SegmentedControl below for why that is enough.
       */}
       <div className="flex min-w-[8rem] flex-1 items-baseline gap-1.5">
-        <h1 className="flex min-w-0 items-baseline gap-1.5 text-lg tracking-tight sm:text-xl lg:text-2xl">
-          <span className="truncate font-bold text-text-primary">{title.months}</span>
+        <h1 className="flex min-w-0 items-baseline gap-1.5">
+          <span className="truncate text-title-3-bold text-text-primary sm:text-title-2-bold lg:text-title-1-bold">
+            {title.months}
+          </span>
           {/*
             The year appears only once the line can actually afford it.
 
@@ -81,7 +83,9 @@ export function CalendarToolbar({
             every screen of the app. `xl` is the first width where the month
             name and the year both fit whole.
           */}
-          <span className="hidden font-normal text-text-tertiary xl:inline">{title.year}</span>
+          <span className="hidden text-title-1-regular text-text-tertiary xl:inline">
+            {title.year}
+          </span>
         </h1>
       </div>
 
@@ -110,7 +114,15 @@ export function CalendarToolbar({
         className="order-last w-full sm:order-0 sm:mx-auto sm:w-40 lg:w-44"
       >
         {VIEWS.map((item) => (
-          <SegmentedControlItem key={item.id} id={item.id} aria-label={item.label}>
+          // Below `sm` these collapse to single letters — D / W / M — so three
+          // 28px targets sit ~2px apart in the calendar header. The letter is
+          // the right visual at that width; the target is not.
+          <SegmentedControlItem
+            key={item.id}
+            id={item.id}
+            aria-label={item.label}
+            className="pointer-coarse:py-2.5"
+          >
             <span className="sm:hidden">{item.label.charAt(0)}</span>
             <span className="hidden sm:inline">{item.label}</span>
           </SegmentedControlItem>

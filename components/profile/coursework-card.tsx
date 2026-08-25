@@ -128,10 +128,15 @@ export function CourseworkCard({
 
       {courses.length === 0 ? (
         <div className="rounded-2lg bg-background-primary-default p-4">
+          {/*
+            The two controls to do something about this are six inches above,
+            labelled. An empty state that re-describes them in a sentence is
+            narrating the interface. "Never uploaded" and "you confirm every
+            row" are real promises, but they are made where they apply — in
+            the importer itself, and once at the bottom of the page.
+          */}
           <p className="text-body-regular text-pretty text-text-secondary">
-            {signedIn
-              ? "Nothing on your record yet. Import a transcript — it is read in this browser and never uploaded — or add courses one at a time. Either way you confirm every row before it is saved."
-              : "Once you are signed in you can import a transcript — read in this browser, never uploaded — or add courses one at a time, confirming every row before it is saved."}
+            Nothing on your record yet.
           </p>
         </div>
       ) : (
@@ -157,7 +162,7 @@ export function CourseworkCard({
                         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                           <a
                             href={`/course/${course.courseId}`}
-                            className="text-body-semibold tabular-nums text-text-primary outline-none transition-colors duration-150 ease hover:text-accent-600 focus-visible:ring-2 focus-visible:ring-border-focus-ring"
+                            className="text-body-semibold tabular-nums text-text-primary outline-none transition-colors duration-150 hover:text-accent-600 focus-visible:ring-2 focus-visible:ring-border-focus-ring"
                           >
                             {code}
                           </a>

@@ -92,6 +92,23 @@ interface Timer {
 
 const timers = new Map<string, Timer>();
 
+/**
+ * Per-toast subscribers to *hold* changes only.
+ *
+ * Kept separate from the main snapshot for the same reason the timers are:
+ * a card needs to know whether its countdown is paused so it can show that,
+ * and that must not re-render the other two cards in the stack. This fires
+ * on hover/focus/pin transitions — a handful of times per toast, not sixty
+ * times a second.
+ */
+const holdListeners = new Map<string, Set<() => void>>();
+
+function emitHold(id: string): void {
+  const set = holdListeners.get(id);
+  if (!set) return;
+  for (const listener of set) listener();
+}
+
 let nextId = 0;
 
 function emit(next: readonly Toast[]): void {
@@ -154,6 +171,8 @@ export function holdToast(id: string, reason: "hover" | "focus" | "pin", held: b
   const timer = timers.get(id);
   if (!timer) return;
 
+  const wasHeld = timer.holds.size > 0;
+
   if (held) {
     timer.holds.add(reason);
     stopTimer(id);
@@ -161,6 +180,39 @@ export function holdToast(id: string, reason: "hover" | "focus" | "pin", held: b
     timer.holds.delete(reason);
     if (timer.holds.size === 0) startTimer(id);
   }
+
+  if (wasHeld !== (timer.holds.size > 0)) emitHold(id);
+}
+
+/**
+ * Subscribes to whether a toast's countdown is currently paused.
+ *
+ * Exists so the card can render a countdown that visibly stops under the
+ * pointer. Without it the store's pause behaviour is real but invisible, and
+ * a reader who hovers to read the description has no way to know they bought
+ * themselves the time.
+ */
+export function subscribeToastHold(id: string, listener: () => void): () => void {
+  let set = holdListeners.get(id);
+  if (!set) {
+    set = new Set();
+    holdListeners.set(id, set);
+  }
+  set.add(listener);
+
+  return () => {
+    set.delete(listener);
+    if (set.size === 0) holdListeners.delete(id);
+  };
+}
+
+export function isToastHeld(id: string): boolean {
+  return (timers.get(id)?.holds.size ?? 0) > 0;
+}
+
+/** Never paused on the server — there is no pointer there. */
+export function isToastHeldServerSnapshot(): boolean {
+  return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -183,9 +235,14 @@ export function showToast(input: ToastInput): string {
     : undefined;
 
   if (existing) {
+    // The card stays mounted, so whatever was holding it open — a pointer
+    // resting on it, the folder picker — is still true. Restarting the timer
+    // without carrying those over would run the countdown out from under a
+    // reader who never moved.
+    const holds = timers.get(existing.id)?.holds;
     clearTimer(existing.id);
     emit(state.toasts.map((t) => (t.id === existing.id ? { ...toast, id: existing.id } : t)));
-    installTimer(existing.id, duration);
+    installTimer(existing.id, duration, holds);
     return existing.id;
   }
 
@@ -200,9 +257,14 @@ export function showToast(input: ToastInput): string {
   return toast.id;
 }
 
-function installTimer(id: string, duration: number | null): void {
+function installTimer(
+  id: string,
+  duration: number | null,
+  holds: Set<string> = new Set(),
+): void {
   if (duration === null) return;
-  timers.set(id, { remaining: duration, startedAt: null, handle: null, holds: new Set() });
+  timers.set(id, { remaining: duration, startedAt: null, handle: null, holds });
+  // `startTimer` is a no-op while anything is holding, which is what we want.
   startTimer(id);
 }
 
@@ -210,6 +272,9 @@ function clearTimer(id: string): void {
   const timer = timers.get(id);
   if (timer?.handle) clearTimeout(timer.handle);
   timers.delete(id);
+  // Deliberately not clearing `holdListeners`: the card unmounts on its own
+  // and removes its listener then. Dropping it here would leave a mounted
+  // card subscribed to a set nobody writes to.
 }
 
 export function dismiss(id: string): void {

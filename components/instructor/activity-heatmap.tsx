@@ -100,7 +100,9 @@ export function ActivityHeatmap({ days, accent, scopeLabel, className }: Activit
           }}
         >
           {METRIC_ORDER.map((key) => (
-            <SegmentedControlItem key={key} id={key}>
+            // Three adjacent 28px segments — the metric switch for the whole
+            // heatmap below it. Same treatment as the other segmented controls.
+            <SegmentedControlItem key={key} id={key} className="pointer-coarse:py-2.5">
               {METRIC_LABEL[key]}
             </SegmentedControlItem>
           ))}

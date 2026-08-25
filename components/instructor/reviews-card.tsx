@@ -1,11 +1,10 @@
 "use client";
 
 import { useCallback } from "react";
-import { RiArrowRightUpLine } from "@remixicon/react";
 
-import { LinkButton } from "@/components/base/buttons/link-button";
 import { ReputationBlock, UNREVIEWED_CAVEAT } from "@/components/course/reputation";
 import { RmpBlock } from "@/components/course/rmp-block";
+import { InstructorSection } from "./section-block";
 import type { ReputationSummary, RmpSnapshot } from "@/lib/types";
 import { cx } from "@/utils/cx";
 
@@ -23,27 +22,19 @@ import { cx } from "@/utils/cx";
  * cached by a CDN and quietly become the mirror the compliance rules forbid
  * (see `app/api/rmp/[instructor]/route.ts`).
  *
- * CULPA is the primary source and the corpus is not here yet: it is being
- * pursued as a partnership rather than a scrape (see
- * `lib/reviews/sources/culpa.ts`), so `reputation` is `null` today and this
- * card says so plainly and links out. The wiring is real — the moment a feed
- * lands, `summarizeInstructor` fills this prop and nothing else changes.
+ * CULPA is the primary source and the corpus IS here: `reputation` carries a
+ * real aggregate for most instructors who have taught recently. It was null for
+ * a long time, and the copy written for that period outlived it — this card
+ * used to tell every reader that "nothing is aggregated here yet" underneath a
+ * block that was, by then, aggregating. Empty is still a state worth rendering
+ * honestly, but it is now the exception rather than the standing apology.
  */
-
-/**
- * Built locally rather than imported from `lib/reviews/sources/culpa.ts`: that
- * module pulls in `node-html-parser` for the adapter, and this is a client
- * component. One URL is not worth a parser in the browser bundle.
- */
-function culpaSearchUrl(instructorName: string): string {
-  return `https://culpa.info/search?entity=all&query=${encodeURIComponent(instructorName)}`;
-}
 
 export interface InstructorReviewsCardProps {
   instructorName: string;
   /**
-   * Aggregated across every course this person has taught. Null until the
-   * CULPA/Reddit corpus lands — rendered as an honest empty state, not a zero.
+   * Aggregated across every course this person has taught. Null means we found
+   * no reviews for this name — rendered as an honest empty state, not a zero.
    */
   reputation: ReputationSummary | null;
   /** Pre-resolved snapshot, e.g. in a test. Normally left undefined. */
@@ -82,67 +73,64 @@ export function InstructorReviewsCard({
   }, []);
 
   return (
-    <section
-      className={cx(
-        "flex w-full flex-col gap-2.5 rounded-[20px] bg-background-secondary-default px-2.5 py-3",
-        className,
-      )}
-      aria-labelledby="instructor-reviews-heading"
-    >
-      <div className="flex w-full flex-col gap-1 px-1.5 pt-1">
-        <p id="instructor-reviews-heading" className="text-body-medium text-text-secondary">
-          What students say
-        </p>
-        <p className="text-title-2-medium text-text-primary">Reviews</p>
-        <p className="text-caption-1-regular text-pretty text-text-secondary">
-          Dimensions, not a verdict.{" "}
-          {showRmp
-            ? "These two sources are never averaged together — they poll different students about different things."
-            : "Everything below comes from Columbia students; the RateMyProfessor figures are in the header and are never averaged with these."}{" "}
-          {UNREVIEWED_CAVEAT}
-        </p>
-      </div>
-
-      <div
-        className={cx(
-          "grid gap-2 rounded-2lg bg-background-primary-default p-3",
-          showRmp && "lg:grid-cols-2",
-        )}
+    <div className={cx("w-full", className)}>
+      <InstructorSection
+        id="instructor-reviews"
+        title="What students say"
+        /*
+          No headline in either state. With reviews, the hero already prints the
+          score and repeating it here invites the reader to check whether the
+          two agree; without them, `ReputationBlock` already says "No reviews
+          matched yet" one line below, and a "Not reviewed yet" above it was a
+          stutter rather than a summary.
+        */
       >
-        <div className="flex min-w-0 flex-col gap-2">
-          <ReputationBlock
-            title="CULPA & Reddit"
-            subtitle="Aggregated across every course this instructor has taught."
-            summary={reputation}
-          />
-          {reputation ? null : (
-            <p className="px-1 text-caption-2-regular text-pretty text-text-tertiary">
-              CULPA is Columbia&rsquo;s student-run review site and our primary source. We
-              are pursuing a data-sharing partnership rather than scraping it, so nothing
-              is aggregated here yet.
-            </p>
+        {/*
+          The description used to run three sentences before a reader reached a
+          single number — a standing explanation of the methodology, the
+          non-averaging rule and the unreviewed caveat, printed whether or not
+          any of it applied. Only the part that is load-bearing for what is
+          actually on screen survives, and the caveat now appears where it is
+          true: under an empty block.
+        */}
+        <div
+          className={cx(
+            "grid gap-2",
+            showRmp && "lg:grid-cols-2",
           )}
-          <div className="px-1">
-            <LinkButton
-              size="xs"
-              href={culpaSearchUrl(instructorName)}
-              target="_blank"
-              rel="noopener noreferrer"
-              trailingIcon={RiArrowRightUpLine}
-            >
-              Search CULPA
-            </LinkButton>
+        >
+          <div className="flex min-w-0 flex-col gap-2">
+            <ReputationBlock
+              title="CULPA & Reddit"
+              subtitle="Aggregated across every course this instructor has taught."
+              summary={reputation}
+            />
+            {reputation ? null : (
+              <p className="text-caption-2-regular text-pretty text-text-tertiary">
+                {UNREVIEWED_CAVEAT}
+              </p>
+            )}
           </div>
-        </div>
 
+          {showRmp ? (
+            <RmpBlock
+              instructorName={instructorName}
+              snapshot={rmpSnapshot}
+              lookup={rmpSnapshot === undefined ? lookupRmp : undefined}
+            />
+          ) : null}
+        </div>
+        {/*
+          Spec §12 rendered where it is checkable: two sources, named, never
+          combined. One line under the evidence beats three above it.
+        */}
         {showRmp ? (
-          <RmpBlock
-            instructorName={instructorName}
-            snapshot={rmpSnapshot}
-            lookup={rmpSnapshot === undefined ? lookupRmp : undefined}
-          />
+          <p className="text-caption-2-regular text-pretty text-text-tertiary">
+            CULPA and RateMyProfessor poll different students about different things and
+            are never averaged together.
+          </p>
         ) : null}
-      </div>
-    </section>
+      </InstructorSection>
+    </div>
   );
 }

@@ -103,7 +103,7 @@ export function CalendarWeek({
             {HOURS.map((hour) => (
               <span
                 key={hour}
-                className="absolute end-2 -translate-y-1/2 text-[11px] text-text-tertiary tabular-nums"
+                className="absolute end-2 -translate-y-1/2 text-caption-2-regular text-text-tertiary tabular-nums"
                 style={{ top: `${hour * HOUR_HEIGHT}px` }}
               >
                 {formatHour(hour)}
@@ -137,12 +137,12 @@ export function CalendarWeek({
               key={day.getTime()}
               type="button"
               onClick={() => onSelectDay(day)}
-              className="flex items-center justify-center gap-1 border-s border-border-table py-2 text-sm"
+              className="flex items-center justify-center gap-1 border-s border-border-table py-2 text-body-regular"
             >
               <span className="text-text-tertiary">{formatWeekday(day)}</span>
               <span
                 className={cx(
-                  "flex size-6 items-center justify-center rounded-full font-semibold",
+                  "flex size-6 items-center justify-center rounded-full text-body-semibold",
                   isToday(day) ? "bg-accent-500 text-white" : "text-text-primary",
                 )}
               >
@@ -156,7 +156,7 @@ export function CalendarWeek({
           className="grid border-t border-border-table"
           style={{ ...gridStyle, gridTemplateRows: `repeat(${allDayLanes}, ${ALL_DAY_LANE_HEIGHT}px)` }}
         >
-          <span className="row-span-full self-center pe-2 text-end text-[10px] text-text-tertiary">
+          <span className="row-span-full self-center pe-2 text-end text-caption-2-regular text-text-tertiary">
             all-day
           </span>
           {visible.map((day, index) => (

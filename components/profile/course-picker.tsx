@@ -1,36 +1,24 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { RiAddLine, RiSearchLine } from "@remixicon/react";
+import { RiAddLine } from "@remixicon/react";
 
 import { addCoursesAction } from "@/app/profile/actions";
 import { Button } from "@/components/base/buttons/button";
-import { Input } from "@/components/base/input/input";
-import { formatCourseId, parseBulletinCode } from "@/lib/requirements/code";
 import { cx } from "@/utils/cx";
+import { CatalogSearch, type CatalogPick } from "./catalog-search";
 import { ProfileModal } from "./profile-modal";
 
 /**
  * Add coursework by hand.
  *
- * ── Why this is a code box and not a catalog search ─────────────────────────
+ * Search is the same catalog scan onboarding uses: code or title, two active
+ * terms, debounced. Outstanding-requirement suggestions sit under an empty
+ * box because those are the courses this student is most likely adding.
  *
- * The app's search index is a multi-megabyte artifact loaded into a worker for
- * the search screen. Pulling it in here to help someone type eight course codes
- * they already know would cost more than it returns, and a student entering
- * their own history is reading a transcript — they have the codes in front of
- * them.
- *
- * What the box does give them is resolution as they type: `MATH UN1201`,
- * `MATHUN1201` and `MATH1201UN` are the same course, and the field says which
- * one it landed on before anything is saved. That matters more than
- * autocomplete, because the two notations Columbia itself publishes are
- * genuinely different orderings of the same three parts — see
- * `lib/requirements/code.ts`.
- *
- * Above it sits the list that IS worth suggesting: courses named by the
- * student's own outstanding requirements. Short, relevant, and already
- * resolved.
+ * A code the catalog does not know is still addable. Transfer, AP, and
+ * archived terms are legitimate rows — `student_courses.course_id` is not a
+ * foreign key — and the coursework card already marks them.
  */
 
 export interface CourseSuggestion {
@@ -54,6 +42,7 @@ interface Draft {
   courseId: string;
   code: string;
   title: string | null;
+  points: number | null;
 }
 
 export function CoursePicker({
@@ -70,54 +59,50 @@ export function CoursePicker({
 
   const taken = useMemo(() => new Set(takenCourseIds), [takenCourseIds]);
   const draftIds = useMemo(() => new Set(drafts.map((draft) => draft.courseId)), [drafts]);
+  const blockedIds = useMemo(() => new Set([...taken, ...draftIds]), [taken, draftIds]);
 
-  /** What the typed text resolves to, if anything. Shown before it is added. */
-  const typed = useMemo(() => {
-    const trimmed = query.trim();
-    if (trimmed.length < 4) return null;
-    const parsed = parseBulletinCode(trimmed);
-    if (!parsed) return null;
-    return { courseId: parsed.courseId, code: formatCourseId(parsed.courseId) };
-  }, [query]);
+  const isSearching = query.trim().length >= 2;
 
-  const filteredSuggestions = useMemo(() => {
-    const needle = query.trim().toUpperCase().replace(/\s+/g, "");
+  const visibleSuggestions = useMemo(() => {
+    if (isSearching) return [];
     return suggestions
-      .filter((suggestion) => !taken.has(suggestion.courseId))
-      .filter((suggestion) => !draftIds.has(suggestion.courseId))
-      .filter((suggestion) => {
-        if (needle.length === 0) return true;
-        return (
-          suggestion.courseId.includes(needle) ||
-          suggestion.title?.toUpperCase().includes(query.trim().toUpperCase()) === true
-        );
-      })
+      .filter((suggestion) => !blockedIds.has(suggestion.courseId))
       .slice(0, 12);
-  }, [suggestions, query, taken, draftIds]);
+  }, [suggestions, blockedIds, isSearching]);
 
-  const addDraft = (draft: Draft) => {
-    if (taken.has(draft.courseId) || draftIds.has(draft.courseId)) return;
-    setDrafts((current) => [...current, draft]);
+  const addDraft = (pick: CatalogPick) => {
+    if (blockedIds.has(pick.courseId)) return;
+    setDrafts((current) => [...current, pick]);
+    setQuery("");
+    setError(null);
+  };
+
+  const close = () => {
+    setIsOpen(false);
     setQuery("");
     setError(null);
   };
 
   const submit = () => {
     if (drafts.length === 0) {
-      setIsOpen(false);
+      close();
       return;
     }
     setError(null);
     startTransition(async () => {
       const result = await addCoursesAction(
-        drafts.map((draft) => ({ code: draft.courseId, source: "picker" })),
+        drafts.map((draft) => ({
+          code: draft.courseId,
+          source: "picker",
+          points: draft.points,
+        })),
       );
       if (!result.ok) {
         setError(result.error ?? "Could not save those.");
         return;
       }
       setDrafts([]);
-      setIsOpen(false);
+      close();
     });
   };
 
@@ -137,12 +122,12 @@ export function CoursePicker({
 
       <ProfileModal
         isOpen={isOpen}
-        onClose={() => setIsOpen(false)}
+        onClose={close}
         title="Add coursework"
-        description="Type a course code the way your transcript prints it. We understand both of Columbia's notations."
+        description="Search by code or title. You can also pick from requirements you still need."
         footer={
           <>
-            <Button size="small" variant="secondary" onClick={() => setIsOpen(false)}>
+            <Button size="small" variant="secondary" onClick={close}>
               Cancel
             </Button>
             <Button size="small" disabled={isPending || drafts.length === 0} onClick={submit}>
@@ -156,32 +141,12 @@ export function CoursePicker({
         }
       >
         <div className="flex flex-col gap-4">
-          <Input
-            label="Course code"
-            placeholder="MATH UN1201"
-            value={query}
-            onChange={setQuery}
-            leadingIcon={RiSearchLine}
-            hint={
-              typed
-                ? `Reads as ${typed.code}`
-                : query.trim().length >= 4
-                  ? "Not a Columbia course code yet — it needs a subject and a four-digit number."
-                  : "e.g. MATH UN1201, COMS W3134, ECON UN3211"
-            }
+          <CatalogSearch
+            blockedIds={blockedIds}
+            onPick={addDraft}
+            query={query}
+            onQueryChange={setQuery}
           />
-
-          {typed && !taken.has(typed.courseId) && !draftIds.has(typed.courseId) ? (
-            <Button
-              size="small"
-              variant="secondary"
-              leadingIcon={RiAddLine}
-              onClick={() => addDraft({ courseId: typed.courseId, code: typed.code, title: null })}
-              className="self-start"
-            >
-              Add {typed.code}
-            </Button>
-          ) : null}
 
           {drafts.length > 0 ? (
             <div className="flex flex-col gap-1.5">
@@ -199,7 +164,7 @@ export function CoursePicker({
                           current.filter((entry) => entry.courseId !== draft.courseId),
                         )
                       }
-                      className="rounded-md bg-background-secondary-default px-1.5 py-1 text-caption-1-medium tabular-nums text-text-secondary outline-none transition-colors duration-150 ease hover:bg-background-secondary-hover focus-visible:ring-2 focus-visible:ring-border-focus-ring"
+                      className="rounded-md bg-background-secondary-default px-1.5 py-1 text-caption-1-medium tabular-nums text-text-secondary outline-none transition-colors duration-150 hover:bg-background-secondary-hover focus-visible:ring-2 focus-visible:ring-border-focus-ring"
                     >
                       {draft.code} ✕
                     </button>
@@ -209,13 +174,13 @@ export function CoursePicker({
             </div>
           ) : null}
 
-          {filteredSuggestions.length > 0 ? (
+          {visibleSuggestions.length > 0 ? (
             <div className="flex flex-col gap-1.5">
               <p className="text-caption-1-medium text-text-secondary">
                 From your outstanding requirements
               </p>
               <ul className="flex flex-col gap-1">
-                {filteredSuggestions.map((suggestion) => (
+                {visibleSuggestions.map((suggestion) => (
                   <li key={suggestion.courseId}>
                     <button
                       type="button"
@@ -224,10 +189,11 @@ export function CoursePicker({
                           courseId: suggestion.courseId,
                           code: suggestion.code,
                           title: suggestion.title,
+                          points: null,
                         })
                       }
                       className={cx(
-                        "flex w-full items-center gap-2 rounded-2lg p-2 text-left outline-none transition-colors duration-150 ease",
+                        "flex w-full min-h-10 items-center gap-2 rounded-2lg p-2 text-left outline-none transition-colors duration-150 pointer-coarse:min-h-11",
                         "hover:bg-background-secondary-hover focus-visible:ring-2 focus-visible:ring-border-focus-ring",
                       )}
                     >

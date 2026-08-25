@@ -23,9 +23,13 @@
  * Nothing in this file reads the seed JSON directly, and nothing in it touches
  * the network — RateMyProfessor is fetched live in the browser (see
  * `app/api/rmp/[instructor]/route.ts`) and never enters this path.
+ *
+ * Reads go through `getInstructorCourses` in `lib/data/catalog.ts`, which joins
+ * `instructors` → `section_instructors` → `sections` instead of paging the
+ * whole term catalog to find one person's sections.
  */
 
-import { getAllCourses } from "@/lib/data/catalog";
+import { getAllCourses, getInstructorCourses } from "@/lib/data/catalog";
 import { CURRENT_TERM, GRID_END_MINUTE, GRID_START_MINUTE, termLabel, WEEKDAYS } from "@/lib/constants";
 import { parseCalendarDate, termBounds, type TermBounds } from "@/lib/schedule/term-dates";
 import type { CourseWithSections, Meeting, Section, TermCode, Weekday } from "@/lib/types";
@@ -284,20 +288,10 @@ export async function loadInstructorProfile(
   slugOrName: string,
   termCode: TermCode = CURRENT_TERM,
 ): Promise<InstructorPageData | null> {
-  const courses = await getAllCourses(termCode);
-  const wanted = instructorSlug(decodeURIComponent(slugOrName));
+  const loaded = await getInstructorCourses(slugOrName, termCode);
+  if (!loaded) return null;
 
-  // Resolve against live catalog names rather than trusting the slug to invert.
-  const names = new Set<string>();
-  for (const course of courses) {
-    for (const section of course.sections) {
-      if (section.termCode !== termCode) continue;
-      for (const person of section.instructors) names.add(person);
-    }
-  }
-  const name = [...names].find((candidate) => instructorSlug(candidate) === wanted);
-  if (!name) return null;
-
+  const { name, courses } = loaded;
   const taught = sectionsOf(courses, termCode, name);
   if (taught.length === 0) return null;
 

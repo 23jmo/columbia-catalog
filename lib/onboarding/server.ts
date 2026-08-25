@@ -40,27 +40,43 @@
  *                  only the ORDER within a tier.
  */
 
-import { getAllCourses, getCoursesByIds } from "@/lib/data/catalog";
+import { getCourseListings, getCoursesByIds } from "@/lib/data/catalog";
 import { createSupabaseCandidateProviderWithIncludes } from "@/lib/db/candidate-source";
 import { ACTIVE_TERMS } from "@/lib/constants";
 import { auditProfile, programsFor } from "@/lib/profile/audit";
 import { EMPTY_PROFILE, type StudentProfile as AppStudentProfile } from "@/lib/profile/types";
 import {
-  graphPrereqSource,
-  loadCourseVectorSource,
-  loadProgressionGraph,
   noVectorSource,
-  unknownPrereqSource,
-  type CourseVectorSource,
+  recommend,
   type PrereqSource,
 } from "@/lib/recommend";
+import {
+  assembleFeedCards,
+  GRADUATE_LEVEL_FLOOR,
+  SHORTLIST_MULTIPLIER,
+  type FeedCard,
+} from "@/lib/recommend/feed";
+import {
+  hydrateCourses,
+  loadCatalog,
+  loadPrereqSource,
+  loadVectorSource,
+  toEngineProfile,
+} from "@/lib/recommend/pipeline";
 import { expandCandidatesForPrograms } from "@/lib/requirements/candidates";
 import { formatCourseId, toCourseId, type CourseId } from "@/lib/requirements/code";
 import type { CourseFacts } from "@/lib/requirements/evaluate";
 import type { GroupResult, Program } from "@/lib/requirements/types";
 import type { CourseWithSections } from "@/lib/types";
 
-import { buildGuessDeck, type GuessDeck } from "./guess";
+import { FEED_PREVIEW_LIMIT } from "./feed-preview";
+import {
+  buildGuessDeck,
+  DEFAULT_TIER_LIMIT,
+  unambiguousPrereqsOf,
+  type GuessDeck,
+} from "./guess";
+import { declaredProgramIds } from "./program-ids";
 import type { GuestOnboardingState } from "./state";
 
 /* ==========================================================================
@@ -133,7 +149,7 @@ function toAuditProfile(state: GuestOnboardingState): AppStudentProfile {
     ...EMPTY_PROFILE,
     userId: "",
     school: state.school,
-    programIds: state.programIds,
+    programIds: declaredProgramIds(state.programIds),
     classYear: state.classYear,
     interestTags: state.interestTags,
     courses: state.courses.map((course) => ({
@@ -168,29 +184,29 @@ export interface GuestAudit {
 export async function auditGuest(state: GuestOnboardingState): Promise<GuestAudit> {
   const profile = toAuditProfile(state);
   const programs = programsFor(profile);
+  const recordIds = profile.courses.map((course) => course.courseId);
 
-  const factsForRecord = await loadCatalogFacts(
-    profile.courses.map((course) => course.courseId),
-  );
-
-  const catalog = new Map<CourseId, CourseFacts>();
+  // One fetch per term — reused for both audit facts and unmatched detection.
   const perTerm = await Promise.all(
-    ACTIVE_TERMS.map((termCode) =>
-      getCoursesByIds(
-        profile.courses.map((course) => course.courseId),
-        termCode,
-      ),
-    ),
+    ACTIVE_TERMS.map((termCode) => getCoursesByIds(recordIds, termCode)),
   );
+
+  const factsForRecord = new Map<string, CatalogFact>();
+  const catalog = new Map<CourseId, CourseFacts>();
+
   for (const courses of perTerm) {
     for (const course of courses) {
-      if (catalog.has(course.courseId)) continue;
-      catalog.set(course.courseId, {
-        courseId: course.courseId,
-        title: course.title,
-        points: course.pointsMin ?? course.pointsMax,
-        requirementFlags: course.requirementFlags,
-      });
+      if (!factsForRecord.has(course.courseId)) {
+        factsForRecord.set(course.courseId, toCatalogFact(course));
+      }
+      if (!catalog.has(course.courseId)) {
+        catalog.set(course.courseId, {
+          courseId: course.courseId,
+          title: course.title,
+          points: course.pointsMin ?? course.pointsMax,
+          requirementFlags: course.requirementFlags,
+        });
+      }
     }
   }
 
@@ -198,8 +214,7 @@ export async function auditGuest(state: GuestOnboardingState): Promise<GuestAudi
 
   const expanded = await expandCandidatesForPrograms(audit.programs, {
     provider: createSupabaseCandidateProviderWithIncludes({ terms: ACTIVE_TERMS }),
-    // Never guess at something the student has already confirmed.
-    exclude: profile.courses.map((course) => course.courseId),
+    exclude: recordIds,
   });
 
   return {
@@ -207,10 +222,24 @@ export async function auditGuest(state: GuestOnboardingState): Promise<GuestAudi
     outstanding: expanded
       .flatMap((result) => result.groups)
       .filter((group) => group.status !== "satisfied"),
-    unmatchedCourseIds: profile.courses
-      .map((course) => course.courseId)
-      .filter((courseId) => !factsForRecord.has(courseId)),
+    unmatchedCourseIds: recordIds.filter((courseId) => !factsForRecord.has(courseId)),
   };
+}
+
+async function auditGuestOrFallback(state: GuestOnboardingState): Promise<GuestAudit> {
+  try {
+    return await auditGuest(state);
+  } catch (cause) {
+    console.error("onboarding: audit failed, using declared programs only:", cause);
+    const profile = toAuditProfile(state);
+    return {
+      programs: programsFor(profile),
+      outstanding: [],
+      unmatchedCourseIds: profile.courses
+        .map((course) => course.courseId)
+        .filter((courseId) => courseId.length > 0),
+    };
+  }
 }
 
 /* ==========================================================================
@@ -218,52 +247,24 @@ export async function auditGuest(state: GuestOnboardingState): Promise<GuestAudi
  * ========================================================================== */
 
 /**
- * The prerequisite source, with its degradation made explicit at the call site.
- *
- * Never returns a source that reports `met` on a failed load. `unknown` shows
- * the course with a caveat, which is the same answer the engine gives for the
- * 43% of prerequisites the parser could not resolve — a state the UI already
- * handles — whereas `met` would quietly turn the hard filter off.
+ * Memoized prerequisite source — same 5-minute cache as the signed-in feed.
  */
 export async function prereqSourceOrDegrade(): Promise<PrereqSource> {
-  try {
-    return graphPrereqSource(await loadProgressionGraph());
-  } catch (cause) {
-    console.error("onboarding: prerequisite graph unavailable, degrading to unknown:", cause);
-    return unknownPrereqSource();
-  }
+  return loadPrereqSource();
 }
 
 /* ==========================================================================
  * The deck
  * ========================================================================== */
 
-/** Per tier. Two dozen cards is a screen a student will actually read. */
-const DECK_TIER_LIMIT = 18;
-
-/**
- * The semantic vector source, degraded rather than fatal.
- *
- * `loadCourseVectorSource` already answers `VECTOR_SOURCE_UNAVAILABLE` when the
- * artifacts are absent, so this only catches the genuinely unexpected — a
- * corrupt artifact, a filesystem that is not there. Onboarding must not fail on
- * it: a deck ranked by requirement fit alone is exactly what shipped before
- * vectors existed, and it is still the half of the product that matters most.
- */
-async function vectorSourceOrDegrade(): Promise<CourseVectorSource> {
-  try {
-    return await loadCourseVectorSource();
-  } catch (cause) {
-    console.error("onboarding: course vectors unavailable, ranking without taste:", cause);
-    return noVectorSource();
-  }
-}
-
 export async function loadGuessDeck(state: GuestOnboardingState): Promise<GuessDeck> {
   const [audit, prereqs, vectors] = await Promise.all([
-    auditGuest(state),
-    prereqSourceOrDegrade(),
-    vectorSourceOrDegrade(),
+    auditGuestOrFallback(state),
+    loadPrereqSource(),
+    loadVectorSource().catch((cause) => {
+      console.error("onboarding: course vectors unavailable, ranking without taste:", cause);
+      return noVectorSource();
+    }),
   ]);
 
   /*
@@ -294,8 +295,20 @@ export async function loadGuessDeck(state: GuestOnboardingState): Promise<GuessD
   for (const group of audit.outstanding) {
     for (const courseId of group.candidates) wanted.add(courseId);
   }
+  // Titles for "and therefore you took Intro" chips, not just the successors.
+  for (const courseId of [...wanted]) {
+    for (const prereqId of unambiguousPrereqsOf(courseId as CourseId, prereqs)) {
+      wanted.add(prereqId);
+    }
+  }
 
-  const catalog = await loadCatalogFacts([...wanted]);
+  let catalog: Map<string, CatalogFact>;
+  try {
+    catalog = await loadCatalogFacts([...wanted]);
+  } catch (cause) {
+    console.error("onboarding: catalog facts failed, course titles may be missing:", cause);
+    catalog = new Map();
+  }
 
   return buildGuessDeck({
     programs: audit.programs,
@@ -305,7 +318,69 @@ export async function loadGuessDeck(state: GuestOnboardingState): Promise<GuessD
     prereqs,
     vectors,
     outstanding: audit.outstanding,
-    limit: DECK_TIER_LIMIT,
+    limit: DEFAULT_TIER_LIMIT,
+  });
+}
+
+/* ==========================================================================
+ * Feed preview — real recommendations from guest state
+ * ========================================================================== */
+
+/**
+ * Rank courses for the last onboarding screen before sign-in.
+ *
+ * Same audit + `recommend()` + section assembly as the signed-in feed, so the
+ * cards behind the blur are the cards that land in the catalog chat — not a
+ * skinnier cousin that has to be regenerated after Google returns.
+ */
+export async function loadOnboardingFeedPreview(
+  state: GuestOnboardingState,
+): Promise<FeedCard[]> {
+  const [audit, catalog, prereqs, vectors] = await Promise.all([
+    auditGuestOrFallback(state),
+    loadCatalog(ACTIVE_TERMS),
+    loadPrereqSource(),
+    loadVectorSource().catch((cause) => {
+      console.error("onboarding: feed preview vectors unavailable:", cause);
+      return noVectorSource();
+    }),
+  ]);
+
+  const profile = toAuditProfile(state);
+  const engine = toEngineProfile(profile);
+  const personalized = engine.taken.length > 0 || audit.outstanding.length > 0;
+  const taken = new Set(state.courses.map((course) => course.courseId));
+  const listingById = new Map(catalog.listings.map((listing) => [listing.courseId, listing]));
+
+  const candidates = catalog.candidates.filter((candidate) => {
+    if (taken.has(candidate.courseId)) return false;
+    if (!personalized) {
+      const listing = listingById.get(candidate.courseId);
+      if (listing && listing.number >= GRADUATE_LEVEL_FLOOR) return false;
+    }
+    return true;
+  });
+
+  const ranked = recommend({
+    profile: engine,
+    candidates,
+    outstanding: audit.outstanding,
+    prereqs,
+    vectors,
+    limit: FEED_PREVIEW_LIMIT * SHORTLIST_MULTIPLIER,
+    withheldLimit: 0,
+  });
+
+  const coursesById = await hydrateCourses(
+    ranked.recommendations.map((entry) => entry.course.courseId),
+    ACTIVE_TERMS,
+  );
+
+  return assembleFeedCards({
+    recommendations: ranked.recommendations,
+    coursesById,
+    limit: FEED_PREVIEW_LIMIT,
+    terms: ACTIVE_TERMS,
   });
 }
 
@@ -325,38 +400,61 @@ const SEARCH_LIMIT = 20;
 /**
  * Find a course by code or title, for the grid's "I took something else" box.
  *
- * Runs against the in-process catalog memo (`getAllCourses`, 60-second TTL)
- * rather than the lexical search index: the index is a browser artifact, this
- * is a server action, and a substring scan over two terms of already-cached
- * rows is well under a millisecond. It is also the same corpus the audit sees,
- * which matters more here than ranking quality — a student searching for a
- * course the audit cannot resolve should not find it and then wonder why it
- * counts for nothing.
+ * Uses `getCourseListings` — id, title, points — not `getAllCourses`. The
+ * full dump nested every meeting and took ~3s on a cold function; this box
+ * does not need a meeting. Same two active terms the audit sees, so a hit
+ * here is a course the record can actually store.
  */
 export async function searchCourses(query: string): Promise<CourseHit[]> {
   const trimmed = query.trim();
   if (trimmed.length < 2) return [];
 
-  const normalized = trimmed.toLowerCase().replace(/\s+/g, "");
-  const words = trimmed.toLowerCase().split(/\s+/).filter(Boolean);
+  const listings = await listingsForSearch();
+  return matchCourseHits(trimmed, listings);
+}
 
-  const hits = new Map<string, CourseHit>();
+/**
+ * Pull both terms into the listing cache so the first keystroke is a scan,
+ * not a five-page PostgREST dump.
+ */
+export async function warmCourseSearch(): Promise<void> {
+  await listingsForSearch();
+}
 
-  for (const termCode of ACTIVE_TERMS) {
-    for (const course of await getAllCourses(termCode)) {
-      if (hits.has(course.courseId)) continue;
-
-      const idMatch = course.courseId.toLowerCase().includes(normalized);
-      const titleMatch = words.every((word) => course.title.toLowerCase().includes(word));
-      if (!idMatch && !titleMatch) continue;
-
-      hits.set(course.courseId, {
-        courseId: course.courseId,
-        code: formatCourseId(course.courseId),
-        title: course.title,
-        points: course.pointsMin ?? course.pointsMax,
+async function listingsForSearch() {
+  const catalogs = await Promise.all(ACTIVE_TERMS.map((termCode) => getCourseListings(termCode)));
+  const byId = new Map<string, { courseId: string; title: string; points: number | null }>();
+  for (const listings of catalogs) {
+    for (const listing of listings) {
+      if (byId.has(listing.courseId)) continue;
+      byId.set(listing.courseId, {
+        courseId: listing.courseId,
+        title: listing.title,
+        points: listing.pointsMin ?? listing.pointsMax,
       });
     }
+  }
+  return [...byId.values()];
+}
+
+function matchCourseHits(
+  trimmed: string,
+  listings: readonly { courseId: string; title: string; points: number | null }[],
+): CourseHit[] {
+  const normalized = trimmed.toLowerCase().replace(/\s+/g, "");
+  const words = trimmed.toLowerCase().split(/\s+/).filter(Boolean);
+  const hits: CourseHit[] = [];
+
+  for (const listing of listings) {
+    const idMatch = listing.courseId.toLowerCase().includes(normalized);
+    const titleMatch = words.every((word) => listing.title.toLowerCase().includes(word));
+    if (!idMatch && !titleMatch) continue;
+    hits.push({
+      courseId: listing.courseId,
+      code: formatCourseId(listing.courseId),
+      title: listing.title,
+      points: listing.points,
+    });
   }
 
   /*
@@ -365,7 +463,7 @@ export async function searchCourses(query: string): Promise<CourseHit[]> {
    * browsing, and the shortest title is the least specialised course, which is
    * the better first guess.
    */
-  return [...hits.values()]
+  return hits
     .sort((a, b) => {
       const aCode = a.courseId.toLowerCase().includes(normalized) ? 0 : 1;
       const bCode = b.courseId.toLowerCase().includes(normalized) ? 0 : 1;

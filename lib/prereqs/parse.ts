@@ -69,11 +69,31 @@ const QUALIFIED_COURSE = /^([A-Z]{2,5})\s+([A-Z]{1,3})?(\d{4})([A-Z]{1,3})?\b/;
 const BARE_COURSE = /^([A-Z]{1,3})?(\d{4})([A-Z]{1,3})?\b/;
 
 /**
- * Two- and three-letter words that are not subject codes. Without this,
+ * English words that are not subject codes. Without this,
  * "COMS W3134 or COMS W3136 OR W3137" reads "OR W3137" as subject `OR`,
  * number 3137 — a course that does not exist.
+ *
+ * The quantifiers matter as much as the conjunctions, and they were the ones
+ * missing. "any 1000-level or 2000-level EESC course" parsed to a `course` node
+ * with id `ANY1000`, which is not a mis-read label but a fabricated GATE: the
+ * planner would hold EESC UN3400 shut forever waiting for a course that has
+ * never existed. A prerequisite naming a LEVEL rather than a course is a
+ * selector we cannot evaluate, so it has to fall through to prose and surface
+ * as an advisory — "check yourself" — which is the honest answer.
+ *
+ * Every word here was checked against `subjects` before being added; none of
+ * them is a real Columbia subject code.
  */
-const NOT_A_SUBJECT = new Set(["OR", "AND", "NOR", "IN", "OF", "TO", "AT", "BY", "FOR", "THE"]);
+const NOT_A_SUBJECT = new Set([
+  // conjunctions and prepositions
+  "OR", "AND", "NOR", "IN", "OF", "TO", "AT", "BY", "FOR", "THE", "AS", "ON",
+  "PER", "VIA", "WITH", "FROM",
+  // quantifiers and determiners — "any 1000-level", "one 3000-level course"
+  "ANY", "ALL", "ONE", "TWO", "EACH", "BOTH", "SOME", "MOST", "ONLY", "AN",
+  "A", "THIS", "THAT", "ITS", "NO", "UP",
+  // modals and verbs that precede a number in this prose
+  "MAY", "CAN", "ARE", "IS", "IT", "SEE", "NOT", "ALSO", "PLUS",
+]);
 
 /** Clauses that grant an instructor override. Lifted out before parsing. */
 const PERMISSION_CLAUSE =

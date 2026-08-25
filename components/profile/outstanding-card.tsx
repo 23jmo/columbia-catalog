@@ -1,7 +1,6 @@
-import { Chip } from "@/components/base/badges/chip";
 import type { RemainingRequirement } from "@/lib/profile/audit";
 import { cx } from "@/utils/cx";
-import { VERIFICATION_CHIP_COLOR, VERIFICATION_LABEL, outstandingLabel } from "./format";
+import { VERIFICATION_LABEL, VERIFICATION_TEXT_COLOR, outstandingLabel } from "./format";
 
 /**
  * Everything still outstanding, ordered by how actionable it is.
@@ -52,7 +51,7 @@ export function OutstandingCard({ remaining, className }: OutstandingCardProps) 
           >
             <a
               href={`#program-${requirement.programId}-heading`}
-              className="min-w-0 flex-1 rounded-lg outline-none transition-colors duration-150 ease hover:text-accent-600 focus-visible:ring-2 focus-visible:ring-border-focus-ring"
+              className="min-w-0 flex-1 rounded-lg outline-none transition-colors duration-150 hover:text-accent-600 focus-visible:ring-2 focus-visible:ring-border-focus-ring"
             >
               <span className="block truncate text-body-medium text-text-primary">
                 {requirement.label}
@@ -66,9 +65,25 @@ export function OutstandingCard({ remaining, className }: OutstandingCardProps) 
               {outstandingLabel(requirement.outstanding, requirement.unit)} left
             </span>
 
-            <Chip variant="caption" color={VERIFICATION_CHIP_COLOR[requirement.verification]}>
-              {VERIFICATION_LABEL[requirement.verification]}
-            </Chip>
+            {/*
+              Only the tiers that change what you should do about the row.
+              Nothing about a requirement here is finished, so "we can check
+              this one exactly" is not news — it is the ordinary case, it was
+              two thirds of the list, and rendering it as a lime pill on every
+              row made the flagged and attested ones invisible. Those two do
+              change the plan: one means search rather than click, the other
+              means talk to an adviser.
+            */}
+            {requirement.verification === "exact" ? null : (
+              <span
+                className={cx(
+                  "shrink-0 text-caption-2-regular",
+                  VERIFICATION_TEXT_COLOR[requirement.verification],
+                )}
+              >
+                {VERIFICATION_LABEL[requirement.verification]}
+              </span>
+            )}
           </li>
         ))}
       </ul>

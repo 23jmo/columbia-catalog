@@ -22,7 +22,8 @@ import { cx } from "@/utils/cx";
  *
  *   · the course page, for a course with more than one section, and
  *   · the section page, for a course with exactly one — where `/course/[id]`
- *     redirects to `?section=NNN` and there is no course page left to visit.
+ *     resolves the lone section and renders it in place, so there is no course
+ *     page left to carry them.
  *
  * ── Why a variant and not two copies ───────────────────────────────────────
  *
@@ -159,13 +160,24 @@ export function CourseLevelPanels({
                       {prettyTitle(similar.title)}
                     </span>
                   </span>
+                  {/*
+                    Plain text, not `InstructorLinks`.
+                    
+                    The whole card is already an <a> to the course, and an
+                    anchor inside an anchor is invalid HTML — React reconciles
+                    the nesting away on the client, the markup no longer matches
+                    what the server sent, and the whole subtree is thrown out
+                    and re-rendered with a hydration error. It also was not a
+                    usable link: the outer card swallows the click.
+                  */}
                   <span className="text-caption-2-regular text-text-tertiary">
-                    {similar.reason}
-                    {similar.credits ? ` · ${similar.credits}` : ""}
-                    {similar.instructors.length > 0 ? " · " : ""}
-                    {similar.instructors.length > 0 ? (
-                      <InstructorLinks names={similar.instructors} />
-                    ) : null}
+                    {[
+                      similar.reason,
+                      similar.credits,
+                      similar.instructors.length > 0 ? similar.instructors.join(", ") : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </span>
                 </Link>
               </li>

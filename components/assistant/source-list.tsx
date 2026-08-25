@@ -1,31 +1,19 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
-import { RiArrowRightUpLine } from "@remixicon/react";
+import { RiShieldCheckLine } from "@remixicon/react";
 
 import type { CitedCourse } from "@/lib/agent/transcript";
-import { toolLabel } from "@/lib/agent/transcript";
+import { Collapse, CollapseMark } from "@/components/assistant/collapse";
 import { cx } from "@/utils/cx";
 
 /**
- * The courses the answer stands on.
+ * The courses the answer leaned on that never became cards.
  *
- * ── Why this exists at all ─────────────────────────────────────────────────
- *
- * The template's answers end in an artifact — the diff, sitting directly under
- * the sentence claiming a change was made. That pairing is the whole point of
- * it, and it transfers exactly: an assistant that says "take COMS W4111" is
- * making a claim about a real catalog, and the student's only defence against a
- * fluent invention is being shown the row it came from.
- *
- * `lib/agent/grounding.ts` already refuses ungrounded answers server-side. This
- * is the same fact pointed at the reader instead of at the log: every course
- * here was returned by a named tool, the tool is printed beside it, and the
- * code links through to the course page where seat counts carry their own
- * provenance stamp. Nothing in this list is generated from the prose.
- *
- * Rows only — the card chrome around them belongs to the caller, because the
- * same list appears under an answer and could appear anywhere else evidence is
- * wanted. A server component: it renders from data the client already holds,
- * and holds no state of its own, so there is no reason to ship it.
+ * Occasional — once per turn, if at all — so the panel may animate. Purpose
+ * is preventing a jarring change when twenty chips appear. They stagger by
+ * index (first cited first, 50ms, capped at 4) rather than uniformly.
  */
 
 export function SourceList({
@@ -35,71 +23,89 @@ export function SourceList({
   courses: readonly CitedCourse[];
   className?: string;
 }) {
+  const [open, setOpen] = useState(false);
+
   if (courses.length === 0) return null;
 
+  const count = `${courses.length} ${courses.length === 1 ? "course" : "courses"}`;
+
   return (
-    <ul className={cx("divide-y divide-border-table", className)}>
-      {courses.map((course) => (
-        <li key={course.courseId}>
-          <Link
-            href={`/course/${course.courseId}`}
-            className={cx(
-              "group flex items-center gap-3 px-3 py-2.5",
-              "transition-colors hover:bg-background-primary-hover",
-              "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
-            )}
-          >
-            <span className="min-w-0 flex-1">
-              <span className="flex items-baseline gap-2">
-                <span className="shrink-0 text-caption-1-semibold text-text-primary">
-                  {course.code}
-                </span>
-                {course.title ? (
-                  <span className="min-w-0 truncate text-caption-1-regular text-text-secondary">
-                    {course.title}
-                  </span>
-                ) : null}
-              </span>
+    <div
+      className={cx(
+        "w-full max-w-90 rounded-2xl border border-border-table",
+        "bg-background-primary-default p-3",
+        className,
+      )}
+    >
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+        className={cx(
+          "flex w-full cursor-pointer items-center gap-2 text-left",
+          "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
+        )}
+      >
+        <RiShieldCheckLine
+          aria-hidden
+          className="size-3.5 shrink-0 text-foreground-icon-quaternary"
+        />
+        <span className="min-w-0 flex-1 truncate text-caption-1-medium text-text-secondary">
+          Also looked at {count}
+        </span>
+        <CollapseMark open={open} />
+      </button>
 
-              <span className="mt-0.5 flex min-w-0 items-center gap-1.5">
-                {/*
-                  The tool that produced the row, named. It is the difference
-                  between "the app says so" and "`recommend_courses` returned
-                  it", and the second is checkable.
-                */}
-                <span className="shrink-0 text-caption-2-regular text-text-tertiary">
-                  {toolLabel(course.source)}
-                </span>
-
-                {/*
-                  Only ever the engine's own reason. There is no branch here
-                  that writes a sentence when the engine did not supply one — an
-                  invented "why" inside the card that exists to prove nothing
-                  was invented would be the worst bug this file could have.
-                */}
-                {course.whyShown ? (
-                  <>
-                    <span aria-hidden className="shrink-0 text-foreground-icon-quaternary">
-                      ·
-                    </span>
-                    <span className="min-w-0 truncate text-caption-2-regular text-text-tertiary">
-                      {course.whyShown}
-                    </span>
-                  </>
-                ) : null}
-              </span>
-            </span>
-
-            <RiArrowRightUpLine
-              aria-hidden
+      <Collapse open={open}>
+        <ul className="mt-2.5 flex flex-wrap gap-1.5">
+          {courses.map((course, index) => (
+            <li
+              key={course.courseId}
               className={cx(
-                "size-4 shrink-0 text-foreground-icon-quaternary transition-colors",
-                "group-hover:text-foreground-icon-secondary",
+                "min-w-0",
+                "transition-[opacity,transform] duration-200 ease-out",
+                "motion-reduce:translate-y-0 motion-reduce:transition-opacity",
+                open ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
               )}
-            />
-          </Link>
-        </li>
-      ))}
-    </ul>
+              style={{
+                // First cited lands alone, then the rest follow. 50ms is the
+                // stagger recipe. Cap so a twenty-hit search does not sit
+                // idle for hundreds of milliseconds before the last chip.
+                transitionDelay: open ? `${Math.min(index, 4) * 50}ms` : "0ms",
+              }}
+            >
+              <LinkChip course={course} />
+            </li>
+          ))}
+        </ul>
+      </Collapse>
+    </div>
+  );
+}
+
+function LinkChip({ course }: { course: CitedCourse }) {
+  return (
+    <Link
+      href={`/course/${course.courseId}`}
+      title={course.title ? `${course.code} ${course.title}` : course.code}
+      className={cx(
+        "flex max-w-56 items-center gap-1.5 rounded-full",
+        "border border-border-table bg-background-primary-default",
+        "px-2.5 py-1 text-caption-1-medium text-text-secondary",
+        "transition-[color,border-color,transform] duration-150 ease-out",
+        "[@media(hover:hover)_and_(pointer:fine)]:hover:border-border-button-hover",
+        "[@media(hover:hover)_and_(pointer:fine)]:hover:text-text-primary",
+        "active:scale-[0.97] active:duration-160",
+        "motion-reduce:transition-colors motion-reduce:active:scale-100",
+        "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
+      )}
+    >
+      <span className="shrink-0 tabular-nums">{course.code}</span>
+      {course.title ? (
+        <span className="min-w-0 truncate text-caption-1-regular text-text-tertiary">
+          {course.title}
+        </span>
+      ) : null}
+    </Link>
   );
 }

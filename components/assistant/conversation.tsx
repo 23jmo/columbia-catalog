@@ -1,8 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import type { ChatStatus, UIMessage } from "ai";
-import { RiShieldCheckLine } from "@remixicon/react";
 
 import {
   citedCourses,
@@ -10,10 +8,15 @@ import {
   proseOf,
   suggestedFollowUps,
   toolActivity,
+  turnBlocks,
+  type TurnBlock,
 } from "@/lib/agent/transcript";
 import { FeedCardView } from "@/components/feed";
+import { AssistantMarkdown } from "@/components/assistant/markdown";
+import { CampusMapArtifactView, InstructorArtifactView, ScheduleArtifactView } from "@/components/assistant/artifacts";
+import { JumpToLatest, useStickToBottom } from "@/components/assistant/jump-to-latest";
 import { SourceList } from "@/components/assistant/source-list";
-import { ToolActivityCard } from "@/components/assistant/tool-activity-card";
+import { ThinkingLine, ToolActivityCard } from "@/components/assistant/tool-activity-card";
 import { cx } from "@/utils/cx";
 
 /**
@@ -27,15 +30,11 @@ import { cx } from "@/utils/cx";
  * — it is a short report with its sources attached. Giving both sides the same
  * container invites the reader to weigh them the same way.
  *
- * ── The evidence is a card in the flow, not a rail ─────────────────────────
+ * ── Cards sit where the tool ran ───────────────────────────────────────────
  *
- * The template's answers carry one attachment: the artifact the agent produced,
- * in a bordered card directly under the prose, with a label strip naming what
- * it is. Ours is the list of courses the tools actually returned. Same position,
- * same chrome, and it earns the position better than a side rail did — the
- * claim and the thing it rests on are read in one movement of the eye, and it
- * does not vanish on a narrow screen, which is exactly where a student is least
- * able to go check.
+ * `message.parts` is the order. Text, then a calendar, then more text is how
+ * the turn actually happened; concatenating the prose and stacking every
+ * artifact under it was throwing that order away.
  */
 
 export function Conversation({
@@ -49,33 +48,38 @@ export function Conversation({
   onAsk: (text: string) => void;
   className?: string;
 }) {
-  const foot = useRef<HTMLDivElement | null>(null);
-
+  const last = messages[messages.length - 1];
   /*
-   * Follow the stream, but only to the bottom of the newest turn.
-   *
-   * `block: "end"` on a sentinel after the last message rather than scrolling a
-   * container to its own scrollHeight: the composer is sticky and the page
-   * scrolls as a whole, so there is no container with a scrollHeight to use.
+   * Tokens, tool rows, and cards all change this. `messages.length` alone
+   * misses the stream — status stays "streaming" for the whole answer, and
+   * that is exactly when the page has to keep following if the student is
+   * already at the bottom.
    */
-  useEffect(() => {
-    if (messages.length === 0) return;
-    foot.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages.length, status]);
+  const streamKey = last
+    ? `${messages.length}:${last.id}:${proseOf(last).length}:${last.parts.length}:${status}`
+    : `0:${status}`;
+  const { showJump, more, jumpToLatest } = useStickToBottom(
+    streamKey,
+    last?.role === "user",
+  );
+
+  // First mention wins. A later unfiltered recommend reprints the same list;
+  // those cards stay hidden so the thread does not stack Computer Vision twice.
+  const alreadyShown = new Set<string>();
 
   return (
-    <div className={cx("flex flex-col gap-7", className)}>
+    <div data-assistant-thread className={cx("flex flex-col gap-7", className)}>
       {messages.map((message, index) => {
         const isLast = index === messages.length - 1;
 
         if (message.role === "user") {
           return (
-            <div key={message.id} className="flex justify-end">
+            <div key={message.id} data-thread-message className="flex justify-end">
               <p
                 className={cx(
                   "max-w-[min(34rem,85%)] whitespace-pre-wrap rounded-2xl",
                   "border border-border-table bg-background-primary-default shadow-xs",
-                  "px-4 py-3 text-body-regular text-text-primary",
+                  "px-4 py-3 text-headline-regular text-text-primary",
                 )}
               >
                 {proseOf(message)}
@@ -84,37 +88,47 @@ export function Conversation({
           );
         }
 
+        const allCards = feedCards(message);
+        // Snapshot before marking this turn's cards shown. The set is mutated
+        // in this loop; if we passed it live, this turn would hide its own
+        // cards because React renders after the loop body finished.
+        const alreadyShownHere = new Set(alreadyShown);
+        for (const card of allCards) alreadyShown.add(card.courseId);
         return (
-          <AssistantTurn
-            key={message.id}
-            message={message}
-            isRunning={isLast && (status === "submitted" || status === "streaming")}
-            showFollowUps={isLast && status === "ready"}
-            onAsk={onAsk}
-          />
+          <div key={message.id} data-thread-message>
+            <AssistantTurn
+              message={message}
+              alreadyShown={alreadyShownHere}
+              isRunning={isLast && (status === "submitted" || status === "streaming")}
+              showFollowUps={isLast && status === "ready"}
+              onAsk={onAsk}
+            />
+          </div>
         );
       })}
 
-      <div ref={foot} aria-hidden />
+      {showJump ? <JumpToLatest count={more} onJump={jumpToLatest} /> : null}
     </div>
   );
 }
 
 function AssistantTurn({
   message,
+  alreadyShown,
   isRunning,
   showFollowUps,
   onAsk,
 }: {
   message: UIMessage;
+  alreadyShown: ReadonlySet<string>;
   isRunning: boolean;
   showFollowUps: boolean;
   onAsk: (text: string) => void;
 }) {
   const activity = toolActivity(message);
-  const cards = feedCards(message);
-  const prose = proseOf(message);
+  const blocks = turnBlocks(message, alreadyShown);
   const followUps = showFollowUps ? suggestedFollowUps(message) : [];
+  const hasBody = blocks.length > 0;
 
   /*
    * Evidence for everything the cards do not already cover.
@@ -125,85 +139,38 @@ function AssistantTurn({
    * would be the same fact twice. What the list is still for is the courses the
    * answer leaned on that never became cards: a `search_courses` result, a
    * `get_course` lookup, a course the prerequisite filter withheld.
+   *
+   * `feedCards(message)` not the filtered blocks: a reprinted set is hidden
+   * above but must stay out of the source list too.
    */
-  const carded = new Set(cards.map((card) => card.courseId));
+  const carded = new Set(feedCards(message).map((card) => card.courseId));
   const courses = citedCourses(message).filter((course) => !carded.has(course.courseId));
 
   return (
     <div className="flex flex-col gap-3.5">
+      {/*
+        The face, while there is nothing else to show.
+
+        A turn that has been submitted but has not streamed a token or opened a
+        tool is dead air, and dead air is where a student decides the thing is
+        broken. The ornament is already the app's mark, so putting it here in
+        its thinking state costs no new vocabulary — and unlike a spinner, it
+        stops the moment there is real output to read, because the prose and the
+        activity card are better evidence of work than any indicator.
+      */}
+      {isRunning && !hasBody && activity.length === 0 ? (
+        <ThinkingLine label="Thinking" />
+      ) : null}
+
       {activity.length > 0 ? (
         <ToolActivityCard activity={activity} isRunning={isRunning} />
       ) : null}
 
-      {prose ? (
-        /*
-         * `whitespace-pre-wrap` rather than a markdown renderer. The system
-         * prompt asks for short prose and the structure lives in the card
-         * beneath it, so a parser here would buy formatting the answer is not
-         * supposed to need — and would be one more place a model could put
-         * markup the surface then has to trust.
-         */
-        <p className="max-w-[88ch] whitespace-pre-wrap text-body-regular text-text-primary">
-          {prose}
-        </p>
-      ) : null}
+      {blocks.map((block, index) => (
+        <TurnBeat key={`${block.kind}-${index}`} block={block} />
+      ))}
 
-      {/*
-        The classes themselves — the same card the home feed renders, section
-        and all. This is the point of the surface: a course code is not
-        something a student can register for, and the decision is the section,
-        so what lands under the prose is the instructor, the meeting pattern,
-        the seat count with its provenance stamp, and the button that opens that
-        exact call number in Vergil.
-      */}
-      {cards.length > 0 ? (
-        /*
-          A grid, not a stack. The card is sized for the home page's rail —
-          about 22rem — and stretching one across the full width of a thread
-          leaves a seat meter a metre long above two buttons floating in space.
-          Two or three to a row keeps the card the shape it was designed as, and
-          lets a three-card answer be taken in at a glance instead of scrolled.
-        */
-        <ul
-          role="list"
-          className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
-        >
-          {cards.map((card) => (
-            <li key={card.courseId} className="flex">
-              <FeedCardView card={card} className="w-full" />
-            </li>
-          ))}
-        </ul>
-      ) : null}
-
-      {courses.length > 0 ? (
-        <section
-          className={cx(
-            "overflow-hidden rounded-2xl border border-border-table",
-            "bg-background-primary-default",
-          )}
-        >
-          <header
-            className={cx(
-              "flex items-center gap-2 border-b border-border-table",
-              "bg-background-secondary-default px-3 py-2",
-            )}
-          >
-            <RiShieldCheckLine
-              aria-hidden
-              className="size-3.5 shrink-0 text-foreground-icon-quaternary"
-            />
-            <h3 className="min-w-0 flex-1 truncate text-caption-1-medium text-text-secondary">
-              What this answer is based on
-            </h3>
-            <span className="shrink-0 text-caption-2-regular tabular-nums text-text-tertiary">
-              {courses.length} {courses.length === 1 ? "course" : "courses"}
-            </span>
-          </header>
-
-          <SourceList courses={courses} />
-        </section>
-      ) : null}
+      {courses.length > 0 ? <SourceList courses={courses} /> : null}
 
       {followUps.length > 0 ? (
         <ul className="flex flex-wrap gap-1.5">
@@ -226,5 +193,34 @@ function AssistantTurn({
         </ul>
       ) : null}
     </div>
+  );
+}
+
+function TurnBeat({ block }: { block: TurnBlock }) {
+  if (block.kind === "text") {
+    return <AssistantMarkdown source={block.text} />;
+  }
+  if (block.kind === "schedule") {
+    return <ScheduleArtifactView artifact={block.artifact} />;
+  }
+  if (block.kind === "campus_map") {
+    return <CampusMapArtifactView artifact={block.artifact} />;
+  }
+  if (block.kind === "instructor") {
+    return <InstructorArtifactView artifact={block.artifact} />;
+  }
+  /*
+   * A grid, not a stack. The card is sized for the home page's rail —
+   * about 22rem — and stretching one across the full width of a thread
+   * leaves a seat meter a metre long above two buttons floating in space.
+   */
+  return (
+    <ul role="list" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {block.cards.map((card) => (
+        <li key={card.courseId} className="flex">
+          <FeedCardView card={card} className="w-full" />
+        </li>
+      ))}
+    </ul>
   );
 }

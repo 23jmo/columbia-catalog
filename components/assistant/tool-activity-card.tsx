@@ -1,36 +1,32 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { RiCheckLine, RiErrorWarningLine, RiLoader4Line } from "@remixicon/react";
+import { RiCheckboxCircleFill, RiErrorWarningLine } from "@remixicon/react";
 
 import type { ToolActivity } from "@/lib/agent/transcript";
+import { Collapse, CollapseMark } from "@/components/assistant/collapse";
+import { OrnamentAvatar } from "@/components/ornament/ornament-avatar";
 import { cx } from "@/utils/cx";
 
 /**
  * What the assistant did before it answered.
  *
- * ── The template's steps card, pointed at a tool loop ──────────────────────
- *
- * BoardUI puts a narrow bordered card mid-conversation reading "5 steps left",
- * with the step currently running raised into its own sub-card and the rest
- * listed plainly beneath it. It is tempting to read that as decoration for dead
- * air. Here it is load-bearing: the spec's hardest rule is that the assistant
- * may state only facts a tool returned, and a student has no way to hold us to
- * that unless they can see which tools ran. "Reading your coursework · Working
- * out what your degree still needs · Ranking courses for you" is the difference
- * between an answer and a claim.
- *
- * The one change the domain forces: the template's list is a *plan*, so the
- * unrun steps are known in advance. A tool loop's are not — the model decides
- * the next call after seeing the last result. So this card reads backwards.
- * Finished steps list plainly with a check; the one still running is the raised
- * card, and it is the last row rather than the first.
- *
- * It stays on screen after the turn finishes, collapsed to one line. The detail
- * is a `<details>` — no state, no JavaScript, keyboard-operable, and open while
- * the turn runs because that is when the list is telling you something you
- * cannot get anywhere else.
+ * Motion lives here because a tool loop is occasional — a handful of rows
+ * over a few seconds — not a list someone opens a hundred times a day.
+ * Purpose is state indication (running → done) and preventing a jarring
+ * change (the list growing, the panel collapsing). Feed cards on the home
+ * rail do not enter-animate; that surface is too frequent.
  */
+
+const GLYPH = "size-4 shrink-0";
+
+/** Enter: opacity + 8px, 200ms ease-out. Never scale(0). */
+const ENTER = cx(
+  "translate-y-0 opacity-100",
+  "transition-[opacity,transform] duration-200 ease-out",
+  "starting:translate-y-2 starting:opacity-0",
+  "motion-reduce:translate-y-0 motion-reduce:transition-opacity motion-reduce:starting:translate-y-0",
+);
 
 export function ToolActivityCard({
   activity,
@@ -41,93 +37,92 @@ export function ToolActivityCard({
   isRunning: boolean;
   className?: string;
 }) {
+  const [open, setOpen] = useState(isRunning);
+
+  useEffect(() => {
+    // Open when work starts; close when it ends. Mid-run and after, the
+    // student can still toggle — this effect only fires when `isRunning` flips.
+    setOpen(isRunning);
+  }, [isRunning]);
+
   if (activity.length === 0) return null;
 
   const failed = activity.filter((entry) => entry.state === "failed").length;
   const done = activity.filter((entry) => entry.state === "done").length;
 
   return (
-    <div className={cx("flex flex-col gap-2", className)}>
-      <details
-        /*
-         * `open` rather than `defaultOpen`-by-state: while the turn runs the
-         * list is the only thing on screen worth reading, and once it finishes
-         * the summary line carries the count. React re-renders this element as
-         * the stream advances, so a controlled `open` would fight a student who
-         * closed it mid-turn — but it is also the only way the card can open
-         * itself when work starts. Running turns win; finished ones stay shut.
-         */
-        open={isRunning}
+    <div className={cx("flex flex-col gap-2.5", className)}>
+      <div
         className={cx(
-          "w-full max-w-[360px] rounded-2xl border border-border-table",
-          "bg-background-secondary-default p-1.5",
+          "w-full max-w-90 rounded-2xl border border-border-table",
+          "bg-background-primary-default p-4",
         )}
       >
-        <summary
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((current) => !current)}
           className={cx(
-            "flex cursor-pointer list-none items-center gap-2 px-2 py-1.5",
-            "marker:hidden [&::-webkit-details-marker]:hidden",
+            "flex w-full cursor-pointer items-center gap-2 text-left",
+            "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
           )}
         >
           <StepGlyph state={isRunning ? "running" : failed > 0 ? "failed" : "done"} />
           <span className="min-w-0 flex-1 truncate text-caption-1-medium text-text-secondary">
             {summarise(activity.length, done, failed, isRunning)}
           </span>
-        </summary>
+          <CollapseMark open={open} />
+        </button>
 
-        <ul className="flex flex-col gap-0.5">
-          {activity.map((entry) => {
-            const isCurrent = entry.state === "running";
+        <Collapse open={open}>
+          <ul className="mt-3 flex flex-col gap-2">
+            {activity.map((entry) => {
+              const isCurrent = entry.state === "running";
+              const isDone = entry.state === "done";
 
-            return (
-              <li
-                key={entry.toolCallId}
-                /*
-                 * The raised sub-card is the template's way of saying "this is
-                 * the one happening now", and it only ever applies to a step
-                 * that is genuinely in flight — a finished list has no raised
-                 * row, which is correct, because nothing in it is current.
-                 */
-                className={cx(
-                  "flex items-start gap-2 px-2 py-1.5",
-                  isCurrent &&
-                    "rounded-xl border border-border-table bg-background-primary-default shadow-xs",
-                )}
-              >
-                <StepGlyph state={entry.state} />
+              return (
+                <li
+                  key={entry.toolCallId}
+                  className={cx(
+                    "flex items-center gap-2 rounded-full px-2.5 py-1.5",
+                    "translate-y-0 opacity-100 starting:translate-y-2 starting:opacity-0",
+                    // Ring, not border+padding — those are layout and would
+                    // jump the row when the running step finishes.
+                    "ring-1 ring-inset ring-transparent",
+                    "transition-[opacity,transform,box-shadow] duration-200 ease-out",
+                    "motion-reduce:translate-y-0 motion-reduce:transition-[opacity,box-shadow]",
+                    "motion-reduce:starting:translate-y-0",
+                    isCurrent && "ring-border-table",
+                  )}
+                >
+                  <StepGlyph state={entry.state} />
 
-                <span className="min-w-0 flex-1">
-                  <span
-                    className={cx(
-                      "text-caption-1-regular",
-                      entry.state === "failed"
-                        ? "text-text-error-primary"
-                        : isCurrent
-                          ? "text-text-primary"
-                          : "text-text-tertiary",
-                    )}
-                  >
-                    {entry.label}
-                  </span>
-
-                  {/*
-                    A failed tool says so in its own words. The alternative — a
-                    silent omission — leaves the answer looking like it rested
-                    on one more source than it did.
-                  */}
-                  {entry.errorText ? (
-                    <span className="block text-caption-2-regular text-text-tertiary">
-                      {entry.errorText}
+                  <span className="min-w-0 flex-1">
+                    <span
+                      className={cx(
+                        "text-caption-1-regular transition-colors duration-200 ease-out",
+                        "motion-reduce:transition-none",
+                        entry.state === "failed" && "text-text-error-primary",
+                        isCurrent && "text-text-secondary",
+                        isDone && "text-text-secondary line-through",
+                      )}
+                    >
+                      {entry.label}
                     </span>
-                  ) : null}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-      </details>
 
-      {/* The template prints its clock below the card, not inside it. */}
+                    {entry.errorText ? (
+                      <span className="block text-caption-2-regular text-text-tertiary">
+                        {entry.errorText}
+                      </span>
+                    ) : null}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </Collapse>
+      </div>
+
       {isRunning ? <Elapsed /> : null}
     </div>
   );
@@ -136,65 +131,80 @@ export function ToolActivityCard({
 function summarise(total: number, done: number, failed: number, isRunning: boolean): string {
   if (isRunning) {
     const left = total - done - failed;
-    return left > 0 ? `${left} ${left === 1 ? "step" : "steps"} running` : "Working";
+    return left > 0 ? `${left} ${left === 1 ? "step" : "steps"} left` : "Working";
   }
   const checked = `${done} ${done === 1 ? "step" : "steps"}`;
   return failed === 0 ? checked : `${checked} · ${failed} couldn't be read`;
 }
 
-/**
- * The circle at the head of a step.
- *
- * Three states, three shapes — a spinner, a tick, a warning — rather than three
- * colours of the same dot, so the list is readable without colour vision and in
- * a screenshot.
- */
 function StepGlyph({ state }: { state: ToolActivity["state"] }) {
-  if (state === "running") {
-    return (
-      <RiLoader4Line
-        aria-hidden
-        className={cx(
-          "mt-0.5 size-3.5 shrink-0 animate-spin text-foreground-icon-secondary",
-          "motion-reduce:animate-none",
-        )}
-      />
-    );
-  }
+  if (state === "running") return <ProgressCircle />;
   if (state === "failed") {
-    return (
-      <RiErrorWarningLine
-        aria-hidden
-        className="mt-0.5 size-3.5 shrink-0 text-foreground-icon-error"
-      />
-    );
+    return <RiErrorWarningLine aria-hidden className={cx(GLYPH, "text-foreground-icon-error")} />;
   }
   return (
-    <RiCheckLine aria-hidden className="mt-0.5 size-3.5 shrink-0 text-foreground-icon-quaternary" />
+    <RiCheckboxCircleFill
+      aria-hidden
+      className={cx(GLYPH, "text-foreground-icon-quaternary")}
+    />
   );
 }
 
-/**
- * "Thinking 3.2s" — the template's own line, and it earns its keep.
- *
- * A tool loop over eighteen tools can genuinely take fifteen seconds, and a
- * spinner with no number is indistinguishable from a hang. A counting number is
- * the cheapest possible proof that something is still happening.
- *
- * Tenths, updated ten times a second, and only while this component is mounted
- * — the parent unmounts it the moment the turn stops running, so there is no
- * interval to leak and no final time to freeze.
- */
+function ProgressCircle() {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 16 16"
+      className={cx(GLYPH, "animate-spin text-foreground-icon-secondary motion-reduce:animate-none")}
+    >
+      <circle
+        cx="8"
+        cy="8"
+        r="5.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        className="opacity-20"
+      />
+      <circle
+        cx="8"
+        cy="8"
+        r="5.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeDasharray="8 26"
+      />
+    </svg>
+  );
+}
+
+export function ThinkingLine({
+  label,
+  className,
+}: {
+  label: string;
+  className?: string;
+}) {
+  return (
+    <p
+      className={cx(
+        ENTER,
+        "flex items-center gap-2 text-caption-1-regular text-text-secondary",
+        className,
+      )}
+    >
+      <OrnamentAvatar size={18} mood="thinking" className="shrink-0" />
+      {label}
+    </p>
+  );
+}
+
 function Elapsed() {
   const [seconds, setSeconds] = useState(0);
 
   useEffect(() => {
-    /*
-     * The clock starts in the effect, not in a ref initialiser.
-     * `performance.now()` during render is impure — a re-render that React
-     * discards would move the start time — and the effect is also the honest
-     * moment to start counting, since it is when the line reaches the screen.
-     */
     const started = performance.now();
     const timer = window.setInterval(() => {
       setSeconds((performance.now() - started) / 1000);
@@ -202,9 +212,5 @@ function Elapsed() {
     return () => window.clearInterval(timer);
   }, []);
 
-  return (
-    <p className="px-1 text-caption-1-regular text-text-tertiary">
-      Thinking {seconds.toFixed(1)}s
-    </p>
-  );
+  return <ThinkingLine label={`Thinking ${seconds.toFixed(1)}s`} />;
 }

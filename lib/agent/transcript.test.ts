@@ -13,13 +13,21 @@
 import { describe, expect, it } from "vitest";
 import type { UIMessage } from "ai";
 
+import type { FeedCard } from "@/lib/recommend/feed";
+
 import {
   citedCourses,
+  campusMapArtifacts,
   feedCards,
+  instructorArtifacts,
   proseOf,
+  scheduleArtifacts,
+  shownCourseIds,
   suggestedFollowUps,
   toolActivity,
   toolLabel,
+  turnBlocks,
+  unseenFeedCards,
 } from "./transcript";
 
 /* ==========================================================================
@@ -373,6 +381,40 @@ describe("section cards", () => {
   });
 });
 
+describe("shown course ids", () => {
+  it("collects card ids from earlier assistant turns, once each", () => {
+    const first = assistant([
+      toolPart({
+        name: "recommend_courses",
+        state: "output-available",
+        output: { cards: [card(), card({ courseId: "MATH1201UN" })] },
+      }),
+    ]);
+    const second = { ...assistant([toolPart({
+      name: "recommend_courses",
+      state: "output-available",
+      output: { cards: [card()] },
+    })]), id: "m2" };
+
+    expect(shownCourseIds([first, second])).toEqual(["COMS4111W", "MATH1201UN"]);
+  });
+
+  it("ignores the student's messages", () => {
+    const user: UIMessage = { id: "u1", role: "user", parts: [text("more")] };
+    expect(shownCourseIds([user])).toEqual([]);
+  });
+});
+
+describe("unseen feed cards", () => {
+  it("drops a card this thread has already shown", () => {
+    const kept = unseenFeedCards(
+      [{ courseId: "COMS4731W" }, { courseId: "HUMA1001CC" }] as FeedCard[],
+      new Set(["COMS4731W"]),
+    );
+    expect(kept.map((row) => row.courseId)).toEqual(["HUMA1001CC"]);
+  });
+});
+
 /* ==========================================================================
  * Prose
  * ========================================================================== */
@@ -401,6 +443,17 @@ describe("suggested follow-ups", () => {
     // Three fixed suggestions under every answer are decoration, and a student
     // stops reading them within two turns.
     expect(suggestedFollowUps(assistant([text("Hello.")]))).toEqual([]);
+  });
+
+  it("offers a follow-up to generate more when there were recommendations", () => {
+    const message = assistant([
+      toolPart({
+        name: "recommend_courses",
+        state: "output-available",
+        output: { cards: [card()] },
+      }),
+    ]);
+    expect(suggestedFollowUps(message)).toContain("Show me more like these");
   });
 
   it("only offers 'why these and not others' when there were recommendations", () => {
@@ -441,5 +494,195 @@ describe("suggested follow-ups", () => {
       toolPart({ name: "search_courses", id: "call-3", state: "output-available", output: {} }),
     ]);
     expect(suggestedFollowUps(message).length).toBeLessThanOrEqual(3);
+  });
+});
+
+/* ==========================================================================
+ * Schedule and campus map
+ * ========================================================================== */
+
+describe("schedule artifacts", () => {
+  it("reads a schedule_card payload into week-grid blocks", () => {
+    const message = assistant([
+      toolPart({
+        name: "show_schedule",
+        state: "output-available",
+        output: {
+          kind: "schedule_card",
+          termCode: "20263",
+          planId: "plan-1",
+          planName: "Fall draft",
+          blocks: [
+            {
+              blockId: "s@Tu@790",
+              label: "COMS 4111 · 001",
+              weekday: "Tu",
+              startMinute: 790,
+              endMinute: 865,
+              tone: "plan",
+            },
+          ],
+          commitmentIds: [],
+          unknownMeetingSectionIds: [],
+          unresolvedSectionIds: [],
+        },
+      }),
+    ]);
+    const [artifact] = scheduleArtifacts(message);
+    expect(artifact?.planName).toBe("Fall draft");
+    expect(artifact?.blocks[0]?.label).toBe("COMS 4111 · 001");
+  });
+
+  it("skips a payload that is not a schedule_card", () => {
+    const message = assistant([
+      toolPart({
+        name: "recommend_courses",
+        state: "output-available",
+        output: { cards: [card()], blocks: [{ label: "nope" }] },
+      }),
+    ]);
+    expect(scheduleArtifacts(message)).toEqual([]);
+  });
+});
+
+describe("campus map artifacts", () => {
+  it("reads a campus_map_card payload", () => {
+    const message = assistant([
+      toolPart({
+        name: "show_campus_map",
+        state: "output-available",
+        output: {
+          kind: "campus_map_card",
+          buildingNames: ["Hamilton Hall"],
+          roomLabel: "517",
+          label: "COMS 4111 · 001",
+          meta: "Thursday · 1:10pm–2:25pm",
+          routeStops: [{ buildingNames: ["Hamilton Hall"], label: "COMS 4111 · 001", highlighted: true }],
+          connectStops: true,
+          weekday: "Th",
+        },
+      }),
+    ]);
+    const [artifact] = campusMapArtifacts(message);
+    expect(artifact?.buildingNames).toEqual(["Hamilton Hall"]);
+    expect(artifact?.connectStops).toBe(true);
+  });
+});
+
+describe("instructor artifacts", () => {
+  it("reads an instructor_card payload", () => {
+    const message = assistant([
+      toolPart({
+        name: "show_instructor",
+        state: "output-available",
+        output: {
+          kind: "instructor_card",
+          found: true,
+          name: "Adam H Cannon",
+          slug: "adam-h-cannon",
+          subtitle: "Computer Science",
+          subjects: ["COMS"],
+          termLabel: "Fall 2026",
+          courseCount: 1,
+          sectionCount: 2,
+          courses: [{ courseId: "COMS1004W", code: "COMS 1004", title: "Intro to Java" }],
+          teachingDays: ["Tu", "Th"],
+          buildings: ["Mudd"],
+          reputation: null,
+        },
+      }),
+    ]);
+    const [artifact] = instructorArtifacts(message);
+    expect(artifact?.name).toBe("Adam H Cannon");
+    expect(artifact?.slug).toBe("adam-h-cannon");
+    expect(artifact?.courses[0]?.code).toBe("COMS 1004");
+  });
+
+  it("skips a card that did not resolve", () => {
+    const message = assistant([
+      toolPart({
+        name: "show_instructor",
+        state: "output-available",
+        output: { kind: "instructor_card", found: false, name: "Staff", error: "placeholder" },
+      }),
+    ]);
+    expect(instructorArtifacts(message)).toEqual([]);
+  });
+});
+
+describe("turn blocks", () => {
+  const schedule = {
+    kind: "schedule_card",
+    termCode: "20263",
+    planId: "plan-1",
+    planName: "Fall draft",
+    blocks: [
+      {
+        blockId: "s@Tu@790",
+        label: "COMS 4111 · 001",
+        weekday: "Tu",
+        startMinute: 790,
+        endMinute: 865,
+        tone: "plan",
+      },
+    ],
+    commitmentIds: [],
+    unknownMeetingSectionIds: [],
+    unresolvedSectionIds: [],
+  };
+
+  it("keeps prose and cards in the order the parts arrived", () => {
+    const message = assistant([
+      text("Here is the week."),
+      toolPart({ name: "show_schedule", state: "output-available", output: schedule }),
+      text("And the walk."),
+      toolPart({
+        name: "show_campus_map",
+        state: "output-available",
+        output: {
+          kind: "campus_map_card",
+          buildingNames: ["Hamilton Hall"],
+          roomLabel: "517",
+          label: "COMS 4111 · 001",
+          meta: null,
+          routeStops: [],
+          connectStops: false,
+          weekday: null,
+        },
+      }),
+    ]);
+    expect(turnBlocks(message).map((block) => block.kind)).toEqual([
+      "text",
+      "schedule",
+      "text",
+      "campus_map",
+    ]);
+  });
+
+  it("does not split prose around a lookup that has no card", () => {
+    const message = assistant([
+      text("Checking."),
+      toolPart({ name: "search_courses", state: "output-available", output: { courses: [] } }),
+      text("Take this."),
+      toolPart({
+        name: "recommend_courses",
+        state: "output-available",
+        output: { cards: [card()] },
+      }),
+    ]);
+    const blocks = turnBlocks(message);
+    expect(blocks.map((block) => block.kind)).toEqual(["text", "feed"]);
+    expect(blocks[0]).toEqual({ kind: "text", text: "Checking.\n\nTake this." });
+  });
+
+  it("hides a feed card this thread has already shown", () => {
+    const message = assistant([
+      toolPart({
+        name: "recommend_courses",
+        state: "output-available",
+        output: { cards: [card()] },
+      }),
+    ]);
+    expect(turnBlocks(message, new Set(["COMS4111W"]))).toEqual([]);
   });
 });

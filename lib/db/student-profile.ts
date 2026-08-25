@@ -27,6 +27,7 @@ interface ProfileRow {
   school: string | null;
   program_ids: string[] | null;
   class_year: string | null;
+  interest_tags: string[] | null;
   attestations: Record<string, string> | null;
   updated_at: string | null;
 }
@@ -36,6 +37,7 @@ interface CourseRow {
   term_code: string | null;
   term_label: string | null;
   points: number | string | null;
+  liked: boolean | null;
   source: string;
   added_at: string;
 }
@@ -68,6 +70,9 @@ function toCourse(row: CourseRow): TakenCourse {
     termCode: row.term_code,
     termLabel: row.term_label,
     points: toPoints(row.points),
+    // Passed through as the tri-state it is. `?? false` here would be the
+    // single change that silently breaks the taste vector.
+    liked: row.liked,
     source: toSource(row.source),
     addedAt: row.added_at,
   };
@@ -91,11 +96,11 @@ export async function loadStudentProfile(): Promise<StudentProfile | null> {
   const [profileResult, coursesResult] = await Promise.all([
     client
       .from("student_profiles")
-      .select("user_id, school, program_ids, class_year, attestations, updated_at")
+      .select("user_id, school, program_ids, class_year, interest_tags, attestations, updated_at")
       .maybeSingle(),
     client
       .from("student_courses")
-      .select("course_id, term_code, term_label, points, source, added_at")
+      .select("course_id, term_code, term_label, points, liked, source, added_at")
       .order("added_at", { ascending: false }),
   ]);
 
@@ -115,6 +120,7 @@ export async function loadStudentProfile(): Promise<StudentProfile | null> {
     school: toSchool(profile?.school ?? null),
     programIds: profile?.program_ids ?? [],
     classYear: profile?.class_year ?? null,
+    interestTags: profile?.interest_tags ?? [],
     attestations: profile?.attestations ?? {},
     courses,
     updatedAt: profile?.updated_at ?? null,

@@ -66,7 +66,7 @@ export function CandidateChips({ courseIds, limit = 8, className }: CandidateChi
             <span
               key={courseId}
               className={cx(
-                "inline-flex items-center overflow-hidden rounded-md border transition-colors duration-150 ease",
+                "inline-flex items-center overflow-hidden rounded-md border transition-colors duration-150",
                 isAdded
                   ? "border-status-lime-text/40 bg-status-lime-background"
                   : "border-border-table bg-background-primary-default",
@@ -74,7 +74,7 @@ export function CandidateChips({ courseIds, limit = 8, className }: CandidateChi
             >
               <a
                 href={`/course/${courseId}`}
-                className="px-1.5 py-1 text-caption-1-medium tabular-nums text-text-secondary outline-none transition-colors duration-150 ease hover:text-accent-600 focus-visible:ring-2 focus-visible:ring-border-focus-ring"
+                className="px-1.5 py-1 text-caption-1-medium tabular-nums text-text-secondary outline-none transition-colors duration-150 hover:text-accent-600 focus-visible:ring-2 focus-visible:ring-border-focus-ring"
               >
                 {code}
               </a>
@@ -88,7 +88,7 @@ export function CandidateChips({ courseIds, limit = 8, className }: CandidateChi
                   aria-label={`Mark ${code} as already taken`}
                   title={`Mark ${code} as already taken`}
                   onClick={() => markTaken(courseId)}
-                  className="flex size-6 items-center justify-center border-l border-border-table text-foreground-icon-tertiary outline-none transition-colors duration-150 ease hover:bg-background-secondary-hover hover:text-text-primary focus-visible:ring-2 focus-visible:ring-border-focus-ring"
+                  className="flex size-6 items-center justify-center border-l border-border-table text-foreground-icon-tertiary outline-none transition-colors duration-150 hover:bg-background-secondary-hover hover:text-text-primary focus-visible:ring-2 focus-visible:ring-border-focus-ring"
                 >
                   <RiAddLine className="size-3.5" aria-hidden />
                 </button>
@@ -101,7 +101,7 @@ export function CandidateChips({ courseIds, limit = 8, className }: CandidateChi
           <button
             type="button"
             onClick={() => setExpanded(true)}
-            className="rounded-md px-1.5 py-1 text-caption-1-medium text-text-tertiary outline-none transition-colors duration-150 ease hover:text-text-primary focus-visible:ring-2 focus-visible:ring-border-focus-ring"
+            className="rounded-md px-1.5 py-1 text-caption-1-medium text-text-tertiary outline-none transition-colors duration-150 hover:text-text-primary focus-visible:ring-2 focus-visible:ring-border-focus-ring"
           >
             +{hidden} more
           </button>

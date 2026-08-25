@@ -25,7 +25,7 @@
 
 import type { User } from "@supabase/supabase-js";
 
-import { createServerSupabaseClient, getBrowserClient } from "./client";
+import { createServerSupabaseClient, createServiceRoleClient, getBrowserClient } from "./client";
 
 /**
  * Columbia and Barnard, subdomains included — cumc.columbia.edu,
@@ -105,6 +105,21 @@ export async function requireSessionUser(): Promise<SessionAccount> {
   const account = await getSessionUser();
   if (!account) throw new NotSignedInError();
   return account;
+}
+
+/**
+ * Permanently deletes the signed-in auth user. Cascades through `users` and
+ * every owned table. Requires the service role — callers must verify the
+ * session first and sign the browser out afterward.
+ */
+export async function deleteSignedInAccount(userId: string): Promise<{ error: string | null }> {
+  const service = createServiceRoleClient();
+  if (!service) {
+    return { error: "Account deletion is not configured on this deployment." };
+  }
+
+  const { error } = await service.auth.admin.deleteUser(userId);
+  return { error: error?.message ?? null };
 }
 
 // ---------------------------------------------------------------------------

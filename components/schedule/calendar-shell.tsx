@@ -7,9 +7,7 @@ import { Button } from "@/components/base/buttons/button";
 import { makeBlock } from "@/lib/schedule";
 import type { PlanAnalysisDetail } from "@/lib/schedule";
 import type { Course, CustomBlock, Section, Weekday } from "@/lib/types";
-import type { TypicalMeetingPattern } from "@/lib/db/typical-meetings";
 import { cx } from "@/utils/cx";
-import { CalendarManage } from "./calendar-manage";
 import { CalendarMonth } from "./calendar-month";
 import { CalendarRail, type CalendarRailPlan } from "./calendar-rail";
 import { CalendarToolbar } from "./calendar-toolbar";
@@ -35,10 +33,7 @@ export function CalendarShell({
   termEnd,
   sections,
   courses,
-  typical,
-  isLoading,
   customBlocks,
-  onRemoveSection,
   onSaveBlock,
   onRemoveBlock,
   canExport,
@@ -47,8 +42,6 @@ export function CalendarShell({
   onDelete,
   onMakePrimary,
   isPrimary,
-  name,
-  onRename,
   savedPicker,
   className,
 }: {
@@ -62,10 +55,7 @@ export function CalendarShell({
   termEnd: string;
   sections: Section[];
   courses: Course[];
-  typical: Map<string, TypicalMeetingPattern>;
-  isLoading: boolean;
   customBlocks: readonly CustomBlock[];
-  onRemoveSection: (sectionId: string) => void;
   onSaveBlock: (block: CustomBlock) => void;
   onRemoveBlock: (blockId: string) => void;
   canExport: boolean;
@@ -74,8 +64,6 @@ export function CalendarShell({
   onDelete: () => void;
   onMakePrimary: () => void;
   isPrimary: boolean;
-  name: string;
-  onRename: (name: string) => void;
   /**
    * "Add from saved" — the student's shortlist, one click from the canvas.
    *
@@ -87,7 +75,7 @@ export function CalendarShell({
   savedPicker?: ReactNode;
   className?: string;
 }) {
-  const [view, setView] = useState<CalendarView>("month");
+  const [view, setView] = useState<CalendarView>("week");
   const [cursor, setCursor] = useState(() => clampToTerm(new Date(), termStart, termEnd));
   const [layers, setLayers] = useState<CalendarLayers>(ALL_LAYERS);
   const [query, setQuery] = useState("");
@@ -338,17 +326,6 @@ export function CalendarShell({
             </div>
           </>
         ) : null}
-
-        <CalendarManage
-          name={name}
-          onRename={onRename}
-          sections={sections}
-          courses={courses}
-          typical={typical}
-          isLoading={isLoading}
-          onRemoveSection={onRemoveSection}
-          className="max-lg:hidden"
-        />
       </div>
     </div>
   );

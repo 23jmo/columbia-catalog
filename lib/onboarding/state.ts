@@ -65,11 +65,9 @@ export const ONBOARDING_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 /**
  * Confirmations between guess-grid re-ranks.
  *
- * The spec says every third to fifth; four is the middle of that window. The
- * batching is the whole point: re-ranking on every tick reshuffles the grid
- * between the moment a student aims at a card and the moment they hit it, so
- * they tap the wrong course and stop trusting the screen. Four is short enough
- * that confirming an unexpected course still visibly changes what is offered.
+ * 1: every confirmation is a meaningful update. Implications of a tap apply
+ * instantly on the client; the server re-rank is debounced there so rapid taps
+ * coalesce instead of shuffling the strip under a finger.
  *
  * It lives in THIS module rather than in `./guess.ts` for a bundling reason
  * that is easy to undo by accident: `guess.ts` imports the recommendation
@@ -77,7 +75,7 @@ export const ONBOARDING_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
  * loader. A client component that imported the constant from there would drag
  * all of it into the browser. This module imports nothing but `zod` and types.
  */
-export const RERANK_BATCH_SIZE = 4;
+export const RERANK_BATCH_SIZE = 1;
 
 export function shouldRerank(confirmationsSinceRerank: number): boolean {
   return confirmationsSinceRerank >= RERANK_BATCH_SIZE;
@@ -241,6 +239,12 @@ export interface GuestOnboardingState {
   /** ISO. Only for diagnostics; nothing branches on it. */
   updatedAt: string;
 }
+
+export {
+  NO_MINORS_PROGRAM_ID,
+  declaredProgramIds,
+  hasDeclinedMinors,
+} from "./program-ids";
 
 const SCHOOLS = ["CC", "SEAS", "GS", "BC"] as const;
 

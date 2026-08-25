@@ -63,7 +63,7 @@ export function InstructorLink({ name, className }: InstructorLinkProps) {
         // See the header: this is what keeps the name clickable inside a
         // stretched-link row, not decoration.
         "relative z-[1]",
-        "rounded outline-none transition-colors duration-150 ease",
+        "rounded outline-none transition-colors duration-150",
         "hover:text-accent-600 hover:underline hover:decoration-dotted hover:underline-offset-2",
         "focus-visible:ring-2 focus-visible:ring-border-focus-ring",
         className,

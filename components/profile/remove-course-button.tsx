@@ -39,7 +39,7 @@ export function RemoveCourseButton({ courseId, code, className }: RemoveCourseBu
         });
       }}
       className={cx(
-        "flex size-7 shrink-0 items-center justify-center rounded-lg outline-none transition-colors duration-150 ease",
+        "flex size-7 shrink-0 items-center justify-center rounded-lg outline-none transition-colors duration-150",
         "hover:bg-background-secondary-hover focus-visible:ring-2 focus-visible:ring-border-focus-ring",
         "disabled:cursor-not-allowed disabled:opacity-50",
         error ? "text-status-rose-text" : "text-foreground-icon-tertiary hover:text-text-primary",

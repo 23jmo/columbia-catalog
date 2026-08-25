@@ -9,6 +9,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 
 import { AppShell } from "@/components/shell/app-shell";
+import { PageContent } from "@/components/shell/page-content";
 import { AgentSetupScreen } from "@/components/home/agent-setup-screen";
 import { MCP_PATH, resolveBaseUrl } from "@/lib/mcp/config";
 
@@ -26,9 +27,9 @@ export default async function McpSetupPage() {
 
   return (
     <AppShell activeNav="home">
-      <div className="mx-auto flex w-full max-w-[640px] min-w-0 flex-col py-2">
+      <PageContent className="max-w-[640px]">
         <AgentSetupScreen mcpEndpointUrl={mcpEndpointUrl} />
-      </div>
+      </PageContent>
     </AppShell>
   );
 }

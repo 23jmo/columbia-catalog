@@ -73,7 +73,10 @@ export function PlanSwitcher({
         aria-label={`Plan: ${selected.name}. Switch plan`}
         className={cx(
           "flex w-full items-center justify-between gap-2 rounded-2lg border border-border-button-default",
-          "bg-background-primary-default px-2.5 py-2 shadow-xs transition-colors duration-150",
+          "bg-background-primary-default px-2.5 py-2 shadow-xs",
+          "transition-[color,background-color,border-color,transform,scale] duration-150 ease-out",
+          "active:scale-[0.97] active:duration-[160ms]",
+          "motion-reduce:transition-none motion-reduce:active:scale-100",
           "hover:bg-background-primary-hover",
         )}
       >

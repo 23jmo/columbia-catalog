@@ -2,11 +2,11 @@ import Link from "next/link";
 import { RiArrowRightUpLine } from "@remixicon/react";
 
 import { BookmarkControls } from "@/components/bookmarks/bookmark-controls";
-import { EnrollmentBar } from "@/components/catalog/enrollment-bar";
-import { ReasonChip } from "@/components/feed/reason-chip";
-import { InstructorLinks } from "@/components/instructor/instructor-link";
-import { formatSectionMeetings } from "@/components/catalog/meetings";
-import { provenanceLabel } from "@/components/course/format";
+import { EnrollmentChip } from "@/components/course/enrollment-chip";
+import { InstructorChip } from "@/components/course/instructor-chip";
+import { WeekStrip } from "@/components/course/meeting-schedule";
+import { meetingLines } from "@/components/course/format";
+import { InstructorLink, InstructorLinks, isLinkableInstructor } from "@/components/instructor/instructor-link";
 import { formatCourseId } from "@/lib/requirements/code";
 import { displayCourseTitle } from "@/lib/onboarding/course-title";
 import type { FeedCard as FeedCardData, FeedSectionView } from "@/lib/recommend/feed";
@@ -18,32 +18,33 @@ import { cx } from "@/utils/cx";
  *
  * ── A section, not a course ────────────────────────────────────────────────
  *
- * The card used to be a course with its best section nested inside it and a
- * "4 other sections" disclosure underneath. That is the shape of a catalog
- * entry, and a catalog entry is not a thing anyone can do — you cannot register
- * for COMS W4111, you register for section 001, call number 14501, Gravano,
- * Tuesday and Thursday at 1:10. So the card is that, and the course page behind
- * the title is where the other sections live. One decision per card.
+ * You cannot register for COMS W4111. You register for section 001, call
+ * number 14501, Gravano, Tuesday and Thursday at 1:10. The card is that
+ * decision. The course page behind the title is where the other sections live.
  *
- * ── Five lines, and every one of them is a fact you would act on ───────────
+ * ── Rank the facts, do not grey them equally ───────────────────────────────
  *
- * The previous version printed the reason chips, the section topic, the
- * instructor, the meeting pattern, an estimate disclaimer, a provenance
- * sentence, a disclosure summary and the registrar's full prerequisite advisory
- * — up to two hundred words on a card whose job is to be glanced at. It was
- * accurate and unreadable, which for a card in a scrolling rail is the same as
- * being wrong.
+ * A rail of cards is glanced at, not read. The questions, in the order they
+ * are actually asked:
  *
- * What survived: why it is here, what it is, who teaches it, when it meets, and
- * how full it is. Everything cut is one tap away on the course page behind the
- * title.
+ *   1. Is this the right class?  → title, in primary
+ *   2. Does it fit my week?      → a week strip, then the clock, also primary
+ *   3. Who teaches it?           → the same instructor chip the drawer uses
+ *   4. Can I still get in?       → "N seats left", with the history on hover
+ *   5. Why is it here?           → one quiet clause, not a glowing truncated pill
  *
- * ── The two actions are icons in the corner ────────────────────────────────
+ * Everything that used to be caption-2 tertiary — the code line, the time,
+ * the instructor, the unverified footnote — was the same grey weight, which
+ * is how a card full of facts becomes a card nobody reads. Grey is for the
+ * eyebrow. The facts you act on are the same colour as the title.
  *
- * Save, and open in Vergil. Both were full-width controls along the bottom,
- * which gave "leave this app" more weight than the class it was about. The
- * card's subject is the section; the actions are what you do after you have
- * read it, and they are one tap either way whether or not they carry a word.
+ * ── Hover previews, not native `title` tooltips ────────────────────────────
+ *
+ * The drawer already has this: `InstructorChip` loads ratings on first open,
+ * `EnrollmentChip` loads the seat history. The feed was printing the same
+ * names and numbers as inert grey, so a student who had learned that a name
+ * is a preview anywhere else had unlearned it here. Same components, same
+ * delay, same charts — the rail is a search hit someone chose for you.
  */
 
 export function FeedCardView({ card, className }: { card: FeedCardData; className?: string }) {
@@ -62,30 +63,13 @@ export function FeedCardView({ card, className }: { card: FeedCardData; classNam
       className={cx(
         "flex flex-col gap-3 rounded-2xl border border-border-table",
         "bg-background-primary-default p-4",
+        "transition-colors duration-150 ease-out motion-reduce:transition-none",
+        "hover:border-border-button-hover",
         className,
       )}
     >
       <header className="flex min-w-0 items-start gap-2">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          {reason ? <ReasonChip className="mb-0.5 self-start">{reason}</ReasonChip> : null}
-
-          {/*
-            The title links to the course page, not to Vergil. Vergil is where
-            you register; this is where you decide, and the other sections, the
-            full prerequisite text and the reviews are all there.
-          */}
-          <h3 className="text-title-3-semibold -tracking-[0.01em] text-text-primary">
-            <Link
-              href={sectionHref}
-              className={cx(
-                "line-clamp-2 rounded-sm outline-none transition-colors duration-100",
-                "hover:text-accent-600 focus-visible:ring-2 focus-visible:ring-border-focus-ring",
-              )}
-            >
-              {title}
-            </Link>
-          </h3>
-
           {/*
             Section before credits, and no credits at all.
 
@@ -96,9 +80,39 @@ export function FeedCardView({ card, className }: { card: FeedCardData; classNam
             classes on 3 versus 2.5 points. The term stays because the feed
             spans two of them.
           */}
-          <p className="truncate text-caption-1-regular tabular-nums text-text-tertiary">
+          <p className="truncate text-caption-1-medium tabular-nums text-text-secondary">
             {card.code} · Sec {section.sectionCode} · {section.termLabel}
           </p>
+
+          {/*
+            The title links to the course page, not to Vergil. Vergil is where
+            you register; this is where you decide, and the other sections, the
+            full prerequisite text and the reviews are all there.
+          */}
+          {/*
+            One line, always. A rail of mixed 1- and 2-line titles makes every
+            card a different height above the week strip, so the clocks and
+            seat meters refuse to line up. Truncate the long ones; the full
+            name is on the course page the title already links to.
+          */}
+          <h3 className="min-w-0 overflow-hidden text-headline-semibold -tracking-[0.01em] text-text-primary">
+            <Link
+              href={sectionHref}
+              className={cx(
+                "block truncate whitespace-nowrap rounded-sm outline-none",
+                "transition-colors duration-100",
+                "hover:text-accent-600 focus-visible:ring-2 focus-visible:ring-border-focus-ring",
+              )}
+            >
+              {title}
+            </Link>
+          </h3>
+
+          {reason ? (
+            <p className="line-clamp-1 text-caption-1-medium text-accent-700" title={reason}>
+              {reason}
+            </p>
+          ) : null}
         </div>
 
         {/*
@@ -130,7 +144,7 @@ export function FeedCardView({ card, className }: { card: FeedCardData; classNam
             aria-label={`Open ${card.code} section ${section.sectionCode}, call number ${section.callNumber}, in Vergil`}
             className={cx(
               "flex size-7 shrink-0 items-center justify-center rounded-lg",
-              "text-foreground-icon-tertiary transition-colors",
+              "text-foreground-icon-tertiary transition-colors duration-150",
               "hover:bg-background-primary-hover hover:text-text-primary",
               "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
             )}
@@ -140,37 +154,8 @@ export function FeedCardView({ card, className }: { card: FeedCardData; classNam
         </div>
       </header>
 
-      <div className="flex min-w-0 flex-col gap-0.5">
-        {/*
-          `InstructorLinks`, not a plain string.
-
-          Every other surface in the app — search results, section rows, the
-          course header, the compare table — routes names through it, so a
-          student who has learned that a name is clickable anywhere has learned
-          it here. It also handles the case that matters: the registrar writes
-          "Staff" and "TBA" into the same field as real people, and that
-          component renders those as plain text rather than as a link to a
-          confident 404.
-        */}
-        <p className="truncate text-body-2-medium text-text-secondary">
-          <InstructorLinks
-            names={teachers(section)}
-            max={2}
-            fallback="Instructor not yet announced"
-          />
-        </p>
-        <TimeLine section={section} />
-      </div>
-
-      {/*
-        Spec §3 asks that a seat number never render without the directory's own
-        stamp, and the printed line under the meter was where it lived. The
-        owner cut that line (2026-08-25) — it was a third grey sentence on a card
-        whose job is to be glanced at — so the timestamp moved onto the meter as
-        its title instead. It is still attached to the number and still reachable
-        on hover and on the course page; it is no longer competing with the class
-        for the reader's attention.
-      */}
+      <TimeLine section={section} />
+      <Teachers section={section} />
       <Footnote section={section} caveats={card.caveats} />
 
       {/*
@@ -180,33 +165,21 @@ export function FeedCardView({ card, className }: { card: FeedCardData; classNam
         has to find the bar again on every card. Pinned to the bottom they land
         on one line, and "which of these has room" becomes a single glance
         across instead of five separate readings.
+
+        The chip, not a wrapped `EnrollmentBar`. The bar was a decoration with
+        a native `title` tooltip; this is the same control the drawer uses, so
+        hovering it loads the seat history and a touch toggles the card. The
+        course page is still one tap away on the title.
       */}
-      {/*
-        The meter is a link, because it was already the question people point
-        at. "Open, 23 / 55" invites "since when, and what about the other
-        sections", and both answers are on the course page — including the
-        directory's own timestamp in full, which is what the hover title carries
-        in short. It had no hover state at all, which made the most interesting
-        number on the card look like a decoration.
-      */}
-      <Link
-        href={sectionHref}
-        title={seatProvenanceTitle(section.sourceAsOf)}
-        aria-label={`Seats and other sections for ${card.code} section ${section.sectionCode}`}
-        className={cx(
-          "mt-auto block min-w-0 rounded-md outline-none",
-          "transition-opacity duration-100 ease-out hover:opacity-80",
-          "focus-visible:ring-2 focus-visible:ring-border-focus-ring",
-        )}
-      >
-        <EnrollmentBar
-          status={section.status}
-          enrollmentCount={section.enrollmentCount}
-          enrollmentCap={section.enrollmentCap}
-          waitlistCount={section.waitlistCount}
-          className="min-w-0"
-        />
-      </Link>
+      <EnrollmentChip
+        section={section}
+        termLabel={section.termLabel}
+        hideProvenance
+        fill
+        compact
+        placement="top"
+        className="mt-auto"
+      />
     </article>
   );
 }
@@ -221,42 +194,101 @@ function teachers(section: FeedSectionView): string[] {
 }
 
 /**
- * When it meets — in three states, never two.
+ * When it meets — drawn, then named.
+ *
+ * "TuTh 1:10pm-2:25pm" in caption-2 tertiary is a string a reader has to
+ * parse, in a colour they have already learned to skip. The week strip is
+ * answered by shape before any reading happens, which is the question every
+ * student is actually asking: does this collide with what I already have.
  *
  * 44.8% of sections have no published meeting pattern, and printing a
  * historical one without saying so is the single most damaging thing this
  * surface could do: a student would build a week around last year's schedule.
- * The estimate therefore names the term it came from, inline and in the warning
- * hue, and "not published" is stated outright rather than left as a blank row.
+ * The estimate therefore names itself, in the warning hue, and "not published"
+ * is stated outright rather than left as a blank row.
  */
 function TimeLine({ section }: { section: FeedSectionView }) {
   if (section.timeKind === "tba") {
     return (
-      <p className="truncate text-body-2-regular text-text-tertiary">
-        Meeting time not published
-      </p>
+      <p className="text-body-medium text-text-secondary">Meeting time not published</p>
     );
   }
 
-  const meeting = formatSectionMeetings(section);
-  if (!meeting) {
+  const lines = meetingLines(section.meetings);
+  const primary = lines[0];
+  if (!primary) {
     return (
-      <p className="truncate text-body-2-regular text-text-tertiary">
-        Meeting time not published
-      </p>
+      <p className="text-body-medium text-text-secondary">Meeting time not published</p>
     );
   }
 
-  if (section.timeKind === "estimated") {
+  const extra = lines.length - 1;
+  const estimated = section.timeKind === "estimated";
+
+  return (
+    <div className="flex min-w-0 items-center gap-2.5">
+      <WeekStrip days={primary.days} />
+      <p
+        className={cx(
+          "min-w-0 truncate text-headline-medium tabular-nums",
+          estimated ? "text-status-yellow-text" : "text-text-primary",
+        )}
+      >
+        {primary.timeLabel}
+        {extra > 0 ? ` · +${extra}` : ""}
+        {estimated ? " · estimated" : ""}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Who teaches it — the same chip the section drawer uses.
+ *
+ * A grey `InstructorLinks` string told you the name and hid that a hover
+ * exists. The chip is the name, a star, and the ratings card; click the name
+ * for the profile, hover anywhere on the chip for the preview. Co-teachers
+ * stay a trailing count so two avatars do not double the card's height.
+ */
+function Teachers({ section }: { section: FeedSectionView }) {
+  const names = teachers(section);
+  const primary = names[0];
+  const rest = names.slice(1);
+
+  if (!primary) {
     return (
-      <p className="truncate text-body-2-regular tabular-nums text-status-yellow-text">
-        {meeting} · estimated, not confirmed
+      <p className="text-body-medium text-text-secondary">Instructor not yet announced</p>
+    );
+  }
+
+  if (!isLinkableInstructor(primary)) {
+    return (
+      <p className="truncate text-body-medium text-text-secondary">
+        <InstructorLinks names={names} max={2} fallback="Instructor not yet announced" />
       </p>
     );
   }
 
   return (
-    <p className="truncate text-body-2-regular tabular-nums text-text-tertiary">{meeting}</p>
+    <div className="flex min-w-0 items-center gap-2">
+      <InstructorChip
+        name={primary}
+        role={`Section ${section.sectionCode}`}
+        placement="top"
+        className="-ml-0.5 min-w-0"
+      />
+      {rest.length > 0 ? (
+        <span className="min-w-0 truncate text-caption-1-medium text-text-secondary">
+          {rest.length === 1 ? (
+            <>
+              · <InstructorLink name={rest[0]!} />
+            </>
+          ) : (
+            `+${rest.length}`
+          )}
+        </span>
+      ) : null}
+    </div>
   );
 }
 
@@ -285,26 +317,12 @@ function Footnote({
   if (!clashes && !unverified) return null;
 
   return (
-    <p className="truncate text-caption-1-regular text-text-tertiary">
+    <p className="truncate text-caption-1-medium">
       {clashes ? <span className="text-status-rose-text">Clashes with your plan</span> : null}
       {clashes && unverified ? " · " : null}
-      {unverified ? "Prerequisites unverified" : null}
+      {unverified ? <span className="text-text-secondary">Prerequisites unverified</span> : null}
     </p>
   );
-}
-
-/**
- * The directory's own reading time, as a hover title on the meter.
- *
- * A seat count is a reading, not a live number, and detaching it from when it
- * was taken is how "23 seats left" becomes something a student believes on
- * registration morning. The line that said so in print is gone by owner
- * decision; this keeps the two together for anyone who goes looking, and the
- * course page still states it outright.
- */
-function seatProvenanceTitle(sourceAsOf: string | null): string | undefined {
-  const label = provenanceLabel(sourceAsOf);
-  return label ? `Seat counts read from the directory ${label}` : undefined;
 }
 
 /* ==========================================================================
@@ -342,7 +360,7 @@ function reasonLine(reason: RecommendationReason): string | null {
       return `Satisfies ${reason.groupLabel}`;
     case "interesting_and_counts":
       /*
-       * The requirement leads, and the taste half trails, because the chip
+       * The requirement leads, and the taste half trails, because the line
        * truncates at the card's width and the half that survives should be the
        * one with a consequence in it. "Satisfies the Science requirement …" is
        * still an answer; "Your kind of thing · satisfies the Sci…" is not.

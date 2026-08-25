@@ -228,5 +228,6 @@ describe("provider selection", () => {
     // sending it a prefixed id is a 404 that reads like a missing model.
     expect(GATEWAY_MODEL).toContain("/");
     expect(OPENAI_MODEL).not.toContain("/");
+    expect(OPENAI_MODEL).toBe("gpt-5.6-luna");
   });
 });

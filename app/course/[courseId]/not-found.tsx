@@ -2,6 +2,7 @@ import Link from "next/link";
 import { RiSearchEyeLine } from "@remixicon/react";
 
 import { AppShell } from "@/components/shell/app-shell";
+import { PageContent } from "@/components/shell/page-content";
 import { ALL_TERMS, CURRENT_TERM, termLabel } from "@/lib/constants";
 
 /**
@@ -20,7 +21,8 @@ export default function CourseNotFound() {
 
   return (
     <AppShell activeNav="search">
-      <div className="mx-auto flex w-full max-w-lg flex-col items-start gap-4 rounded-2lg border border-border-table bg-background-primary-default p-6 shadow-card">
+      <PageContent className="max-w-lg">
+        <div className="flex flex-col items-start gap-4 rounded-2lg border border-border-table bg-background-primary-default p-6 shadow-card">
         <RiSearchEyeLine className="size-6 text-foreground-icon-secondary" aria-hidden />
 
         <div>
@@ -44,7 +46,8 @@ export default function CourseNotFound() {
         >
           Search the catalog
         </Link>
-      </div>
+        </div>
+      </PageContent>
     </AppShell>
   );
 }

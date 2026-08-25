@@ -8,12 +8,14 @@ import { CampusCard } from "@/components/campus/campus-card";
 import { Chip, type ChipProps } from "@/components/base/badges/chip";
 import { ExpandableText } from "@/components/course/expandable-text";
 import { ReferenceBlock } from "@/components/course/reference-block";
+import { CourseHeroCard } from "@/components/course/course-hero-card";
 import {
   meetingLines,
   prettyTitle,
   readSeats,
   type SeatReading,
 } from "@/components/course/format";
+import { CourseSubjectIcon } from "@/components/course/subject-icon";
 import { EnrollmentChip } from "@/components/course/enrollment-chip";
 import { InstructorChip } from "@/components/course/instructor-chip";
 import type { SectionDetailData } from "@/components/course/load-section-detail";
@@ -21,7 +23,7 @@ import { MeetingSchedule } from "@/components/course/meeting-schedule";
 import { RegistrationHandoff } from "@/components/course/registration-handoff";
 import { BookmarkControls } from "@/components/bookmarks/bookmark-controls";
 import { SectionWeekPreview } from "@/components/course/section-week-preview";
-import { SeatPill } from "@/components/course/seat-state";
+import { ProvenanceStamp, SeatPill } from "@/components/course/seat-state";
 import { AddToScheduleButton } from "@/components/schedule/add-to-schedule-button";
 import { REQUIREMENT_FILTERS } from "@/lib/constants";
 import type { Section } from "@/lib/types";
@@ -126,6 +128,10 @@ export interface SectionDetailProps {
    * drawer answers a click in milliseconds.
    */
   courseLevel?: ReactNode;
+  /** Standalone page: draw the instructor-profile hero. Drawer: plain header. */
+  surface?: "page" | "drawer";
+  /** Back navigation, rendered inside the page hero cover. */
+  backLink?: { href: string; label: string };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -176,13 +182,15 @@ export function SectionDetail({
   titleId = "section-title",
   showClose = false,
   courseLevel,
+  surface = "drawer",
+  backLink,
 }: SectionDetailProps) {
   const { course, section, siblings, code, credits, headline, ownTitle, courseTitle } = data;
 
   const seats = readSeats(section);
   const verdict = seatVerdict(seats);
 
-  // Where this surface lives on its own. The drawer's title grows into it; the
+  // Where this surface lives on its own.
   // standalone page is already here and renders that title as plain text.
   const sectionHref = `/course/${course.courseId}?section=${encodeURIComponent(section.sectionCode)}`;
 
@@ -227,135 +235,131 @@ export function SectionDetail({
     // this line is deliberately the quietest thing in the card.
     .map(prettyTitle);
 
-  return (
-    <article className="flex w-full flex-col gap-5">
-      {/* ================================================================== */}
-      {/* The decision                                                        */}
-      {/* ================================================================== */}
-      <div className="flex flex-col gap-4">
-        <header className="flex flex-col gap-3">
+  const eyebrowRow = (
+    <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-caption-1-medium text-text-secondary">
+      <span className="text-caption-1-semibold tracking-[0.04em] tabular-nums text-accent-600">
+        {code}
+      </span>
+      <span aria-hidden>·</span>
+      <span className="tabular-nums">Section {section.sectionCode}</span>
+      <span aria-hidden>·</span>
+      <span>{data.termLabel}</span>
+      {credits ? (
+        <>
+          <span aria-hidden>·</span>
+          <span className="tabular-nums">{credits}</span>
+        </>
+      ) : null}
+      {verdict ? (
+        <Chip variant="caption" color={SEAT_CHIP_COLOR[seats.tone]}>
+          {verdict}
+        </Chip>
+      ) : null}
+    </div>
+  );
+
+  const scheduleButton = (
+    <AddToScheduleButton
+      sectionId={section.sectionId}
+      sectionCode={section.sectionCode}
+      termCode={section.termCode}
+      size="medium"
+      emphasis="high"
+      className="shrink-0"
+    />
+  );
+
+  const titleHeading = (
+    <h1
+      id={titleId}
+      className="min-w-0 text-display-4-semibold -tracking-[0.02em] text-balance text-text-primary"
+    >
+      {/*
+        Inside the drawer the title is the handle for "show me all of this":
+        clicking it grows the rail into the full page rather than swapping one
+        screen for another, because it is the same section either way -- just
+        with room around it. On the standalone page it renders as plain text;
+        see the component.
+
+        The id stays on the <h1>, not the link. `aria-labelledby` wants the
+        heading, and moving it inside would label the dialog with a link.
+      */}
+      <ExpandTitleLink href={sectionHref}>{headline}</ExpandTitleLink>
+    </h1>
+  );
+
+  const partOfLine = ownTitle ? (
+    <p className="text-body-regular text-text-secondary">
+      Part of{" "}
+      {/*
+        A real anchor, not a <Link>. `/course/[courseId]` is an intercepted
+        route, so a client-side navigation to it from inside the overlay would
+        be caught by the drawer slot and answered with the section chooser --
+        leaving the reader in the drawer they were trying to leave. A document
+        navigation exits the overlay and lands on the standalone course page,
+        which is what "part of" is offering. Same reasoning as the drawer's own
+        "Full page" link.
+      */}
+      {/*
+        Text, not a link, when this is the only section. The course page
+        redirects straight back here, so the link would be a click that returns
+        you to where you already are. "Part of CHEM 1" is still worth saying —
+        it names the thing this class is filed under — it just has nowhere else
+        to go.
+      */}
+      {siblings.length === 0 ? (
+        <span>
+          {code} {courseTitle}
+        </span>
+      ) : (
+        <a
+          href={`/course/${course.courseId}`}
+          className="underline decoration-border-table underline-offset-2 transition-colors hover:text-text-primary"
+        >
+          {code} {courseTitle}
+        </a>
+      )}
+    </p>
+  ) : null;
+
+  const identityHeader = (
+    <header className="flex flex-col gap-3">
+      {surface === "drawer" ? (
+        <>
+          {/*
+            Eyebrow row: subject icon sits on the metadata line (not beside the
+            title), so it aligns with code · section · term instead of floating
+            against a multi-line heading. Schedule + close share the right edge.
+          */}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <CourseSubjectIcon
+                subjectCode={course.subjectCode}
+                variant="inline"
+                className="shrink-0"
+              />
+              {eyebrowRow}
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {scheduleButton}
+              {showClose ? <DrawerCloseButton /> : null}
+            </div>
+          </div>
+          {titleHeading}
+          {partOfLine}
+        </>
+      ) : (
+        <>
+          {eyebrowRow}
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1 flex flex-col gap-1.5">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-caption-1-medium text-text-secondary">
-              <span className="text-caption-1-semibold tracking-[0.04em] tabular-nums text-accent-600">
-                {code}
-              </span>
-              <span aria-hidden>·</span>
-              <span className="tabular-nums">Section {section.sectionCode}</span>
-              <span aria-hidden>·</span>
-              <span>{data.termLabel}</span>
-              {credits ? (
-                <>
-                  <span aria-hidden>·</span>
-                  <span className="tabular-nums">{credits}</span>
-                </>
-              ) : null}
-              {verdict ? (
-                <Chip variant="caption" color={SEAT_CHIP_COLOR[seats.tone]}>
-                  {verdict}
-                </Chip>
-              ) : null}
+              {titleHeading}
+              {partOfLine}
             </div>
-
-            {/*
-              The heading and the one thing you do with this class, on one line.
-              Adding a section to a plan is the whole point of the panel, and it
-              was previously reachable only from the course page — a reader who
-              landed here from search had to leave the section to schedule it.
-
-              Beside the title rather than down with the call number because the
-              call-number row is the *hand-off* set (copy it, open Vergil, watch
-              it) — things that send you somewhere else. Scheduling happens
-              here, and pairing it with the name of the class is what makes it
-              read as "this one".
-
-              The heading takes `flex-1`, which pushes the button to the right
-              edge of the content column — the same edge the seat chip, the
-              description and every hairline below already end on. Keeping it in
-              the TITLE row rather than the outer row (where the drawer's close
-              button lives) is what puts it on the title's line instead of level
-              with the small eyebrow above it. `items-start` keeps it on the
-              first line when a long title wraps.
-            */}
-            <div className="flex items-start gap-3">
-              <h1
-                id={titleId}
-                className="min-w-0 flex-1 text-display-4-semibold -tracking-[0.02em] text-balance text-text-primary"
-              >
-                {/*
-                  Inside the drawer the title is the handle for "show me all of
-                  this": clicking it grows the rail into the full page rather
-                  than swapping one screen for another, because it is the same
-                  section either way -- just with room around it. On the
-                  standalone page it renders as plain text; see the component.
-
-                  The id stays on the <h1>, not the link. `aria-labelledby`
-                  wants the heading, and moving it inside would label the dialog
-                  with a link.
-                */}
-                <ExpandTitleLink href={sectionHref}>
-                  {headline}
-                </ExpandTitleLink>
-              </h1>
-              {/*
-                The 32px button against the heading's 44px line box — 6px of top
-                margin is what optically centres it on the first line. This is
-                tied to the heading's line-height, so it moves whenever the
-                title's size token does: at `title-1` (34px) it was `mt-px`.
-              */}
-              <AddToScheduleButton
-                sectionId={section.sectionId}
-                sectionCode={section.sectionCode}
-                termCode={section.termCode}
-                size="small"
-                iconOnly
-                glyph="plus"
-                emphasis="high"
-                className="mt-1.5 shrink-0"
-              />
-            </div>
-
-            {/*
-              Only when the section named itself. Printing "Part of X" under a
-              heading that already says X is noise, and on an ordinary course the
-              section title is the course title repeated verbatim.
-            */}
-            {ownTitle ? (
-              <p className="text-body-regular text-text-secondary">
-                Part of{" "}
-                {/*
-                  A real anchor, not a <Link>. `/course/[courseId]` is an
-                  intercepted route, so a client-side navigation to it from inside
-                  the overlay would be caught by the drawer slot and answered with
-                  the section chooser -- leaving the reader in the drawer they were
-                  trying to leave. A document navigation exits the overlay and
-                  lands on the standalone course page, which is what "part of" is
-                  offering. Same reasoning as the drawer's own "Full page" link.
-                */}
-                {/*
-                  Text, not a link, when this is the only section. The course
-                  page redirects straight back here, so the link would be a
-                  click that returns you to where you already are. "Part of
-                  CHEM 1" is still worth saying — it names the thing this
-                  class is filed under — it just has nowhere else to go.
-                */}
-                {siblings.length === 0 ? (
-                  <span>
-                    {code} {courseTitle}
-                  </span>
-                ) : (
-                  <a
-                    href={`/course/${course.courseId}`}
-                    className="underline decoration-border-table underline-offset-2 transition-colors hover:text-text-primary"
-                  >
-                    {code} {courseTitle}
-                  </a>
-                )}
-              </p>
-            ) : null}
-            </div>
-            {showClose ? <DrawerCloseButton className="shrink-0" /> : null}
+            {scheduleButton}
           </div>
+        </>
+      )}
 
           {requirementLabels.length > 0 ? (
             <div className="flex flex-wrap gap-1.5">
@@ -424,7 +428,31 @@ export function SectionDetail({
               />
             }
           />
-        </header>
+    </header>
+  );
+
+  return (
+    <article
+      className={cx(
+        "flex w-full flex-col",
+        surface === "page" ? "gap-3 sm:gap-5" : "gap-4 sm:gap-5",
+      )}
+    >
+      {/* ================================================================== */}
+      {/* The decision                                                        */}
+      {/* ================================================================== */}
+      <div className="flex flex-col gap-4">
+        {surface === "page" ? (
+          <CourseHeroCard
+            seed={code}
+            subjectCode={course.subjectCode}
+            backLink={backLink}
+          >
+            {identityHeader}
+          </CourseHeroCard>
+        ) : (
+          identityHeader
+        )}
 
         {/* --------------------------------------------------------------- */}
         {/* When it meets, and whether there is room                         */}
@@ -438,7 +466,12 @@ export function SectionDetail({
           less. The rule above does the same separating job for the price of one
           pixel, and it is the treatment the reference blocks below already use.
         */}
-        <div className="flex flex-col gap-3 border-t border-border-table pt-4">
+        <div
+          className={cx(
+            "flex flex-col gap-3 border-t border-border-table pt-4",
+            surface === "page" && "sm:border-x sm:border-border-ai-profile-card sm:px-4",
+          )}
+        >
           {/*
             "When does it meet" and "can I get in" are one row, because they are
             one question — a student weighing this section reads the time and the
@@ -456,12 +489,23 @@ export function SectionDetail({
             so this must NOT add a second one — two identical timestamps under
             one number reads as two readings that happen to agree.
           */}
-          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
-            <MeetingSchedule meetings={section.meetings} className="min-w-0 flex-1" />
+          {/*
+            Stack on narrow viewports: the chip is `shrink-0` and the schedule
+            is `min-w-0 flex-1`, so a side-by-side row lets the schedule crush
+            to nothing while the chip keeps its width — the two overlap. Below
+            `sm` they are one column; from `sm` up the original wrap row returns.
+          */}
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start sm:gap-x-4 sm:gap-y-1">
+            <MeetingSchedule meetings={section.meetings} className="min-w-0 sm:col-start-1 sm:row-start-1" />
             <EnrollmentChip
               section={section}
               termLabel={data.termLabel}
-              className="shrink-0 items-end"
+              hideProvenance
+              className="sm:col-start-2 sm:row-start-1 sm:justify-self-end sm:self-start"
+            />
+            <ProvenanceStamp
+              sourceAsOf={section.sourceAsOf}
+              className="truncate sm:col-start-2 sm:row-start-2 sm:justify-self-end sm:text-right"
             />
           </div>
 
@@ -581,7 +625,7 @@ export function SectionDetail({
                     href={`/course/${course.courseId}?section=${encodeURIComponent(sibling.sectionCode)}`}
                     className={cx(
                       "group flex min-h-14 items-center gap-3 rounded-xl px-2 py-2",
-                      "transition-colors duration-150 ease outline-none",
+                      "transition-colors duration-150 outline-none",
                       "hover:bg-background-primary-hover",
                       "focus-visible:ring-2 focus-visible:ring-border-focus-ring",
                     )}
@@ -589,7 +633,7 @@ export function SectionDetail({
                     <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span className="flex min-w-0 items-baseline gap-2 text-body-medium text-text-primary">
                         <span className="tabular-nums">{sibling.sectionCode}</span>
-                        <span className="truncate font-normal text-text-secondary">
+                        <span className="truncate text-body-regular text-text-secondary">
                           {sibling.instructors.length > 0
                             ? sibling.instructors.join(" · ")
                             : "Instructor TBA"}
@@ -614,7 +658,7 @@ export function SectionDetail({
                       aria-hidden
                       className={cx(
                         "size-4 shrink-0 text-text-tertiary",
-                        "transition-transform duration-150 ease motion-reduce:transition-none",
+                        "transition-transform duration-150 ease-in-out motion-reduce:transition-none",
                         "group-hover:-translate-y-px group-hover:translate-x-px",
                       )}
                     />

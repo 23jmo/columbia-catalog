@@ -13,6 +13,7 @@
  */
 
 import { CURRENT_TERM } from "@/lib/constants";
+import { instructorSlug } from "@/lib/data/instructor-slug";
 import type { CourseWithSections, Section, TermCode } from "@/lib/types";
 
 import {
@@ -23,8 +24,10 @@ import {
 } from "./client";
 import {
   SECTION_SELECT,
+  rowToCourse,
   rowToCourseWithSections,
   rowToSection,
+  type CourseRow,
   type CourseRowWithSections,
   type SectionRow,
   type SectionRowWithRelations,
@@ -169,6 +172,79 @@ async function fetchAllCourses(termCode: TermCode): Promise<CourseWithSections[]
   }
 
   return courses;
+}
+
+/**
+ * Courses offered in a term, without sections, meetings, or instructors.
+ *
+ * The feed ranks COURSES and only needs id/code/title/points/number to do it.
+ * `getAllCourses` nested every meeting into that ranking pass — ~8 MB and
+ * five sequential round trips — so the home page waited on a dump it then
+ * threw away. This select is the parent row plus a tiny `sections!inner`
+ * stub so the term filter still works.
+ */
+const COURSE_LISTING_SELECT =
+  "course_id, subject_code, course_number, qualifier, title, points_min, points_max, sections!inner(term_code)";
+
+interface CourseListingRow {
+  course_id: string;
+  subject_code: string;
+  course_number: number;
+  qualifier: string | null;
+  title: string;
+  points_min: number | string | null;
+  points_max: number | string | null;
+}
+
+interface CourseListing {
+  courseId: string;
+  subjectCode: string;
+  number: number;
+  qualifier: string | null;
+  title: string;
+  pointsMin: number | null;
+  pointsMax: number | null;
+}
+
+function listingFromRow(row: CourseListingRow): CourseListing {
+  const pointsMin = row.points_min == null ? null : Number(row.points_min);
+  const pointsMax = row.points_max == null ? null : Number(row.points_max);
+  return {
+    courseId: row.course_id,
+    subjectCode: row.subject_code,
+    number: row.course_number,
+    qualifier: row.qualifier,
+    title: row.title,
+    pointsMin: pointsMin != null && Number.isFinite(pointsMin) ? pointsMin : null,
+    pointsMax: pointsMax != null && Number.isFinite(pointsMax) ? pointsMax : null,
+  };
+}
+
+export async function getCourseListings(
+  termCode: TermCode = CURRENT_TERM,
+): Promise<CourseListing[]> {
+  const client = readClient();
+  const listings: CourseListing[] = [];
+
+  for (let page = 0; ; page += 1) {
+    const from = page * PAGE_SIZE;
+    const { data, error } = await client
+      .from("courses")
+      .select(COURSE_LISTING_SELECT)
+      .eq("sections.term_code", termCode)
+      .order("subject_code", { ascending: true })
+      .order("course_number", { ascending: true })
+      .range(from, from + PAGE_SIZE - 1)
+      .overrideTypes<CourseListingRow[], { merge: false }>();
+
+    if (error) fail(`getCourseListings(${termCode})`, error);
+
+    const rows = data ?? [];
+    for (const row of rows) listings.push(listingFromRow(row));
+    if (rows.length < PAGE_SIZE) break;
+  }
+
+  return listings;
 }
 
 export async function getCourse(
@@ -481,6 +557,120 @@ export async function getSeatStates(sectionIds: string[]): Promise<SeatState[]> 
   }
 
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Instructors
+// ---------------------------------------------------------------------------
+
+const SECTION_WITH_COURSE_SELECT =
+  `${SECTION_SELECT.replace("section_instructors(", "section_instructors!inner(")}, courses(*)`;
+
+/**
+ * Resolve a URL slug to the canonical instructor row.
+ *
+ * Most names round-trip through `normalized_name` (`adam-h-cannon` →
+ * `adam h cannon`). Diacritics break that equality — `josé-garcia` vs
+ * `josé garcía` — so the fast indexed lookup is verified with
+ * `instructorSlug` and a paginated scan is the fallback.
+ */
+export async function findInstructorBySlug(
+  slug: string,
+): Promise<{ instructorId: string; fullName: string } | null> {
+  const client = readClient();
+  const normalizedGuess = slug.replace(/-/g, " ");
+
+  const { data: exact, error: exactError } = await client
+    .from("instructors")
+    .select("instructor_id, full_name")
+    .eq("normalized_name", normalizedGuess)
+    .maybeSingle()
+    .overrideTypes<{ instructor_id: string; full_name: string } | null, { merge: false }>();
+
+  if (exactError) fail("findInstructorBySlug(exact)", exactError);
+  if (exact && instructorSlug(exact.full_name) === slug) {
+    return { instructorId: exact.instructor_id, fullName: exact.full_name };
+  }
+
+  for (let page = 0; ; page += 1) {
+    const from = page * PAGE_SIZE;
+    const { data, error } = await client
+      .from("instructors")
+      .select("instructor_id, full_name")
+      .order("normalized_name", { ascending: true })
+      .range(from, from + PAGE_SIZE - 1)
+      .overrideTypes<{ instructor_id: string; full_name: string }[], { merge: false }>();
+
+    if (error) fail("findInstructorBySlug(scan)", error);
+
+    const rows = data ?? [];
+    for (const row of rows) {
+      if (instructorSlug(row.full_name) === slug) {
+        return { instructorId: row.instructor_id, fullName: row.full_name };
+      }
+    }
+    if (rows.length < PAGE_SIZE) break;
+  }
+
+  return null;
+}
+
+/**
+ * Courses this instructor teaches in a term — only their sections attached.
+ *
+ * Replaces the old whole-catalog scan in `loadInstructorProfile`: one indexed
+ * join through `section_instructors` instead of paging ~4,600 courses (~8 MB).
+ */
+export async function getCoursesTaughtByInstructor(
+  instructorId: string,
+  termCode: TermCode = CURRENT_TERM,
+): Promise<CourseWithSections[]> {
+  const client = readClient();
+  type SectionWithCourse = SectionRowWithRelations & { courses: CourseRow | null };
+  const sectionRows: SectionWithCourse[] = [];
+
+  for (let page = 0; ; page += 1) {
+    const from = page * PAGE_SIZE;
+    const { data, error } = await client
+      .from("sections")
+      .select(SECTION_WITH_COURSE_SELECT)
+      .eq("term_code", termCode)
+      .is("withdrawn_at", null)
+      .eq("section_instructors.instructor_id", instructorId)
+      .order("course_id", { ascending: true })
+      .order("section_code", { ascending: true })
+      .range(from, from + PAGE_SIZE - 1)
+      .overrideTypes<SectionWithCourse[], { merge: false }>();
+
+    if (error) fail(`getCoursesTaughtByInstructor(${instructorId})`, error);
+
+    const rows = data ?? [];
+    sectionRows.push(...rows);
+    if (rows.length < PAGE_SIZE) break;
+  }
+
+  const byCourse = new Map<string, CourseWithSections>();
+  for (const row of sectionRows) {
+    if (!row.courses) continue;
+    let entry = byCourse.get(row.courses.course_id);
+    if (!entry) {
+      entry = { ...rowToCourse(row.courses), sections: [] };
+      byCourse.set(row.courses.course_id, entry);
+    }
+    entry.sections.push(rowToSection(row));
+  }
+
+  for (const course of byCourse.values()) {
+    course.sections.sort((a, b) =>
+      a.sectionCode.localeCompare(b.sectionCode, undefined, { numeric: true }),
+    );
+  }
+
+  return [...byCourse.values()].sort((a, b) =>
+    `${a.subjectCode} ${a.number}`.localeCompare(`${b.subjectCode} ${b.number}`, undefined, {
+      numeric: true,
+    }),
+  );
 }
 
 // ---------------------------------------------------------------------------

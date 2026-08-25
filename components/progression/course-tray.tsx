@@ -62,8 +62,18 @@ export function CourseTray({
     );
   }, [ranked, query]);
 
+  /*
+   * `min-w-0` on the root below is load-bearing, not defensive.
+   *
+   * Both call sites drop this tray into a grid that collapses to one column
+   * below `xl`. A grid item's default `min-width: auto` refuses to shrink past
+   * its own min-content width, so on a 390px phone this tray sized the whole
+   * implicit column to 394px — and because grid items stretch, the map and the
+   * detail panel inherited that width too and the document scrolled sideways by
+   * 32px on every visit.
+   */
   return (
-    <div className={cx("flex min-h-0 flex-col gap-2", className)}>
+    <div className={cx("flex min-h-0 min-w-0 flex-col gap-2", className)}>
       {/* BoardUI's Input wraps react-aria TextField, so `onChange` hands back
           the string, not a DOM event. */}
       <Input
@@ -99,7 +109,11 @@ export function CourseTray({
                   }
                 }}
                 className={cx(
-                  "flex w-full items-baseline gap-2 rounded-md px-2 py-1.5 text-left transition-colors duration-150 ease",
+                  // 36px rows stacked 2px apart is a scroll list you tap by
+                  // luck. `py-3` takes each to 48 on a touch device; the tray
+                  // scrolls anyway, so the only cost is seeing fewer rows at
+                  // once, and the alternative is opening the wrong course.
+                  "flex w-full items-baseline gap-2 rounded-md px-2 py-1.5 pointer-coarse:py-3 text-left transition-colors duration-150",
                   "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
                   draggable && !isPlaced && "cursor-grab active:cursor-grabbing",
                   isSelected ? "bg-background-tertiary-default" : "hover:bg-background-secondary-hover",

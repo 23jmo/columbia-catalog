@@ -11,9 +11,10 @@ import { cx } from "@/utils/cx";
  *
  * Reuses the shell's own sign-in card rather than writing a second one, so a
  * student who has already met "Read everything — sign in to add classes" in the
- * account menu meets the identical promise here. The only thing this adds is
- * the sentence explaining why *this* screen is the exception: a profile has to
- * be stored somewhere, and everything else on the site does not.
+ * account menu meets the identical promise here. It adds nothing to that card
+ * but the failure path — an earlier version also restated the promise in a
+ * footnote underneath, which is the sort of thing that accumulates until a
+ * page is more reassurance than product.
  *
  * A thin client wrapper exists because `SignInPromptCard` takes an `onSignIn`
  * handler and the page is a server component — a function is not something a
@@ -44,10 +45,12 @@ export function SignInNotice({ className }: SignInNoticeProps) {
           });
         }}
       />
-      <p className="px-3 pt-1 pb-2 text-caption-1-regular text-pretty text-text-tertiary">
-        A profile needs an account because it has to be saved somewhere. Everything else on
-        Columbia Catalog stays free to read without one.
-      </p>
+      {/*
+        The footnote that used to sit here ("a profile needs an account because
+        it has to be saved somewhere…") restated the card directly above it,
+        which already says reads are free and writes need an account. Two ways
+        of saying one thing is how a page starts to read as anxious.
+      */}
       {error ? (
         <p className="px-3 pb-2 text-caption-1-regular text-text-error-primary" role="alert">
           {error}

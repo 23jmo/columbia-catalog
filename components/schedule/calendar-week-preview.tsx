@@ -125,10 +125,10 @@ export function CalendarWeekPreview({
           {days.map((day) => (
             <div
               key={day.getTime()}
-              className="flex items-center justify-center gap-1 border-s border-border-table py-2 text-sm"
+              className="flex items-center justify-center gap-1 border-s border-border-table py-2 text-body-regular"
             >
               <span className="text-text-tertiary">{formatWeekday(day)}</span>
-              <span className="flex size-6 items-center justify-center rounded-full font-semibold text-text-primary">
+              <span className="flex size-6 items-center justify-center rounded-full text-body-semibold text-text-primary">
                 {day.getDate()}
               </span>
             </div>
@@ -146,7 +146,7 @@ export function CalendarWeekPreview({
             {HOURS.map((hour) => (
               <span
                 key={hour}
-                className="absolute end-2 -translate-y-1/2 text-[11px] tabular-nums text-text-tertiary"
+                className="absolute end-2 -translate-y-1/2 text-caption-2-regular tabular-nums text-text-tertiary"
                 style={{ top: `${hour * HOUR_HEIGHT}px` }}
               >
                 {formatHour(hour)}

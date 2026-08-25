@@ -11,6 +11,7 @@
 import type { Metadata } from "next";
 
 import { AppShell } from "@/components/shell/app-shell";
+import { PageContent } from "@/components/shell/page-content";
 
 import { SavedFolderView } from "../saved-folder-view";
 
@@ -26,8 +27,10 @@ export default async function SavedFolderPage({
   const { folderId } = await params;
 
   return (
-    <AppShell activeNav="saved" contentClassName="mx-auto w-full max-w-4xl">
-      <SavedFolderView folderId={folderId} />
+    <AppShell activeNav="saved">
+      <PageContent className="max-w-4xl">
+        <SavedFolderView folderId={folderId} />
+      </PageContent>
     </AppShell>
   );
 }

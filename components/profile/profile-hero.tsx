@@ -7,6 +7,11 @@ import {
 
 import { Chip } from "@/components/base/badges/chip";
 import { Stat, StatStrip } from "@/components/shell/stat";
+import {
+  pageHeroBodyClass,
+  pageHeroCoverClass,
+  pageHeroSectionClass,
+} from "@/components/shell/page-hero-layout";
 import type { ProfileAudit } from "@/lib/profile/audit";
 import type { StudentProfile } from "@/lib/profile/types";
 import { SCHOOL_LABEL } from "@/lib/requirements/types";
@@ -76,22 +81,22 @@ export function ProfileHero({
   const plannedCount = profile.courses.filter((course) => course.source === "plan").length;
   const completedCount = profile.courses.length - plannedCount;
 
+  // A statistic needs something to be a statistic about. See the strip below.
+  const hasSomethingToCount = hasPrograms || profile.courses.length > 0;
+
   return (
     <section
-      className={cx(
-        "relative w-full overflow-hidden rounded-3xl border border-border-ai-profile-card",
-        className,
-      )}
+      className={cx(pageHeroSectionClass("card"), className)}
       aria-labelledby="profile-hero-name"
     >
-      <div className="absolute inset-x-0 top-0 h-[165px] overflow-hidden rounded-t-[23px] bg-background-tertiary-default">
-        <ProfileCover seed={name ?? "columbia-catalog-profile"} />
+      <div className={pageHeroCoverClass()}>
+        <ProfileCover seed={name ?? "columbia-catalog-profile"} className="min-h-full min-w-full" />
       </div>
 
-      <div className="relative flex w-full flex-col gap-[15px] px-4 pt-[124px] pb-4">
+      <div className={pageHeroBodyClass()}>
         <span className="flex size-20 items-center justify-center rounded-full bg-background-tertiary-default ring-4 ring-background-primary-default">
           {name ? (
-            <span className="text-[30px] leading-[42.5px] font-medium text-text-secondary">
+            <span className="text-display-4-medium text-text-secondary">
               {initialsOf(name)}
             </span>
           ) : (
@@ -127,13 +132,25 @@ export function ProfileHero({
             </div>
           </div>
 
-          <div className="absolute -top-[34px] right-1 flex items-center justify-end gap-2.5">
-            <DegreeSetup
-              profile={profile}
-              programOptions={programOptions}
-              signedIn={signedIn}
-            />
-          </div>
+          {/*
+            `DegreeSetup` documents the house convention that an unavailable
+            action stays visible and explains itself, so a reader learns the
+            feature exists. This surface is the one place that argument does not
+            hold: the sentence directly below the heading already says "sign in
+            and declare a degree" in words, and the card under it is the control
+            that gets you there. Rendered anyway, it put a greyed-out pill on
+            the cover edge — a third offer of the same thing, and the only one
+            that does nothing when pressed.
+          */}
+          {signedIn ? (
+            <div className="absolute -top-[34px] right-1 flex items-center justify-end gap-2.5">
+              <DegreeSetup
+                profile={profile}
+                programOptions={programOptions}
+                signedIn={signedIn}
+              />
+            </div>
+          ) : null}
         </div>
 
         {/*
@@ -151,24 +168,53 @@ export function ProfileHero({
                 requirement asks for
               </span>
             </div>
-            <p className="text-caption-1-regular text-pretty text-text-tertiary">
+            {/*
+              `max-w-[68ch]`: at the full width of the hero this ran to about
+              150 characters on one line, which is unreadable at caption size
+              and made the qualifier look like a legal footer rather than the
+              gloss on the figure above it.
+
+              The "nothing here is a registrar record" sentence it used to end
+              on now lives only in `DataCard`, which is a heading about exactly
+              that and sits at the bottom of the page where a reader goes
+              looking for it. Said in both places it was said in neither.
+            */}
+            <p className="max-w-[68ch] text-caption-1-regular text-pretty text-text-tertiary">
               {checkedGreen} requirement{checkedGreen === 1 ? "" : "s"} we could check against the
               Bulletin
               {attestedGreen.length > 0
                 ? `, and ${attestedGreen.length} that ${attestedGreen.length === 1 ? "is" : "are"} complete because you said so.`
-                : "."}{" "}
-              Nothing here is a registrar record — see below.
+                : "."}
             </p>
           </div>
         ) : (
+          /*
+            One line, not a paragraph. This used to spend 34 words describing
+            the audit the reader cannot see yet, next to a sign-in card that
+            already makes the same offer and four statistics that all read
+            zero. Saying it once, shortest, is what makes it read as a state
+            rather than a pitch — and the promise about grades and transcript
+            files it used to carry now lives in `DataCard`, where a reader
+            looking for it will actually go.
+          */
           <p className="text-body-regular text-pretty text-text-secondary">
             {signedIn
-              ? "Tell us your school and major and this becomes a live degree audit. Everything you enter stays yours: no grades, no GPA, no transcript file."
-              : "Sign in and tell us your school and major, and this becomes a live degree audit — what the Core still wants, what your major still wants, and what to take next term to move it."}
+              ? "Declare your school and major to see what is left."
+              : "Sign in and declare a degree to see what is left."}
           </p>
         )}
 
-        <StatStrip>
+        {/*
+          Four zeros are not a summary.
+
+          With nothing declared and nothing on the record this strip rendered
+          "0 / 0 / 0 of 0 / 0" under four icons and four captions — the most
+          visually prominent block on the page, carrying no information at all,
+          on exactly the visit where the reader is deciding whether this screen
+          is worth their time. It appears once there is something to count.
+        */}
+        {hasSomethingToCount ? (
+          <StatStrip>
           <Stat
             icon={RiBookMarkedLine}
             label="Courses on record"
@@ -200,7 +246,8 @@ export function ProfileHero({
             tone={audit.remaining.length > 0 ? "accent" : "default"}
             detail={hasPrograms ? "listed below" : "declare a program"}
           />
-        </StatStrip>
+          </StatStrip>
+        ) : null}
       </div>
     </section>
   );

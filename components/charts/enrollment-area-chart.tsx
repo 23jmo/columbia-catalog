@@ -17,7 +17,8 @@
  * counts. A smooth curve between two observations would draw seats draining
  * at a steady rate they never drained at — it would invent the shape of the
  * fill. The steps are the honest silhouette, and the area under them is still
- * an area.
+ * an area. One look is enough: a flat hold is the answer when the count has
+ * not moved. We only empty when there are no readings at all.
  *
  * ── Colour carries the current state, not a fixed brand green ──────────────
  *
@@ -33,6 +34,12 @@ import { RiLineChartLine } from "@remixicon/react";
 
 import { cx } from "@/utils/cx";
 
+import {
+  buildEnrollmentAreaModel,
+  type EnrollmentPoint,
+} from "./enrollment-area-model";
+
+export type { EnrollmentPoint };
 export type EnrollmentTone = "open" | "tight" | "full" | "waitlist" | "unknown";
 
 /** Same tone → chart colour mapping the seat meter uses, so the surfaces agree. */
@@ -44,37 +51,29 @@ const TONE_STROKE: Record<EnrollmentTone, string> = {
   unknown: "var(--color-chart-neutral)",
 };
 
-export interface EnrollmentPoint {
-  /** Epoch ms — a numeric x axis so gaps between readings are drawn to scale. */
-  t: number;
-  enrolled: number;
-}
-
 export interface EnrollmentAreaChartProps {
   points: EnrollmentPoint[];
   capacity: number | null;
   tone: EnrollmentTone;
   /** Shown above the number, e.g. "Enrolled · Fall 2026". */
   label: string;
+  /**
+   * Feed-card hover. The full chart is a 320×280 instrument; a 22rem rail
+   * card cannot host that without covering the card it is explaining.
+   */
+  compact?: boolean;
   className?: string;
 }
 
-/**
- * A y-ceiling that produces whole, round ticks.
- *
- * Recharts will happily hand back `0 / 46.5 / 93` for a peak of 86, and three
- * arbitrary numbers up the side of a 160px plot is worse than no axis at all —
- * the reader stops using them as a scale and starts reading them as data.
- * Rounding up to the next power-of-ten multiple gives 0 / 50 / 100 here, and
- * 0 / 250 / 500 for a 400-seat lecture.
- */
-function niceCeiling(value: number): number {
-  const safe = Math.max(value, 1);
-  const unit = 10 ** Math.floor(Math.log10(safe));
-  return Math.ceil(safe / unit) * unit;
-}
+function Empty({ reason, compact = false }: { reason: string; compact?: boolean }) {
+  if (compact) {
+    return (
+      <p className="max-w-56 px-0.5 py-1 text-caption-1-regular text-text-secondary">
+        {reason}
+      </p>
+    );
+  }
 
-function Empty({ reason }: { reason: string }) {
   return (
     <div className="flex min-h-32 flex-col items-center justify-center gap-1.5 px-4 py-6 text-center">
       <RiLineChartLine aria-hidden className="size-5 text-foreground-icon-tertiary" />
@@ -89,6 +88,7 @@ export function EnrollmentAreaChart({
   capacity,
   tone,
   label,
+  compact = false,
   className,
 }: EnrollmentAreaChartProps) {
   const stroke = TONE_STROKE[tone];
@@ -96,61 +96,15 @@ export function EnrollmentAreaChart({
   // a def, and a random id would break SSR/hydration agreement.
   const gradientId = `enrollment-fill-${tone}`;
 
-  const model = useMemo(() => {
-    if (points.length === 0) return null;
-    const sorted = [...points].sort((a, b) => a.t - b.t);
-    const first = sorted[0];
-    const last = sorted[sorted.length - 1];
-    const peak = Math.max(...sorted.map((p) => p.enrolled), capacity ?? 0);
-    const span = Math.max(last.t - first.t, 1);
-
-    /*
-     * The current level has to be drawn as a segment, not as a corner.
-     *
-     * `stepAfter` holds each value until the next observation and then steps.
-     * That is the right shape, but it means the FINAL value steps up exactly
-     * at the last x — zero width — so a section that went 66 → 86 draws as a
-     * flat line at 66 with a hairline at the right edge. The reader's eye
-     * takes the silhouette as the story, and the story it tells is the
-     * previous value.
-     *
-     * Extending past the last look is a short tail so the current number has
-     * a shape you can see. How stale the whole reading is stays the provenance
-     * stamp's job, under the chip.
-     */
-    const drawn = [...sorted, { t: last.t + span * 0.12, enrolled: last.enrolled }];
-
-    return {
-      sorted,
-      drawn,
-      first,
-      last,
-      delta: last.enrolled - first.enrolled,
-      // Head-room above the taller of the peak and the cap, so neither the line
-      // nor the cap rule runs along the top edge of the plot.
-      yMax: niceCeiling(peak * 1.08),
-      /*
-       * Format the axis by calendar day, not by elapsed hours. Two readings 24h
-       * apart both taken at the overnight ingest are a 1.0-day span, and an
-       * hours format renders them as "9 PM" and "9 PM" — an axis that labels
-       * two different days with the same string.
-       */
-      sameDay: new Date(first.t).toDateString() === new Date(last.t).toDateString(),
-      spanDays: span / 86_400_000,
-    };
-  }, [points, capacity]);
+  const model = useMemo(
+    () => buildEnrollmentAreaModel(points, capacity),
+    [points, capacity],
+  );
 
   if (!model) {
     return (
       <div className={className}>
-        <Empty reason="We have not recorded a reading for this section yet." />
-      </div>
-    );
-  }
-  if (model.sorted.length < 2) {
-    return (
-      <div className={className}>
-        <Empty reason="Only one reading so far — the line appears once the count moves." />
+        <Empty compact={compact} reason="We have not recorded a reading for this section yet." />
       </div>
     );
   }
@@ -165,7 +119,7 @@ export function EnrollmentAreaChart({
     new Date(value).toLocaleString(undefined, tickFormat);
 
   return (
-    <figure className={cx("flex flex-col gap-3", className)}>
+    <figure className={cx("flex flex-col", compact ? "w-60 gap-2" : "gap-3", className)}>
       {/* ---------------------------------------------------------------- */}
       {/* The headline: what it is now, and how far it has moved            */}
       {/* ---------------------------------------------------------------- */}
@@ -173,8 +127,13 @@ export function EnrollmentAreaChart({
         <span className="text-caption-2-medium tracking-[0.04em] text-text-tertiary uppercase">
           {label}
         </span>
-        <span className="flex items-center gap-2">
-          <span className="text-title-2-semibold tabular-nums text-text-primary">
+        <span className="flex flex-wrap items-center gap-2">
+          <span
+            className={cx(
+              "tabular-nums text-text-primary",
+              compact ? "text-headline-semibold" : "text-title-2-semibold",
+            )}
+          >
             {model.last.enrolled}
             {capacity != null ? (
               <span className="text-headline-regular text-text-tertiary"> / {capacity}</span>
@@ -198,7 +157,7 @@ export function EnrollmentAreaChart({
         </span>
       </figcaption>
 
-      <div className="h-40 w-full">
+      <div className={cx("w-full", compact ? "h-28" : "h-40")}>
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart
             data={model.drawn}
@@ -282,7 +241,7 @@ export function EnrollmentAreaChart({
             ) : null}
 
             <Area
-              // Change-only rows: hold flat, then step. See the note at the top.
+              // Every look, including unchanged counts: hold flat, then step.
               type="stepAfter"
               dataKey="enrolled"
               stroke={stroke}

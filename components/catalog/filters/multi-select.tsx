@@ -95,7 +95,9 @@ export function MultiSelect({
         className={cx(
           "flex w-full items-center justify-between gap-1.5 rounded-2lg px-2.5 py-2",
           "border border-border-button-default bg-background-primary-default shadow-xs",
-          "text-body-medium transition-colors duration-200",
+          "text-body-medium transition-[color,background-color,border-color,transform,scale] duration-200 ease-out",
+          "active:scale-[0.97] active:duration-[160ms]",
+          "motion-reduce:transition-none motion-reduce:active:scale-100",
           "outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-border-focus-ring",
           isDisabled
             ? "cursor-not-allowed bg-background-primary-disabled text-text-tertiary shadow-none"
@@ -113,7 +115,7 @@ export function MultiSelect({
         <RiArrowDownSLine
           aria-hidden
           className={cx(
-            "size-4 shrink-0 text-text-secondary transition-transform duration-200",
+            "size-4 shrink-0 text-text-secondary transition-transform duration-150 ease-out motion-reduce:transition-none",
             isOpen && "rotate-180",
           )}
         />

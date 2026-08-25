@@ -1,0 +1,14 @@
+/**
+ * Jump pill frost. The landing rim lives in globals.css; this file only
+ * covers the case where blur itself is the problem.
+ */
+@media (prefers-reduced-transparency: reduce) {
+  .assistant-jump-glass {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .assistant-jump-glass [data-jump-tint] {
+    background-color: var(--color-background-primary-default);
+  }
+}

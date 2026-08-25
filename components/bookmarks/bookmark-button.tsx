@@ -111,8 +111,22 @@ export function BookmarkButton({
         title={label}
         className={cx(
           "relative inline-flex items-center justify-center rounded-full",
-          size === "xs" ? "size-7" : "size-8",
-          "cursor-pointer transition-colors duration-150 ease",
+          /*
+           * 28/32px is right for a mouse and wrong for a thumb — Apple and
+           * Google both put the floor at 44/48px, and this control sits in a
+           * dense list where a miss saves the wrong section.
+           *
+           * `pointer-coarse` rather than a breakpoint: the thing that decides
+           * how big a target must be is the input device, not the viewport. A
+           * touchscreen laptop at 1400px needs the large target; a 380px-wide
+           * desktop window does not. The icon inside keeps its size, so only
+           * the tappable area grows.
+           */
+          size === "xs" ? "size-7 pointer-coarse:size-11" : "size-8 pointer-coarse:size-11",
+          "touch-manipulation",
+          "cursor-pointer transition-[color,background-color,border-color,transform,scale] duration-150 ease-out",
+          "active:scale-[0.97] active:duration-[160ms]",
+          "motion-reduce:transition-none motion-reduce:active:scale-100",
           "hover:bg-background-secondary-hover",
           "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
           "disabled:cursor-not-allowed disabled:opacity-60",

@@ -24,6 +24,10 @@ function courseRow(): CourseRow {
     points_max: 3,
     prerequisite_text: null,
     corequisite_text: null,
+    // Null is the honest default: the backfill has not run for this course, and
+    // "no formula" must stay distinguishable from "an empty formula".
+    prerequisite_formula: null,
+    prerequisite_confidence: null,
     department: "Computer Science",
     requirement_flags: {},
     created_at: "2026-01-01T00:00:00Z",

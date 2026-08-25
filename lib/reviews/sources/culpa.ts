@@ -1,7 +1,22 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * CULPA ADAPTER — READ THIS BEFORE RUNNING IT
+ * CULPA HTML ADAPTER — SUPERSEDED. Use `./culpa-api.ts`.
  * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * ⚠ **This adapter does not work against the live site and cannot be made to.**
+ *
+ * culpa.info is a Create React App SPA: the server returns `<div id="root">`
+ * and a script tag, and every review is loaded client-side from a JSON API. The
+ * selectors below were written without a fixture (see the note further down)
+ * and have no rendered document to match against — every one of them returns
+ * nothing. Confirmed by fetching the homepage on 2026-08-24.
+ *
+ * `./culpa-api.ts` talks to that JSON API instead and is what
+ * `scripts/ingest-reviews.ts` constructs. This file is kept for its pacing
+ * policy, user agent, and `normalizeCourseId`, which the API adapter imports —
+ * and as the record of why the HTML path was abandoned.
+ *
+ * The original header follows, and its rules still bind the API adapter:
  *
  * CULPA (culpa.info) is Columbia's student-run course and professor review
  * site. It is the PRIMARY reputation source for this product: it is

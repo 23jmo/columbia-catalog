@@ -31,6 +31,7 @@ import type { Metadata } from "next";
 import { RiNodeTree } from "@remixicon/react";
 
 import { AppShell } from "@/components/shell/app-shell";
+import { PageContent } from "@/components/shell/page-content";
 import { PageHeader } from "@/components/shell/page-header";
 import { Chip } from "@/components/base/badges/chip";
 import { Stat } from "@/components/shell/stat";
@@ -80,7 +81,7 @@ export default function ProgressionPage() {
 
   return (
     <AppShell activeNav="progression">
-      <div className="mx-auto flex w-full max-w-[1600px] min-w-0 flex-col gap-7">
+      <PageContent className="max-w-[1600px] gap-7">
         <PageHeader
           eyebrow="Progression"
           icon={RiNodeTree}
@@ -109,7 +110,7 @@ export default function ProgressionPage() {
         </PageHeader>
 
         <ProgressionScreen startYear={year} initialCourseId={defaultFocusCourseId()} />
-      </div>
+      </PageContent>
     </AppShell>
   );
 }

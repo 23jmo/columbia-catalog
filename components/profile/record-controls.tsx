@@ -1,16 +1,22 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { RiDeleteBin6Line, RiDownload2Line } from "@remixicon/react";
+import { useRouter } from "next/navigation";
+import { RiDeleteBin6Line, RiDownload2Line, RiRefreshLine } from "@remixicon/react";
 
 import { deleteRecordAction } from "@/app/profile/actions";
 import { Button } from "@/components/base/buttons/button";
+import { restartOnboarding } from "@/lib/onboarding/store";
 import type { StudentProfile } from "@/lib/profile/types";
 import { ProfileModal } from "./profile-modal";
 
 /**
- * Export and erasure — the two controls `vergil_api_spec.md` §15 names as
- * required practice for stored personal data.
+ * Export, erasure, and a way back through setup.
+ *
+ * Export and erasure are the two controls `vergil_api_spec.md` §15 names as
+ * required practice for stored personal data. Redo is the third: the wizard
+ * is reachable from a URL, but a signed-in student who wants to walk it
+ * again should not have to remember that.
  *
  * They are on the page rather than buried in a settings screen because a
  * student should never have to email anyone to get their own coursework out of
@@ -38,9 +44,22 @@ export interface RecordControlsProps {
 }
 
 export function RecordControls({ profile, signedIn = true }: RecordControlsProps) {
+  const router = useRouter();
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  /**
+   * Wipe the local wizard so it opens on question one, then go there.
+   *
+   * Completing it again upserts into the existing record — school and
+   * year update, programs and courses union. It does not erase. That is
+   * the button next to this one.
+   */
+  const redoOnboarding = () => {
+    restartOnboarding();
+    router.push("/onboarding");
+  };
 
   const exportRecord = () => {
     /*
@@ -82,6 +101,16 @@ export function RecordControls({ profile, signedIn = true }: RecordControlsProps
   return (
     <>
       <div className="flex flex-wrap items-center gap-2">
+        <Button
+          size="small"
+          variant="secondary"
+          leadingIcon={RiRefreshLine}
+          onClick={redoOnboarding}
+          disabled={!signedIn}
+          title="Walk through setup again. Existing courses stay; new answers are added."
+        >
+          Redo onboarding
+        </Button>
         <Button
           size="small"
           variant="secondary"

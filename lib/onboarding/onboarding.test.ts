@@ -10,6 +10,7 @@ import {
   expectedLevelCeiling,
   impliedPrerequisites,
   namedCoursesOf,
+  unambiguousPrereqsOf,
   yearsCompleted,
 } from "./guess";
 import { displayCourseTitle } from "./course-title";
@@ -448,13 +449,10 @@ describe("guess deck", () => {
     ].map(([courseId, code]) => [courseId, { code, title: code, points: 3 }]),
   );
 
-  it("re-ranks on a batch boundary and not before", () => {
-    expect(RERANK_BATCH_SIZE).toBeGreaterThanOrEqual(3);
-    expect(RERANK_BATCH_SIZE).toBeLessThanOrEqual(5);
-    for (let count = 0; count < RERANK_BATCH_SIZE; count++) {
-      expect(shouldRerank(count)).toBe(false);
-    }
-    expect(shouldRerank(RERANK_BATCH_SIZE)).toBe(true);
+  it("re-ranks after every confirmation", () => {
+    expect(RERANK_BATCH_SIZE).toBe(1);
+    expect(shouldRerank(0)).toBe(false);
+    expect(shouldRerank(1)).toBe(true);
   });
 
   it("reads the courses a program names, and marks the required ones", () => {
@@ -571,6 +569,24 @@ describe("guess deck", () => {
 
     expect(deck.tier1).toEqual([]);
     expect(deck.tier2).toEqual([]);
+    expect(deck.impliesTaken).toEqual({});
+  });
+
+  it("names the intro a confirmation would imply, before the student ticks it", () => {
+    const deck = buildGuessDeck({
+      programs: [CC_MAJOR_COMPUTER_SCIENCE],
+      classYear: "2027",
+      confirmed: [],
+      catalog,
+      prereqs: fakePrereqs({ COMS3134W: [["COMS1004W"]] }),
+      vectors: noVectorSource(),
+      now: new Date("2026-09-15T00:00:00Z"),
+    });
+
+    expect(unambiguousPrereqsOf("COMS3134W", fakePrereqs({ COMS3134W: [["COMS1004W"]] }))).toEqual([
+      "COMS1004W",
+    ]);
+    expect(deck.impliesTaken.COMS3134W?.map((facts) => facts.courseId)).toEqual(["COMS1004W"]);
   });
 });
 

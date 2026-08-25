@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Vergil schedule capture</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="mark" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div>
+          <p class="eyebrow">Columbia Catalog</p>
+          <h1>Schedule refresh</h1>
+          <p class="lede">Capture the public course times and locations Vergil already loaded.</p>
+        </div>
+      </header>
+
+      <section class="stats" aria-label="Capture status">
+        <div><strong id="section-count">0</strong><span>sections</span></div>
+        <div><strong id="meeting-count">0</strong><span>meetings</span></div>
+        <div><strong id="location-count">0</strong><span>locations</span></div>
+      </section>
+
+      <section class="refresh-card" aria-labelledby="refresh-title">
+        <div class="card-heading">
+          <div>
+            <p class="card-label">Full-term refresh</p>
+            <h2 id="refresh-title">Current Vergil term</h2>
+          </div>
+          <span id="term-code" class="term-pill">—</span>
+        </div>
+        <p id="status" class="status" role="status">Checking this browser session…</p>
+        <div class="progress-track" aria-hidden="true"><span id="progress-bar"></span></div>
+        <button id="scan" class="primary" type="button" disabled>Refresh every course</button>
+        <button id="cancel-scan" class="text-button" type="button" hidden>Stop refresh</button>
+      </section>
+
+      <section class="contribution-card" aria-labelledby="contribution-title">
+        <label class="toggle-row">
+          <span>
+            <strong id="contribution-title">Help keep the catalog current</strong>
+            <small>Allow the signed-in Columbia Catalog site to import only this sanitized capture.</small>
+          </span>
+          <input id="contribution-enabled" type="checkbox" />
+        </label>
+        <button id="contribute" class="secondary" type="button" disabled>Review contribution</button>
+      </section>
+
+      <div class="utility-actions">
+        <button id="export" class="text-button" type="button" disabled>Export JSON</button>
+        <span aria-hidden="true">·</span>
+        <button id="clear" class="text-button danger" type="button" disabled>Clear local data</button>
+      </div>
+
+      <details>
+        <summary>Privacy boundary</summary>
+        <p>
+          Only course identifiers, call numbers, days, times, locations, and observation times cross
+          the extension boundary. Credentials, cookies, planner data, registration actions, and personal
+          academic records are never read. Sharing is off until you enable it above.
+        </p>
+        <a href="privacy.html" target="_blank">Read the full privacy policy</a>
+      </details>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

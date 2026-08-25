@@ -1,28 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { RiLoader4Line } from "@remixicon/react";
 
 import { guessDeckAction } from "@/app/onboarding/actions";
-/*
- * Type-only imports from `guess.ts` and `server.ts`, and a VALUE import only
- * from `state.ts`.
- *
- * That split is load-bearing, not stylistic. `guess.ts` imports the
- * recommendation engine and `server.ts` imports the Supabase client and the
- * catalog; a value import of either from this client component would pull both
- * into the browser bundle. `import type` is erased entirely, and the one
- * constant this file genuinely needs at runtime — the re-rank batch size —
- * lives in `state.ts`, which imports nothing heavier than `zod`.
- */
-import type { GuessCandidate, GuessDeck } from "@/lib/onboarding/guess";
+import { DEFAULT_TIER_LIMIT, type GuessCandidate, type GuessDeck, type GuessFacts } from "@/lib/onboarding/guess";
+import { loadGuessDeckCached, peekCachedGuessDeck } from "@/lib/onboarding/guess-cache";
 import type { CourseHit, ResolvedCourse } from "@/lib/onboarding/server";
 import type { GuestCourse, GuestOnboardingState } from "@/lib/onboarding/state";
 import { displayCourseTitle } from "@/lib/onboarding/course-title";
-import { shouldRerank } from "@/lib/onboarding/state";
 import { dismiss, toast } from "@/lib/toast/store";
 
 import { AddChip, ChipWrap, RemovableChip } from "./chip";
+import { CourseworkSkeleton } from "./coursework-skeleton";
 import { CourseSearch } from "./course-search";
 import { TranscriptImport } from "./transcript-import";
 
@@ -48,16 +37,10 @@ import { TranscriptImport } from "./transcript-import";
  *
  * Tier 2 is the engine's answer to "given what is confirmed, what else has this
  * student almost certainly taken" — prerequisite implications and requirement
- * fit, not the general feed. It re-ranks as courses are added, from either the
- * strip or the search box.
- *
- * ── Why re-ranking is batched ───────────────────────────────────────────────
- *
- * Every fourth confirmation (`RERANK_BATCH_SIZE`), never on every tap.
- * Re-ranking per tap reshuffles the strip between the moment a student aims at
- * a chip and the moment their finger lands, so they add the wrong course — and
- * after that happens twice they stop trusting the screen. The counter lives in
- * the guest state, so it survives stepping back.
+ * fit, not the general feed. Confirming a course immediately adds its
+ * unambiguous prerequisites ("you took Intro if you took Data Structures")
+ * from the deck payload; the strip re-ranks in the background after a short
+ * debounce so rapid taps coalesce instead of shuffling under a finger.
  *
  * ── Pre-filled means on the record, and removing removes ────────────────────
  *
@@ -78,8 +61,15 @@ export interface StepCourseworkProps {
   onConfirmationBatch: () => void;
 }
 
-/** Enough to fill the strip without turning it into a wall of pills. */
-const STRIP_LIMIT = 12;
+/**
+ * Maybe-taken chips under the pre-checked set. 24, not 12: a rising senior's
+ * optional list is long, and a dozen looked like we ran out of ideas. Must stay
+ * at or below `DEFAULT_TIER_LIMIT` or the extra slots are empty by construction.
+ */
+const STRIP_LIMIT = Math.min(24, DEFAULT_TIER_LIMIT);
+
+/** Coalesce rapid taps into one re-rank so the strip does not shuffle mid-aim. */
+const RERANK_DEBOUNCE_MS = 180;
 
 export function StepCoursework({
   state,
@@ -88,17 +78,17 @@ export function StepCoursework({
   removeCourse,
   onConfirmationBatch,
 }: StepCourseworkProps) {
-  const [deck, setDeck] = useState<GuessDeck | null>(null);
+  const [deck, setDeck] = useState<GuessDeck | null>(() => peekCachedGuessDeck(state));
   const [error, setError] = useState<string | null>(null);
   const [isTranscriptOpen, setIsTranscriptOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   /*
-   * The re-rank trigger. Incremented on a batch boundary and on first mount;
-   * the deck effect depends on it and on nothing else, so a confirmation
-   * between boundaries cannot trigger a fetch.
+   * The re-rank trigger. Incremented on first mount and after confirmations
+   * (debounced). Implications of a tap apply locally and do not wait for this.
    */
   const [rerankToken, setRerankToken] = useState(0);
+  const rerankTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /** Candidates already offered once, so auto-confirmation cannot loop. */
   const seenRef = useRef<Set<string>>(new Set());
@@ -107,11 +97,12 @@ export function StepCoursework({
 
   /*
    * `stateRef` rather than a dependency: the deck request needs the CURRENT
-   * state, but re-running the effect whenever the state changes would defeat
-   * the batching this whole screen is built around.
+   * state, and the debounce below is what stops every tap from launching its
+   * own fetch.
    */
   const stateRef = useRef(state);
   const addCoursesRef = useRef(addCourses);
+  const deckRef = useRef(deck);
 
   /*
    * Both refs are written in an effect, not during render. A ref assigned
@@ -123,7 +114,8 @@ export function StepCoursework({
   useEffect(() => {
     stateRef.current = state;
     addCoursesRef.current = addCourses;
-  }, [state, addCourses]);
+    deckRef.current = deck;
+  }, [state, addCourses, deck]);
 
   /* ── The transcript entrance ──────────────────────────────────────────────
    *
@@ -180,7 +172,7 @@ export function StepCoursework({
     let active = true;
 
     startTransition(async () => {
-      const result = await guessDeckAction(stateRef.current);
+      const result = await loadGuessDeckCached(stateRef.current, guessDeckAction);
       if (!active) return;
 
       if (!result.ok || !result.deck) {
@@ -222,21 +214,41 @@ export function StepCoursework({
     };
   }, [rerankToken]);
 
+  useEffect(() => {
+    return () => {
+      if (rerankTimer.current) clearTimeout(rerankTimer.current);
+    };
+  }, []);
+
   /**
    * Add one course from the strip or the search box.
    *
-   * The batch counter advances only on an ADDITION. Removing is a correction,
-   * and making a correction bring the re-rank forward would mean the strip
-   * reshuffles hardest exactly when the student is telling us we got it wrong.
+   * Unambiguous prerequisites land immediately — that is the "you took Intro
+   * too" chip, and it does not need the engine. The strip re-ranks after a
+   * short idle so a burst of taps becomes one fetch, not a shuffle under the
+   * next finger.
    */
   const confirm = useCallback(
     (course: GuestCourse) => {
       retireTranscriptOffer();
       addCourse(course);
+      seenRef.current.add(course.courseId);
+
+      const skip = new Set(stateRef.current.courses.map((row) => row.courseId));
+      skip.add(course.courseId);
+      for (const id of stateRef.current.dismissedCourseIds) skip.add(id);
+
+      const implied = (deckRef.current?.impliesTaken?.[course.courseId] ?? []).filter(
+        (facts) => !skip.has(facts.courseId) && !seenRef.current.has(facts.courseId),
+      );
+      for (const facts of implied) seenRef.current.add(facts.courseId);
+      if (implied.length > 0) addCoursesRef.current(implied.map(toGuestCourseFromFacts));
+
       onConfirmationBatch();
-      if (shouldRerank(stateRef.current.confirmationsSinceRerank + 1)) {
+      if (rerankTimer.current) clearTimeout(rerankTimer.current);
+      rerankTimer.current = setTimeout(() => {
         setRerankToken((token) => token + 1);
-      }
+      }, RERANK_DEBOUNCE_MS);
     },
     [addCourse, onConfirmationBatch, retireTranscriptOffer],
   );
@@ -251,68 +263,74 @@ export function StepCoursework({
     .filter((candidate) => !confirmedIds.has(candidate.courseId))
     .slice(0, STRIP_LIMIT);
 
+  const showSkeleton =
+    !error &&
+    (!deck ||
+      (state.courses.length === 0 &&
+        (deck.tier1.some((candidate) => !state.dismissedCourseIds.includes(candidate.courseId)) ??
+          false)));
+
   return (
-    <div className="flex flex-col gap-9">
+    <div className="flex flex-col gap-5">
       <p aria-live="polite" className="sr-only">
-        {isPending ? "Updating our suggestions" : "Suggestions up to date"}
+        {isPending ? "Updating our suggestions" : showSkeleton ? "Loading course suggestions" : "Suggestions up to date"}
       </p>
 
-      {/* ── On your record ──────────────────────────────────────────────── */}
-      {state.courses.length > 0 ? (
-        <ChipWrap>
-          {state.courses.map((course) => (
-            <RemovableChip
-              key={course.courseId}
-              /*
-                The one place "we do not have this course" is stated. It is a
-                label, never a rejection: `student_courses.course_id` is
-                deliberately not a foreign key so transfer credit, AP credit and
-                archived terms are storable, and such rows are simply excluded
-                from similarity and requirement matching downstream.
-              */
-              note={course.inCatalog ? undefined : "not in our catalog"}
-              onRemove={() => removeCourse(course.courseId)}
-              removeLabel={`Remove ${course.code}`}
-            >
-              {course.code}
-            </RemovableChip>
-          ))}
-        </ChipWrap>
-      ) : null}
+      <section className="flex flex-col gap-4">
+        {showSkeleton ? <CourseworkSkeleton /> : null}
 
-      {!deck && !error ? (
-        <p className="flex items-center justify-center gap-2 text-body-regular text-text-secondary">
-          <RiLoader4Line className="size-4 animate-spin" aria-hidden />
-          Working out what you have probably taken…
-        </p>
-      ) : null}
-
-      {error ? <p className="text-center text-body-regular text-text-secondary">{error}</p> : null}
-
-      {/* ── And probably these ──────────────────────────────────────────── */}
-      {suggestions.length > 0 ? (
-        <section className="flex flex-col gap-3">
-          <h2 className="text-center text-caption-2-medium tracking-[0.08em] text-text-tertiary uppercase">
-            Students with these usually have these too
-          </h2>
+        {!showSkeleton && state.courses.length > 0 ? (
           <ChipWrap>
-            {suggestions.map((candidate) => (
-              <AddChip
-                key={candidate.courseId}
-                onPress={() => confirm(toGuestCourse(candidate))}
-                sublabel={candidate.title ? displayCourseTitle(candidate.title) : undefined}
-                label={`Add ${candidate.code}${
-                  candidate.title ? ` — ${displayCourseTitle(candidate.title)}` : ""
+            {state.courses.map((course) => (
+              <RemovableChip
+                key={course.courseId}
+                sublabel={course.title ? displayCourseTitle(course.title) : undefined}
+                /*
+                  The one place "we do not have this course" is stated. It is a
+                  label, never a rejection: `student_courses.course_id` is
+                  deliberately not a foreign key so transfer credit, AP credit and
+                  archived terms are storable, and such rows are simply excluded
+                  from similarity and requirement matching downstream.
+                */
+                note={course.inCatalog ? undefined : "not in our catalog"}
+                onRemove={() => removeCourse(course.courseId)}
+                removeLabel={`Remove ${course.code}${
+                  course.title ? ` — ${displayCourseTitle(course.title)}` : ""
                 }`}
               >
-                {candidate.code}
-              </AddChip>
+                {course.code}
+              </RemovableChip>
             ))}
           </ChipWrap>
-        </section>
-      ) : null}
+        ) : null}
 
-      {/* ── The secondary path ──────────────────────────────────────────── */}
+        {error ? <p className="text-center text-body-regular text-text-secondary">{error}</p> : null}
+
+        {!showSkeleton && suggestions.length > 0 ? (
+          <div
+            className={isPending ? "flex flex-col gap-3 opacity-60 motion-reduce:opacity-100" : "flex flex-col gap-3"}
+          >
+            <h2 className="text-center text-caption-2-medium tracking-[0.08em] text-text-tertiary uppercase">
+              Students with these usually have these too
+            </h2>
+            <ChipWrap>
+              {suggestions.map((candidate) => (
+                <AddChip
+                  key={candidate.courseId}
+                  onPress={() => confirm(toGuestCourse(candidate))}
+                  sublabel={candidate.title ? displayCourseTitle(candidate.title) : undefined}
+                  label={`Add ${candidate.code}${
+                    candidate.title ? ` — ${displayCourseTitle(candidate.title)}` : ""
+                  }`}
+                >
+                  {candidate.code}
+                </AddChip>
+              ))}
+            </ChipWrap>
+          </div>
+        ) : null}
+      </section>
+
       <CourseSearch
         confirmedIds={confirmedIds}
         onAdd={(hit: CourseHit) =>
@@ -376,6 +394,19 @@ function toGuestCourse(candidate: GuessCandidate): GuestCourse {
     // Every deck candidate came out of the catalog or a program the catalog
     // resolves, so this is true by construction. Transcript rows are where
     // `false` actually happens.
+    inCatalog: true,
+  };
+}
+
+function toGuestCourseFromFacts(facts: GuessFacts): GuestCourse {
+  return {
+    courseId: facts.courseId,
+    code: facts.code,
+    title: facts.title,
+    termLabel: null,
+    points: facts.points,
+    liked: null,
+    source: "onboarding_guess",
     inCatalog: true,
   };
 }

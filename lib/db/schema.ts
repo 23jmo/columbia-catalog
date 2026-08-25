@@ -207,10 +207,47 @@ export type CourseRow = {
   points_max: number | null;
   prerequisite_text: string | null;
   corequisite_text: string | null;
+  /**
+   * The parse of `prerequisite_text`, added in migration 0032 and written by
+   * `scripts/backfill-prereqs.ts`. Shape is `StoredPrereqFormula` below.
+   *
+   * Typed as `Json` rather than as that interface on purpose: this is what the
+   * database hands back, and it is only as trustworthy as the last backfill
+   * that ran. Callers narrow it deliberately — see `readStoredFormula`.
+   */
+  prerequisite_formula: Json | null;
+  /**
+   * How much of the prose became structure. NEVER filter a student out on a
+   * formula whose confidence is `"prose"`: that tier means no course reference
+   * resolved at all, so the empty tree is ignorance, not permission.
+   */
+  prerequisite_confidence: PrereqConfidenceValue | null;
   department: string | null;
   requirement_flags: Json;
   created_at: string;
   updated_at: string;
+};
+
+/**
+ * Mirrors the check constraint in 0032. Kept as a union rather than `string` so
+ * a typo in a filter is a compile error instead of a silently empty result set.
+ */
+export type PrereqConfidenceValue = "structured" | "partial" | "prose";
+
+/**
+ * What `prerequisite_formula` actually holds.
+ *
+ * `instructorPermission` is the field that keeps the prerequisite filter from
+ * being cruel: roughly a quarter of Columbia's prerequisites end "or permission
+ * of the instructor", which makes every gate above them soft. Storing it
+ * separately from the tree means a filter can honour it without re-reading the
+ * prose it came from.
+ */
+export type StoredPrereqFormula = {
+  tree: Json | null;
+  corequisites: Json | null;
+  instructorPermission: boolean;
+  advisories: string[];
 };
 
 export type SectionRow = {
@@ -492,6 +529,13 @@ export type StudentProfileRow = {
   program_ids: string[];
   class_year: string | null;
   attestations: Record<string, string>;
+  /**
+   * Declared interests, hand-authored and major-scoped (migration 0032). Each
+   * tag maps to a seed vector built from exemplar courses, which is why this is
+   * a bounded `text[]` and not free text — an unrecognised tag has no vector
+   * and would silently contribute nothing.
+   */
+  interest_tags: string[];
   created_at: string;
   updated_at: string;
 };
@@ -505,12 +549,78 @@ export type StudentCourseRow = {
   term_code: string | null;
   term_label: string | null;
   points: number | null;
+  /**
+   * The student's own opinion, and explicitly NOT a grade (migration 0032).
+   *
+   * `null` is the common case and means "we have not asked" — never "they
+   * disliked it". Collapsing this to a boolean would make every un-reviewed
+   * course read as disliked and poison the taste vector with courses the
+   * student never had a view about. See `lib/recommend/taste.ts`.
+   */
+  liked: boolean | null;
   source: string;
   added_at: string;
 };
 
 export type StudentCourseInsert = Partial<StudentCourseRow> &
   Pick<StudentCourseRow, "user_id" | "course_id">;
+
+/**
+ * The agent's conversation state (migration 0032).
+ *
+ * Owner-private throughout. A thread contains a student's academic situation in
+ * their own words — what they are struggling with, what they want to avoid,
+ * which requirement they are behind on — and is strictly more sensitive than
+ * their schedule.
+ */
+export type AgentConversationRow = {
+  conversation_id: string;
+  user_id: string;
+  /**
+   * The first prompt, truncated. Not model-generated on purpose: naming a
+   * thread with an LLM call would spend one of the student's twenty prompts on
+   * a label.
+   */
+  title: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AgentConversationInsert = Partial<AgentConversationRow> &
+  Pick<AgentConversationRow, "user_id">;
+
+export type AgentMessageRow = {
+  message_id: string;
+  conversation_id: string;
+  user_id: string;
+  role: "user" | "assistant";
+  content: string;
+  /**
+   * AI SDK `UIMessage` parts — tool calls, tool results, and the course ids a
+   * turn cited. Kept so a reloaded thread renders as cards rather than as prose
+   * *about* cards, which is what storing `content` alone would degrade to.
+   */
+  parts: Json;
+  created_at: string;
+};
+
+export type AgentMessageInsert = Partial<AgentMessageRow> &
+  Pick<AgentMessageRow, "conversation_id" | "user_id" | "role">;
+
+/**
+ * One row per prompt spent, not a counter.
+ *
+ * A counter is smaller and cannot answer "when does my limit reset" — and a
+ * limit that cannot say when it lifts is indistinguishable from a bug. See
+ * `lib/agent/usage.ts`.
+ */
+export type AgentUsageRow = {
+  usage_id: string;
+  user_id: string;
+  created_at: string;
+};
+
+export type AgentUsageInsert = Partial<AgentUsageRow> & Pick<AgentUsageRow, "user_id">;
 
 export type WatchRow = {
   user_id: string;
@@ -639,9 +749,26 @@ export type InstructorInsert = Omit<
 > &
   Partial<Pick<InstructorRow, "instructor_id">>;
 
-export type CourseInsert = Omit<CourseRow, "created_at" | "updated_at" | "requirement_flags"> & {
+export type CourseInsert = Omit<
+  CourseRow,
+  | "created_at"
+  | "updated_at"
+  | "requirement_flags"
+  // The prerequisite parse has exactly one writer, `scripts/backfill-prereqs.ts`,
+  // and it runs long after ingest. Omitting the pair here says so in the type:
+  // the directory crawl reads prose off a page and has no business inventing a
+  // formula, and an ingest that *could* set these would overwrite a good parse
+  // with a null on every routine refresh.
+  | "prerequisite_formula"
+  | "prerequisite_confidence"
+> & {
   requirement_flags?: Json;
-} & Partial<Pick<CourseRow, "created_at" | "updated_at">>;
+} & Partial<
+    Pick<
+      CourseRow,
+      "created_at" | "updated_at" | "prerequisite_formula" | "prerequisite_confidence"
+    >
+  >;
 
 export type SectionInsert = Omit<
   SectionRow,
@@ -1285,6 +1412,27 @@ export type Database = {
         Insert: PlanProposalRow;
         Update: Partial<PlanProposalRow>;
         Relationships: [];
+      };
+      agent_conversations: {
+        Row: AgentConversationRow;
+        Insert: AgentConversationInsert;
+        Update: Partial<AgentConversationInsert>;
+        Relationships: [Rel<["user_id"], "users", ["user_id"]>];
+      };
+      agent_messages: {
+        Row: AgentMessageRow;
+        Insert: AgentMessageInsert;
+        Update: Partial<AgentMessageInsert>;
+        Relationships: [
+          Rel<["conversation_id"], "agent_conversations", ["conversation_id"]>,
+          Rel<["user_id"], "users", ["user_id"]>,
+        ];
+      };
+      agent_usage: {
+        Row: AgentUsageRow;
+        Insert: AgentUsageInsert;
+        Update: Partial<AgentUsageInsert>;
+        Relationships: [Rel<["user_id"], "users", ["user_id"]>];
       };
     };
     Views: {

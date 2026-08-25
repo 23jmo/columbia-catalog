@@ -89,8 +89,12 @@ export function AgentSetupPanel({
               type="button"
               onClick={() => setTab(item.id)}
               className={cx(
-                "flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5",
-                "text-caption-1-medium outline-none transition-colors duration-150 ease",
+                // Three adjacent 30px targets across 340px: wide enough
+                // individually, but a segmented control is precisely where a
+                // thumb lands one segment over. The extra padding on a touch
+                // device takes each to 46px without changing the desktop row.
+                "flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 pointer-coarse:py-3",
+                "text-caption-1-medium outline-none transition-colors duration-150",
                 "focus-visible:ring-2 focus-visible:ring-border-focus-ring",
                 tab === item.id
                   ? "border border-border-button-default bg-background-primary-default text-text-primary shadow-xs"

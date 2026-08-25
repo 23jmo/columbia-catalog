@@ -50,7 +50,7 @@ export const CourseNode = memo(function CourseNode({ data, selected }: NodeProps
       className={cx(
         "relative flex w-[208px] flex-col gap-1 overflow-hidden rounded-2lg border py-2 pr-3 pl-3.5",
         "before:absolute before:inset-y-0 before:left-0 before:w-1",
-        "transition-[box-shadow,border-color] duration-150 ease",
+        "transition-[box-shadow,border-color] duration-150",
         STATUS_RULE[data.status],
         data.isExternal
           ? "border-dashed border-border-button-default bg-background-secondary-default"

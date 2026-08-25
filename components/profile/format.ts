@@ -130,6 +130,22 @@ export const VERIFICATION_CHIP_COLOR: Record<Verification, "lime" | "cyan" | "ye
   attested: "yellow",
 };
 
+/**
+ * The same tiers as text rather than as a filled pill.
+ *
+ * `exact` is the ordinary case — most requirements in a transcribed program are
+ * a list of course codes — and a lime pill on every one of nineteen rows was
+ * doing the opposite of its job: it made the two tiers that carry a real caveat
+ * impossible to pick out, and put "done" green on a list of things that are not
+ * done. Rendered as text, `exact` recedes to the same grey as the rest of the
+ * row and the two exceptions keep their colour.
+ */
+export const VERIFICATION_TEXT_COLOR: Record<Verification, string> = {
+  exact: "text-text-tertiary",
+  flagged: "text-status-cyan-text",
+  attested: "text-status-yellow-text",
+};
+
 export const STATUS_LABEL: Record<GroupStatus, string> = {
   satisfied: "Done",
   in_progress: "In progress",

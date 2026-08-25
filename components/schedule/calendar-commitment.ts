@@ -85,3 +85,19 @@ export function clampAnchor(
     left: Math.min(Math.max(pad, left), window.innerWidth - width - pad),
   };
 }
+
+/** Hold duration before touch can start a commitment drag. */
+export const LONG_PRESS_MS = 450;
+
+/** Finger movement that cancels a hold before it arms. */
+export const HOLD_CANCEL_PX = 12;
+
+export function pointerMovedBeyondHold(
+  startX: number,
+  startY: number,
+  x: number,
+  y: number,
+  cancelPx = HOLD_CANCEL_PX,
+): boolean {
+  return Math.hypot(x - startX, y - startY) >= cancelPx;
+}

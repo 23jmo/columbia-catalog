@@ -2,8 +2,8 @@
  * The assistant surface.
  *
  * `AssistantHome` is the only client entry point; everything else here is a
- * leaf it renders. `SourceList` is exported separately because it is a server
- * component and other surfaces may want the same evidence rail.
+ * leaf it renders. `SourceList` is a client accordion — other surfaces can
+ * still import the same evidence list.
  */
 
 export { AssistantHome } from "./assistant-home";

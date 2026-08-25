@@ -76,7 +76,8 @@ export interface TranscriptParse {
  * often (see `pdf-text.ts`) and `parseBulletinCode` can handle the unspaced
  * form. Anchored on a word boundary so `SCORE1201` in prose is not a course.
  */
-const CODE_PATTERN = /\b([A-Z]{2,6})\s{0,2}([A-Z]{1,3})?\s{0,2}(\d{4})\b/g;
+const CODE_PATTERN =
+  /\b([A-Z]{2,6})\s{0,2}([A-Z]{1,3})?\s{0,2}(\d{4})([A-Z]{1,3})?\b/g;
 
 /** `Fall 2024`, `2024 Spring Term`, `Spring Semester 2025`. */
 const TERM_PATTERN =
@@ -89,10 +90,29 @@ const TERM_PATTERN =
  * mid-sentence is a word, not a grade. `IP`/`I` are in-progress markers,
  * `W`/`WD` withdrawals, `P`/`CR` pass-credit, `R` a repeat.
  */
-const GRADE_PATTERN =
-  /(?:^|\s)((?:[A-D][+-]?|F|W|WD|WF|P|CR|NC|IP|I|R|AP|TR|Y)\s*)(?=$|\s)/;
+const GRADE_TOKEN =
+  /(?:^|\s)((?:[A-D][+-]?|F|W|WD|WF|P|CR|NC|IP|I|R|AP|TR|Y))(?=$|\s)/g;
 
 const POINTS_PATTERN = /\b(\d{1,2}(?:\.\d{1,2})?)\s*(?:points?|pts?|credits?|cr\b)/i;
+
+/**
+ * The last grade-shaped token after the course code.
+ *
+ * Taking the first one steals the Roman numeral in "ALGORITHMS I". Taking
+ * every "D" steals the one in "CHINA- D". Student Planning puts the real mark
+ * immediately before Taken/Planned, so that wins when it is present.
+ */
+function lastGrade(afterCode: string, line: string): string | null {
+  const beforeStatus = /\s((?:[A-D][+-]?|F|W|WD|WF|P|CR|NC|IP|I|R|AP|TR|Y)|-)\s+(Taken|Planned)\s*$/i.exec(
+    line,
+  );
+  if (beforeStatus) {
+    return beforeStatus[1] === "-" ? null : beforeStatus[1];
+  }
+  const matches = [...afterCode.matchAll(GRADE_TOKEN)];
+  if (matches.length === 0) return null;
+  return matches[matches.length - 1][1] ?? null;
+}
 
 function classify(grade: string | null, line: string): TranscriptWarning[] {
   const warnings: TranscriptWarning[] = [];
@@ -191,8 +211,7 @@ export function parseTranscriptText(text: string): TranscriptParse {
       if (seen.has(parsed.courseId)) continue;
       seen.add(parsed.courseId);
 
-      const gradeMatch = GRADE_PATTERN.exec(line.slice(match.index + whole.length));
-      const grade = gradeMatch ? gradeMatch[1].trim() : null;
+      const grade = lastGrade(line.slice(match.index + whole.length), line);
       const pointsMatch = POINTS_PATTERN.exec(line);
 
       candidates.push({

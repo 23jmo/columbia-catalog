@@ -109,7 +109,7 @@ export function NoPlanState({
         Already have a plan somewhere else?{" "}
         <Link
           href="/schedule"
-          className="rounded text-text-secondary underline underline-offset-2 outline-none transition-colors duration-150 ease hover:text-text-primary focus-visible:ring-2 focus-visible:ring-border-focus-ring"
+          className="rounded text-text-secondary underline underline-offset-2 outline-none transition-colors duration-150 hover:text-text-primary focus-visible:ring-2 focus-visible:ring-border-focus-ring"
         >
           Build it on the schedule canvas
         </Link>

@@ -269,7 +269,7 @@ export function TranscriptImport({ signedIn = true, className }: TranscriptImpor
                 if (file) void readPdf(file);
               }}
               className={cx(
-                "group flex h-[164px] w-full cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed p-4 text-center outline-none transition-colors duration-200 ease",
+                "group flex h-[164px] w-full cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed p-4 text-center outline-none transition-colors duration-200",
                 "focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-border-focus-ring",
                 dragOver
                   ? "border-border-button-active bg-background-secondary-default"
@@ -322,7 +322,7 @@ export function TranscriptImport({ signedIn = true, className }: TranscriptImpor
                 setError(null);
                 setMode("paste");
               }}
-              className="self-start rounded-lg px-1 py-0.5 text-caption-1-medium text-text-secondary underline-offset-2 outline-none transition-colors duration-150 ease hover:text-accent-600 hover:underline focus-visible:ring-2 focus-visible:ring-border-focus-ring"
+              className="self-start rounded-lg px-1 py-0.5 text-caption-1-medium text-text-secondary underline-offset-2 outline-none transition-colors duration-150 hover:text-accent-600 hover:underline focus-visible:ring-2 focus-visible:ring-border-focus-ring"
             >
               Or paste the text instead
             </button>
@@ -378,14 +378,14 @@ export function TranscriptImport({ signedIn = true, className }: TranscriptImpor
                 <button
                   type="button"
                   onClick={() => setSelected(new Set(candidates.map((c) => c.courseId)))}
-                  className="rounded-lg px-1.5 py-0.5 text-caption-1-medium text-text-secondary outline-none transition-colors duration-150 ease hover:text-accent-600 focus-visible:ring-2 focus-visible:ring-border-focus-ring"
+                  className="rounded-lg px-1.5 py-0.5 text-caption-1-medium text-text-secondary outline-none transition-colors duration-150 hover:text-accent-600 focus-visible:ring-2 focus-visible:ring-border-focus-ring"
                 >
                   Select all
                 </button>
                 <button
                   type="button"
                   onClick={() => setSelected(new Set())}
-                  className="rounded-lg px-1.5 py-0.5 text-caption-1-medium text-text-secondary outline-none transition-colors duration-150 ease hover:text-accent-600 focus-visible:ring-2 focus-visible:ring-border-focus-ring"
+                  className="rounded-lg px-1.5 py-0.5 text-caption-1-medium text-text-secondary outline-none transition-colors duration-150 hover:text-accent-600 focus-visible:ring-2 focus-visible:ring-border-focus-ring"
                 >
                   Clear
                 </button>
@@ -397,7 +397,7 @@ export function TranscriptImport({ signedIn = true, className }: TranscriptImpor
                 <li key={candidate.courseId}>
                   <label
                     className={cx(
-                      "flex cursor-pointer items-start gap-2.5 rounded-2lg p-2 transition-colors duration-150 ease",
+                      "flex cursor-pointer items-start gap-2.5 rounded-2lg p-2 transition-colors duration-150",
                       "hover:bg-background-secondary-hover",
                       candidate.warnings.length > 0 && "bg-status-yellow-background/40",
                     )}

@@ -37,6 +37,8 @@ import {
   writeGuestState,
   type GuestOnboardingState,
 } from "./state";
+import { clearFeedPreviewCache } from "./feed-preview-cache";
+import { clearOnboardingHandoff } from "./handoff";
 
 export interface OnboardingSnapshot {
   state: GuestOnboardingState;
@@ -83,6 +85,20 @@ export function subscribeOnboarding(listener: () => void): () => void {
 }
 
 export function getOnboardingSnapshot(): OnboardingSnapshot {
+  /*
+   * Hydrate on the client snapshot read, not in an effect.
+   *
+   * Google SSO is a full document load back onto `/onboarding`. An effect
+   * runs after paint, so the server snapshot ("which school?") is what the
+   * student sees for a frame. `useSyncExternalStore` already gives us a
+   * server snapshot for hydration and this function immediately after — reading
+   * storage here is the whole point of the primitive. Mutate without `emit`:
+   * notifying subscribers during `getSnapshot` is a render-phase update.
+   */
+  if (typeof window !== "undefined" && !snapshot.isHydrated) {
+    const stored = readGuestState();
+    snapshot = { state: stored ?? emptyGuestState(), isHydrated: true };
+  }
   return snapshot;
 }
 
@@ -121,4 +137,25 @@ export function updateOnboardingState(
 export function markOnboardingMigrated(): void {
   hasMigrated = true;
   clearGuestState();
+}
+
+/**
+ * Start the wizard from scratch.
+ *
+ * The profile's "Redo onboarding" control calls this before routing to
+ * `/onboarding`. A signed-in student who already finished once has
+ * `hasMigrated` set in this tab, which would silently drop every new answer
+ * — the store stops writing to `localStorage` after a flush. Resetting that
+ * flag, and the in-memory + stored state, is what makes a second pass a real
+ * second pass rather than a walk through a wizard that cannot remember
+ * anything.
+ *
+ * Does not touch the database. Completing the wizard again upserts; existing
+ * courses stay unless the student erases them from the profile.
+ */
+export function restartOnboarding(): void {
+  hasMigrated = false;
+  clearFeedPreviewCache();
+  clearOnboardingHandoff();
+  emit({ state: emptyGuestState(), isHydrated: true });
 }

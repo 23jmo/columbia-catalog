@@ -78,7 +78,7 @@ export function CommitmentCard({
             if (event.key === "Escape") onClose();
           }}
           placeholder="Commitment"
-          className="min-w-0 flex-1 bg-transparent text-lg font-semibold text-text-primary outline-none placeholder:text-text-tertiary"
+          className="min-w-0 flex-1 bg-transparent text-title-3-semibold text-text-primary outline-none placeholder:text-text-tertiary"
         />
         <button
           type="button"
@@ -90,7 +90,7 @@ export function CommitmentCard({
         </button>
       </div>
 
-      <p className="mb-3 text-sm text-text-tertiary">Every {WEEKDAY_LABEL[weekday]}</p>
+      <p className="mb-3 text-body-regular text-text-tertiary">Every {WEEKDAY_LABEL[weekday]}</p>
 
       <div className="mb-2 flex flex-col gap-2">
         <label className="flex items-center gap-2 rounded-xl bg-background-secondary-default px-3 py-2">
@@ -98,7 +98,7 @@ export function CommitmentCard({
           <select
             value={weekday}
             onChange={(event) => onWeekdayChange(event.target.value as Weekday)}
-            className="min-w-0 flex-1 bg-transparent text-sm text-text-primary outline-none"
+            className="min-w-0 flex-1 bg-transparent text-body-regular text-text-primary outline-none"
             aria-label="Weekday"
           >
             {(Object.keys(WEEKDAY_LABEL) as Weekday[]).map((day) => (
@@ -118,7 +118,7 @@ export function CommitmentCard({
               const parsed = parseTimeInput(event.target.value);
               if (parsed !== null) onStartChange(parsed);
             }}
-            className="min-w-0 flex-1 bg-transparent text-sm tabular-nums text-text-primary outline-none"
+            className="min-w-0 flex-1 bg-transparent text-body-regular tabular-nums text-text-primary outline-none"
             aria-label="Start time"
           />
           <RiArrowRightLine className="size-4 shrink-0 text-foreground-icon-tertiary" aria-hidden />
@@ -129,10 +129,10 @@ export function CommitmentCard({
               const parsed = parseTimeInput(event.target.value);
               if (parsed !== null) onEndChange(parsed);
             }}
-            className="min-w-0 flex-1 bg-transparent text-sm tabular-nums text-text-primary outline-none"
+            className="min-w-0 flex-1 bg-transparent text-body-regular tabular-nums text-text-primary outline-none"
             aria-label="End time"
           />
-          <span className="shrink-0 rounded-full bg-background-tertiary-default px-2 py-0.5 text-xs text-text-tertiary tabular-nums">
+          <span className="shrink-0 rounded-full bg-background-tertiary-default px-2 py-0.5 text-caption-1-regular text-text-tertiary tabular-nums">
             {formatDuration(startMinute, endMinute)}
           </span>
         </div>

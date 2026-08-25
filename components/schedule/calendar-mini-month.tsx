@@ -32,9 +32,14 @@ function MiniMonthHeader() {
 
   return (
     <div className="flex items-center justify-between gap-1">
+      {/*
+        28px steppers. They sit at opposite ends of the row with the month
+        title between them, so each can take the full 44px on a touch device
+        without the two hit areas ever meeting.
+      */}
       <RACButton
         slot="previous"
-        className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-text-secondary outline-none transition-colors hover:bg-background-secondary-hover"
+        className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-text-secondary outline-none transition-colors hover:bg-background-secondary-hover pointer-coarse:size-11"
       >
         <ChevronLeft16 />
       </RACButton>
@@ -43,7 +48,7 @@ function MiniMonthHeader() {
       </span>
       <RACButton
         slot="next"
-        className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-text-secondary outline-none transition-colors hover:bg-background-secondary-hover"
+        className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-text-secondary outline-none transition-colors hover:bg-background-secondary-hover pointer-coarse:size-11"
       >
         <ChevronRight16 />
       </RACButton>
@@ -90,9 +95,18 @@ export function CalendarMiniMonth({
                 </CalendarHeaderCell>
               )}
             </CalendarGridHeader>
+            {/*
+              `CalendarCell` is the pressable element; `DayCell` inside it is a
+              fixed 32px square that draws the pill. Padding on the cell
+              therefore grows the target without touching the artwork — 42
+              adjacent 49×32 cells is the densest grid of taps in the app, and
+              12px of vertical padding takes each to 44 while the 2px
+              `borderSpacing` keeps rows from colliding. The month gets ~72px
+              taller on a phone, which is the price of hitting the day you meant.
+            */}
             <CalendarGridBody>
               {(date) => (
-                <CalendarCell date={date} className="p-0 outline-none">
+                <CalendarCell date={date} className="p-0 outline-none pointer-coarse:py-1.5">
                   {(cellProps) => <DayCell {...cellProps} isRange={false} />}
                 </CalendarCell>
               )}

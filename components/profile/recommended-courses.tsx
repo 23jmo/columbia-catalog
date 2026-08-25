@@ -44,6 +44,14 @@ export function RecommendedCourses({
   hasPrograms,
   className,
 }: RecommendedCoursesProps) {
+  /*
+   * With nothing declared there is nothing to recommend and no way to explain
+   * that which is not just "declare a degree" a third time — the hero says it
+   * and the sign-in card says it. An empty card titled "0 courses" above a
+   * sentence apologising for the zero is scaffolding pretending to be content.
+   */
+  if (recommendations.length === 0 && !hasPrograms) return null;
+
   return (
     <section
       className={cx(
@@ -67,10 +75,16 @@ export function RecommendedCourses({
             className="mt-px size-4 shrink-0 text-foreground-icon-tertiary"
             aria-hidden
           />
+          {/*
+            What is left is matched on a curriculum flag rather than a course
+            list, so there is no list to offer — search is the tool for those,
+            and each requirement above already links to the Bulletin page that
+            defines it. That reasoning does not need restating here; the reader
+            needs to know there is nothing to click.
+          */}
           <p className="text-body-regular text-pretty text-text-secondary">
-            {hasPrograms
-              ? `Nothing to suggest for ${termLabel}. Either your named requirements are done, or what is left is matched on a curriculum flag rather than a course list — search is the right tool for those, and each requirement above links to the Bulletin page that defines it.`
-              : "Declare a school and a major above and this fills with courses that would move your audit forward."}
+            Nothing to suggest for {termLabel}. What is left is matched by curriculum flag —
+            search for those.
           </p>
         </div>
       ) : (
@@ -88,7 +102,7 @@ export function RecommendedCourses({
                       <h3 className="text-headline-semibold text-pretty text-text-primary">
                         <a
                           href={`/course/${offering.courseId}`}
-                          className="rounded-lg outline-none transition-colors duration-150 ease hover:text-accent-600 focus-visible:ring-2 focus-visible:ring-border-focus-ring"
+                          className="rounded-lg outline-none transition-colors duration-150 hover:text-accent-600 focus-visible:ring-2 focus-visible:ring-border-focus-ring"
                         >
                           {offering.title}
                         </a>
@@ -115,16 +129,25 @@ export function RecommendedCourses({
                     {requirement.programName}
                   </p>
 
-                  <ul className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    {reasons.map((reason) => (
-                      <li
-                        key={reason}
-                        className="text-caption-2-regular text-text-tertiary before:mr-2 before:content-['·'] first:before:hidden"
-                      >
-                        {reason}
-                      </li>
-                    ))}
-                  </ul>
+                  {/*
+                    Only the reasons that are not already on the card. A
+                    recommendation whose only distinction is "it counts toward
+                    the thing named on the line above" now prints nothing here,
+                    which is correct — the row exists to carry what is unusual
+                    about this course, and most of them are not unusual.
+                  */}
+                  {reasons.length > 0 ? (
+                    <ul className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      {reasons.map((reason) => (
+                        <li
+                          key={reason}
+                          className="text-caption-2-regular text-text-tertiary before:mr-2 before:content-['·'] first:before:hidden"
+                        >
+                          {reason}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
 
                   {/*
                     Spec §3 and AGENTS.md: a seat number never renders without

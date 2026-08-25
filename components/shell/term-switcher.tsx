@@ -137,12 +137,18 @@ export function TermSwitcher({
       <DropdownTrigger
         aria-label={`Term: ${selectedLabel}. Change term`}
         className={cx(
-          "flex h-9 items-center gap-2 transition-colors duration-150 ease",
+          // `compact` is the phone header's variant, so it carries the touch
+          // floor. See `BookmarkButton` for why this keys off pointer type.
+          "flex h-9 touch-manipulation items-center gap-2",
+          "transition-[color,background-color,border-color,transform,scale] duration-150 ease-out",
+          "active:scale-[0.97] active:duration-[160ms]",
+          "motion-reduce:transition-none motion-reduce:active:scale-100",
+          compact && "pointer-coarse:h-11",
           appearance === "sidebar"
             ? cx(
                 "rounded-full bg-background-tertiary-default py-2 pl-2 pr-2.5",
                 "hover:bg-background-tertiary-hover/55",
-                compact ? "w-9 justify-center px-2" : "w-full justify-between",
+                compact ? "w-9 justify-center px-2 pointer-coarse:w-11" : "w-full justify-between",
               )
             : cx(
                 "rounded-2lg border border-border-button-default bg-background-primary-default p-2 shadow-xs",

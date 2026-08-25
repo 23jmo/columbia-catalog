@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import type { InstructorPageData } from "@/lib/data/instructors";
 import { cx } from "@/utils/cx";
+import { InstructorSection } from "./section-block";
 import { countLabel, durationLabel, shortDateLabel } from "./format";
 
 /**
@@ -40,8 +41,18 @@ function StepButton({
       onClick={onPress}
       disabled={disabled}
       className={cx(
-        "flex size-4 shrink-0 items-center justify-center rounded-[3px] text-text-secondary",
-        "outline-none transition-colors duration-150 ease focus-visible:ring-2 focus-visible:ring-border-focus-ring",
+        "relative flex size-4 shrink-0 items-center justify-center rounded-[3px] text-text-secondary",
+        /*
+         * 16×16 is a WCAG 2.5.8 failure outright, and these two are the only
+         * way to move through the months. The glyph is right at 16px — a
+         * 44px chevron in a 32px pill would be absurd — so the hit area grows
+         * on its own, the way the toast close button does. `-inset-3` lands a
+         * 40px square; the two buttons sit at opposite ends of a 150px pill,
+         * so the areas cannot reach each other, and what they do overlap is
+         * the month label, which is not interactive.
+         */
+        "before:absolute before:-inset-3 before:content-['']",
+        "outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-border-focus-ring",
         disabled ? "cursor-not-allowed opacity-30" : "cursor-pointer hover:bg-background-secondary-hover",
       )}
     >
@@ -89,26 +100,12 @@ export function TeachingRhythmCard({ months, className }: TeachingRhythmCardProp
   const totalMinutes = month.days.reduce((sum, day) => sum + day.minutes, 0);
   const meetings = month.days.reduce((sum, day) => sum + day.sections, 0);
 
-  return (
-    <section
-      className={cx(
-        "relative flex w-full flex-col gap-2.5 rounded-[20px] bg-background-secondary-default px-2.5 py-3",
-        className,
-      )}
-    >
-      <div className="flex w-full px-1.5 pt-1">
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <p className="w-full text-body-medium text-text-secondary">Teaching rhythm</p>
-          <p
-            key={month.key}
-            className="animate-number-fade text-title-2-medium whitespace-nowrap tabular-nums text-text-primary"
-          >
-            {countLabel(meetings)} class {meetings === 1 ? "meeting" : "meetings"}
-          </p>
-        </div>
-      </div>
-
-      <div className="absolute top-4 right-4 flex h-8 w-[150px] shrink-0 items-center justify-between gap-1 rounded-2lg border border-border-button-default bg-background-primary-default px-1 py-1 shadow-xs">
+  const monthStepper = (
+    /* `min-w`, not `w`: at a fixed 150px "September 2026" clipped to
+       "September 202(". The label sizes itself through the invisible copy
+       inside, so letting the box grow costs nothing and fixes every long
+       month at once. */
+    <div className="flex h-8 min-w-[150px] shrink-0 items-center justify-between gap-1 rounded-2lg border border-border-button-default bg-background-primary-default px-1 py-1 shadow-xs">
         <StepButton
           direction="previous"
           disabled={index === 0}
@@ -123,8 +120,21 @@ export function TeachingRhythmCard({ months, className }: TeachingRhythmCardProp
           disabled={index >= months.length - 1}
           onPress={() => setIndex((current) => Math.min(months.length - 1, current + 1))}
         />
-      </div>
+    </div>
+  );
 
+  return (
+    <div className={cx("w-full", className)}>
+      <InstructorSection
+        id="instructor-teaching-rhythm"
+        title="Teaching rhythm"
+        headline={
+          <span key={month.key} className="animate-number-fade whitespace-nowrap tabular-nums">
+            {countLabel(meetings)} class {meetings === 1 ? "meeting" : "meetings"}
+          </span>
+        }
+        action={monthStepper}
+      >
       <div
         className="flex w-full items-end gap-[3px]"
         style={{ height: PLOT_HEIGHT }}
@@ -148,7 +158,7 @@ export function TeachingRhythmCard({ months, className }: TeachingRhythmCardProp
                     : `${shortDateLabel(day.date)} · no class`
                 }
                 className={cx(
-                  "animate-bar-rise w-full rounded-sm transition-[height,background-color] duration-300 ease",
+                  "animate-bar-rise w-full rounded-sm transition-[height,background-color] duration-300 ease-in-out",
                   teaching ? "bg-chart-agents-bar" : "bg-chart-track",
                 )}
                 style={{ height, animationDelay: `${at * 22}ms` }}
@@ -158,11 +168,12 @@ export function TeachingRhythmCard({ months, className }: TeachingRhythmCardProp
         })}
       </div>
 
-      <div className="flex w-full items-start justify-between px-1.5 text-[11px] leading-[15px] font-medium tracking-[0.2px] whitespace-nowrap text-text-tertiary">
+      <div className="flex w-full items-start justify-between text-caption-2-medium whitespace-nowrap text-text-tertiary">
         <p>{shortDateLabel(month.days[0].date)}</p>
         <p className="tabular-nums">{durationLabel(totalMinutes)} total</p>
         <p>{shortDateLabel(month.days[month.days.length - 1].date)}</p>
       </div>
-    </section>
+      </InstructorSection>
+    </div>
   );
 }

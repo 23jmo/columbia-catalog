@@ -173,7 +173,28 @@ export function useHoverCard({ onOpen }: HoverCardOptions = {}): HoverCard {
 export const HOVER_CARD_SURFACE = [
   "z-50 rounded-2lg border border-border-button-default p-3",
   "bg-background-primary-default text-text-primary shadow-dropdown",
-  "transition duration-200 ease-out motion-reduce:transition-none",
+  "transition duration-200 ease-out",
+  /*
+   * Reduced motion drops the movement, not the feedback. `transition-none`
+   * here used to kill the scale, the opacity AND the blur at once, so the card
+   * popped in at full contrast. Suppressing only the scale and blur leaves the
+   * fade, which is the part that aids comprehension rather than decorating.
+   */
+  "motion-reduce:data-[entering]:scale-100 motion-reduce:data-[exiting]:scale-100",
+  "motion-reduce:data-[entering]:blur-none motion-reduce:data-[exiting]:blur-none",
+  /*
+   * Grow out of the trigger, not out of the card's own middle. React Aria
+   * stamps `data-placement` with the resolved side, so the origin follows the
+   * card when it flips to avoid a viewport edge.
+   *
+   * Edge origins rather than corners because `data-placement` carries only the
+   * base side -- the `start` / `end` alignment never reaches the attribute, so
+   * `origin-top-left` would be right for the instructor chip (`bottom start`)
+   * and wrong for the seat chip (`bottom end`). Same shape as the dropdown
+   * family at components/base/dropdown/menu-styles.ts.
+   */
+  "data-[placement=bottom]:origin-top data-[placement=top]:origin-bottom",
+  "data-[placement=left]:origin-right data-[placement=right]:origin-left",
   "data-[entering]:scale-95 data-[entering]:opacity-0 data-[entering]:blur-[4px]",
   "data-[exiting]:scale-95 data-[exiting]:opacity-0 data-[exiting]:blur-[4px]",
 ].join(" ");

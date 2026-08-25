@@ -76,10 +76,13 @@ const EnrollmentAreaChart = dynamic(
   { ssr: false, loading: () => <ChartSkeleton /> },
 );
 
-function ChartSkeleton() {
+function ChartSkeleton({ compact = false }: { compact?: boolean }) {
   return (
     <div
-      className="h-52 w-[320px] animate-pulse rounded-2lg bg-background-secondary-default"
+      className={cx(
+        "animate-pulse rounded-2lg bg-background-secondary-default",
+        compact ? "h-8 w-48" : "h-52 w-[320px]",
+      )}
       aria-label="Loading seat history"
     />
   );
@@ -91,6 +94,15 @@ const TONE_TEXT: Record<SeatReading["tone"], string> = {
   full: "text-status-rose-text",
   waitlist: "text-status-purple-text",
   unknown: "text-text-secondary",
+};
+
+/** Filled width behind the label — same tones as `SeatMeter`, integrated into the chip. */
+const TONE_FILL: Record<SeatReading["tone"], string> = {
+  open: "bg-status-lime-background",
+  tight: "bg-status-yellow-background",
+  full: "bg-status-rose-background",
+  waitlist: "bg-status-purple-background",
+  unknown: "bg-background-tertiary-default",
 };
 
 type HistoryState =
@@ -118,10 +130,36 @@ export interface EnrollmentChipProps {
   >;
   /** "Fall 2026" — printed above the number inside the card. */
   termLabel?: string;
+  /** When the parent lays out stamp on its own grid row (drawer meeting row). */
+  hideProvenance?: boolean;
+  /**
+   * Stretch to the parent's width. The feed rail pins meters to one line
+   * across cards; a shrink-to-content chip would sit at a different x on
+   * every card and "which has room" would stop being a glance.
+   */
+  fill?: boolean;
+  /**
+   * Smaller hover chart. The feed rail is 22rem wide; the full 320px
+   * instrument covers the card it is meant to explain.
+   */
+  compact?: boolean;
+  /**
+   * Popover placement. Feed cards sit above the composer, so they pass
+   * `"top"` to keep the chart from covering the box.
+   */
+  placement?: "bottom end" | "bottom start" | "top" | "top end";
   className?: string;
 }
 
-export function EnrollmentChip({ section, termLabel, className }: EnrollmentChipProps) {
+export function EnrollmentChip({
+  section,
+  termLabel,
+  hideProvenance = false,
+  fill = false,
+  compact = false,
+  placement = "bottom end",
+  className,
+}: EnrollmentChipProps) {
   const reading = readSeats(section);
   const hasRatio = reading.enrolled != null && reading.capacity != null;
   const waiting = reading.waitlistCount ?? 0;
@@ -153,63 +191,131 @@ export function EnrollmentChip({ section, termLabel, className }: EnrollmentChip
   }, [section.sectionId]);
 
   const card = useHoverCard({ onOpen: loadHistory });
+  // Occupancy, not remainder. Filling by seats left made an 8-seat section
+  // paint an 8% sliver, which read as a broken two-tone bar. The headline
+  // already says how many are left; the fill is "how full is this".
+  const fillPercent =
+    reading.enrolled != null && reading.capacity != null && reading.capacity > 0
+      ? Math.min(100, Math.round((reading.enrolled / reading.capacity) * 100))
+      : null;
 
   return (
-    <div className={cx("flex flex-col items-start gap-1.5", className)}>
+    <div className={cx("flex w-full flex-col items-stretch gap-1 sm:gap-1", className)}>
       <button
         ref={chipRef}
         type="button"
         aria-label={`${reading.headline}. Show this section's seat history.`}
         {...card.triggerProps}
         className={cx(
-          "group inline-flex cursor-pointer items-baseline gap-2 rounded-lg px-3 py-2",
-          "border border-border-table bg-background-secondary-default",
-          "transition-colors duration-150 ease outline-none motion-reduce:transition-none",
-          "hover:bg-background-tertiary-default",
+          "group relative overflow-hidden rounded-lg border border-border-table bg-background-secondary-default",
+          "transition-colors duration-150 outline-none",
           "focus-visible:ring-2 focus-visible:ring-border-focus-ring",
+          /* Match `WeekStrip` (size-7) on sm+ so the chip sits on the same line. */
+          fill ? "h-7 w-full" : "sm:h-7 sm:max-w-full",
         )}
       >
+        {fillPercent != null ? (
+          <span
+            aria-hidden
+            className={cx(
+              "absolute inset-y-0 left-0 w-full origin-left",
+              "transition-transform duration-300 ease-out motion-reduce:transition-none",
+              TONE_FILL[reading.tone],
+            )}
+            style={{ transform: `scaleX(${fillPercent / 100})` }}
+          />
+        ) : null}
+
+        <span
+          aria-hidden
+          className={cx(
+            "pointer-events-none absolute inset-0 bg-background-tertiary-default opacity-0",
+            "transition-opacity duration-150 ease-out",
+            "group-hover:opacity-40 group-focus-visible:opacity-40",
+          )}
+        />
+
+        <span
+          className={cx(
+            "relative flex h-full w-full cursor-pointer items-center justify-between gap-3 px-3 py-1.5",
+            fill
+              ? "px-2.5 py-0"
+              : "sm:inline-flex sm:w-auto sm:max-w-full sm:flex-nowrap sm:items-center sm:justify-start sm:gap-x-1.5 sm:px-2.5 sm:py-0",
+          )}
+        >
         {reading.remaining != null ? (
-          <>
-            <span className={cx("text-headline-semibold tabular-nums", TONE_TEXT[reading.tone])}>
+          <span className="flex min-w-0 items-center gap-1.5 sm:gap-1">
+            <span
+              className={cx(
+                "tabular-nums",
+                fill ? "text-caption-1-semibold" : "text-headline-semibold sm:text-caption-1-semibold",
+                TONE_TEXT[reading.tone],
+              )}
+            >
               {reading.remaining}
             </span>
-            <span className="text-caption-1-regular text-text-secondary">seats left</span>
-          </>
+            <span className="text-caption-1-regular text-text-secondary sm:whitespace-nowrap">
+              seats left
+            </span>
+          </span>
         ) : (
-          <span className={cx("text-headline-medium", TONE_TEXT[reading.tone])}>
+          <span
+            className={cx(
+              "min-w-0",
+              fill ? "text-caption-1-semibold" : "text-headline-medium sm:text-caption-1-semibold",
+              TONE_TEXT[reading.tone],
+            )}
+          >
             {reading.headline}
           </span>
         )}
 
-        {hasRatio ? (
-          <span className="text-caption-1-regular tabular-nums text-text-tertiary">
-            · {reading.enrolled} / {reading.capacity} enrolled
-          </span>
-        ) : null}
-
-        {waiting > 0 ? (
-          <span className="text-caption-1-regular tabular-nums text-status-purple-text">
-            · {waiting} waiting
-          </span>
-        ) : null}
-
         {/*
-          The affordance. Without it the chip is a static fact and nobody
-          discovers the chart — the same reason the call number carries a copy
-          glyph rather than relying on people trying a click.
+          Trailing cluster. One flex row on mobile; `sm:contents` at `sm+` so
+          ratio and icon rejoin the chip's wrap flow as separate inline spans.
         */}
-        <RiLineChartLine
-          aria-hidden
-          className={cx(
-            "size-3.5 shrink-0 self-center text-foreground-icon-tertiary",
-            "transition-colors duration-150 ease motion-reduce:transition-none",
-            "group-hover:text-foreground-icon-secondary",
-          )}
-        />
+        <span className={cx("flex shrink-0 items-center gap-2", !fill && "sm:contents")}>
+          {hasRatio ? (
+            <span className="text-caption-1-regular tabular-nums text-text-tertiary">
+              {fill ? (
+                <span>
+                  {reading.enrolled} / {reading.capacity}
+                </span>
+              ) : (
+                <>
+                  <span className="sm:hidden">
+                    {reading.enrolled}/{reading.capacity}
+                  </span>
+                  <span className="hidden sm:inline">
+                    · {reading.enrolled} / {reading.capacity} enrolled
+                  </span>
+                </>
+              )}
+            </span>
+          ) : null}
+
+          {waiting > 0 ? (
+            <span className="text-caption-1-regular tabular-nums text-status-purple-text">
+              <span className="sm:hidden">{waiting} wait</span>
+              <span className="hidden sm:inline">· {waiting} waiting</span>
+            </span>
+          ) : null}
+
+          <RiLineChartLine
+            aria-hidden
+            className={cx(
+              "size-3.5 shrink-0 self-center text-foreground-icon-tertiary",
+              "transition-colors duration-150",
+              "group-hover:text-foreground-icon-secondary",
+            )}
+          />
+        </span>
+        </span>
       </button>
 
-      <ProvenanceStamp sourceAsOf={section.sourceAsOf} />
+      {hideProvenance ? null : (
+        <ProvenanceStamp sourceAsOf={section.sourceAsOf} className="truncate px-0.5" />
+      )}
 
       {/*
         `isNonModal` so the rest of the panel stays live behind the card — this
@@ -225,26 +331,31 @@ export function EnrollmentChip({ section, termLabel, className }: EnrollmentChip
         // End-aligned because the chip now sits at the right edge of its row;
         // a start-aligned card would immediately hit the viewport and get
         // shifted back by collision handling anyway.
-        placement="bottom end"
+        placement={placement}
         offset={8}
-        className={HOVER_CARD_SURFACE}
+        className={cx(HOVER_CARD_SURFACE, compact && "p-2.5")}
       >
         <div {...card.surfaceProps}>
           {history.status === "ready" ? (
-            <div className="w-[320px]">
-              <EnrollmentAreaChart
-                points={history.points}
-                capacity={reading.capacity}
-                tone={reading.tone}
-                label={termLabel ? `Enrolled · ${termLabel}` : "Enrolled"}
-              />
-            </div>
+            <EnrollmentAreaChart
+              points={history.points}
+              capacity={reading.capacity}
+              tone={reading.tone}
+              compact={compact}
+              className={compact ? undefined : "w-[320px]"}
+              label={termLabel ? `Enrolled · ${termLabel}` : "Enrolled"}
+            />
           ) : history.status === "error" ? (
-            <p className="w-[320px] py-6 text-center text-caption-1-regular text-text-secondary">
+            <p
+              className={cx(
+                "text-center text-caption-1-regular text-text-secondary",
+                compact ? "py-1.5" : "w-[320px] py-6",
+              )}
+            >
               Could not load seat history right now.
             </p>
           ) : (
-            <ChartSkeleton />
+            <ChartSkeleton compact={compact} />
           )}
         </div>
       </Popover>

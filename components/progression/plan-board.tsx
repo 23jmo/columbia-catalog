@@ -88,7 +88,7 @@ export function PlanBoard({
                   onDragLeave={() => setDragOverTermKey((current) => (current === term.termKey ? null : current))}
                   onDrop={(event) => handleDrop(event, term.termKey)}
                   className={cx(
-                    "flex min-h-[132px] flex-col gap-2 rounded-2lg border p-3 transition-colors duration-150 ease",
+                    "flex min-h-[132px] flex-col gap-2 rounded-2lg border p-3 transition-colors duration-150",
                     dragOverTermKey === term.termKey
                       ? "border-accent-500 bg-background-secondary-hover"
                       : "border-border-table bg-background-primary-default",
@@ -193,7 +193,7 @@ function PlannedCourse({
           type="button"
           onClick={() => onRemove(courseId, termKey)}
           aria-label={`Remove ${courseLabel(graph, courseId)} from this term`}
-          className="shrink-0 rounded-sm p-0.5 text-text-tertiary opacity-0 transition-opacity duration-150 ease group-hover:opacity-100 hover:text-text-primary focus-visible:opacity-100"
+          className="shrink-0 rounded-sm p-0.5 text-text-tertiary opacity-0 transition-opacity duration-150 ease-out group-hover:opacity-100 hover:text-text-primary focus-visible:opacity-100"
         >
           <RiCloseLine className="size-3.5" aria-hidden />
         </button>

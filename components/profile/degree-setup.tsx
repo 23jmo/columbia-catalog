@@ -162,7 +162,7 @@ export function DegreeSetup({
                     aria-pressed={selected}
                     onClick={() => setSchool(selected ? null : option)}
                     className={cx(
-                      "flex flex-col items-start gap-0.5 rounded-2lg border p-2.5 text-left transition-colors duration-150 ease",
+                      "flex flex-col items-start gap-0.5 rounded-2lg border p-2.5 text-left transition-colors duration-150",
                       "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
                       selected
                         ? "border-accent-500 bg-background-secondary-default"
@@ -204,7 +204,7 @@ export function DegreeSetup({
                 {visible.map((option) => (
                   <label
                     key={option.id}
-                    className="flex cursor-pointer items-start gap-2.5 rounded-2lg p-2 transition-colors duration-150 ease hover:bg-background-secondary-hover"
+                    className="flex cursor-pointer items-start gap-2.5 rounded-2lg p-2 transition-colors duration-150 hover:bg-background-secondary-hover"
                   >
                     <Checkbox
                       isSelected={programIds.includes(option.id)}

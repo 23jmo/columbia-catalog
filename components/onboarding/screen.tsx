@@ -1,16 +1,20 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { RiArrowLeftLine, RiArrowRightLine } from "@remixicon/react";
 
+import { OrnamentAvatar } from "@/components/ornament/ornament-avatar";
 import { cx } from "@/utils/cx";
+
+import { TypewriterQuestion } from "./typewriter-question";
 
 /**
  * The onboarding surface: one question, centred, on an empty ground.
  *
  * ── Why this is a takeover and not a page ───────────────────────────────────
  *
- * Every other route in the app wears `AppShell` — nav rail, tab bar, header.
+ * Every other route in the app wears `AppShell` — nav rail, hamburger bar.
  * This one deliberately does not. A student in setup has exactly one job, and
  * a nav rail is five invitations to abandon it half-finished, which leaves a
  * profile that is worse than no profile: enough coursework to look answered,
@@ -45,6 +49,22 @@ import { cx } from "@/utils/cx";
  * guarantee: `goBack` moves the cursor and never touches the record.
  */
 
+/**
+ * 240ms: comfortably inside the 300ms cap for UI motion, and long enough that a
+ * whole-screen change reads as deliberate rather than as a flicker.
+ *
+ * The curve is a literal only because `motion` JS configs cannot read a CSS
+ * custom property. It is the same cubic-bezier as the `--ease-out` token in
+ * styles/theme.css -- if that token is retuned, this array must be updated by
+ * hand to match.
+ */
+const STEP_TRANSITION = { duration: 0.24, ease: [0.23, 1, 0.32, 1] } as const;
+
+/** How far a screen travels as it is replaced. Short on purpose: the content
+ *  is being swapped, not carried somewhere, and a full-width slide would read
+ *  as a carousel and fight the typewriter. */
+const STEP_OFFSET_PX = 24;
+
 export interface OnboardingScreenProps {
   /** The whole of the screen's copy. Sentence case, ends in `?` or `.`. */
   question: string;
@@ -75,6 +95,19 @@ export interface OnboardingScreenProps {
   /** Which two-hue pairing the ornament wears. One per screen, so the flow
    *  shifts colour as it advances without ever animating. */
   hue?: OrnamentHue;
+  /**
+   * Pin the screen to the viewport and clip overflow.
+   *
+   * The last step ranks up to ten cards. Guests must not be able to scroll
+   * past the sign-in overlay and browse them. Signed-in students get the
+   * same stack with the lock off, so they can actually read it.
+   */
+  lockViewport?: boolean;
+  /**
+   * Which way the flow just moved: `1` forward, `-1` back. Drives the direction
+   * of the step transition so going back visibly reverses going forward.
+   */
+  direction?: 1 | -1;
 }
 
 export function OnboardingScreen({
@@ -88,9 +121,38 @@ export function OnboardingScreen({
   wide = false,
   hasPinnedToast = false,
   hue,
+  lockViewport = false,
+  direction = 1,
 }: OnboardingScreenProps) {
+  /*
+   * Reduced motion keeps the crossfade and drops the horizontal travel. The
+   * fade is what signals that the question has been replaced; removing it too
+   * would make the flow jump between screens with no transition at all.
+   */
+  const shouldReduceMotion = useReducedMotion();
+  const offset = shouldReduceMotion ? 0 : STEP_OFFSET_PX;
+  // Belt-and-suspenders for iOS rubber-banding: a child with overflow-hidden
+  // is not always enough; the document itself has to refuse to scroll.
+  useEffect(() => {
+    if (!lockViewport) return;
+    const html = document.documentElement;
+    const previousOverflow = html.style.overflow;
+    const previousOverscroll = html.style.overscrollBehavior;
+    html.style.overflow = "hidden";
+    html.style.overscrollBehavior = "none";
+    return () => {
+      html.style.overflow = previousOverflow;
+      html.style.overscrollBehavior = previousOverscroll;
+    };
+  }, [lockViewport]);
+
   return (
-    <div className="relative flex min-h-dvh w-full flex-col bg-background-secondary-default">
+    <div
+      className={cx(
+        "relative flex w-full flex-col bg-background-secondary-default",
+        lockViewport ? "h-dvh overflow-hidden overscroll-none" : "min-h-dvh",
+      )}
+    >
       {onBack ? <BackArrow onClick={onBack} /> : null}
 
       {/*
@@ -109,15 +171,52 @@ export function OnboardingScreen({
           // Deep enough to clear the toast card at its two-line worst, which is
           // what a 390px viewport gives it.
           hasPinnedToast ? "pb-44" : "pb-24",
+          lockViewport && "min-h-0 overflow-hidden",
         )}
       >
-        <Ornament hue={hue} />
+        <OrnamentAvatar hue={hue} mood="tracking" />
 
-        <h1 className="mt-7 text-center text-display-4-regular -tracking-[0.02em] text-balance text-text-primary sm:mt-9 sm:text-display-3-regular">
-          {question}
-        </h1>
+        {/*
+          Keyed on the question rather than on the flow's step: the degree step
+          asks up to four separate questions under one step name, and each of
+          them is a screen the student experiences as its own.
 
-        <div className="mt-8 w-full sm:mt-10">{children}</div>
+          `mode="wait"` so the outgoing question is gone before the incoming one
+          arrives -- two full-screen questions on top of each other are
+          unreadable. `initial={false}` so the first screen does not animate in
+          on page load.
+
+          The wrapper repeats the column's flex properties because it now sits
+          between the column and the content, and `lockViewport`'s `flex-1`
+          child needs a flex parent to resolve against.
+        */}
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={question}
+            initial={{ opacity: 0, transform: `translateX(${direction * offset}px)` }}
+            animate={{ opacity: 1, transform: "translateX(0px)" }}
+            exit={{ opacity: 0, transform: `translateX(${-direction * offset}px)` }}
+            transition={STEP_TRANSITION}
+            className={cx(
+              "flex w-full flex-col items-center",
+              lockViewport && "min-h-0 flex-1",
+            )}
+          >
+            <TypewriterQuestion
+              text={question}
+              className="mt-7 text-center text-display-4-regular -tracking-[0.02em] text-text-primary sm:mt-9 sm:text-display-3-regular"
+            />
+
+            <div
+              className={cx(
+                "mt-8 w-full sm:mt-10",
+                lockViewport && "min-h-0 flex-1 overflow-hidden",
+              )}
+            >
+              {children}
+            </div>
+          </motion.div>
+        </AnimatePresence>
 
         {onNext ? (
           <AdvanceArrow onClick={onNext} disabled={!canAdvance} label={nextLabel} />
@@ -138,131 +237,133 @@ export function OnboardingScreen({
  * ========================================================================== */
 
 /**
- * The hue pairings, one per screen.
+ * Columbia navy pairings — one per screen.
  *
- * Two hues, never one. A single-hue disc is a ball; the shift from one hue to
- * another across the face is the whole reason this reads as light rather than
- * as an icon. The pairings are deliberately unbalanced — a warm and a cool —
- * because two neighbouring hues just look like a printing error.
- *
- * These are Tailwind's built-in palette vars, the same source
- * `--contribution-tier-*` in `styles/globals.css` already reads from. They are
- * fixed hues rather than theme tokens, which is why every one of them is mixed
- * down into `--color-background-secondary-default` below: that token IS
- * theme-aware, so the mix lands near the page's own ground in either theme
- * instead of glowing at full strength against a dark one.
+ * The app's accent ramp already defaults to BoardUI blue; these lean into the
+ * darker end (700–950) with a lighter blue highlight (400–600) so the disc
+ * reads as Columbia navy rather than a generic pastel gradient.
  */
 const ORNAMENT_HUES = {
-  roseBlue: ["--color-rose-400", "--color-blue-500"],
-  roseCyan: ["--color-rose-400", "--color-cyan-500"],
-  cyanRose: ["--color-cyan-500", "--color-rose-400"],
-  violetRose: ["--color-violet-500", "--color-rose-400"],
-  tealViolet: ["--color-teal-500", "--color-violet-500"],
-  blueRose: ["--color-blue-500", "--color-rose-400"],
-  cyanViolet: ["--color-cyan-500", "--color-violet-500"],
+  roseBlue: ["--color-blue-900", "--color-blue-500"],
+  roseCyan: ["--color-blue-950", "--color-blue-600"],
+  cyanRose: ["--color-blue-800", "--color-blue-400"],
+  violetRose: ["--color-blue-900", "--color-blue-700"],
+  tealViolet: ["--color-blue-950", "--color-blue-500"],
+  blueRose: ["--color-blue-800", "--color-blue-600"],
+  cyanViolet: ["--color-blue-900", "--color-blue-400"],
 } as const;
 
 export type OrnamentHue = keyof typeof ORNAMENT_HUES;
 
 /**
- * The ornament above the headline.
- *
- * ── What it is not ──────────────────────────────────────────────────────────
- *
- * The first version of this was a sphere: one hue, a specular highlight at 30%
- * 26%, an inset shadow along the bottom edge, and a hard circular rim. Those
- * four things together are the visual grammar of a 3D marble or a voice
- * assistant's microphone button, and it was the one element on the page that
- * announced itself as decoration. All four are gone. There is no highlight, no
- * inset shadow, no rim, and no single hue.
- *
- * ── What it is ──────────────────────────────────────────────────────────────
- *
- * Three overlapping radial gradients — two offset hue blooms and a centre wash
- * — under a grain overlay, the whole thing masked by a fourth radial so the
- * disc DISSOLVES at its edge rather than terminating. The mask is what does the
- * real work: it starts fading at 34% of the radius, so there is no point at
- * which the shape has a boundary you could trace. `overflow-hidden` and
- * `rounded-full` are deliberately absent, because both would reintroduce
- * exactly the crisp circle the mask exists to avoid.
- *
- * Saturation is pulled down by mixing every hue into
- * `--color-background-secondary-default` — the page's own ground — rather than
- * into white or into transparent. Mixing toward the ground desaturates AND
- * keeps the disc sitting in the page in both themes; mixing toward transparent
- * would leave it fully saturated and merely faint.
- *
- * ── Static, and deliberately so ─────────────────────────────────────────────
- *
- * No canvas, no WebGL, no animation frame.
- * `components/shell/sign-in-prompt-shader.tsx` was checked first, as the one
- * existing piece of generative art in the app. It does not do grain: it is a
- * 48-particle 2D canvas driven by `requestAnimationFrame`, sized by a
- * `ResizeObserver`, shaped as a bottom-anchored flame filling its container's
- * right half. Nothing in it is reusable at 85px, and running an animation loop
- * on every screen of a setup flow to decorate one is a cost with no return.
+ * Flat Columbia medallion — navy + bronze patina, grain/dither, feathered edge.
+ * A seated-lion glyph (Alma Mater inspired, not the official mark) sits at ~14%
+ * opacity so it reads as embossed metal, not a logo stamp.
  */
+const FINE_GRAIN =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.85' numOctaves='5' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E\")";
+
+const COARSE_DITHER =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3Cfilter id='d'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.48' numOctaves='2' stitchTiles='stitch'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='discrete' tableValues='0 0.2 0.45 0.7 1'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23d)'/%3E%3C/svg%3E\")";
+
+const FINE_DITHER =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.15' numOctaves='3' stitchTiles='stitch'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='discrete' tableValues='0 0.5 1'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E\")";
+
+/** Soft falloff at the rim — dissolves into `background-secondary-default`. */
+const ORNAMENT_SIZE = 92;
+/** Extra canvas so the feather and grain are not clipped at the layout box. */
+const ORNAMENT_CANVAS = 116;
+const ORNAMENT_BLEED = (ORNAMENT_CANVAS - ORNAMENT_SIZE) / 2;
+
+const EDGE_FEATHER =
+  "radial-gradient(circle at 50% 50%, black 40%, rgba(0,0,0,0.82) 54%, rgba(0,0,0,0.42) 68%, rgba(0,0,0,0.14) 82%, transparent 100%)";
+
+const LION_GLYPH = "/onboarding/lion-glyph.svg";
+
 export function Ornament({ hue = "roseBlue" }: { hue?: OrnamentHue }) {
-  const [warm, cool] = ORNAMENT_HUES[hue];
-
-  /* Mixed toward the page's ground: desaturates and stays theme-aware. */
-  const soften = (token: string, strength: number) =>
-    `color-mix(in srgb, var(${token}) ${strength}%, var(--color-background-secondary-default))`;
-
-  /*
-   * Fades to `transparent`, not to the ground colour. A gradient that ends on
-   * an opaque colour paints a filled square behind the disc, which the mask
-   * then cuts into — a circle with a visible edge, the exact thing being
-   * avoided. Ending on transparent lets the three layers accumulate only where
-   * they actually overlap.
-   */
-  const bloom = (position: string, token: string, strength: number, radius: number) =>
-    `radial-gradient(circle at ${position}, ${soften(token, strength)} 0%, transparent ${radius}%)`;
-
-  const dissolve = "radial-gradient(circle at 50% 50%, black 34%, transparent 72%)";
+  const [deep, bright] = ORNAMENT_HUES[hue];
 
   return (
     <div
       aria-hidden
-      className="relative size-[85px] shrink-0"
-      style={{
-        backgroundImage: [
-          /*
-           * Placed close together with radii far wider than the gap between
-           * them, so the two blooms overlap across most of the disc and the
-           * hue shifts continuously. Pushed further apart — or given radii
-           * that stop short of each other — they resolve into two visibly
-           * separate blobs with a seam down the middle, which is the failure
-           * mode this geometry is tuned against.
-           */
-          bloom("38% 34%", warm, 66, 78),
-          bloom("64% 64%", cool, 66, 80),
-          // A wide, weak wash across the whole face, so the overlap lands on a
-          // third colour rather than on bare ground.
-          bloom("50% 50%", cool, 28, 92),
-        ].join(", "),
-        maskImage: dissolve,
-        WebkitMaskImage: dissolve,
-      }}
+      className="relative shrink-0 overflow-visible"
+      style={{ width: ORNAMENT_SIZE, height: ORNAMENT_SIZE }}
     >
       {/*
-        The grain, and the reason this does not read as a CSS gradient.
-
-        `soft-light` rather than `overlay`: overlay drives the light half toward
-        white and the dark half toward black, which rebuilds the very
-        highlight-and-shadow reading the sphere was dropped for. Soft-light
-        perturbs without polarising. It inherits the parent's mask, so the grain
-        dissolves at the edge along with everything else.
+        Paint larger than the layout box. Mask + grain need room past the rim;
+        a 92px clip was cutting the feather and bevel off flat.
       */}
-      <span
-        className="absolute inset-0"
+      <div
+        className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
         style={{
-          backgroundImage:
-            "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
-          mixBlendMode: "soft-light",
-          opacity: 0.55,
+          width: ORNAMENT_CANVAS,
+          height: ORNAMENT_CANVAS,
+          WebkitMaskImage: EDGE_FEATHER,
+          maskImage: EDGE_FEATHER,
         }}
-      />
+      >
+        <div
+          className="absolute inset-0 rounded-full"
+          style={{
+            backgroundColor: `color-mix(in srgb, var(${deep}) 88%, #5c4a38)`,
+            backgroundImage: [
+              `linear-gradient(180deg, color-mix(in srgb, var(${bright}) 12%, var(${deep})) 0%, color-mix(in srgb, var(${deep}) 92%, #3d342c) 100%)`,
+              `radial-gradient(circle at 50% 62%, color-mix(in srgb, #8a7355 14%, transparent) 0%, transparent 58%)`,
+            ].join(", "),
+            boxShadow: [
+              `inset 0 2.5px 0 color-mix(in srgb, var(${bright}) 52%, white)`,
+              `inset 0 -2.5px 0 color-mix(in srgb, var(${deep}) 62%, black)`,
+              `inset 0 3px 8px -3px color-mix(in srgb, var(${bright}) 22%, white)`,
+              `inset 0 -3px 8px -3px color-mix(in srgb, var(${deep}) 38%, black)`,
+            ].join(", "),
+          }}
+        >
+        {/* Seated-lion glyph — embossed medallion, barely there. */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={{
+            backgroundImage: `url(${LION_GLYPH})`,
+            backgroundSize: "70%",
+            backgroundPosition: "50% 56%",
+            backgroundRepeat: "no-repeat",
+            opacity: 0.14,
+            mixBlendMode: "soft-light",
+            filter: "sepia(0.35) brightness(1.08)",
+          }}
+        />
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 rounded-full"
+          style={{
+            backgroundImage: FINE_GRAIN,
+            backgroundSize: `${ORNAMENT_CANVAS}px ${ORNAMENT_CANVAS}px`,
+            mixBlendMode: "overlay",
+            opacity: 0.68,
+          }}
+        />
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 rounded-full"
+          style={{
+            backgroundImage: COARSE_DITHER,
+            backgroundSize: "56px 56px",
+            mixBlendMode: "hard-light",
+            opacity: 0.55,
+          }}
+        />
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 rounded-full"
+          style={{
+            backgroundImage: FINE_DITHER,
+            backgroundSize: "64px 64px",
+            mixBlendMode: "overlay",
+            opacity: 0.42,
+          }}
+        />
+        </div>
+      </div>
     </div>
   );
 }

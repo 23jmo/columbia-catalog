@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type ComponentType, type ReactNode } from "react";
+import { Fragment, Suspense, useState, type ComponentType, type ReactNode } from "react";
 import { RiCloseLine, RiSideBarFill } from "@remixicon/react";
 
 import { ThemeToggle } from "@/components/application/theme/theme-toggle";
 import { AccountMenu } from "@/components/shell/account-menu";
+import { ChatThreadList } from "@/components/shell/chat-thread-list";
 import { SHELL_NAV_ITEMS, type ShellNavKey } from "@/components/shell/nav";
 import { TermSwitcher } from "@/components/shell/term-switcher";
+import { SidebarSecondaryNav } from "@/components/shell/sidebar-secondary-nav";
 import { useDrawerPush } from "@/components/shell/use-drawer-push";
 import { cx } from "@/utils/cx";
 
@@ -25,7 +27,14 @@ function Collapsible({ collapsed, children }: { collapsed: boolean; children: Re
   return (
     <span
       className={cx(
-        "flex min-w-0 items-center overflow-hidden transition-[max-width,opacity] duration-300 ease-in-out motion-reduce:transition-none",
+        /*
+         * Only the opacity is animated. The `max-w-0` below still applies when
+         * collapsed -- it just snaps rather than easing, and `overflow-hidden`
+         * clips the label either way. Easing it added a layout animation to the
+         * app's second most frequent interaction while carrying no information
+         * the fade does not already carry.
+         */
+        "flex min-w-0 items-center overflow-hidden transition-opacity duration-150 ease-out motion-reduce:transition-none",
         collapsed ? "max-w-0 opacity-0" : "max-w-40 opacity-100",
       )}
     >
@@ -58,7 +67,7 @@ function NavItem({
       title={collapsed ? label : undefined}
       className={cx(
         "flex items-center overflow-hidden rounded-2lg p-2",
-        "transition-[width,background-color] duration-300 ease-in-out motion-reduce:transition-none",
+        "transition-colors duration-150 ease-out motion-reduce:transition-none",
         collapsed ? "size-9 justify-center" : "w-full",
         isSelected
           ? "bg-linear-to-b from-accent-500 to-accent-600 shadow-nav-selected"
@@ -90,7 +99,7 @@ export interface CatalogSidebarProps {
   mobile?: boolean;
   onClose?: () => void;
   onNavigate?: () => void;
-  /** Flush panel for the mobile drawer instead of the floating card. */
+  /** Flush panel for the mobile push rail instead of the floating card. */
   flat?: boolean;
   fluid?: boolean;
   className?: string;
@@ -156,9 +165,12 @@ export function CatalogSidebar({
       className={cx(
         "flex h-full shrink-0 flex-col justify-between overflow-hidden",
         flat
-          ? "border-r border-border-table bg-background-secondary-default"
+          ? "bg-background-secondary-default"
           : "rounded-3xl border border-border-button-white bg-background-secondary-default shadow-sidebar",
-        "transition-[width] ease-in-out motion-reduce:transition-none",
+        "transition-[width] ease-out motion-reduce:transition-none",
+        // The width collapse relayouts this subtree on every frame. Containment
+        // keeps that recalc from escaping into the results column beside it.
+        "[contain:layout_paint]",
         collapsed
           ? "w-[60px] px-[11px] py-3"
           : fluid
@@ -178,7 +190,7 @@ export function CatalogSidebar({
         {/* Account + collapse — mirrors BoardUI header row */}
         <div
           className={cx(
-            "flex w-full transition-[gap] duration-300 ease-in-out motion-reduce:transition-none",
+            "flex w-full",
             collapsed
               ? "flex-col-reverse items-start justify-center gap-2.5"
               : "flex-row items-center justify-between gap-2",
@@ -187,14 +199,16 @@ export function CatalogSidebar({
           <AccountMenu appearance="sidebar" compact={collapsed} />
 
           {mobile ? (
-            <button
-              type="button"
-              aria-label="Close navigation"
-              onClick={onClose}
-              className="cursor-pointer text-foreground-icon-secondary outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring"
-            >
-              <RiCloseLine className="size-5" aria-hidden />
-            </button>
+            onClose ? (
+              <button
+                type="button"
+                aria-label="Close navigation"
+                onClick={onClose}
+                className="cursor-pointer text-foreground-icon-secondary outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring"
+              >
+                <RiCloseLine className="size-5" aria-hidden />
+              </button>
+            ) : null
           ) : (
             <button
               type="button"
@@ -208,7 +222,7 @@ export function CatalogSidebar({
             >
               <RiSideBarFill
                 className={cx(
-                  "size-5 transition-transform duration-300 ease-in-out motion-reduce:transition-none",
+                  "size-5 transition-transform duration-150 ease-out motion-reduce:transition-none",
                   !collapsed && "-scale-x-100",
                 )}
                 aria-hidden
@@ -225,20 +239,32 @@ export function CatalogSidebar({
 
         <nav className={cx("flex w-full flex-col gap-1", !collapsed && "px-0.5")} aria-label="Primary">
           {SHELL_NAV_ITEMS.map((item) => (
-            <NavItem
-              key={item.key}
-              icon={item.icon}
-              label={item.label}
-              href={item.href}
-              isSelected={item.key === activeNav}
-              collapsed={collapsed}
-              onNavigate={onNavigate}
-            />
+            <Fragment key={item.key}>
+              <NavItem
+                icon={item.icon}
+                label={item.label}
+                href={item.href}
+                isSelected={item.key === activeNav}
+                collapsed={collapsed}
+                onNavigate={onNavigate}
+              />
+              {/*
+                Threads hang off Home the way files hang off a folder. Hidden
+                when the rail is collapsed — five truncated titles at 60px
+                wide are not a list, they are noise.
+              */}
+              {item.key === "home" && !collapsed ? (
+                <Suspense fallback={null}>
+                  <ChatThreadList onNavigate={onNavigate} />
+                </Suspense>
+              ) : null}
+            </Fragment>
           ))}
         </nav>
       </div>
 
       <div className="flex w-full shrink-0 flex-col gap-3 pt-2">
+        <SidebarSecondaryNav collapsed={collapsed} />
         {collapsed ? <ThemeToggle collapsed /> : <ThemeToggle appearance="sidebar-segmented" />}
       </div>
     </aside>

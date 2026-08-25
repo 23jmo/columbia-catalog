@@ -69,7 +69,7 @@ function Pill({
       aria-pressed={isActive}
       className={cx(
         "inline-flex h-7 cursor-pointer items-center rounded-full px-2.5",
-        "text-caption-1-medium whitespace-nowrap transition-colors duration-150 ease",
+        "text-caption-1-medium whitespace-nowrap transition-colors duration-150",
         "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
         isActive
           ? "bg-background-tertiary-default text-text-primary"

@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { RiArrowLeftLine } from "@remixicon/react";
 
 import {
   ClassroomLoadCard,
@@ -14,8 +12,11 @@ import {
   TeachingRhythmCard,
 } from "@/components/instructor";
 import { AppShell } from "@/components/shell/app-shell";
+import { pageIdentityContentClass } from "@/components/shell/page-hero-layout";
+import { PageContent } from "@/components/shell/page-content";
 import { CURRENT_TERM, termLabel } from "@/lib/constants";
 import { listInstructors, loadInstructorProfile } from "@/lib/data/instructors";
+import { getInstructorReputation } from "@/lib/db/reputation";
 
 /**
  * The instructor page.
@@ -56,15 +57,9 @@ import { listInstructors, loadInstructorProfile } from "@/lib/data/instructors";
  * being pursued as a partnership rather than a scrape.
  *
  * `generateStaticParams` prerenders the term's instructors — about four
- * thousand of them, not the "tens per subject" this comment used to claim.
- * That claim was true against the COMS seed and quietly stopped being true when
- * the database grew to the full catalog, at which point the build began dying
- * on a Postgres `statement_timeout`: every one of those pages calls
- * `loadInstructorProfile`, which reads the WHOLE term to find one person's
- * sections. `getAllCourses` now memoises per process, which is what makes
- * prerendering a set this size cost one catalog read per build worker instead
- * of one per page. Keep that in mind before adding another per-item caller of a
- * whole-collection read.
+ * thousand of them. `loadInstructorProfile` resolves the slug against
+ * `instructors` and joins through `section_instructors`, so each page is a
+ * small targeted read rather than paging the whole term catalog.
  */
 
 interface InstructorPageProps {
@@ -103,25 +98,26 @@ export default async function InstructorPage({ params }: InstructorPageProps) {
   const data = await loadInstructorProfile(slug, CURRENT_TERM);
   if (!data) notFound();
 
+  /*
+   * The same call `/course/[courseId]` already makes. Until this landed the two
+   * pages disagreed out loud: the course page rendered "Instructor quality,
+   * n=93, Sources: CULPA (93)" for Adam H Cannon while his own instructor page
+   * said "Not rated yet" — same person, same corpus, one of them hardcoded to
+   * `null` behind a TODO that outlived the thing it was waiting for.
+   *
+   * Fetched once here and handed to both the hero and the reviews card so they
+   * can never drift from each other either.
+   */
+  const reputation = await getInstructorReputation(data.name);
+
   return (
     <AppShell activeNav="search">
-      <div className="mx-auto flex w-full max-w-4xl flex-col items-center gap-4">
-        <Link
-          href="/search"
-          className="mr-auto inline-flex w-fit items-center gap-1.5 rounded-lg px-1.5 py-1 text-caption-1-medium text-text-secondary transition-colors outline-none hover:bg-background-primary-hover hover:text-text-primary focus-visible:ring-2 focus-visible:ring-border-focus-ring"
-        >
-          <RiArrowLeftLine aria-hidden className="size-4" />
-          All courses
-        </Link>
-
-        {/*
-          TODO(reviews): pass `summarizeInstructor(reviews)` from
-          `lib/reviews/aggregate` once a CULPA feed lands. `null` renders the
-          honest "not rated yet" state, which is the truth today — and it is the
-          same prop on both the hero and the reviews card, so one wiring lights
-          up the whole page.
-        */}
-        <InstructorProfileCard data={data} reputation={null} />
+      <PageContent className={pageIdentityContentClass()}>
+        <InstructorProfileCard
+          data={data}
+          reputation={reputation}
+          backLink={{ href: "/search", label: "All courses" }}
+        />
 
         <CoursesTaught
           courses={data.courses}
@@ -134,7 +130,11 @@ export default async function InstructorPage({ params }: InstructorPageProps) {
           difficulty, would-take-again and sample size. This card is where the
           Columbia corpus goes when it lands.
         */}
-        <InstructorReviewsCard instructorName={data.name} reputation={null} showRmp={false} />
+        <InstructorReviewsCard
+          instructorName={data.name}
+          reputation={reputation}
+          showRmp={false}
+        />
 
         {/*
           Below here is trivia, and is ordered as such. Nothing a reader needs
@@ -149,7 +149,7 @@ export default async function InstructorPage({ params }: InstructorPageProps) {
         <ClassroomLoadCard data={data} />
 
         <InstructorDetailsCard data={data} />
-      </div>
+      </PageContent>
     </AppShell>
   );
 }

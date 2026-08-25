@@ -139,7 +139,7 @@ function CourseToken({
       onClick={() => onSelect?.(courseId)}
       title={graph.courses.get(courseId)?.title}
       className={cx(
-        "text-caption-1-medium inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 transition-colors duration-150 ease",
+        "text-caption-1-medium inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 transition-colors duration-150",
         "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
         status === "met"
           ? "border-status-lime-background bg-status-lime-background text-status-lime-text"

@@ -1,6 +1,7 @@
 import { CampusCard } from "@/components/campus/campus-card";
 import type { InstructorPageData } from "@/lib/data/instructors";
 import { cx } from "@/utils/cx";
+import { InstructorSection } from "./section-block";
 import { weekdayListLabel } from "./format";
 
 /**
@@ -42,21 +43,12 @@ export function InstructorClassroomMap({ data, className }: InstructorClassroomM
   const days = data.teachingDays.length > 0 ? weekdayListLabel(data.teachingDays) : null;
 
   return (
-    <section
-      className={cx(
-        "flex w-full flex-col gap-2.5 rounded-[20px] bg-background-secondary-default px-2.5 py-3",
-        className,
-      )}
-      aria-labelledby="instructor-classroom-map-heading"
-    >
-      <div className="flex w-full flex-col gap-0.5 px-1.5 pt-1">
-        <p id="instructor-classroom-map-heading" className="text-body-medium text-text-secondary">
-          Where they teach
-        </p>
-        <p className="text-title-2-medium text-pretty text-text-primary">
-          {others > 0 ? `${data.buildings.length} buildings this term` : data.buildings[0]}
-        </p>
-      </div>
+    <div className={cx("w-full", className)}>
+      <InstructorSection
+        id="instructor-classroom-map"
+        title="Where they teach"
+        headline={others > 0 ? `${data.buildings.length} buildings this term` : data.buildings[0]}
+      >
 
       <CampusCard
         buildingNames={data.buildings}
@@ -72,16 +64,27 @@ export function InstructorClassroomMap({ data, className }: InstructorClassroomM
       />
 
       {/*
-        The names in full, under the map.
+        The names in full, under the map — but only when there is more than one.
 
-        The map can only show the buildings it can place — anything the campus
-        layout does not know, and anything off the Morningside plan, has no
-        point to draw. Printing the list means the answer is complete even when
-        the picture is not, and it is the part that survives a screen reader.
+        The list is here because the map can only show the buildings it can
+        place: anything the campus layout does not know, and anything off the
+        Morningside plan, has no point to draw. Printing the names means the
+        answer is complete even when the picture is not, and it is the part that
+        survives a screen reader.
+
+        None of that applies to a single building. The headline above IS the
+        name in that case, so the list repeated it verbatim ten pixels below the
+        map that also labels it — the same word three times, reading as a
+        rendering bug rather than as thoroughness. With two or more the headline
+        is a count ("3 buildings this term") and the list is the only place the
+        names appear, so it stays.
       */}
-      <p className="px-1.5 text-caption-1-regular text-pretty text-text-secondary">
-        {data.buildings.join(" · ")}
-      </p>
-    </section>
+        {others > 0 ? (
+          <p className="text-caption-1-regular text-pretty text-text-secondary">
+            {data.buildings.join(" · ")}
+          </p>
+        ) : null}
+      </InstructorSection>
+    </div>
   );
 }

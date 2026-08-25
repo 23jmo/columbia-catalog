@@ -16,6 +16,11 @@ export function ShellWordmark({
       aria-label="Columbia Catalog — home"
       className={cx(
         "flex min-w-0 items-center gap-2 rounded-2lg p-1 outline-none",
+        // 36px tall from `p-1` around a 28px glyph. It is the only "back to the
+        // start" affordance on a phone, so on a touch device it
+        // takes the full 44px — there is room, and this is the one control on
+        // the header a lost reader reaches for.
+        "pointer-coarse:min-h-11",
         "focus-visible:ring-2 focus-visible:ring-border-focus-ring",
         className,
       )}

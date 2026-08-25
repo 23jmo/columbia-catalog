@@ -6,17 +6,20 @@ import { Popover } from "react-aria-components";
 
 import { Avatar } from "@/components/base/avatar/avatar";
 import { InstructorLink } from "@/components/instructor/instructor-link";
+import { InstructorProfileHero } from "@/components/instructor/profile-hero";
 import type { ReputationSummary, RmpSnapshot } from "@/lib/types";
 import { cx } from "@/utils/cx";
 
 import { initialsOf } from "./format";
 import { HOVER_CARD_SURFACE, useHoverCard } from "./hover-card";
 import {
-  DIMENSION_LABEL,
-  UNREVIEWED_CAVEAT,
+  ChartSkeleton,
+  ReputationMiniChart,
+  RmpMiniChart,
+  SourceMixChart,
+} from "./instructor-hover-charts";
+import {
   dateRangeLabel,
-  formatDimension,
-  SourceBreakdown,
   type DimensionKey,
 } from "./reputation";
 
@@ -100,10 +103,20 @@ export interface InstructorChipProps {
   name: string;
   /** "Section 001" — what this person teaches on the section being read. */
   role?: string | null;
+  /**
+   * Popover placement. Feed cards sit above the composer, so they pass
+   * `"top"` to keep the ratings from covering the box.
+   */
+  placement?: "bottom start" | "bottom end" | "top" | "top start";
   className?: string;
 }
 
-export function InstructorChip({ name, role, className }: InstructorChipProps) {
+export function InstructorChip({
+  name,
+  role,
+  placement = "bottom start",
+  className,
+}: InstructorChipProps) {
   /*
    * The whole chip, not the star, so the card stays start-aligned with the
    * avatar the way it was when the chip was one button — and so the card is
@@ -165,7 +178,7 @@ export function InstructorChip({ name, role, className }: InstructorChipProps) {
         onPointerLeave={onPointerLeave}
         className={cx(
           "group flex min-w-0 items-center gap-2 rounded-lg py-0.5 pr-1 pl-0.5",
-          "transition-colors duration-150 ease motion-reduce:transition-none",
+          "transition-colors duration-150",
           "hover:bg-background-primary-hover",
           className,
         )}
@@ -191,9 +204,19 @@ export function InstructorChip({ name, role, className }: InstructorChipProps) {
           aria-label={`Show ratings for ${name}.`}
           {...pressProps}
           className={cx(
-            "shrink-0 cursor-pointer rounded p-0.5 outline-none",
+            "relative shrink-0 cursor-pointer rounded p-0.5 outline-none",
+            /*
+             * 18×18 fails WCAG 2.5.8, so the hit area grows — but only to ~30px,
+             * not the usual 44. The instructor's name sits immediately to the
+             * left and is itself a link to the profile, which carries these same
+             * ratings; a 44px halo here would reach across and start eating taps
+             * meant for the name. Clearing the AA floor without stealing from the
+             * neighbour is the better trade for a supplementary affordance.
+             * (The name link is `z-[1]`, so it wins any overlap that remains.)
+             */
+            "before:absolute before:-inset-1.5 before:content-['']",
             "text-foreground-icon-tertiary",
-            "transition-colors duration-150 ease motion-reduce:transition-none",
+            "transition-colors duration-150",
             "group-hover:text-foreground-icon-secondary hover:text-foreground-icon-primary",
             "focus-visible:ring-2 focus-visible:ring-border-focus-ring",
           )}
@@ -213,20 +236,17 @@ export function InstructorChip({ name, role, className }: InstructorChipProps) {
         isOpen={card.isOpen}
         onOpenChange={card.setIsOpen}
         isNonModal
-        placement="bottom start"
+        placement={placement}
         offset={8}
-        className={HOVER_CARD_SURFACE}
+        className={cx(HOVER_CARD_SURFACE, "overflow-hidden p-0")}
       >
-        <div {...card.surfaceProps} className="flex w-[320px] flex-col gap-3">
-          <div className="min-w-0">
-            <p className="text-body-semibold text-text-primary">
-              <InstructorLink name={name} />
-            </p>
-            {role ? <p className="text-caption-2-regular text-text-tertiary">{role}</p> : null}
-          </div>
+        <div {...card.surfaceProps} className="flex w-85 flex-col">
+          <InstructorProfileHero variant="popover" name={name} subtitle={role} />
 
-          <RmpHalf name={name} state={rmp} />
-          <ReputationHalf state={reputation} />
+          <div className="flex flex-col gap-2 px-3 pb-2.5 pt-2">
+            <ReputationHalf state={reputation} />
+            <RmpHalf name={name} state={rmp} />
+          </div>
         </div>
       </Popover>
     </>
@@ -234,15 +254,6 @@ export function InstructorChip({ name, role, className }: InstructorChipProps) {
 }
 
 /* -------------------------------------------------------------------------- */
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-headline-semibold tabular-nums text-text-primary">{value}</p>
-      <p className="text-caption-2-regular text-text-tertiary">{label}</p>
-    </div>
-  );
-}
 
 function CardHeading({ children, meta }: { children: string; meta?: string | null }) {
   return (
@@ -260,45 +271,30 @@ function RmpHalf({ name, state }: { name: string; state: Load<RmpSnapshot | null
   const href = live?.profileUrl ?? rmpSearchUrl(name);
 
   return (
-    <section className="flex flex-col gap-2 border-t border-border-table pt-3">
-      <CardHeading>RateMyProfessor</CardHeading>
+    <section className="flex flex-col gap-1.5 border-t border-border-table pt-2">
+      <CardHeading
+        meta={
+          live?.numRatings != null
+            ? `${live.numRatings} ratings`
+            : state.status === "loading" || state.status === "idle"
+              ? "…"
+              : null
+        }
+      >
+        RateMyProfessor
+      </CardHeading>
 
       {state.status === "loading" || state.status === "idle" ? (
-        <p className="text-caption-1-regular text-text-secondary">Reading live…</p>
+        <ChartSkeleton bars={3} />
       ) : live ? (
         <>
-          <div className="grid grid-cols-4 gap-2">
-            <Metric label="Rating" value={live.rating != null ? live.rating.toFixed(1) : "—"} />
-            <Metric
-              label="Difficulty"
-              value={live.difficulty != null ? live.difficulty.toFixed(1) : "—"}
-            />
-            <Metric
-              label="Again"
-              value={
-                live.wouldTakeAgainPercent != null
-                  ? `${Math.round(live.wouldTakeAgainPercent)}%`
-                  : "—"
-              }
-            />
-            <Metric label="Ratings" value={live.numRatings != null ? String(live.numRatings) : "—"} />
-          </div>
-          {/*
-            The stamp is not decoration. It is how a reader can tell this is a
-            live read rather than something we keep — which is the compliance
-            claim the file header makes, made visible.
-          */}
+          <RmpMiniChart snapshot={live} />
           <p className="text-caption-2-regular text-text-tertiary">
-            Read live at{" "}
-            {new Date(live.fetchedAt).toLocaleTimeString(undefined, {
-              hour: "numeric",
-              minute: "2-digit",
-            })}
-            . Not stored, and never combined with anything else on this card.
+            Live read · not stored
           </p>
         </>
       ) : (
-        <p className="text-caption-1-regular text-text-secondary">
+        <p className="text-caption-2-regular text-text-secondary">
           {state.status === "error"
             ? "RateMyProfessor did not answer just now."
             : `No profile matched “${name}”.`}
@@ -310,14 +306,14 @@ function RmpHalf({ name, state }: { name: string; state: Load<RmpSnapshot | null
         target="_blank"
         rel="noopener noreferrer"
         className={cx(
-          "inline-flex items-center gap-1 self-start rounded-md text-caption-1-medium text-text-secondary",
+          "inline-flex items-center gap-1 self-start rounded-md text-caption-2-medium text-text-secondary",
           "underline decoration-border-table underline-offset-4 outline-none",
           "transition-colors hover:text-text-primary",
           "focus-visible:ring-2 focus-visible:ring-border-focus-ring",
         )}
       >
         {live ? "View on RateMyProfessor" : "Search RateMyProfessor"}
-        <RiArrowRightUpLine aria-hidden className="size-3.5" />
+        <RiArrowRightUpLine aria-hidden className="size-3" />
       </a>
     </section>
   );
@@ -328,43 +324,33 @@ function ReputationHalf({ state }: { state: Load<ReputationSummary | null> }) {
   const range = summary ? dateRangeLabel(summary.dateRange) : null;
 
   return (
-    <section className="flex flex-col gap-1 border-t border-border-table pt-3">
-      <CardHeading meta={summary ? `n=${summary.sampleSize}${range ? `, ${range}` : ""}` : null}>
+    <section className="flex flex-col gap-1.5">
+      <CardHeading
+        meta={
+          summary
+            ? `n=${summary.sampleSize}${range ? ` · ${range}` : ""}`
+            : state.status === "loading" || state.status === "idle"
+              ? "…"
+              : null
+        }
+      >
         Columbia reviews
       </CardHeading>
 
       {state.status === "loading" || state.status === "idle" ? (
-        <p className="text-caption-1-regular text-text-secondary">Loading…</p>
+        <ChartSkeleton bars={3} />
       ) : state.status === "error" ? (
-        <p className="text-caption-1-regular text-text-secondary">
+        <p className="text-caption-2-regular text-text-secondary">
           Could not load reviews right now.
         </p>
       ) : summary ? (
         <>
-          <dl className="flex flex-col">
-            {CARD_DIMENSIONS.map((key) => (
-              <div key={key} className="flex items-baseline justify-between gap-3 py-0.5">
-                <dt className="text-caption-1-regular text-text-secondary">
-                  {DIMENSION_LABEL[key]}
-                </dt>
-                <dd
-                  className={cx(
-                    "text-caption-1-medium tabular-nums",
-                    formatDimension(key, summary.dimensions)
-                      ? "text-text-primary"
-                      : "text-text-tertiary",
-                  )}
-                >
-                  {formatDimension(key, summary.dimensions) ?? "No signal"}
-                </dd>
-              </div>
-            ))}
-          </dl>
-          <SourceBreakdown bySource={summary.bySource} className="mt-1" />
+          <ReputationMiniChart summary={summary} keys={CARD_DIMENSIONS} />
+          <SourceMixChart bySource={summary.bySource} />
         </>
       ) : (
-        <p className="text-caption-1-regular text-text-secondary">
-          No reviews matched yet. {UNREVIEWED_CAVEAT}
+        <p className="text-caption-2-regular text-text-secondary">
+          No reviews matched yet.
         </p>
       )}
     </section>

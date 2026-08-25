@@ -21,7 +21,7 @@ import { listPrograms } from "@/lib/requirements/programs";
  *
  * ── No shell: this route is a takeover ──────────────────────────────────────
  *
- * Every other route wraps itself in `AppShell` — nav rail, mobile tab bar,
+ * Every other route wraps itself in `AppShell` — nav rail, mobile hamburger,
  * header. This one renders the flow as the page's only child, edge to edge,
  * with nothing to wander off into. A student in setup has one job, and a nav
  * rail is five invitations to abandon it half-finished; a half-finished profile

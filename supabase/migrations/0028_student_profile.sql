@@ -1,4 +1,17 @@
 -- =============================================================================
+-- 0028_student_profile.sql — renumbered from 0017 on 2026-08-24.
+--
+-- It was written as 0017, but 0017 was already taken by 0017_section_titles.sql
+-- and `supabase db push` matches the remote ledger by VERSION, not filename. So
+-- push saw "0017" already applied and silently skipped this file — which is how
+-- the tables below came to exist (applied out of band) while
+-- `delete_my_academic_record()` did not, leaving /profile's "Erase my record"
+-- button calling an RPC that was never created.
+--
+-- Every statement here is idempotent (`if not exists`, `drop … if exists` before
+-- each `create`, `create or replace`), so re-running it against the partially
+-- applied schema adds what is missing and changes nothing that is already right.
+--
 -- 0017_student_profile.sql — the self-reported academic record behind /profile
 --
 -- Spec reference: §22 open question 4 ("full degree-audit … remains unscoped

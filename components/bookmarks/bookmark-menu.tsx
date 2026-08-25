@@ -97,8 +97,10 @@ export function BookmarkMenu({
       <DropdownTrigger
         aria-label={`More options for section ${sectionCode}`}
         className={cx(
-          "inline-flex size-8 items-center justify-center rounded-full",
-          "text-foreground-icon-secondary transition-colors duration-150 ease",
+          // Matches `BookmarkButton` beside it — see the comment there for why
+          // this keys off pointer type rather than viewport width.
+          "inline-flex size-8 touch-manipulation items-center justify-center rounded-full pointer-coarse:size-11",
+          "text-foreground-icon-secondary transition-colors duration-150",
           "hover:bg-background-secondary-hover",
           className,
         )}

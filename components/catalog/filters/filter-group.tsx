@@ -51,7 +51,7 @@ export function FilterGroup({
           <RiArrowDownSLine
             aria-hidden
             className={cx(
-              "size-4 shrink-0 text-text-secondary transition-transform duration-200",
+              "size-4 shrink-0 text-text-secondary transition-transform duration-150 ease-out motion-reduce:transition-none",
               isOpen && "rotate-180",
             )}
           />

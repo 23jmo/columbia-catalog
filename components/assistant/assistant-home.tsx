@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { DefaultChatTransport } from "ai";
 import { useChat } from "@ai-sdk/react";
 import {
@@ -11,10 +12,16 @@ import {
 } from "@remixicon/react";
 
 import { describeFailure, planSubmission, type Gate } from "@/lib/agent/gate";
+import {
+  announceHistoryChanged,
+  fetchConversation,
+  threadHref,
+} from "@/lib/agent/history";
 import { Composer } from "@/components/assistant/composer";
 import { Conversation } from "@/components/assistant/conversation";
 import { SignInFlair } from "@/components/assistant/sign-in-flair";
-import { Ornament } from "@/components/onboarding/screen";
+import { OrnamentAvatar } from "@/components/ornament/ornament-avatar";
+import { ChatHistoryModal } from "@/components/shell/chat-history-modal";
 import { SignInPrompt } from "@/components/home/sign-in-prompt";
 import { seedOnboardingMessages, takeOnboardingHandoff } from "@/lib/onboarding/handoff";
 import { cx } from "@/utils/cx";
@@ -87,6 +94,12 @@ export interface AssistantHomeProps {
    */
   greetingName?: string | null;
   /**
+   * Thread to reopen, from `/?c=`. Null on a fresh home visit. Changing this
+   * (sidebar click) loads that thread; minting a new id writes the same param
+   * back so the rail can highlight it.
+   */
+  initialConversationId?: string | null;
+  /**
    * The recommendation feed, rendered on the server and handed down as an
    * element.
    *
@@ -107,11 +120,14 @@ export function AssistantHome({
   promptsLimit,
   greetingName,
   feed,
+  initialConversationId = null,
 }: AssistantHomeProps) {
+  const router = useRouter();
   const [input, setInput] = useState("");
   const [gate, setGate] = useState<Gate | null>(null);
   const [promptsUsed, setPromptsUsed] = useState(initialPromptsUsed);
   const [limit, setLimit] = useState(promptsLimit);
+  const [findOpen, setFindOpen] = useState(false);
 
   /*
    * The thread id.
@@ -127,6 +143,13 @@ export function AssistantHome({
    * creates it. That is cheaper than opting this component out of compilation.
    */
   const [conversationId, setConversationId] = useState<string | null>(null);
+  /*
+   * Ids we already have in memory. After the route mints a thread we write
+   * `/?c=` so the rail can highlight it — that prop change must not refetch
+   * the same thread mid-stream, or the in-flight answer gets replaced by
+   * whatever has been persisted so far (usually just the question).
+   */
+  const skipFetchId = useRef<string | null>(null);
 
   /*
    * Everything the route reports back out-of-band.
@@ -143,9 +166,15 @@ export function AssistantHome({
     const thread = response.headers.get("x-agent-conversation-id");
     if (used) setPromptsUsed(Number(used));
     if (reportedLimit) setLimit(Number(reportedLimit));
-    if (thread) setConversationId(thread);
-
-    if (response.ok) return;
+    if (thread) {
+      skipFetchId.current = thread;
+      setConversationId(thread);
+      router.replace(threadHref(thread), { scroll: false });
+    }
+    if (response.ok) {
+      announceHistoryChanged();
+      return;
+    }
 
     /*
      * Read a clone. The transport reads the body itself to build its error, and
@@ -157,7 +186,7 @@ export function AssistantHome({
       .json()
       .catch(() => null);
     setGate(describeFailure(response.status, body));
-  }, []);
+  }, [router]);
 
   const transport = useMemo(
     () =>
@@ -197,10 +226,34 @@ export function AssistantHome({
    * four sections would spend a prompt on work we just did.
    */
   useEffect(() => {
+    // A reopened thread wins over the onboarding handoff. Seeding on top
+    // would replace a saved conversation with the four cards from last week.
+    if (initialConversationId) return;
     const cards = takeOnboardingHandoff();
     if (!cards?.length) return;
     setMessages(seedOnboardingMessages(cards));
-  }, [setMessages]);
+  }, [initialConversationId, setMessages]);
+
+  useEffect(() => {
+    if (!isSignedIn || !initialConversationId) return;
+    if (initialConversationId === skipFetchId.current) return;
+
+    let cancelled = false;
+    void fetchConversation(initialConversationId).then((loaded) => {
+      if (cancelled) return;
+      if (!loaded) {
+        skipFetchId.current = null;
+        router.replace("/", { scroll: false });
+        return;
+      }
+      skipFetchId.current = loaded.conversationId;
+      setConversationId(loaded.conversationId);
+      setMessages(loaded.messages);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [initialConversationId, isSignedIn, router, setMessages]);
 
   const ask = useCallback(
     (text: string) => {
@@ -232,12 +285,14 @@ export function AssistantHome({
   );
 
   const startNewThread = useCallback(() => {
+    skipFetchId.current = null;
     setConversationId(null);
     setMessages([]);
     setGate(null);
     clearError();
     setInput("");
-  }, [clearError, setMessages]);
+    router.replace("/", { scroll: false });
+  }, [clearError, router, setMessages]);
 
   const hasThread = messages.length > 0;
 
@@ -245,14 +300,14 @@ export function AssistantHome({
    * Going Home puts the feed back.
    *
    * `/` is already the current route, so every nav link to it — the sidebar
-   * item, the mobile tab, the wordmark — is a soft navigation onto the page it
+   * item, the hamburger Home row, the wordmark — is a soft navigation onto the page it
    * is already on. React reconciles the same tree, this component never
    * unmounts, and the thread would sit there unchanged while the student's
    * click did visibly nothing. That is the worst kind of dead control: it looks
    * like the app ignored them.
    *
    * A delegated listener rather than a signal threaded through the shell. The
-   * alternative is making `ShellNav`, `CatalogSidebar` and `MobileTabBar` — all
+   * alternative is making `ShellNav`, `CatalogSidebar` and `MobileShell` — all
    * three of which render the Home link, and two of which are server components
    * today — aware that one page has state worth clearing. That is a lot of
    * shared surface bent around one screen. This asks a narrower and more honest
@@ -289,11 +344,11 @@ export function AssistantHome({
   return (
     /*
      * The column fills the viewport so the sticky composer lands on its bottom
-     * edge rather than floating mid-screen on an empty thread. The two figures
-     * are `<main>`'s own vertical padding at each breakpoint — 96px under `lg`,
-     * where the mobile tab bar's reserve is included, and 56px at and above it.
+     * edge rather than floating mid-screen on an empty thread. The subtracted
+     * height is the slim hamburger bar (3.5rem) plus `<main>`'s `py-5` (2.5rem)
+     * below `lg`, and `py-7` (3.5rem) at desktop where the bar is gone.
      */
-    <div className="flex min-h-[calc(100dvh-6rem)] w-full min-w-0 flex-col lg:min-h-[calc(100dvh-3.5rem)]">
+    <div className="flex min-h-[calc(100dvh-6rem-env(safe-area-inset-top,0px))] w-full min-w-0 flex-col xl:min-h-[calc(100dvh-3.5rem)]">
       {hasThread ? <ThreadHeader messages={messages} onNewThread={startNewThread} /> : null}
 
       {/*
@@ -330,14 +385,14 @@ export function AssistantHome({
       ) : null}
 
       {/*
-        Sticky, clearing the mobile tab bar. `<main>` already reserves that
-        bar's height as bottom padding, so at `lg` — where the bar is gone — the
-        offset goes with it.
+        Sticky to the viewport bottom. The hamburger bar is at the top now, so
+        this no longer has to clear a tab bar.
       */}
       <div
+        data-assistant-dock
         className={cx(
-          "sticky z-10 -mx-1 bg-background-full px-1 pb-1 pt-4",
-          "bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] lg:bottom-0",
+          "sticky bottom-0 z-10 -mx-1 bg-background-full px-1 pt-4",
+          "pb-[max(0.25rem,env(safe-area-inset-bottom,0px))]",
         )}
       >
         {/*
@@ -353,6 +408,7 @@ export function AssistantHome({
           onSubmit={() => ask(input)}
           onStop={stop}
           onNewThread={startNewThread}
+          onOpenHistory={isSignedIn ? () => setFindOpen(true) : undefined}
           status={status}
           canStartNewThread={hasThread || input.length > 0}
           promptsUsed={promptsUsed}
@@ -360,6 +416,8 @@ export function AssistantHome({
           termLabel={termLabel}
         />
       </div>
+
+      <ChatHistoryModal isOpen={findOpen} onClose={() => setFindOpen(false)} />
     </div>
   );
 }
@@ -422,24 +480,16 @@ function Hero({ name }: { name: string | null }) {
   return (
     <header className="flex flex-col px-1">
       {/*
-        The medallion from onboarding.
+        The medallion from onboarding, with its face on — the same component
+        the onboarding screens open with, not a second mark drawn to match, so
+        it can only ever drift in one place.
 
-        The same component the onboarding screens open with, not a second mark
-        drawn to match — so a student who has been through the flow meets the
-        same object here, and it can only ever drift in one place.
-
-        Scaled rather than parameterised. `Ornament` draws at a fixed 92px and
-        this header wants ~56 above 40px type; adding a `size` prop would mean
-        editing a file another agent is actively rewriting, which AGENTS.md rule
-        3 exists to prevent. A transform costs nothing and is honest about who
-        owns what: the fixed box supplies the 56px of layout the transform does
-        not, and `origin-top-left` keeps the shrink anchored to it.
+        Resting, not tracking. On the home page the student is reading the
+        feed, and a face whose eyes follow the pointer across a row of cards
+        pulls attention off the cards. It blinks and swivels on its own, which
+        is enough to read as awake.
       */}
-      <div className="h-14 w-14">
-        <div className="origin-top-left scale-[0.609]">
-          <Ornament />
-        </div>
-      </div>
+      <OrnamentAvatar size={56} mood="resting" />
 
       <h1
         className={cx(
@@ -486,10 +536,9 @@ function Hero({ name }: { name: string | null }) {
  * The composer's `+` already clears the thread, and on a desktop screen so does
  * the sidebar's Home. Neither reads as an exit on a phone: the `+` is an
  * unlabelled icon that sits where "attach a file" lives in every other chat
- * surface, and the sidebar is collapsed into a tab bar that is behind the
- * keyboard the moment the student is typing. So the way out is also stated in
- * words, at the top, next to the name of the thing it closes — the one place a
- * reader is already looking to find out where they are.
+ * surface, and the sidebar is behind a hamburger. So the way out is also
+ * stated in words, at the top, next to the name of the thing it closes — the
+ * one place a reader is already looking to find out where they are.
  */
 function ThreadHeader({
   messages,

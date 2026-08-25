@@ -46,6 +46,7 @@ import { AssistantHome } from "@/components/assistant";
 import { FeedPanel, FeedSkeleton } from "@/components/feed";
 import { buildFeed } from "@/lib/recommend/feed";
 import { CURRENT_TERM, buildTerm } from "@/lib/constants";
+import { isConversationId } from "@/lib/agent/history-format";
 import { PROMPT_LIMIT, checkPromptBudget } from "@/lib/agent/usage";
 import { getSessionUser } from "@/lib/db/auth";
 import { createServiceRoleClient } from "@/lib/db/client";
@@ -62,6 +63,9 @@ export default async function HomePage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const params = await searchParams;
+  const requestedId = typeof params.c === "string" ? params.c : null;
+  const initialConversationId =
+    requestedId && isConversationId(requestedId) ? requestedId : null;
 
   const account = await getSessionUser();
   const term = buildTerm(CURRENT_TERM);
@@ -82,6 +86,7 @@ export default async function HomePage({
           promptsUsed={budget.used}
           promptsLimit={budget.limit}
           greetingName={firstName(account?.name)}
+          initialConversationId={initialConversationId}
           /*
            * Passed as an element, not awaited here.
            *

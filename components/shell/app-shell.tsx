@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { CatalogSidebar } from "@/components/shell/catalog-sidebar";
-import { MobileNavBar } from "@/components/shell/mobile-nav";
+import { MobileShell } from "@/components/shell/mobile-nav";
 import type { ShellNavKey } from "@/components/shell/nav";
 import { BookmarkProvider } from "@/components/bookmarks/bookmark-provider";
 import { RefreshWorker } from "@/components/crawler/refresh-worker";
@@ -19,14 +19,14 @@ import { cx } from "@/utils/cx";
  *
  * This file is a **server component** on purpose. The rail's structure, the
  * links, and the page frame are all static markup that never needs to reach
- * the browser. Only the four genuinely interactive pieces are client
+ * the browser. Only the genuinely interactive pieces are client
  * components, and they are leaves:
  *
  *   TermSwitcher   (inside CatalogSidebar)
  *   ThemeToggle    (inside CatalogSidebar)
  *   AccountMenu    (inside CatalogSidebar)
  *   CatalogSidebar (collapse state)
- *   MobileNavBar   (drawer state)
+ *   MobileShell    (hamburger push on phone and tablet)
  *
  * Plus components that render nothing until something asks them to.
  * `PlanSyncProvider` owns the lifecycle of plan write-through sync, which has
@@ -72,8 +72,8 @@ export function AppShell({ children, activeNav = "home", contentClassName }: App
           confirmation is in the same place whichever screen raised it. */}
       <Toaster />
 
-      {/* Desktop rail — floating panel with outer breathing room, like BoardUI. */}
-      <div className="sticky top-0 hidden h-dvh shrink-0 p-3 lg:block">
+      {/* Desktop rail — floating panel. `xl`, not `lg`: 1024px is still a tablet. */}
+      <div className="sticky top-0 hidden h-dvh shrink-0 p-3 xl:block">
         <CatalogSidebar activeNav={activeNav} className="h-full" />
       </div>
 
@@ -131,24 +131,29 @@ export function AppShell({ children, activeNav = "home", contentClassName }: App
         flush against the panel's left edge, because the floor IS the content
         measure plus its gutters.
       */}
-      <div
+      <MobileShell
+        activeNav={activeNav}
         className={cx(
-          "flex min-w-0 flex-1 flex-col transition-[padding,min-width] motion-reduce:transition-none",
+          "transition-[padding,min-width] motion-reduce:transition-none",
           "lg:[padding-right:var(--drawer-rail,0px)] lg:[min-width:calc(34rem+var(--drawer-rail,0px))]",
         )}
         style={{
-          // The drawer sets these per direction, so the page moves on exactly
-          // the panel's clock — including while the dev motion dial is dragged.
-          transitionDuration: "var(--drawer-push-duration, 90ms)",
-          transitionTimingFunction:
-            "var(--drawer-push-ease, cubic-bezier(0.34, 1.35, 0.64, 1))",
+          // Instant: the drawer does not animate, so the page must not ease
+          // around it either. The variable still exists so a drag can zero it
+          // independently, but the fallback is already 0.
+          transitionDuration: "var(--drawer-push-duration, 0ms)",
+          transitionTimingFunction: "var(--drawer-push-ease, linear)",
         }}
       >
-        <MobileNavBar activeNav={activeNav} />
-        <main className={cx("min-w-0 flex-1 px-4 py-5 sm:px-6 lg:px-8 lg:py-7", contentClassName)}>
+        <main
+          className={cx(
+            "min-w-0 flex-1 overflow-x-clip px-4 py-5 sm:px-6 xl:overflow-x-visible xl:px-8 xl:py-7",
+            contentClassName,
+          )}
+        >
           {children}
         </main>
-      </div>
+      </MobileShell>
     </div>
   );
 }

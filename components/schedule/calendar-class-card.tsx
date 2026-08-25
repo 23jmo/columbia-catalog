@@ -80,17 +80,17 @@ export function ClassEventCard({
     >
       <header className="flex items-start gap-2 border-b border-border-table p-3">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-lg font-semibold text-text-primary">
+          <p className="truncate text-title-3-semibold text-text-primary">
             {course?.title ?? event.title}
           </p>
-          <p className="text-sm text-text-secondary">
+          <p className="text-body-regular text-text-secondary">
             {section ? `${section.courseId} · ${section.sectionCode}` : event.title}
           </p>
-          <p className="mt-1 text-sm text-text-tertiary">
+          <p className="mt-1 text-body-regular text-text-tertiary">
             {WEEKDAY_LABEL[weekday]} · {timeLabel}
           </p>
           {event.description ? (
-            <p className="mt-0.5 text-sm text-text-tertiary">{event.description}</p>
+            <p className="mt-0.5 text-body-regular text-text-tertiary">{event.description}</p>
           ) : null}
           {event.layer === "historical" ? (
             <Chip variant="caption" color="purple" className="mt-2">
@@ -130,13 +130,13 @@ export function ClassEventCard({
                 <li
                   key={`${stop.id}-${stop.startMinute}`}
                   className={cx(
-                    "rounded-xl px-2.5 py-2 text-sm",
+                    "rounded-xl px-2.5 py-2 text-body-regular",
                     stop.id === highlightId
                       ? "bg-accent-500/10 ring-1 ring-accent-500/30"
                       : "bg-background-secondary-default",
                   )}
                 >
-                  <span className="font-medium text-text-primary">{stop.label}</span>
+                  <span className="text-body-medium text-text-primary">{stop.label}</span>
                   <span className="ms-2 tabular-nums text-text-tertiary">
                     {formatTimeFromMinutes(stop.startMinute)}–{formatTimeFromMinutes(stop.endMinute)}
                   </span>
@@ -156,7 +156,7 @@ export function ClassEventCard({
                 <li
                   key={`${leg.fromId}-${leg.toId}-${index}`}
                   className={cx(
-                    "flex items-start gap-2 rounded-xl p-2.5 text-sm",
+                    "flex items-start gap-2 rounded-xl p-2.5 text-body-regular",
                     leg.feasible ? "bg-background-secondary-default" : "bg-status-rose-background",
                   )}
                 >

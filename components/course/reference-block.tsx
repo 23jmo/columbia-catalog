@@ -15,17 +15,27 @@ import type { ReactNode } from "react";
  * pages stitched together, which is exactly what that page must not look like.
  */
 export function ReferenceBlock({
+  id,
   title,
   count,
   children,
 }: {
+  /**
+   * Anchor target, when something links to this block. The course page has a
+   * "jump to sections" affordance; the section page has never needed one, so
+   * this stays optional rather than becoming a required slug on every block.
+   */
+  id?: string;
   title: string;
   /** Rendered beside the label when the block is a list of a known size. */
   count?: number;
   children: ReactNode;
 }) {
   return (
-    <section className="flex flex-col gap-3 border-t border-border-table pt-5">
+    <section
+      id={id}
+      className="flex scroll-mt-6 flex-col gap-3 border-t border-border-table pt-5"
+    >
       <h2 className="flex items-center gap-1.5 text-caption-2-medium tracking-[0.06em] text-text-tertiary uppercase">
         {title}
         {count != null ? (

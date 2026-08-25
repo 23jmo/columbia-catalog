@@ -5,15 +5,18 @@
  * `app/components/calendar/DayColumn.vue`
  *
  * Drag on empty space to draft a custom commitment on the snapped grid.
- * Double-click still opens a one-hour block for quick entry.
+ * Double-click opens a one-hour block on desktop; touch requires a hold first
+ * so scrolling the week grid does not spawn commitments.
  */
 
 import { isToday } from "date-fns";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { isoDate } from "./calendar-date";
 import {
   defaultEndMinute,
+  LONG_PRESS_MS,
   minutesAtPointer,
+  pointerMovedBeyondHold,
   rangeFromDrag,
 } from "./calendar-commitment";
 import { EventBlock } from "./calendar-event";
@@ -34,6 +37,13 @@ type DragState = {
   pointerId: number;
   anchorMinute: number;
   currentMinute: number;
+};
+
+type HoldState = {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  anchorMinute: number;
 };
 
 export function DayColumn({
@@ -60,8 +70,17 @@ export function DayColumn({
   const pendingRef = useRef<{ pointerId: number; startY: number; anchorMinute: number } | null>(
     null,
   );
+  const holdRef = useRef<HoldState | null>(null);
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
+  const [creationArmed, setCreationArmed] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+    };
+  }, []);
 
   const minuteAt = (clientY: number) => {
     const rect = columnRef.current?.getBoundingClientRect();
@@ -69,10 +88,35 @@ export function DayColumn({
     return minutesAtPointer(clientY, rect.top);
   };
 
+  const cancelHold = () => {
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+    holdRef.current = null;
+  };
+
   const clearDrag = () => {
     dragRef.current = null;
     pendingRef.current = null;
     setDrag(null);
+    setCreationArmed(false);
+  };
+
+  const clearInteraction = () => {
+    cancelHold();
+    clearDrag();
+  };
+
+  const armCreation = (hold: HoldState) => {
+    holdRef.current = null;
+    holdTimerRef.current = null;
+    pendingRef.current = {
+      pointerId: hold.pointerId,
+      startY: hold.startY,
+      anchorMinute: hold.anchorMinute,
+    };
+    setCreationArmed(true);
   };
 
   const finishDrag = (clientX: number, clientY: number) => {
@@ -96,12 +140,15 @@ export function DayColumn({
       data-date={isoDate(day)}
       className={cx(
         "relative snap-start border-s border-border-table",
-        onCreateAtPointer && "touch-none select-none",
+        onCreateAtPointer && "select-none",
+        onCreateAtPointer && (creationArmed || drag) && "touch-none",
         drag && "cursor-ns-resize",
       )}
       style={{ height: `${24 * HOUR_HEIGHT}px` }}
       onDoubleClick={(event) => {
         if (!onCreateAtPointer) return;
+        // Double-tap on phones was opening accidental one-hour blocks.
+        if (event.pointerType === "touch") return;
         const target = event.target as HTMLElement;
         if (target.closest("[data-event]")) return;
         const startMinute = minuteAt(event.clientY);
@@ -114,13 +161,42 @@ export function DayColumn({
         if (!onCreateAtPointer || event.button !== 0) return;
         const target = event.target as HTMLElement;
         if (target.closest("[data-event]")) return;
+
+        const anchorMinute = minuteAt(event.clientY);
+
+        if (event.pointerType === "touch") {
+          cancelHold();
+          holdRef.current = {
+            pointerId: event.pointerId,
+            startX: event.clientX,
+            startY: event.clientY,
+            anchorMinute,
+          };
+          holdTimerRef.current = setTimeout(() => {
+            const hold = holdRef.current;
+            if (!hold) return;
+            armCreation(hold);
+          }, LONG_PRESS_MS);
+          return;
+        }
+
         pendingRef.current = {
           pointerId: event.pointerId,
           startY: event.clientY,
-          anchorMinute: minuteAt(event.clientY),
+          anchorMinute,
         };
       }}
       onPointerMove={(event) => {
+        const hold = holdRef.current;
+        if (hold?.pointerId === event.pointerId && !creationArmed && !dragRef.current) {
+          if (
+            pointerMovedBeyondHold(hold.startX, hold.startY, event.clientX, event.clientY)
+          ) {
+            cancelHold();
+          }
+          return;
+        }
+
         const pending = pendingRef.current;
         if (pending?.pointerId === event.pointerId && !dragRef.current) {
           if (Math.abs(event.clientY - pending.startY) < DRAG_THRESHOLD_PX) return;
@@ -149,7 +225,9 @@ export function DayColumn({
           finishDrag(event.clientX, event.clientY);
           return;
         }
+        cancelHold();
         pendingRef.current = null;
+        setCreationArmed(false);
       }}
       onPointerCancel={(event) => {
         if (
@@ -158,7 +236,7 @@ export function DayColumn({
         ) {
           event.currentTarget.releasePointerCapture(event.pointerId);
         }
-        clearDrag();
+        clearInteraction();
       }}
     >
       {Array.from({ length: 23 }, (_, index) => index + 1).map((hour) => (

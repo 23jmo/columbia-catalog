@@ -55,8 +55,12 @@ export function SeatMeter({ reading, className }: { reading: SeatReading; classN
       }
     >
       <div
-        className={cx("h-full rounded-full transition-[width] duration-300 ease", TONE_BAR[reading.tone])}
-        style={{ width: `${percent ?? 0}%` }}
+        className={cx(
+          "h-full w-full origin-left rounded-full",
+          "transition-transform duration-300 ease-out motion-reduce:transition-none",
+          TONE_BAR[reading.tone],
+        )}
+        style={{ transform: `scaleX(${(percent ?? 0) / 100})` }}
       />
     </div>
   );

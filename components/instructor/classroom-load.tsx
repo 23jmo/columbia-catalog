@@ -25,6 +25,7 @@ import { minutesToLabel, WEEKDAY_LABEL, WEEKDAYS } from "@/lib/constants";
 import type { InstructorPageData, LoadSample } from "@/lib/data/instructors";
 import type { Weekday } from "@/lib/types";
 import { cx } from "@/utils/cx";
+import { InstructorSection } from "./section-block";
 import { countLabel } from "./format";
 
 const LINE_COLOR = "var(--color-chart-agents-bar-active)";
@@ -75,29 +76,23 @@ export function ClassroomLoadCard({ data, className }: ClassroomLoadCardProps) {
   const hasSignal = samples.some((sample) => sample.students > 0);
 
   return (
-    <section
-      className={cx(
-        "flex w-full flex-col rounded-[20px] bg-background-secondary-default py-3",
-        className,
-      )}
-    >
-      <div className="relative z-10 -mb-8 flex w-full px-4 pt-1">
-        <div className="flex flex-col gap-0.5">
-          <p className="text-body-medium whitespace-nowrap text-text-secondary">
-            Classroom load
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="animate-number-fade text-title-2-medium whitespace-nowrap tabular-nums text-text-primary">
+    <div className={cx("w-full", className)}>
+      <InstructorSection
+        id="instructor-classroom-load"
+        title="Classroom load"
+        headline={
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="animate-number-fade whitespace-nowrap tabular-nums">
               {peak ? `${countLabel(peak.students)} at peak` : "No meeting times published"}
-            </p>
+            </span>
             {peak ? (
               <span className="inline-flex items-center justify-center rounded-md bg-status-purple-background px-1.5 py-0.5 text-body-medium whitespace-nowrap text-status-purple-text">
                 {WEEKDAY_LABEL[peak.weekday].slice(0, 3)} {minutesToLabel(peak.minute)}
               </span>
             ) : null}
-          </div>
-        </div>
-      </div>
+          </span>
+        }
+      >
 
       {hasSignal ? (
         <div className="animate-chart-reveal h-[200px] w-full">
@@ -158,13 +153,14 @@ export function ClassroomLoadCard({ data, className }: ClassroomLoadCardProps) {
         </div>
       )}
 
-      <div className="mt-2 grid w-full grid-cols-5 px-4 text-[11px] leading-[15px] font-medium tracking-[0.2px] whitespace-nowrap text-text-tertiary">
+      <div className="mt-2 grid w-full grid-cols-5 text-caption-2-medium whitespace-nowrap text-text-tertiary">
         {WEEKDAYS.map((weekday) => (
           <span key={weekday} className="text-center first:text-left last:text-right">
             {WEEKDAY_LABEL[weekday].slice(0, 3)}
           </span>
         ))}
       </div>
-    </section>
+      </InstructorSection>
+    </div>
   );
 }

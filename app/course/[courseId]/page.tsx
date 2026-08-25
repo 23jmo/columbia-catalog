@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { RiArrowLeftLine } from "@remixicon/react";
 
 import { prettyTitle } from "@/components/course/format";
 import { loadCourseDetail, resolveCourse } from "@/components/course/load-course-detail";
@@ -9,6 +7,8 @@ import { loadSectionDetail } from "@/components/course/load-section-detail";
 import { CourseLevelPanels } from "@/components/course/course-level-panels";
 import { courseDetailIntegrations } from "./integrations";
 import { AppShell } from "@/components/shell/app-shell";
+import { pageIdentityContentClass } from "@/components/shell/page-hero-layout";
+import { PageContent } from "@/components/shell/page-content";
 import { CURRENT_TERM, termLabel } from "@/lib/constants";
 
 import { CourseDetail } from "./course-detail";
@@ -133,10 +133,10 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
     if (data) {
       /*
        * A course with exactly one section has no course page any more — the
-       * bare URL redirects here — so this page inherits the four blocks that
-       * are claims about the course rather than about the class. That costs a
-       * `loadCourseDetail`, which is why it is behind the sibling check and
-       * not paid on every section page.
+       * bare URL lands on this branch and renders the section — so this page
+       * inherits the four blocks that are claims about the course rather than
+       * about the class. That costs a `loadCourseDetail`, which is why it is
+       * behind the sibling check and not paid on every section page.
        */
       const isOnlySection = data.siblings.length === 0;
       const courseData = isOnlySection
@@ -152,20 +152,15 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
 
       return (
         <AppShell activeNav="search">
-          <div className="mx-auto flex w-full max-w-4xl flex-col gap-5">
-            {/* "All sections" is a promise of a list. With one section there
-                is no list, and the destination redirects straight back. */}
-            <Link
-              href={isOnlySection ? "/search" : `/course/${data.course.courseId}`}
-              className="inline-flex w-fit items-center gap-1.5 rounded-lg px-1.5 py-1 text-caption-1-medium text-text-secondary transition-colors outline-none hover:bg-background-primary-hover hover:text-text-primary focus-visible:ring-2 focus-visible:ring-border-focus-ring"
-            >
-              <RiArrowLeftLine aria-hidden className="size-4" />
-              {isOnlySection ? "All courses" : `All sections of ${data.code}`}
-            </Link>
-
+          <PageContent className={pageIdentityContentClass("gap-0 sm:gap-5")}>
             <SectionDetail
               data={data}
               titleId="course-title"
+              surface="page"
+              backLink={{
+                href: isOnlySection ? "/search" : `/course/${data.course.courseId}`,
+                label: isOnlySection ? "All courses" : `All sections of ${data.code}`,
+              }}
               courseLevel={
                 courseData ? (
                   <CourseLevelPanels
@@ -176,7 +171,7 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
                 ) : null
               }
             />
-          </div>
+          </PageContent>
         </AppShell>
       );
     }
@@ -193,7 +188,8 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
    * section's seat count wearing a course-level label.
    *
    * So the bare URL is not a page for those courses, it is a synonym. It
-   * redirects to the section, which carries the course-level blocks with it.
+   * renders the section, which carries the course-level blocks with it, and
+   * declares `?section=NNN` as its canonical so crawlers collapse the pair.
    * `loadSectionDetail` with a null code already resolves a lone section —
    * asking someone to pick from a list of one is a dead click — so this is the
    * same rule the drawer has always followed, finally applied to the page.
@@ -208,17 +204,13 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
 
   return (
     <AppShell activeNav="search">
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-5">
-        <Link
-          href="/search"
-          className="inline-flex w-fit items-center gap-1.5 rounded-lg px-1.5 py-1 text-caption-1-medium text-text-secondary transition-colors outline-none hover:bg-background-primary-hover hover:text-text-primary focus-visible:ring-2 focus-visible:ring-border-focus-ring"
-        >
-          <RiArrowLeftLine aria-hidden className="size-4" />
-          All courses
-        </Link>
-
-        <CourseDetail data={data} variant="page" />
-      </div>
+      <PageContent className={pageIdentityContentClass("gap-0 sm:gap-5")}>
+        <CourseDetail
+          data={data}
+          variant="page"
+          backLink={{ href: "/search", label: "All courses" }}
+        />
+      </PageContent>
     </AppShell>
   );
 }

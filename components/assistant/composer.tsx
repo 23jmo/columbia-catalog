@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useId } from "react";
+import { useEffect, useRef, useId, useState } from "react";
 import type { ChatStatus } from "ai";
+import { Calligraph } from "calligraph";
+import { useReducedMotion, motion } from "motion/react";
 import {
   RiAddLine,
   RiArrowUpLine,
   RiCalendarLine,
+  RiHistoryLine,
   RiShieldCheckLine,
   RiStopFill,
 } from "@remixicon/react";
@@ -61,6 +64,8 @@ export interface ComposerProps {
   onStop: () => void;
   /** Clears the thread. The template's `+`; ours starts a fresh question. */
   onNewThread: () => void;
+  /** Opens the full chat list. The rail only holds five; this is the rest. */
+  onOpenHistory?: () => void;
   status: ChatStatus;
   canStartNewThread: boolean;
   promptsUsed: number;
@@ -68,12 +73,27 @@ export interface ComposerProps {
   termLabel: string;
 }
 
+/** Example questions — the placeholder cycles through these when the box is empty. */
+const COMPOSER_EXAMPLE_PROMPTS = [
+  "What are some easy global cores that still have open seats?",
+  "What major related classes would I find interesting?",
+  "Are there any humanities classes taught by highly rated professors that would satisfy some of my requirements?",
+  "Which open sections fit my plan next semester?",
+  "What should I take to clear my last science requirement?",
+] as const;
+
+const PLACEHOLDER_ROTATE_MS = 7200;
+
+/** Shared type for the writing surface and its Calligraph overlay. */
+const COMPOSER_TEXT = "text-headline-regular";
+
 export function Composer({
   value,
   onChange,
   onSubmit,
   onStop,
   onNewThread,
+  onOpenHistory,
   status,
   canStartNewThread,
   promptsUsed,
@@ -82,6 +102,13 @@ export function Composer({
 }: ComposerProps) {
   const box = useRef<HTMLTextAreaElement | null>(null);
   const isBusy = status === "submitted" || status === "streaming";
+  const reduceMotion = useReducedMotion();
+  const placeholder = useRotatingPlaceholder(
+    COMPOSER_EXAMPLE_PROMPTS,
+    value.trim().length === 0,
+    reduceMotion,
+  );
+  const showPlaceholder = value.trim().length === 0;
 
   /*
    * Grow to the content, capped.
@@ -110,14 +137,17 @@ export function Composer({
           them — but `--shadow-xs` is only overridden for dark here, so in light
           mode that resolves to Tailwind's 5%-opacity default and the box
           disappears into the page. The rim is what actually draws it.
+
+          The rim stays on while the agent is working. The running light is a
+          dash covering about a third of the perimeter, not a replacement
+          stroke — hiding the hairline then is what made the box look like it
+          had lost its border.
         */}
         <span
           aria-hidden
           className={cx(
             "absolute inset-0 rounded-3xl border border-border-table",
             "bg-background-primary-default shadow-xs",
-            "transition-colors duration-[450ms] motion-reduce:transition-none",
-            isBusy && "border-transparent",
           )}
         />
 
@@ -130,25 +160,31 @@ export function Composer({
             somewhere to write a paragraph instead of a tall box with one line
             floating at the top of it.
           */}
-          <textarea
-            ref={box}
-            rows={2}
-            value={value}
-            onChange={(event) => onChange(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                onSubmit();
-              }
-            }}
-            placeholder="Ask me anything"
-            aria-label="Ask the assistant a question"
-            className={cx(
-              "min-h-14 w-full min-w-0 flex-1 resize-none bg-transparent px-2 pt-1",
-              "text-body-regular text-text-primary caret-accent-500",
-              "placeholder:text-text-tertiary outline-none",
-            )}
-          />
+          <div className="relative min-h-14 w-full min-w-0 flex-1">
+            <textarea
+              ref={box}
+              rows={2}
+              value={value}
+              onChange={(event) => onChange(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  onSubmit();
+                }
+              }}
+              placeholder=""
+              aria-label="Ask the assistant a question"
+              className={cx(
+                "min-h-14 w-full resize-none bg-transparent px-2 pt-1",
+                COMPOSER_TEXT,
+                "text-text-primary caret-accent-500 outline-none",
+              )}
+            />
+
+            {showPlaceholder ? (
+              <ComposerPlaceholder text={placeholder} reduceMotion={reduceMotion} />
+            ) : null}
+          </div>
 
           <div className="flex shrink-0 items-center gap-2">
             <button
@@ -168,6 +204,23 @@ export function Composer({
             >
               <RiAddLine aria-hidden className="size-5" />
             </button>
+
+            {onOpenHistory ? (
+              <button
+                type="button"
+                onClick={onOpenHistory}
+                aria-label="Find a past chat"
+                title="Find a past chat"
+                className={cx(
+                  "flex size-9 shrink-0 items-center justify-center rounded-full xl:hidden",
+                  "border border-border-table text-foreground-icon-secondary transition-colors",
+                  "hover:bg-background-primary-hover hover:text-text-primary",
+                  "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
+                )}
+              >
+                <RiHistoryLine aria-hidden className="size-5" />
+              </button>
+            ) : null}
 
             <span className="ml-auto hidden shrink-0 items-center gap-1.5 px-1 sm:flex">
               <RiCalendarLine aria-hidden className="size-4 text-foreground-icon-quaternary" />
@@ -203,6 +256,88 @@ export function Composer({
   );
 }
 
+/** Cycles example prompts in the empty textarea; stops while the student is typing. */
+function useRotatingPlaceholder(
+  prompts: readonly string[],
+  enabled: boolean,
+  reduceMotion: boolean | null,
+): string {
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    if (!enabled || reduceMotion || prompts.length <= 1) return;
+
+    const timer = window.setInterval(() => {
+      setIndex((current) => (current + 1) % prompts.length);
+    }, PLACEHOLDER_ROTATE_MS);
+
+    return () => window.clearInterval(timer);
+  }, [enabled, prompts.length, reduceMotion]);
+
+  return prompts[index] ?? prompts[0] ?? "";
+}
+
+/**
+ * Animated placeholder — native `placeholder` cannot morph, so Calligraph sits
+ * over the empty textarea and disappears once the student starts typing.
+ *
+ * Calligraph already blurs individual glyphs on enter/exit; a light whole-line
+ * blur during the swap keeps long example prompts from feeling like a hard cut.
+ */
+function ComposerPlaceholder({
+  text,
+  reduceMotion,
+}: {
+  text: string;
+  reduceMotion: boolean | null;
+}) {
+  const firstPrompt = useRef(true);
+  const [soft, setSoft] = useState(false);
+
+  useEffect(() => {
+    if (reduceMotion) return;
+    if (firstPrompt.current) {
+      firstPrompt.current = false;
+      return;
+    }
+    setSoft(true);
+    const id = window.setTimeout(() => setSoft(false), 380);
+    return () => window.clearTimeout(id);
+  }, [text, reduceMotion]);
+
+  return (
+    <div
+      aria-hidden
+      className={cx(
+        "pointer-events-none absolute inset-x-2 top-1 line-clamp-2 text-text-tertiary",
+        COMPOSER_TEXT,
+      )}
+    >
+      {reduceMotion ? (
+        text
+      ) : (
+        <motion.span
+          className="inline-block text-pretty"
+          animate={{
+            filter: soft ? "blur(2.5px)" : "blur(0px)",
+            opacity: soft ? 0.88 : 1,
+          }}
+          transition={{ duration: 0.36, ease: [0.19, 1, 0.22, 1] }}
+        >
+          <Calligraph
+            animation="default"
+            autoSize={false}
+            drift={{ x: 0, y: 0 }}
+            stagger={0}
+          >
+            {text}
+          </Calligraph>
+        </motion.span>
+      )}
+    </div>
+  );
+}
+
 /**
  * The gradient chasing the pill's outline while the assistant works.
  *
@@ -224,8 +359,8 @@ function RunningLight({ active }: { active: boolean }) {
     <span
       aria-hidden
       className={cx(
-        "pointer-events-none absolute inset-0 overflow-hidden rounded-3xl",
-        "transition-opacity duration-[450ms] motion-reduce:transition-none",
+        "pointer-events-none absolute inset-0 overflow-hidden rounded-3xl [contain:paint]",
+        "transition-opacity duration-[450ms]",
         active ? "opacity-100" : "opacity-0",
       )}
     >
@@ -243,20 +378,28 @@ function RunningLight({ active }: { active: boolean }) {
       >
         <defs>
           <linearGradient id={gradient} x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#5eead4" />
-            <stop offset="30%" stopColor="#46baec" />
-            <stop offset="50%" stopColor="#9677c8" />
-            <stop offset="70%" stopColor="#e633a4" />
-            <stop offset="100%" stopColor="#00faa7" />
+            <stop offset="0%" stopColor="var(--color-accent-200)" />
+            <stop offset="30%" stopColor="var(--color-accent-400)" />
+            <stop offset="50%" stopColor="var(--color-accent-500)" />
+            <stop offset="70%" stopColor="var(--color-accent-600)" />
+            <stop offset="100%" stopColor="var(--color-accent-300)" />
           </linearGradient>
-          <filter id={`${gradient}-wide`} x="-50%" y="-50%" width="200%" height="200%">
+          {/*
+            Filter regions sized to roughly 3x each blur's deviation rather than
+            the default 200% square. The blur is recomputed every frame while the
+            dash travels, and the region is what decides how many pixels that
+            costs -- a 4x area buys nothing here because the blur cannot reach
+            that far.
+
+            There is no `-fine` filter: a stdDeviation of 0.5 on a viewBox this
+            stretched is below the threshold of visibility, and it was still
+            forcing a full filter pass per frame.
+          */}
+          <filter id={`${gradient}-wide`} x="-8%" y="-40%" width="116%" height="180%">
             <feGaussianBlur stdDeviation="14" />
           </filter>
-          <filter id={`${gradient}-mid`} x="-50%" y="-50%" width="200%" height="200%">
+          <filter id={`${gradient}-mid`} x="-4%" y="-20%" width="108%" height="140%">
             <feGaussianBlur stdDeviation="6" />
-          </filter>
-          <filter id={`${gradient}-fine`} x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="0.5" />
           </filter>
         </defs>
 
@@ -274,10 +417,19 @@ function RunningLight({ active }: { active: boolean }) {
             strokeWidth={stroke.width}
             strokeLinecap="round"
             strokeDasharray={`${stroke.dash} ${100 - stroke.dash}`}
-            filter={`url(#${gradient}-${stroke.key})`}
+            filter={stroke.key === "fine" ? undefined : `url(#${gradient}-${stroke.key})`}
             style={{
               opacity: stroke.opacity,
               animation: `composer-loader-dash 4.5s linear ${stroke.delay} infinite`,
+              /*
+               * Paused rather than unmounted while idle. The comment above this
+               * component explains why the rects stay drawn -- unmounting them
+               * makes the light snap in on submit instead of coming up. But
+               * leaving three infinite blurred animations running behind a
+               * transparent element costs the same per frame as running them
+               * visibly, so the clock stops instead of the element leaving.
+               */
+              animationPlayState: active ? "running" : "paused",
             }}
           />
         ))}

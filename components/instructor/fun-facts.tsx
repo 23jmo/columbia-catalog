@@ -1,6 +1,7 @@
 "use client";
 
 import { provenanceLabel } from "@/components/course/format";
+import { InstructorSection } from "./section-block";
 import type { InstructorPageData } from "@/lib/data/instructors";
 import { cx } from "@/utils/cx";
 import { ActivityHeatmap } from "./activity-heatmap";
@@ -45,32 +46,26 @@ export function InstructorFunFacts({ data, className }: InstructorFunFactsProps)
   const accent = accentForSubject(data.subjects[0] ?? data.name);
 
   return (
-    <section
-      className={cx(
-        "flex w-full flex-col gap-2.5 rounded-[20px] bg-background-secondary-default px-2.5 py-3",
-        className,
-      )}
-      aria-labelledby="instructor-fun-facts-heading"
-    >
-      <div className="flex w-full flex-col gap-0.5 px-1.5 pt-1">
-        <p id="instructor-fun-facts-heading" className="text-body-medium text-text-secondary">
-          By the numbers
-        </p>
-        <div className="flex flex-wrap items-baseline gap-2">
-          <p className="text-title-2-medium whitespace-nowrap tabular-nums text-text-primary">
-            {data.studentsTaught != null
-              ? `${countLabel(data.studentsTaught)} students`
-              : "Enrolment not published"}
-          </p>
-          {data.fillRatio != null ? (
-            <span className="inline-flex items-center justify-center rounded-md bg-status-purple-background px-1.5 py-0.5 text-body-medium whitespace-nowrap text-status-purple-text">
-              {percentLabel(data.fillRatio)} of seats
+    <div className={cx("w-full", className)}>
+      <InstructorSection
+        id="instructor-fun-facts"
+        title="By the numbers"
+        headline={
+          <span className="flex flex-wrap items-baseline gap-2">
+            <span className="whitespace-nowrap tabular-nums">
+              {data.studentsTaught != null
+                ? `${countLabel(data.studentsTaught)} ${data.studentsTaught === 1 ? "student" : "students"}`
+                : "Enrolment not published"}
             </span>
-          ) : null}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {data.fillRatio != null ? (
+              <span className="inline-flex items-center justify-center rounded-md bg-status-purple-background px-1.5 py-0.5 text-body-medium whitespace-nowrap text-status-purple-text">
+                {percentLabel(data.fillRatio)} of seats
+              </span>
+            ) : null}
+          </span>
+        }
+      >
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <StatTile
           value={String(data.courseCount)}
           label={data.courseCount === 1 ? "Course" : "Courses"}
@@ -83,22 +78,24 @@ export function InstructorFunFacts({ data, className }: InstructorFunFactsProps)
           value={data.totalCapacity != null ? countLabel(data.totalCapacity) : "—"}
           label="Seats offered"
         />
-        <StatTile value={durationLabel(data.weeklyMinutes)} label="Class time / week" />
-      </div>
+          <StatTile value={durationLabel(data.weeklyMinutes)} label="Class time / week" />
+        </div>
 
-      <p className="px-1.5 text-caption-2-regular text-pretty text-text-tertiary">
-        {asOf
-          ? `Seat counts as published by the Directory of Classes on ${asOf}.`
-          : "The Directory of Classes did not publish an “as of” time for these seat counts."}
-      </p>
+        {/* Provenance travels with the number, always (spec §3). */}
+        <p className="text-caption-2-regular text-pretty text-text-tertiary">
+          {asOf
+            ? `Seat counts as published by the Directory of Classes on ${asOf}.`
+            : "The Directory of Classes did not publish an “as of” time for these seat counts."}
+        </p>
 
-      <div className="rounded-2lg bg-background-primary-default p-2.5">
-        <ActivityHeatmap
-          days={data.calendar}
-          accent={accent}
-          scopeLabel={`${data.termLabel} · ${shortDateLabel(data.bounds.startsOn)} – ${shortDateLabel(data.bounds.endsOn)}`}
-        />
-      </div>
-    </section>
+        <div className="rounded-2lg border border-border-table bg-background-primary-default p-2.5">
+          <ActivityHeatmap
+            days={data.calendar}
+            accent={accent}
+            scopeLabel={`${data.termLabel} · ${shortDateLabel(data.bounds.startsOn)} – ${shortDateLabel(data.bounds.endsOn)}`}
+          />
+        </div>
+      </InstructorSection>
+    </div>
   );
 }

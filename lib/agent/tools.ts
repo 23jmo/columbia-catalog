@@ -13,9 +13,9 @@
  * exactly how `student_courses` and the localStorage progression record ended
  * up as two disagreeing student records.
  *
- * The three additions are the ones MCP has no equivalent for, because they need
- * the recommendation engine: `get_courses_taken`, `get_unmet_requirements`, and
- * `recommend_courses`.
+ * The three engine additions are `get_courses_taken`, `get_unmet_requirements`,
+ * and `recommend_courses`. Two more, in `present-tools.ts`, put existing UI on
+ * the thread: `show_schedule` and `show_campus_map`.
  *
  * ── The transcript is not logging ──────────────────────────────────────────
  *
@@ -40,6 +40,7 @@
 import { z } from "zod";
 import { tool, type ToolSet } from "ai";
 
+import { presentTools } from "@/lib/agent/present-tools";
 import { getCoursesByIds } from "@/lib/data/catalog";
 import { createSupabaseCandidateProvider } from "@/lib/db/candidate-source";
 import { loadStudentProfile } from "@/lib/db/student-profile";
@@ -63,6 +64,11 @@ export interface AgentToolContext {
   userId: string;
   /** Raw tool output for this turn, in call order. Read by the grounding check. */
   transcript: string[];
+  /**
+   * Course ids already on screen this conversation. Mutated after each
+   * `recommend_courses` so a second call in the same turn does not reprint.
+   */
+  alreadyShownCourseIds: string[];
   /** Shared MCP context: ports, synthetic auth, rate-limit bucket. */
   mcp: McpToolContext;
 }
@@ -95,10 +101,12 @@ export function buildAgentToolContext(
   userId: string,
   email: string,
   baseUrl: string,
+  alreadyShownCourseIds: readonly string[] = [],
 ): AgentToolContext {
   return {
     userId,
     transcript: [],
+    alreadyShownCourseIds: [...alreadyShownCourseIds],
     mcp: {
       deps: mcpDeps(baseUrl),
       auth: sessionAuth(userId, email),
@@ -348,31 +356,40 @@ function engineTools(context: AgentToolContext): ToolSet {
 
     recommend_courses: tool({
       description:
-        "The recommendation engine, and the reason this app exists. Returns SECTION CARDS — " +
-        "ranked for THIS student, each one a real section with its instructor, meeting pattern, " +
-        "seat count and Vergil link — not bare course names. Use it for any question that ends " +
-        "in the student picking something: what should I take, what fits Tuesdays, what clears " +
-        "my Core, what's left, what would I like. Prefer it over search_courses unless the " +
-        "student named a specific course they already know about.\n\n" +
-        "Each card carries `best` (the section the card is about) and `others` (its siblings). " +
-        "Courses whose prerequisites the student has not met are EXCLUDED from `cards`; set " +
-        "includeWithheld to see them under `withheld`, with what is missing and whether the " +
-        "registrar's own wording allows instructor permission as a way in. `caveats` containing " +
-        "`no_vector` means we have no semantic profile for that course and it was ranked on " +
-        "requirement fit alone. The student SEES these cards rendered beside your answer, so " +
-        "write about the ones you mean rather than restating every field.",
+        "The recommendation engine. Returns SECTION CARDS for THIS student. " +
+        "An unfiltered call returns the SAME ranked list every time — that is how " +
+        "Computer Vision reprints under a Global Core question. On any follow-up, " +
+        "you MUST pass clears (requirement label from get_unmet_requirements), " +
+        "subjects (department codes), or excludeCourseIds (every courseId already " +
+        "shown). Prefer it over search_courses unless the student named a course " +
+        "they already know.\n\n" +
+        "Each card carries `best` (the section the card is about) and `others` " +
+        "(its siblings). Courses whose prerequisites the student has not met are " +
+        "EXCLUDED from `cards`; set includeWithheld to see them under `withheld`. " +
+        "`caveats` containing `no_vector` means we ranked on requirement fit alone. " +
+        "The student SEES these cards under your answer. Default limit is 3.",
       inputSchema: z.object({
-        limit: z.number().int().min(1).max(25).default(8),
+        limit: z.number().int().min(1).max(25).default(3),
         subjects: z
           .array(z.string())
           .optional()
-          .describe('Restrict to subject codes, e.g. ["COMS", "MATH"].'),
+          .describe('Restrict to subject codes, e.g. ["HUMA", "AHIS"]. Not ["COMS"] unless they asked for CS.'),
+        clears: z
+          .string()
+          .optional()
+          .describe(
+            'Requirement group label, copied exactly from get_unmet_requirements. Example: "Global Core".',
+          ),
+        excludeCourseIds: z
+          .array(z.string())
+          .optional()
+          .describe("courseIds already shown this conversation. Pass them on every follow-up recommend."),
         includeWithheld: z
           .boolean()
           .default(false)
           .describe("Also return courses blocked by prerequisites. Use when asked why, or why not."),
       }),
-      async execute({ limit, subjects, includeWithheld }) {
+      async execute({ limit, subjects, clears, excludeCourseIds, includeWithheld }) {
         /*
          * The feed's builder, not the bare engine.
          *
@@ -388,8 +405,27 @@ function engineTools(context: AgentToolContext): ToolSet {
          * while there were two paths: the assistant and the feed now rank with
          * one implementation, so they cannot disagree about what to recommend
          * on the same screen.
+         *
+         * Previously-shown ids are merged in even if the model forgets
+         * `excludeCourseIds`. That stops the same six cards reprinting;
+         * `clears` / `subjects` is still what makes Global Core not be CS.
          */
-        const feed = await buildFeed({ limit, ...(subjects?.length ? { subjects } : {}) });
+        const exclude = [
+          ...context.alreadyShownCourseIds,
+          ...(excludeCourseIds ?? []),
+        ];
+        const feed = await buildFeed({
+          limit,
+          ...(subjects?.length ? { subjects } : {}),
+          ...(clears?.trim() ? { clears: clears.trim() } : {}),
+          ...(exclude.length ? { excludeCourseIds: exclude } : {}),
+        });
+
+        for (const card of feed.cards) {
+          if (!context.alreadyShownCourseIds.includes(card.courseId)) {
+            context.alreadyShownCourseIds.push(card.courseId);
+          }
+        }
 
         return emit({
           /*
@@ -429,5 +465,5 @@ function engineTools(context: AgentToolContext): ToolSet {
 export function buildAgentTools(context: AgentToolContext): ToolSet {
   const tools: ToolSet = {};
   for (const name of BRIDGED_MCP_TOOLS) tools[name] = bridgeMcpTool(name, context);
-  return { ...tools, ...engineTools(context) };
+  return { ...tools, ...engineTools(context), ...presentTools(context) };
 }

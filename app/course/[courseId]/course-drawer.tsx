@@ -8,7 +8,6 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
-  type CSSProperties,
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
@@ -25,12 +24,11 @@ import { cx } from "@/utils/cx";
  *
  * ── Why this is mounted from a LAYOUT, not from the page ───────────────────
  *
- * The enter transition is driven by state (`isVisible` flips on the frame after
- * mount), so it replays on every mount. That used to happen twice per open:
+ * The panel used to animate on mount, so it replayed on every remount:
  * `loading.tsx` rendered a drawer, and when the data arrived React unmounted
  * that whole subtree and mounted the page's drawer in its place. Two React
  * elements in two different Suspense slots are two components, however
- * identical their props — so the panel slid up, vanished, and slid up again.
+ * identical their props — so the panel appeared, vanished, and appeared again.
  *
  * Hoisting the panel into `app/@drawer/(.)course/[courseId]/layout.tsx` puts it
  * ABOVE the Suspense boundary, where nothing the page does can unmount it. The
@@ -57,48 +55,6 @@ import { cx } from "@/utils/cx";
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
-/*
- * Motion timings.
- *
- * Fast, and asymmetric. An entrance is doing work -- it tells the reader where
- * this panel came from and that their results are still behind it -- so it
- * gets enough time to read as movement. An exit tells them nothing they have
- * not already decided; every millisecond of it is latency between clicking
- * close and having their list back. So the way out is quicker than the way in,
- * and both are short enough to feel like the panel is already there rather
- * than like something being played at you.
- *
- * The values live in CSS custom properties so the dev-only motion dial can
- * drive them live without a rebuild (`components/dev/drawer-motion-dial.tsx`).
- * The constants below are the fallbacks baked into the `var()` calls, so the
- * drawer is fully specified with no dial mounted -- which is what production
- * ships.
- */
-const DEFAULT_ENTER_MS = 90;
-const DEFAULT_EXIT_MS = 60;
-
-/*
- * The dim runs on its own clock -- see `scrimStyle` for why it is not the
- * panel's. Up like weather, out like a light.
- */
-const DEFAULT_SCRIM_ENTER_MS = 220;
-const DEFAULT_SCRIM_EXIT_MS = 110;
-
-/**
- * A little overshoot on the way in.
- *
- * The panel travels past its resting edge by a hair and settles back, which is
- * what a thing with mass does when it stops. The previous curve decelerated
- * into place perfectly smoothly and read as correct but inert.
- *
- * Kept small on purpose. Overshoot is a cost paid in legibility -- the text
- * inside is moving while you are already trying to read it -- and at this
- * duration a large bounce stops reading as weight and starts reading as a
- * wobble. This is roughly a 3% overrun, enough to feel and not enough to
- * chase. The dial's "snap" preset goes further if you want to compare.
- */
-const DEFAULT_EASE_ENTER = "cubic-bezier(0.34, 1.35, 0.64, 1)";
 
 /* -------------------------------------------------------------------------- */
 /*  Push rail vs overlay                                                      */
@@ -214,8 +170,7 @@ function writeStoredRailPx(px: number): void {
  * agree with the server render or the attributes below hydrate mismatched --
  * `aria-modal` in particular. Reporting `false` until something subscribes
  * makes the first paint identical on both sides; the real value arrives in the
- * microtask after, well before the panel has finished sliding. Same shape as
- * `hooks/use-plans.ts` and the motion dial.
+ * microtask after. Same shape as `hooks/use-plans.ts`.
  */
 let pushMatches = false;
 let pushHydrated = false;
@@ -337,13 +292,8 @@ function useRailResize(isPushRail: boolean, panelRef: React.RefObject<HTMLDivEle
       event.currentTarget.setPointerCapture(event.pointerId);
       setIsResizing(true);
 
-      /*
-       * The shell's padding and the nav rail both ease on
-       * `--drawer-push-duration`. At the panel's 90ms that reads as lag while
-       * a pointer is dragging — the edge under your finger moves and the page
-       * catches up after. Zero for the gesture, restored on release so the
-       * next open still animates.
-       */
+      // The page already follows `--drawer-push-duration`. Keep it at 0ms so
+      // a drag cannot inherit a leftover duration from anything else.
       document.documentElement.style.setProperty("--drawer-push-duration", "0ms");
       // Otherwise the drag selects the course text it is dragging over.
       document.body.style.userSelect = "none";
@@ -368,10 +318,7 @@ function useRailResize(isPushRail: boolean, panelRef: React.RefObject<HTMLDivEle
       event.currentTarget.releasePointerCapture?.(event.pointerId);
       setIsResizing(false);
 
-      document.documentElement.style.setProperty(
-        "--drawer-push-duration",
-        `var(--drawer-enter, ${DEFAULT_ENTER_MS}ms)`,
-      );
+      document.documentElement.style.setProperty("--drawer-push-duration", "0ms");
       document.body.style.removeProperty("user-select");
 
       const panel = panelRef.current;
@@ -412,88 +359,413 @@ function useRailResize(isPushRail: boolean, panelRef: React.RefObject<HTMLDivEle
 }
 
 /**
- * How long to hold the navigation open so the exit can play.
+ * Above `sm` the panel is not a sheet.
  *
- * Read from the live custom property rather than hardcoded, so the JS delay
- * and the CSS transition cannot drift apart -- including while the dial is
- * being dragged. If they drift, the drawer either jumps away mid-slide or
- * sits finished and idle before it leaves.
+ * It arrives from the right edge on `translate-x`, and a vertical throw there
+ * would be a gesture against the grain of the shape — you would be flinging a
+ * side panel downwards into an edge it has no relationship with. Read at event
+ * time rather than subscribed to, for the same reason the scroll lock and the
+ * Tab trap read `matchMedia` inline: it keeps the breakpoint out of the mount
+ * effect's dependencies, where it would restart the entrance on every resize.
  */
-function durationMs(property: string, fallback: number): number {
-  if (typeof window === "undefined") return fallback;
-  const raw = getComputedStyle(document.documentElement).getPropertyValue(property).trim();
-  if (!raw) return fallback;
-  const value = Number.parseFloat(raw);
-  if (!Number.isFinite(value) || value < 0) return fallback;
-  return raw.endsWith("ms") ? value : value * 1000;
-}
+const SHEET_QUERY = "(min-width: 40rem)";
 
-function exitDurationMs(): number {
-  return durationMs("--drawer-exit", DEFAULT_EXIT_MS);
-}
+/**
+ * How far down is far enough.
+ *
+ * A quarter of the sheet — about 185px of an 88dvh panel on a 390×844 phone.
+ * The number has to sit in a fairly narrow band: much less and the sheet
+ * leaves while you are still deciding, which is worse than it sticking, because
+ * an accidental dismissal costs a navigation and a scroll position. Much more
+ * and the gesture stops being a flick and becomes a haul, at which point the
+ * close button was quicker and the drag is decoration.
+ *
+ * A fraction rather than a pixel count because the sheet's height is `88dvh`
+ * and a fixed threshold would mean something different on a 667px phone than
+ * on a 932px one. The gesture should read the same on both.
+ */
+const SHEET_DISMISS_FRACTION = 0.25;
 
-/** The expand rides the entrance's clock: it is an arrival, not a dismissal. */
-function enterDurationMs(): number {
-  return durationMs("--drawer-enter", DEFAULT_ENTER_MS);
+/**
+ * ...or fast enough.
+ *
+ * Distance alone gets the slow, deliberate drag right and the flick wrong: a
+ * quick downward throw is unambiguously "get rid of this", and requiring it to
+ * also cover a quarter of the screen makes the reader repeat themselves. So
+ * velocity is a second, independent way to pass.
+ *
+ * Both a speed and a floor, because velocity on its own is dangerous. The
+ * fastest pointer samples in any gesture are the first few, so a 6px twitch at
+ * the start of a tap can clear a pure speed test on its own. The floor says the
+ * flick has to have actually gone somewhere.
+ */
+const SHEET_FLICK_PX_PER_MS = 0.5;
+const SHEET_FLICK_MIN_PX = 32;
+
+/**
+ * Upward: resistance, not travel.
+ *
+ * There is nothing above the sheet to reveal — it is already capped at 88dvh
+ * with the results deliberately visible behind the gap — so an upward drag
+ * cannot be given what it is asking for. The two honest answers are to ignore
+ * it or to resist it, and ignoring it makes the sheet feel broken: a finger
+ * moves and nothing does, which reads as a dropped gesture rather than as a
+ * limit.
+ *
+ * So it moves, and pulls back harder the further it goes, asymptotically
+ * approaching this bound. `(d * limit) / (d + limit)` is the cheap form of
+ * that curve: at `d = limit` it is exactly half, and it never reaches the
+ * limit however hard you pull. The sheet is against a stop and says so.
+ *
+ * Deliberately NOT a promote-to-full-page gesture. Expanding is already a
+ * verb here — the title link — and it ends in a document navigation. Attaching
+ * that to an upward flick would put an irreversible page load on the far side
+ * of a gesture people make by accident while scrolling.
+ */
+const SHEET_OVERDRAG_PX = 96;
+
+/**
+ * Nothing moves until the pointer has travelled this far.
+ *
+ * The slop is what keeps a tap a tap. Every link, chip and button in the sheet
+ * sits inside the drag surface, so without a dead zone the panel would lurch a
+ * pixel under every press and a shaky thumb would start a gesture instead of
+ * following a link. Below the slop the drag has not begun, so the click lands
+ * normally and React never re-renders.
+ */
+const SHEET_SLOP_PX = 6;
+
+/**
+ * The window velocity is measured over.
+ *
+ * One frame's delta is far too noisy to threshold on — a 16ms sample that
+ * happens to straddle a stall reads as a dead stop mid-flick. A tail of
+ * roughly two frames smooths that out while still being recent enough to
+ * describe the release rather than the whole gesture: a drag that crawled down
+ * and then stopped must not dismiss on the strength of how it started.
+ */
+const SHEET_VELOCITY_WINDOW_MS = 120;
+
+/**
+ * How much of the dim the drag can take away.
+ *
+ * The scrim lifting as the sheet comes down is what makes the gesture read as
+ * reversible — the page behind is coming back, and it is coming back in
+ * proportion to how far you have pulled, so the halfway point looks like
+ * halfway rather than like a decision already made. Not all the way to zero:
+ * some dim has to remain or the sheet stops looking like it is in front of
+ * anything, and the moment it lands back home would be a flash of the scrim
+ * returning.
+ */
+const SHEET_SCRIM_TRAVEL = 0.7;
+
+/**
+ * Scrolling into the section grows the sheet to the full screen.
+ *
+ * The peek height exists to answer "what is behind this?" — the strip of
+ * results above the sheet is what makes it a sheet rather than a page, and it
+ * is worth real estate for exactly as long as the reader is still deciding
+ * whether they opened the right thing. Once they start scrolling they have
+ * decided, and the strip stops being orientation and becomes 12% of a phone
+ * screen spent on a list they are no longer reading.
+ *
+ * So the height follows the intent: peek while you are glancing, full while
+ * you are reading, and back to peek the moment you return to the top. That
+ * last part is what keeps it reversible without a control — no button is
+ * needed to get the results back, because the gesture that got you here
+ * reverses.
+ *
+ * Two different numbers so the sheet cannot flap. Expanding takes a deliberate
+ * 12px of scroll; collapsing takes an actual return to the top. A single
+ * threshold would put the sheet's height on a knife edge at exactly the scroll
+ * offset a finger rests at.
+ */
+const SHEET_EXPAND_SCROLL_PX = 12;
+
+/** The asymptotic curve described in `SHEET_OVERDRAG_PX`. */
+function overdrag(distance: number): number {
+  return (distance * SHEET_OVERDRAG_PX) / (distance + SHEET_OVERDRAG_PX);
 }
 
 /**
- * Duration and easing for whichever direction is currently playing.
+ * The scroll container the gesture started inside, if any.
  *
- * Inline rather than Tailwind `duration-*`/`ease-*` classes because the values
- * come from custom properties the dial rewrites at runtime, and a utility
- * class compiles to a fixed literal. The `var()` fallbacks are the real
- * defaults -- nothing has to set these properties for the drawer to work.
+ * This is the whole difference between a sheet that can be read and a sheet
+ * that can only be thrown away. `DrawerFrame` is the entire body of the panel,
+ * so almost every pointer that lands on the sheet lands inside a scroller, and
+ * a drag handler that did not ask this question would dismiss the drawer every
+ * time someone tried to scroll it.
  *
- * Decelerating in, accelerating out: arriving settles into place, leaving gets
- * out of the way. The pair is what makes the panel read as an object with
- * weight rather than a div whose transform changed.
+ * `scrollHeight > clientHeight` first because it is free, and the computed
+ * style read — which is not — only happens for elements that could actually be
+ * scrolling. Stops at the panel: the page behind is scroll-locked and is not
+ * ours to consult.
  */
-function motionStyle(isClosing: boolean): CSSProperties {
-  return isClosing
-    ? {
-        transitionDuration: `var(--drawer-exit, ${DEFAULT_EXIT_MS}ms)`,
-        transitionTimingFunction: "var(--drawer-ease-exit, cubic-bezier(0.4, 0, 1, 1))",
-      }
-    : {
-        transitionDuration: `var(--drawer-enter, ${DEFAULT_ENTER_MS}ms)`,
-        transitionTimingFunction: `var(--drawer-ease-enter, ${DEFAULT_EASE_ENTER})`,
-      };
+function scrollerUnder(target: EventTarget | null, panel: HTMLElement): HTMLElement | null {
+  let node = target instanceof Element ? target : null;
+  while (node && node !== panel) {
+    if (node instanceof HTMLElement && node.scrollHeight > node.clientHeight) {
+      const overflowY = getComputedStyle(node).overflowY;
+      if (overflowY === "auto" || overflowY === "scroll") return node;
+    }
+    node = node.parentElement;
+  }
+  return null;
 }
 
 /**
- * Duration and easing for the dim behind the panel.
+ * Drag the sheet down to dismiss it.
  *
- * ── Why this is not `motionStyle` ──────────────────────────────────────────
+ * ── Why the offset is written to the DOM, not to state ─────────────────────
  *
- * It used to be. The scrim ran on the panel's timing on the theory that the
- * dim must not outlive the thing it dims -- true, but it does not follow that
- * the two should arrive together. The panel is the object being tracked and
- * wants to be quick and decisive. The dim is atmosphere, and atmosphere that
- * lands as fast as an object does not read as atmosphere; it reads as a flash.
- * At the panel's old 200ms nobody noticed. At 90ms the blur snaps.
+ * The same reason `useRailResize` does it: a pointer crossing a phone screen
+ * produces a sample per frame, and re-rendering a panel full of course content
+ * sixty times a second to move it would drop the frames the gesture is made
+ * of. So the live offset is one `translate` write per move, and the only React
+ * state is `isDragging`, which changes twice per gesture because it has to
+ * reach `className`.
  *
- * So the scrim gets its own, longer ramp: slow enough to feel like the room
- * dimming, still comfortably shorter than a click-to-click round trip.
+ * ── Why `translate` and not `transform` ────────────────────────────────────
  *
- * Leaving is the exception -- it stays brisk, because a dim that lingers after
- * the panel has gone is the failure the original rule was guarding against.
- * The asymmetry is the point: fade up like weather, cut out like a light.
+ * Tailwind v4 compiles `translate-y-*` to the standalone `translate` property,
+ * not to `transform`. The live drag writes that same property, so clearing the
+ * inline value on a cancelled gesture hands the panel back to its resting
+ * class with nothing left to interpolate.
  *
- * Linear, not eased. The eye reads the rate of a brightness change far more
- * directly than the rate of a movement, so an eased fade reads as a lurch even
- * when the identical curve on a transform reads as grace.
+ * ── Keyboard, and WCAG 2.5.7 ───────────────────────────────────────────────
+ *
+ * There is deliberately no keyboard equivalent of the drag, because there does
+ * not need to be one. 2.5.7 asks that anything achievable by dragging also be
+ * achievable with a single pointer, and dismissal already is, three ways over:
+ * the close button, the scrim, and Escape. The gesture is a faster route to a
+ * destination that was never gated behind it, which is the one shape of
+ * drag-only interaction the rule permits.
  */
-function scrimStyle(isClosing: boolean): CSSProperties {
-  return isClosing
-    ? {
-        transitionDuration: `var(--drawer-scrim-exit, ${DEFAULT_SCRIM_EXIT_MS}ms)`,
-        transitionTimingFunction: "linear",
+function useSheetDrag({
+  panelRef,
+  scrimRef,
+  close,
+  collapse,
+  isFull,
+  isBusy,
+}: {
+  panelRef: React.RefObject<HTMLDivElement | null>;
+  scrimRef: React.RefObject<HTMLButtonElement | null>;
+  close: () => void;
+  /** Step back to the peek height instead of leaving. See `onPointerUp`. */
+  collapse: () => void;
+  isFull: boolean;
+  isBusy: boolean;
+}) {
+  const dragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    /** Null when the gesture began on the grab handle rather than in content. */
+    scroller: HTMLElement | null;
+    captured: boolean;
+    offset: number;
+    height: number;
+    samples: { y: number; t: number }[];
+  } | null>(null);
+  const [isDragging, setDragging] = useState(false);
+
+  /**
+   * Publish one frame of the gesture. `null` hands the panel back to CSS.
+   *
+   * The height is passed in rather than measured because measuring here would
+   * force a layout on every pointer move to read a number that cannot change
+   * mid-gesture — the sheet is a fixed `88dvh` and the viewport is not
+   * resizing under a finger.
+   */
+  const paint = useCallback(
+    (offset: number | null, height: number) => {
+      const panel = panelRef.current;
+      if (panel) {
+        if (offset === null) panel.style.removeProperty("translate");
+        else panel.style.translate = `0 ${offset}px`;
       }
-    : {
-        transitionDuration: `var(--drawer-scrim-enter, ${DEFAULT_SCRIM_ENTER_MS}ms)`,
-        transitionTimingFunction: "linear",
+      const scrim = scrimRef.current;
+      if (!scrim) return;
+      // Only the downward half dims: pulling up against the stop is the sheet
+      // refusing to move, and the room should not brighten to acknowledge it.
+      if (offset === null || offset <= 0) {
+        scrim.style.removeProperty("opacity");
+        return;
+      }
+      const progress = Math.min(1, offset / height);
+      scrim.style.opacity = String(1 - SHEET_SCRIM_TRAVEL * progress);
+    },
+    [panelRef, scrimRef],
+  );
+
+  const onPointerDown = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      const panel = panelRef.current;
+      if (!panel || isBusy || dragRef.current) return;
+      if (event.pointerType === "mouse" && event.button !== 0) return;
+      if (window.matchMedia(SHEET_QUERY).matches) return;
+
+      const scroller = scrollerUnder(event.target, panel);
+      /*
+       * Scrolled away from the top, so the reader is reading. Pulling the sheet
+       * from here would mean the content could never be scrolled back up: every
+       * upward-then-downward correction inside a long section would start
+       * dismissing the thing being read.
+       */
+      if (scroller && scroller.scrollTop > 0) return;
+
+      /*
+       * Recorded, not started. Nothing is captured and nothing is prevented
+       * until the pointer proves it is a downward drag — see `onPointerMove`.
+       * Committing here is what turns every tap on a link into a dropped click.
+       */
+      dragRef.current = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        scroller,
+        captured: false,
+        offset: 0,
+        height: panel.getBoundingClientRect().height,
+        samples: [{ y: event.clientY, t: event.timeStamp }],
       };
+    },
+    [isBusy, panelRef],
+  );
+
+  const onPointerMove = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      const drag = dragRef.current;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+
+      const dy = event.clientY - drag.startY;
+      const dx = event.clientX - drag.startX;
+
+      if (!drag.captured) {
+        if (Math.abs(dy) < SHEET_SLOP_PX && Math.abs(dx) < SHEET_SLOP_PX) return;
+        /*
+         * Two ways to be handed back rather than taken. A gesture that is
+         * mostly horizontal was never ours — the sheet has no lateral axis.
+         * And an upward gesture that began in the content is a scroll: the
+         * scroller is at the top, so the reader is starting to read, and this
+         * is the exact moment a greedy handler would eat the first flick of
+         * every session.
+         */
+        if (Math.abs(dx) > Math.abs(dy) || (drag.scroller !== null && dy < 0)) {
+          dragRef.current = null;
+          return;
+        }
+        drag.captured = true;
+        event.currentTarget.setPointerCapture(event.pointerId);
+        setDragging(true);
+      }
+
+      drag.samples.push({ y: event.clientY, t: event.timeStamp });
+      while (
+        drag.samples.length > 2 &&
+        event.timeStamp - drag.samples[0].t > SHEET_VELOCITY_WINDOW_MS
+      ) {
+        drag.samples.shift();
+      }
+
+      drag.offset = dy >= 0 ? dy : -overdrag(-dy);
+      paint(drag.offset, drag.height);
+    },
+    [paint],
+  );
+
+  const onPointerUp = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      const drag = dragRef.current;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      dragRef.current = null;
+      // Never captured: a tap, or a scroll we declined. Nothing was moved and
+      // nothing needs restoring — and crucially, no click was swallowed.
+      if (!drag.captured) return;
+
+      /*
+       * `pointercancel` reaches here too, and by then the capture is already
+       * gone. Releasing a pointer that is no longer captured throws, so ask
+       * first rather than letting a cancelled gesture take the panel down with
+       * it.
+       */
+      if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      setDragging(false);
+
+      const first = drag.samples[0];
+      const last = drag.samples[drag.samples.length - 1];
+      const elapsed = last.t - first.t;
+      const velocity = elapsed > 0 ? (last.y - first.y) / elapsed : 0;
+
+      const isFarEnough = drag.offset >= drag.height * SHEET_DISMISS_FRACTION;
+      const isFastEnough =
+        velocity >= SHEET_FLICK_PX_PER_MS && drag.offset >= SHEET_FLICK_MIN_PX;
+      if (!isFarEnough && !isFastEnough) {
+        // Cancelled: drop the inline offset so the sheet sits at rest again.
+        paint(null, drag.height);
+        return;
+      }
+
+      /*
+       * A full-height sheet steps back before it leaves.
+       *
+       * The reader scrolled to get here, which is a stronger signal of intent
+       * than any single drag: they are reading this section. Throwing that away
+       * on one gesture makes a long section feel precarious, and the cost of
+       * being wrong is asymmetric — landing back at the peek height costs a
+       * flick to undo, while dismissing costs a navigation, a lost scroll
+       * position, and finding the row again.
+       *
+       * So the pull down is read as "give me less of this", and the answer to
+       * that is less of it. Repeat the gesture and the second one closes, which
+       * is the detent behaviour every phone sheet has taught people to expect.
+       */
+      if (isFull) {
+        paint(null, drag.height);
+        collapse();
+      } else {
+        // Leave the last drag offset in place. Clearing it would snap the
+        // sheet home for a frame before `router.back()` unmounts it.
+        close();
+      }
+    },
+    [close, collapse, isFull, paint],
+  );
+
+  /**
+   * Stop the browser from scrolling with a gesture we have taken.
+   *
+   * `DrawerFrame` is a scroll container, so on a touch screen the browser
+   * decides at the start of the gesture whether the vertical movement belongs
+   * to it. At the top of the scroll it will still claim a downward drag —
+   * there is nowhere to scroll to, but the claim is made from `touch-action`,
+   * not from the scroll position — and a claimed gesture arrives as
+   * `pointercancel` a frame later. The sheet would follow the finger for one
+   * frame and then let go, which is worse than not dragging at all.
+   *
+   * `preventDefault` on a non-passive `touchmove` is the only thing that takes
+   * it back, and React attaches its own touch listeners as passive, so this has
+   * to be a native one. It fires only once a drag is actually captured, so a
+   * scroll we declined is never interfered with.
+   *
+   * Capture phase, on the panel: `children` remount as the section's Suspense
+   * boundary resolves, and a listener bound to the scroller itself would be
+   * pointing at a detached node by the time the content arrived.
+   */
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const keepTheGesture = (event: TouchEvent) => {
+      if (dragRef.current?.captured && event.cancelable) event.preventDefault();
+    };
+    panel.addEventListener("touchmove", keepTheGesture, { passive: false, capture: true });
+    return () => panel.removeEventListener("touchmove", keepTheGesture, { capture: true });
+  }, [panelRef]);
+
+  return { isDragging, onPointerDown, onPointerMove, onPointerUp };
 }
 
 /**
@@ -506,8 +778,7 @@ function scrimStyle(isClosing: boolean): CSSProperties {
  * frame; the page below it does, a Suspense boundary away.
  *
  * `null` means no panel is above us. `DrawerFrame` falls back to a plain
- * `router.back()` in that case: no animation, but the X still closes, which is
- * the failure worth having.
+ * `router.back()` in that case: the X still closes.
  */
 const DrawerCloseContext = createContext<(() => void) | null>(null);
 
@@ -538,8 +809,11 @@ export const DRAWER_TITLE_ID = "drawer-section-title";
 export function CourseDrawer({ children }: { children: ReactNode }) {
   const router = useRouter();
   const panelRef = useRef<HTMLDivElement>(null);
+  // The drag lifts the dim in step with the sheet, so it needs to reach the
+  // scrim's opacity directly — the same one-write-per-frame channel the panel
+  // uses, for the same reason.
+  const scrimRef = useRef<HTMLButtonElement>(null);
   const restoreFocusTo = useRef<HTMLElement | null>(null);
-  const [isVisible, setVisible] = useState(false);
   /*
    * Closing is tracked twice on purpose. The ref is the re-entry guard and has
    * to be correct synchronously -- two dismisses in one tick would both read a
@@ -549,7 +823,6 @@ export function CourseDrawer({ children }: { children: ReactNode }) {
    */
   const isClosingRef = useRef(false);
   const [isClosing, setClosing] = useState(false);
-  const exitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isPushRail = useIsPushRail();
   const {
     handleRef: resizeHandleRef,
@@ -560,27 +833,18 @@ export function CourseDrawer({ children }: { children: ReactNode }) {
     onKeyDown: onResizeKeyDown,
   } = useRailResize(isPushRail, panelRef);
   const isExpandingRef = useRef(false);
-  const [isExpanding, setExpanding] = useState(false);
-  const expandTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /*
+   * The sheet's second height. Not the same thing as expand-to-page, which
+   * leaves the overlay. See `SHEET_EXPAND_SCROLL_PX`.
+   */
+  const [isSheetFull, setSheetFull] = useState(false);
 
   /**
-   * Dismiss: play the exit, then navigate.
+   * Dismiss: pop the history entry immediately.
    *
-   * A route-driven drawer cannot animate out on its own, because the
-   * navigation IS the unmount — `router.back()` pops the history entry, the
-   * slot empties, and the panel is gone from the DOM in the same tick, with
-   * nothing left to transition. Every dismiss path used to call it directly,
-   * which is why the drawer arrived by sliding and left by blinking out.
-   *
-   * So the order inverts: flip to hidden first, which runs the same transform
-   * transition backwards, and hold the navigation until it has played. The
-   * drawer leaves the way it came, and only then does the URL catch up.
-   *
-   * A timer rather than `transitionend`, for the same reason the entrance does
-   * not trust `requestAnimationFrame`: a transition that is never painted
-   * never fires its event, and a missed event here does not mean a missing
-   * animation — it means a drawer that never closes at all. The timer always
-   * fires. Motion is allowed to be skipped; the dismiss is not.
+   * The drawer is a URL, so `router.back()` is the close. There is no exit
+   * animation to wait for — holding the navigation would just be latency
+   * between clicking close and having the list back.
    */
   const close = useCallback(() => {
     // Escape during the exit, a second click on the X, the backdrop under a
@@ -588,88 +852,103 @@ export function CourseDrawer({ children }: { children: ReactNode }) {
     // would queue another `back()` and pop further through the reader's
     // history than they asked for.
     if (isClosingRef.current) return;
-    /*
-     * Escape during an expand, or the X caught on the way past as the panel
-     * grows. The two gestures move the drawer in opposite directions and both
-     * end in a navigation; letting them overlap means `router.back()` at 60ms
-     * racing `location.href` at 90ms, and which one wins decides whether the
-     * reader lands on the full page or back in the results. The expand started
-     * first, so it keeps the click.
-     */
+    // Expand started first, so it keeps the click rather than racing a back().
     if (isExpandingRef.current) return;
     isClosingRef.current = true;
     setClosing(true);
-    setVisible(false);
-
-    // Nothing is animating, so there is nothing to wait for; waiting anyway
-    // would just be 300ms of a dead click for the reader least able to
-    // interpret one.
-    const skipsMotion =
-      typeof window !== "undefined" &&
-      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
-
-    if (skipsMotion) {
-      router.back();
-      return;
-    }
-    exitTimer.current = setTimeout(() => router.back(), exitDurationMs());
+    router.back();
   }, [router]);
 
   /**
    * Promote the rail to the whole page.
    *
-   * The panel already holds the section; the full page is the same section
-   * with room around it. So the transition that says so is the panel widening
-   * into the space the results were using, on the entrance's clock and the
-   * same overshoot — it arrives at full size the way it arrived at rail size.
-   * Sliding this one out and a fresh page in would describe a journey between
-   * two places, when this is one thing growing.
-   *
    * ── Why a document navigation ──────────────────────────────────────────────
    *
    * The URL is already `/course/X?section=Y`; the rail is that route
    * intercepted. `router.push` to the same address is a no-op that leaves the
-   * intercept standing, so the panel would finish expanding and then simply
-   * sit there. A document navigation is the way out of an intercepted route --
-   * the same mechanism the footer's "Full course page" link has always used --
-   * and it lands on the real page with the drawer gone.
-   *
-   * The cost is a full page load, which is why the animation matters: it
-   * covers the request instead of leaving a dead click, and it retracts the
-   * rail so the page behind is already at full width when the new document
-   * paints. Without that the reader sees the layout jump twice.
+   * intercept standing. A document navigation is the way out of an intercepted
+   * route -- the same mechanism the footer's "Full course page" link has always
+   * used -- and it lands on the real page with the drawer gone.
    */
   const expand = useCallback((href: string) => {
     if (isExpandingRef.current || isClosingRef.current) return;
     isExpandingRef.current = true;
-    setExpanding(true);
-
-    // Give the width back to the page at the same moment, so the panel is
-    // growing into space that is genuinely opening up rather than covering it.
-    // The nav rail is part of that width, so it comes back at the same time.
-    document.documentElement.removeAttribute("data-drawer-push");
-    document.documentElement.style.setProperty("--drawer-rail", "0px");
-    document.documentElement.style.setProperty(
-      "--drawer-push-duration",
-      `var(--drawer-enter, ${DEFAULT_ENTER_MS}ms)`,
-    );
-    document.documentElement.style.setProperty(
-      "--drawer-push-ease",
-      `var(--drawer-ease-enter, ${DEFAULT_EASE_ENTER})`,
-    );
-
-    const skipsMotion =
-      typeof window !== "undefined" &&
-      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
-
-    if (skipsMotion) {
-      window.location.href = href;
-      return;
-    }
-    expandTimer.current = setTimeout(() => {
-      window.location.href = href;
-    }, enterDurationMs());
+    window.location.href = href;
   }, []);
+
+  /**
+   * Back to the peek height, and back to the top of the section with it.
+   *
+   * The scroll position has to come too. Height follows scroll — that is the
+   * whole rule — so returning the sheet to peek while the content stayed 400px
+   * down would put the two in contradiction, and the listener below would
+   * immediately grow it again on the next scroll event. Returning both makes
+   * the collapse a real return to the state the sheet opened in.
+   */
+  const collapse = useCallback(() => {
+    setSheetFull(false);
+    panelRef.current
+      ?.querySelector<HTMLElement>("[data-drawer-scroller]")
+      ?.scrollTo({ top: 0 });
+  }, []);
+
+  /**
+   * Height follows the scroll.
+   *
+   * Bound to the panel in the capture phase rather than to the scroller itself,
+   * for two reasons. `scroll` does not bubble, so capture is the only way a
+   * parent hears it at all. And the scroller is inside `children`, which React
+   * unmounts and replaces when the section's Suspense boundary resolves — a
+   * listener attached to the element directly would be holding a detached node
+   * from the moment the real content arrived, which is roughly the moment the
+   * reader starts scrolling.
+   */
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const onScroll = (event: Event) => {
+      const scroller = event.target;
+      if (!(scroller instanceof HTMLElement)) return;
+      /*
+       * The sheet's own scroller, and nothing else inside it.
+       *
+       * Capture catches every descendant's scroll, and the section detail
+       * contains at least one other: the week calendar scrolls itself to the
+       * class's meeting hour the moment it mounts, which is a scroll to ~1024
+       * arriving unprompted a few hundred milliseconds after the drawer opens.
+       * Without this the sheet read that as "the reader is reading" and sprang
+       * to full height before anyone had touched it — it never showed the peek
+       * state at all.
+       */
+      if (!scroller.hasAttribute("data-drawer-scroller")) return;
+      // Only the sheet has two heights. Above `sm` the panel is already full
+      // height and there is nothing for a scroll to grow it into.
+      if (window.matchMedia(SHEET_QUERY).matches) return;
+      setSheetFull((full) => (full ? scroller.scrollTop > 0 : scroller.scrollTop > SHEET_EXPAND_SCROLL_PX));
+    };
+    panel.addEventListener("scroll", onScroll, true);
+    return () => panel.removeEventListener("scroll", onScroll, true);
+  }, []);
+
+  /*
+   * Both directions the panel can already be leaving in. A sheet that is
+   * mid-exit or mid-expand is not a thing to grab: the first would race two
+   * dismissals into the history stack, and the second is a panel on its way to
+   * becoming a page, which has no bottom edge left to throw.
+   */
+  const {
+    isDragging,
+    onPointerDown: onSheetPointerDown,
+    onPointerMove: onSheetPointerMove,
+    onPointerUp: onSheetPointerUp,
+  } = useSheetDrag({
+    panelRef,
+    scrimRef,
+    close,
+    collapse,
+    isFull: isSheetFull,
+    isBusy: isClosing,
+  });
 
   /**
    * Make room for the rail by shrinking the page, not by covering it.
@@ -682,13 +961,10 @@ export function CourseDrawer({ children }: { children: ReactNode }) {
    * property is simply absent and the fallback `0px` applies, so the shell is
    * fully specified on every page that has never opened one.
    *
-   * The direction's own duration and easing ride along, so the list moves on
-   * exactly the same clock as the panel rather than on a second, hardcoded one
-   * that would drift the moment the dial is touched.
+   * Duration is 0ms on purpose: the drawer does not animate, so the page must
+   * not ease around it.
    */
   useEffect(() => {
-    const isOpening = isVisible && !isClosing;
-
     /*
      * Same handshake, second signal. `--drawer-rail` tells the page how much
      * width to give up; this tells the nav rail to stop being 260px wide while
@@ -697,8 +973,11 @@ export function CourseDrawer({ children }: { children: ReactNode }) {
      *
      * An attribute rather than another custom property: the sidebar swaps
      * structure, not just a length. See `useDrawerPush`.
+     *
+     * Stay reserved until unmount. Retracting on `isClosing` would snap the
+     * page wider while the panel was still painted for one frame of navigation.
      */
-    document.documentElement.toggleAttribute("data-drawer-push", isPushRail && isOpening);
+    document.documentElement.toggleAttribute("data-drawer-push", isPushRail);
 
     if (!isPushRail) return;
     const root = document.documentElement.style;
@@ -707,28 +986,15 @@ export function CourseDrawer({ children }: { children: ReactNode }) {
       // The reader's width if they have set one, the opening bid otherwise.
       // Everything downstream — shell padding, results floor, nav collapse —
       // is computed from this one line.
-      isOpening ? `calc(var(${RAIL_WIDTH_PROPERTY}, ${RAIL_WIDTH}) + ${RAIL_GAP} * 2)` : "0px",
+      `calc(var(${RAIL_WIDTH_PROPERTY}, ${RAIL_WIDTH}) + ${RAIL_GAP} * 2)`,
     );
-    root.setProperty(
-      "--drawer-push-duration",
-      isOpening
-        ? `var(--drawer-enter, ${DEFAULT_ENTER_MS}ms)`
-        : `var(--drawer-exit, ${DEFAULT_EXIT_MS}ms)`,
-    );
-    root.setProperty(
-      "--drawer-push-ease",
-      isOpening
-        ? `var(--drawer-ease-enter, ${DEFAULT_EASE_ENTER})`
-        : "var(--drawer-ease-exit, cubic-bezier(0.4, 0, 1, 1))",
-    );
-  }, [isPushRail, isVisible, isClosing]);
+    root.setProperty("--drawer-push-duration", "0ms");
+  }, [isPushRail]);
 
   /*
    * Unmount-only, deliberately separate from the effect above: a cleanup that
-   * ran on every visibility change would clear the property and re-set it in
-   * the same tick, which is a frame of the page snapping back to full width in
-   * the middle of the panel arriving. By the time this runs the exit has
-   * already animated the rail to 0px, so removing it changes nothing visible.
+   * ran on every rail-mode change would clear the property and re-set it in
+   * the same tick, which is a frame of the page snapping back to full width.
    */
   useEffect(() => {
     return () => {
@@ -745,33 +1011,6 @@ export function CourseDrawer({ children }: { children: ReactNode }) {
     // Focus the panel itself rather than the first control: a screen reader
     // should hear the section title, not "close button".
     panelRef.current?.focus();
-    /*
-     * The panel renders hidden and flips to visible a frame later, so the
-     * browser has painted the off-screen state for the transition to run from.
-     *
-     * The timer is not belt-and-braces. `requestAnimationFrame` only fires
-     * while the compositor is actually painting this surface -- in a
-     * background tab, an offscreen or headless pane, or some embedded
-     * webviews, the callback simply never runs. Without a fallback `isVisible`
-     * stays false forever and the panel sits permanently translated
-     * off-screen while STILL trapping focus and scroll-locking the page
-     * behind it: a click that freezes the app and shows nothing. An enter
-     * animation is allowed to be skipped; it is not allowed to be the thing
-     * that decides whether the drawer exists.
-     *
-     * Whichever lands first wins. The second `setVisible(true)` is a no-op --
-     * React bails out when the value is unchanged -- so this cannot double the
-     * transition, which is the whole point of the layout above it.
-     */
-    const show = () => {
-      // A dismiss can land before either of these does — a fast Escape, or a
-      // reader who clicks straight back out. Re-showing the panel then would
-      // strand it on screen after the navigation had already been scheduled.
-      if (isClosingRef.current) return;
-      setVisible(true);
-    };
-    const frame = requestAnimationFrame(show);
-    const fallback = setTimeout(show, 60);
 
     /*
      * Scroll-lock the page only when the panel is covering it.
@@ -783,8 +1022,8 @@ export function CourseDrawer({ children }: { children: ReactNode }) {
      *
      * Read from `matchMedia` here rather than from `isPushRail` so this stays
      * out of the effect's dependencies. Adding it would re-run the whole mount
-     * effect on a resize: refocusing the panel and restarting the entrance in
-     * the middle of someone dragging their window.
+     * effect on a resize: refocusing the panel in the middle of someone
+     * dragging their window.
      */
     const coversThePage = !window.matchMedia(PUSH_QUERY).matches;
     const previousOverflow = document.body.style.overflow;
@@ -827,10 +1066,6 @@ export function CourseDrawer({ children }: { children: ReactNode }) {
 
     document.addEventListener("keydown", onKeyDown);
     return () => {
-      cancelAnimationFrame(frame);
-      clearTimeout(fallback);
-      if (exitTimer.current) clearTimeout(exitTimer.current);
-      if (expandTimer.current) clearTimeout(expandTimer.current);
       document.removeEventListener("keydown", onKeyDown);
       document.body.style.overflow = previousOverflow;
       // Back where they were: the row they clicked, not the top of the page.
@@ -856,32 +1091,21 @@ export function CourseDrawer({ children }: { children: ReactNode }) {
              */
             "lg:p-3 lg:pointer-events-none",
             /*
-             * The rail's own margin is part of what makes it a rail. Growing to
-             * the full page means giving that back too, or the "full page" would
-             * arrive inset by 12px and then jump flush when the real document
-             * paints. Animated on the panel's clock so the inset closes with the
-             * width rather than a beat behind it.
-             */
-            "transition-[padding] motion-reduce:transition-none",
-            isExpanding && "lg:p-0",
-            /*
              * On the way out the drawer is a picture of itself. Leaving it
-             * clickable for those 300ms means a link inside a panel that is
-             * already halfway off screen can still be followed, landing the
-             * reader somewhere they were in the middle of leaving.
+             * clickable while `router.back()` is in flight means a link inside
+             * a panel that is already being dismissed can still be followed.
              */
             isClosing && "pointer-events-none",
           )}
-          style={motionStyle(isClosing)}
           role="presentation"
         >
           <button
+            ref={scrimRef}
             type="button"
             aria-label="Close section details"
             onClick={close}
             className={cx(
-              "absolute inset-0 cursor-default bg-black/30 backdrop-blur-sm transition-opacity",
-              "motion-reduce:backdrop-blur-none motion-reduce:transition-none",
+              "absolute inset-0 cursor-default bg-black/30 backdrop-blur-sm",
               /*
                * There is nothing to dim once the panel sits beside the page rather
                * than over it, and a rail that darkened the results would be
@@ -893,19 +1117,15 @@ export function CourseDrawer({ children }: { children: ReactNode }) {
                * of a scrim is not worth the risk when a media query settles it.
                */
               "lg:hidden",
-              /*
-               * Fade the dim out as the sheet grows over it. Below `lg` the expand
-               * is the panel filling the screen, and a scrim held at full strength
-               * behind something already opaque is only visible in the sliver of
-               * corner that has not been covered yet.
-               */
-              isVisible && !isExpanding ? "opacity-100" : "opacity-0",
             )}
-            style={scrimStyle(isClosing)}
           />
 
           <div
             ref={panelRef}
+            onPointerDown={onSheetPointerDown}
+            onPointerMove={onSheetPointerMove}
+            onPointerUp={onSheetPointerUp}
+            onPointerCancel={onSheetPointerUp}
             role="dialog"
             /*
              * Only a modal when it actually behaves like one. As a rail the page
@@ -930,6 +1150,34 @@ export function CourseDrawer({ children }: { children: ReactNode }) {
                * the horizontal room and cover the results it is meant to sit beside.
                */
               "h-[88dvh] w-full rounded-t-2xl border-t border-border-table",
+              /*
+               * The second detent. Once the reader is scrolling, the 12% of
+               * screen the peek was spending on the results behind is worth
+               * more as section, so the sheet takes it — growing upward,
+               * because the container is `items-end` and the content is
+               * anchored to the top of its scroller, so the words being read do
+               * not move while the sheet does.
+               *
+               * The corners square off with it. A rounded top edge against the
+               * very top of the screen leaves two notches of scrim in the
+               * corners, which reads as a rendering fault rather than as a
+               * sheet — the radius is there to say "there is something behind
+               * this", and at full height that is no longer the claim.
+               *
+               * `cx` is tailwind-merge, so these genuinely replace the peek
+               * values above rather than racing them on specificity.
+               *
+               * The top inset only matters here. At the peek height the sheet
+               * starts 12% down the screen and cannot reach a notch; at full
+               * height its first 47px on a modern iPhone are behind the status
+               * bar, which is exactly where the grab handle would land. Worth
+               * nothing today — the viewport is not `viewport-fit=cover`, so
+               * `env()` resolves to the fallback — and worth everything the day
+               * it is, which is the argument for writing it now rather than
+               * discovering it on a device.
+               */
+              isSheetFull &&
+                "h-dvh rounded-t-none border-t-transparent pt-[env(safe-area-inset-top,0px)]",
               "sm:h-dvh sm:max-w-2xl sm:rounded-none sm:border-t-0 sm:border-l",
               /*
                * At `lg` it stops being an edge-to-edge overlay and becomes a
@@ -948,51 +1196,7 @@ export function CourseDrawer({ children }: { children: ReactNode }) {
               // space reserved for it can never disagree.
               "lg:[width:var(--drawer-panel-width,min(30rem,42vw))]",
               "lg:rounded-3xl lg:border lg:border-border-button-white lg:shadow-sidebar",
-              /*
-               * The axis has to switch with the shape. At `sm` and up `translate-y`
-               * is pinned to 0 so `translate-x` alone drives the slide; below `sm`
-               * no x-translate is set, so y alone drives it. One transition,
-               * whichever axis is live.
-               *
-               * Do not keep `will-change-transform` after open — it leaves the
-               * panel on a compositor layer and makes body text look slightly soft.
-               */
-              "transition-[transform,width,max-width,height,border-radius] motion-reduce:transition-none",
-              /*
-               * The offscreen distance is a variable so the dial can shorten the
-               * travel. A panel that starts 100% away has to cover the whole
-               * viewport in the duration; starting closer is often what actually
-               * makes a fast animation read as fast rather than as a jump.
-               */
-              isVisible
-                ? "translate-y-0 sm:translate-x-0"
-                : "translate-y-[var(--drawer-distance,100%)] sm:translate-y-0 sm:translate-x-[var(--drawer-distance,100%)]",
-              /*
-               * Expanded: every constraint that made this a panel comes off at
-               * once -- the width cap, the height cap, the corners, the inset --
-               * and the same overshoot the entrance uses carries it there. The
-               * document navigation fires as this lands, so the page that paints
-               * is the shape the panel just became.
-               *
-               * `max-w-[100dvw]` rather than `max-w-none`: below `lg` the panel
-               * is `w-full` held in by a max-width, and `none` is a keyword, not
-               * a length. A transition cannot interpolate to a keyword, so
-               * releasing the cap that way snapped the sheet to full width in a
-               * single frame while everything around it was still easing. A
-               * length the size of the viewport releases it just as completely
-               * and does animate.
-               */
-              isExpanding &&
-                "h-dvh rounded-none border-transparent sm:max-w-[100dvw] lg:w-full lg:rounded-none",
-              /*
-               * A transition on `width` is right for every other way this panel
-               * changes size and wrong for exactly one: a drag already supplies
-               * a frame per pointer move, so easing on top of that is the edge
-               * arriving after the finger. Dropped for the gesture only.
-               */
-              isResizing && "transition-none",
             )}
-            style={motionStyle(isClosing)}
           >
             {/*
               The seam between the list and the section is a control.
@@ -1006,11 +1210,9 @@ export function CourseDrawer({ children }: { children: ReactNode }) {
               layout whose whole argument is that it has exactly two.
 
               `separator` with `tabindex` is the window-splitter pattern, so it
-              is announced with its current width and takes arrow keys. Hidden
-              while expanding — there is nothing to resize once it is becoming a
-              page.
+              is announced with its current width and takes arrow keys.
             */}
-            {isPushRail && !isExpanding && !isClosing ? (
+            {isPushRail && !isClosing ? (
               <div
                 ref={resizeHandleRef}
                 role="separator"
@@ -1030,7 +1232,7 @@ export function CourseDrawer({ children }: { children: ReactNode }) {
                   className={cx(
                     "pointer-events-none absolute top-1/2 left-1/2 h-10 w-1 -translate-x-1/2 -translate-y-1/2",
                     "rounded-full bg-border-table opacity-0",
-                    "transition-opacity duration-150 motion-reduce:transition-none",
+                    "transition-opacity duration-150",
                     "group-hover:opacity-100 group-focus-visible:opacity-100",
                     isResizing && "opacity-100",
                   )}
@@ -1042,9 +1244,38 @@ export function CourseDrawer({ children }: { children: ReactNode }) {
           Grab handle: the standard signal that a sheet is draggable-dismissable
           and, more importantly here, that there is a page behind it. Pointless
           on the desktop sidebar, which has a visible edge instead.
+
+          It is now also the thing it has always claimed to be. The strip is the
+          one piece of chrome in the panel that is not inside a scroller —
+          `DrawerFrame` is the entire body — so it is the only surface where a
+          downward drag can never be ambiguous with reading. Content drags work
+          too, but only from the top of the scroll; this always works.
+
+          Hence the height. The pill stays 4px because that is the convention
+          and a fatter one reads as a divider, but the strip around it is 26px
+          of grabbable margin rather than the 20 it had, which is the difference
+          between a target and a suggestion. `touch-none` so the browser does
+          not claim the gesture as a scroll before the handler sees it.
+
+          Still `aria-hidden`, and deliberately. Exposing it would announce a
+          control that a screen reader cannot operate and that offers nothing
+          Escape and the close button do not already do — see `useSheetDrag` on
+          WCAG 2.5.7. A drag is a shortcut here, never the only door.
         */}
-            <div aria-hidden className="flex shrink-0 justify-center pt-2 pb-1 sm:hidden">
-              <span className="h-1 w-9 rounded-full bg-border-table" />
+            <div
+              aria-hidden
+              className="flex shrink-0 cursor-grab touch-none justify-center pt-3 pb-2.5 active:cursor-grabbing sm:hidden"
+            >
+              <span
+                className={cx(
+                  "h-1 w-9 rounded-full transition-colors duration-150",
+                  // Confirm the grab. Without it the only feedback that the
+                  // sheet has been caught is the sheet moving, which is no help
+                  // at the start of the gesture — the moment you most want to
+                  // know whether you are dragging the panel or scrolling it.
+                  isDragging ? "bg-text-tertiary" : "bg-border-table",
+                )}
+              />
             </div>
 
             {children}
@@ -1055,10 +1286,22 @@ export function CourseDrawer({ children }: { children: ReactNode }) {
   );
 }
 
-/** Scroll area for drawer slot content. Close lives in the section header below. */
+/**
+ * Scroll area for drawer slot content. Close lives in the section header below.
+ *
+ * The `data-drawer-scroller` marker is how `CourseDrawer` finds this element to
+ * return it to the top when the sheet collapses. An attribute rather than a ref
+ * because the panel is mounted a layout above whatever renders this, and this
+ * component is re-created whenever the section's Suspense boundary resolves —
+ * the panel needs to be able to ask "where is the scroller now?" rather than to
+ * have been handed one that may since have been thrown away.
+ */
 export function DrawerFrame({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-6 sm:pb-5">
+    <div
+      data-drawer-scroller
+      className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-6 sm:pb-5"
+    >
       {children}
     </div>
   );
@@ -1067,9 +1310,9 @@ export function DrawerFrame({ children }: { children: ReactNode }) {
 /**
  * Dismiss, from wherever the close affordance is drawn.
  *
- * Prefers the panel's own `close` — which plays the exit before popping the
- * history entry — and falls back to popping it directly when no panel is above
- * us, as on the standalone page where there is nothing to animate away.
+ * Prefers the panel's own `close` — which guards against a double `back()` —
+ * and falls back to popping the history entry directly when no panel is above
+ * us, as on the standalone page.
  */
 export function useDrawerClose(): () => void {
   const close = useContext(DrawerCloseContext);
@@ -1097,10 +1340,10 @@ export function useDrawerClose(): () => void {
  * Cmd-click, middle-click, "open in new tab", "copy link address" and every
  * assistive technology that enumerates links all work because the destination
  * is genuinely in the markup. Only the plain left click is intercepted, and
- * only to play the growth before the same navigation the browser was going to
- * do anyway -- so if the JS never loads, the link still goes to the right page.
+ * only so the intercepted route can leave via a document navigation -- if the
+ * JS never loads, the link still goes to the right page.
  *
- * Modified clicks fall through untouched: hijacking a Cmd-click would animate
+ * Modified clicks fall through untouched: hijacking a Cmd-click would navigate
  * this tab while opening another, which is two responses to one gesture.
  *
  * ── Why it degrades to plain text ──────────────────────────────────────────
@@ -1155,11 +1398,8 @@ export function ExpandTitleLink({
 /**
  * Dismisses the overlay.
  *
- * Goes through `useDrawerClose` rather than `router.back()` so the drawer
- * leaves the way it arrived. Popping the history entry directly unmounts the
- * panel in the same tick, and a panel that is gone from the DOM has nothing
- * left to animate — which is how the X used to make the drawer blink out of
- * existence while every other part of it slid.
+ * Goes through `useDrawerClose` rather than `router.back()` so a second click
+ * during navigation cannot pop further through history than the reader asked.
  */
 export function DrawerCloseButton({ className }: { className?: string }) {
   const close = useDrawerClose();

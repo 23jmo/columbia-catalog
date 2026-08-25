@@ -11,7 +11,7 @@ import { ChipWrap, OptionChip } from "./chip";
  *
  * ── Why one step became three screens ───────────────────────────────────────
  *
- * School, class year and programs used to share a screen: three legends, three
+ * School, class year, major and minors used to share a screen: four legends, four
  * hints, and a form. It answered fastest for the student who already knew all
  * three, and it stalled everyone else, because a screen with three questions
  * has to explain which one to answer first. Split, each screen has exactly one
@@ -73,9 +73,8 @@ export function schoolsWithPrograms(options: readonly ProgramOption[]): Set<stri
  * record — it stays visible, labelled with its own school, to be removed
  * deliberately.
  *
- * `ProgramsQuestion` renders exactly this list and the flow decides whether to
- * show that screen at all from exactly this list, so the screen that gets
- * skipped is by construction the screen that would have been empty.
+ * `MajorsQuestion` and `MinorsQuestion` render from these lists; the flow
+ * skips a screen when its list is empty.
  */
 export function electableProgramsFor(
   school: School | null,
@@ -88,6 +87,58 @@ export function electableProgramsFor(
     .filter((option) =>
       school ? option.school === school || picked.has(option.id) : picked.has(option.id),
     );
+}
+
+const MAJOR_KINDS = ["major", "concentration"] as const;
+const MINOR_KINDS = ["minor"] as const;
+
+/** Majors and concentrations a student can elect for their school. */
+export function electableMajorsFor(
+  school: School | null,
+  options: readonly ProgramOption[],
+  programIds: readonly string[],
+): ProgramOption[] {
+  const kinds = new Set<string>(MAJOR_KINDS);
+  return electableProgramsFor(school, options, programIds).filter((option) =>
+    kinds.has(option.kind),
+  );
+}
+
+/** Minors a student can elect for their school. */
+export function electableMinorsFor(
+  school: School | null,
+  options: readonly ProgramOption[],
+  programIds: readonly string[],
+): ProgramOption[] {
+  const kinds = new Set<string>(MINOR_KINDS);
+  return electableProgramsFor(school, options, programIds).filter((option) =>
+    kinds.has(option.kind),
+  );
+}
+
+/** True when at least one picked program is a major or concentration. */
+export function hasSelectedMajor(
+  programIds: readonly string[],
+  options: readonly ProgramOption[],
+): boolean {
+  const byId = new Map(options.map((option) => [option.id, option]));
+  const majorKinds = new Set<string>(MAJOR_KINDS);
+  return programIds.some((id) => {
+    const option = byId.get(id);
+    return option !== undefined && majorKinds.has(option.kind);
+  });
+}
+
+/** True when at least one picked program is a minor. */
+export function hasSelectedMinor(
+  programIds: readonly string[],
+  options: readonly ProgramOption[],
+): boolean {
+  const byId = new Map(options.map((option) => [option.id, option]));
+  return programIds.some((id) => {
+    const option = byId.get(id);
+    return option?.kind === "minor";
+  });
 }
 
 /* ==========================================================================
@@ -203,43 +254,30 @@ export function ClassYearQuestion({
 }
 
 /* ==========================================================================
- * 3 · Programs
+ * 3 · Major
+ * 4 · Minors
  * ========================================================================== */
 
-const KIND_LABEL: Record<string, string> = {
-  major: "Major",
-  minor: "Minor",
-  concentration: "Concentration",
-  core: "Core",
-};
+function programChipLabel(option: ProgramOption): string {
+  // CC publishes "Economics" for both the major and the concentration — same
+  // name, different requirements. The screen is already "What's your major?",
+  // so only concentrations need a qualifier in the chip itself.
+  if (option.kind === "concentration") return `${option.name} (concentration)`;
+  return option.name;
+}
 
-export function ProgramsQuestion({
+function ProgramPickerQuestion({
   school,
   programIds,
-  programOptions,
+  visible,
   onToggleProgram,
 }: {
   school: School | null;
   programIds: readonly string[];
-  programOptions: readonly ProgramOption[];
+  visible: readonly ProgramOption[];
   /** One id, not the new list — two taps in a frame must not lose one. */
   onToggleProgram: (programId: string) => void;
 }) {
-  const visible = useMemo(
-    () => electableProgramsFor(school, programOptions, programIds),
-    [programOptions, programIds, school],
-  );
-
-  /*
-   * No empty state, because this screen is never reached empty.
-   *
-   * It used to carry one, and it said "Carry on — the Core is enough to work
-   * from". That was false for the only two schools that could ever see it: GS
-   * and BC have no Core in the registry either, so the sentence promised a
-   * fallback that does not exist. The flow now skips this question outright
-   * when `electableProgramsFor` comes back empty, and the honest version of the
-   * message is delivered a screen earlier, at the moment the school is picked.
-   */
   const picked = new Set(programIds);
 
   return (
@@ -252,8 +290,82 @@ export function ProgramsQuestion({
             isSelected={picked.has(option.id)}
             onPress={() => onToggleProgram(option.id)}
             sublabel={
-              (KIND_LABEL[option.kind] ?? option.kind) +
-              (isForeign ? ` · ${SCHOOL_LABEL[option.school as School] ?? option.school}` : "")
+              isForeign ? SCHOOL_LABEL[option.school as School] ?? option.school : undefined
+            }
+          >
+            {programChipLabel(option)}
+          </OptionChip>
+        );
+      })}
+    </ChipWrap>
+  );
+}
+
+/** Majors and concentrations — at least one required when any are offered. */
+export function MajorsQuestion({
+  school,
+  programIds,
+  programOptions,
+  onToggleProgram,
+}: {
+  school: School | null;
+  programIds: readonly string[];
+  programOptions: readonly ProgramOption[];
+  onToggleProgram: (programId: string) => void;
+}) {
+  const visible = useMemo(
+    () => electableMajorsFor(school, programOptions, programIds),
+    [programOptions, programIds, school],
+  );
+
+  return (
+    <ProgramPickerQuestion
+      school={school}
+      programIds={programIds}
+      visible={visible}
+      onToggleProgram={onToggleProgram}
+    />
+  );
+}
+
+/** Minors only — pick one or more, or explicitly choose none. */
+export function MinorsQuestion({
+  school,
+  programIds,
+  programOptions,
+  noneSelected,
+  onSelectNone,
+  onToggleMinor,
+}: {
+  school: School | null;
+  programIds: readonly string[];
+  programOptions: readonly ProgramOption[];
+  noneSelected: boolean;
+  onSelectNone: () => void;
+  onToggleMinor: (programId: string) => void;
+}) {
+  const visible = useMemo(
+    () => electableMinorsFor(school, programOptions, programIds),
+    [programOptions, programIds, school],
+  );
+
+  const picked = new Set(programIds);
+
+  return (
+    <ChipWrap>
+      <OptionChip isSelected={noneSelected} onPress={onSelectNone}>
+        None
+      </OptionChip>
+      {visible.map((option) => {
+        const isForeign = option.school !== school;
+        return (
+          <OptionChip
+            key={option.id}
+            isSelected={picked.has(option.id)}
+            disabled={noneSelected}
+            onPress={() => onToggleMinor(option.id)}
+            sublabel={
+              isForeign ? SCHOOL_LABEL[option.school as School] ?? option.school : undefined
             }
           >
             {option.name}

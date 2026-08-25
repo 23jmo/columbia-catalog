@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { defaultEndMinute, minutesAtPointer, rangeFromDrag } from "./calendar-commitment";
+import {
+  defaultEndMinute,
+  minutesAtPointer,
+  pointerMovedBeyondHold,
+  rangeFromDrag,
+} from "./calendar-commitment";
 import { PX_PER_MINUTE } from "./calendar-layout";
 
 describe("rangeFromDrag", () => {
@@ -23,5 +28,12 @@ describe("minutesAtPointer", () => {
 describe("defaultEndMinute", () => {
   it("defaults to one hour", () => {
     expect(defaultEndMinute(600)).toBe(660);
+  });
+});
+
+describe("pointerMovedBeyondHold", () => {
+  it("cancels when the finger moves far enough", () => {
+    expect(pointerMovedBeyondHold(0, 0, 0, 15)).toBe(true);
+    expect(pointerMovedBeyondHold(0, 0, 0, 5)).toBe(false);
   });
 });

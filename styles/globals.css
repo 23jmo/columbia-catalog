@@ -1174,3 +1174,35 @@ input[type="search"]::-webkit-search-cancel-button {
     transform: scaleY(0.7);
   }
 }
+
+/* Toast countdown ---------------------------------------------------------
+ *
+ * The hairline along a toast's bottom edge, draining left-to-right over the
+ * toast's `duration`. A CSS animation rather than a ticking React value for
+ * two reasons: it runs on the compositor, and `animation-play-state` pauses
+ * it *exactly* where it is — which is what lets the card mirror the store's
+ * hover/focus/pin holds without ever knowing how much time is left.
+ *
+ * `animation-duration` and `animation-play-state` are set inline per toast.
+ */
+@keyframes toast-countdown {
+  from {
+    transform: scaleX(1);
+  }
+
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.animate-toast-countdown {
+  animation: toast-countdown linear forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* A steadily draining bar is the one piece of motion here that is purely
+   * informational, so it stays — but it steps rather than slides. */
+  .animate-toast-countdown {
+    animation-timing-function: steps(12, end);
+  }
+}

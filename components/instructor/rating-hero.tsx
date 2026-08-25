@@ -5,6 +5,7 @@ import { RiArrowRightUpLine } from "@remixicon/react";
 
 import { LinkButton } from "@/components/base/buttons/link-button";
 import { formatDimension } from "@/components/course/reputation";
+import { culpaInstructorHref } from "@/lib/reviews/culpa-links";
 import type { ReputationSummary, RmpSnapshot } from "@/lib/types";
 import { cx } from "@/utils/cx";
 
@@ -53,10 +54,6 @@ import { cx } from "@/utils/cx";
  * path may cache, persist, or server-render that snapshot.
  */
 
-function culpaSearchUrl(name: string): string {
-  return `https://culpa.info/search?entity=all&query=${encodeURIComponent(name)}`;
-}
-
 function rmpSearchUrl(name: string): string {
   return `https://www.ratemyprofessors.com/search/professors?q=${encodeURIComponent(name)}`;
 }
@@ -82,15 +79,8 @@ function ScoreBlock({
       <div className="flex items-baseline gap-1">
         <p
           className={cx(
-            "whitespace-nowrap font-medium tabular-nums text-text-primary",
-            /*
-             * Display type, set explicitly rather than with a title token.
-             * The largest token on the scale renders smaller than the stat
-             * tiles further down the page, which left the page's most
-             * important number looking like a caption for the ones that do not
-             * matter. A hero has to actually be the biggest thing on screen.
-             */
-            isLead ? "text-[52px] leading-[1.05] -tracking-[0.02em]" : "text-[30px] leading-tight",
+            "whitespace-nowrap tabular-nums text-text-primary",
+            isLead ? "text-display-2-medium" : "text-display-4-medium",
           )}
         >
           {value}
@@ -215,7 +205,7 @@ export function InstructorRating({
               value={culpaScore}
               source="CULPA & Reddit"
               sampleLabel={`n=${reputation.sampleSize}`}
-              href={culpaSearchUrl(name)}
+              href={culpaInstructorHref(name)}
             />
           ) : null}
           {rmpRating != null && rmp ? (
@@ -232,15 +222,21 @@ export function InstructorRating({
           ) : null}
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1.5">
           <p className="text-title-2-medium text-text-primary">
             {isResolved ? "Not rated yet" : "Checking…"}
           </p>
           {isResolved ? (
-            <p className="max-w-prose text-caption-1-regular text-pretty text-text-secondary">
-              No CULPA aggregate, and RateMyProfessor has no rated profile matching this
-              name. Most Columbia instructors have neither — we would rather say so than
-              show a number we cannot stand behind.
+            /*
+              Three sentences of justification became one fact. The old copy
+              explained that most Columbia instructors have neither source and
+              that we would rather say so than invent a number — a defence of
+              the empty state, written when the empty state was the common case.
+              With CULPA ingested it is the exception, and an exception needs a
+              label, not an essay. The reasoning still lives in `page.tsx`.
+            */
+            <p className="max-w-[52ch] text-caption-1-regular text-pretty text-text-secondary">
+              No reviews on CULPA or RateMyProfessor under this name.
             </p>
           ) : null}
         </div>
@@ -254,13 +250,22 @@ export function InstructorRating({
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+      {/*
+        `LinkButton size="xs"` is text-height — 16px — which fails WCAG 2.5.8
+        on its own, and these two are the exits to the sources this whole card
+        is arguing from. `min-h-11` on a touch device gives each its own row of
+        thumb, and the vertical gap goes with it: at `gap-y-1` two 44px targets
+        that wrap onto separate lines would sit 4px apart, which is how you
+        tap CULPA and land on RateMyProfessor.
+      */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pointer-coarse:gap-y-0">
         <LinkButton
           size="xs"
-          href={culpaSearchUrl(name)}
+          href={culpaInstructorHref(name)}
           target="_blank"
           rel="noopener noreferrer"
           trailingIcon={RiArrowRightUpLine}
+          className="pointer-coarse:min-h-11"
         >
           {reputation ? "Read on CULPA" : "Search CULPA"}
         </LinkButton>
@@ -270,6 +275,7 @@ export function InstructorRating({
           target="_blank"
           rel="noopener noreferrer"
           trailingIcon={RiArrowRightUpLine}
+          className="pointer-coarse:min-h-11"
         >
           {rmp ? "View on RateMyProfessor" : "Search RateMyProfessor"}
         </LinkButton>

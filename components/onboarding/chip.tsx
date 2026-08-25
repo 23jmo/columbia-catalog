@@ -105,11 +105,14 @@ export function OptionChip({
  */
 export function RemovableChip({
   children,
+  sublabel,
   note,
   onRemove,
   removeLabel,
 }: {
   children: ReactNode;
+  /** Course title under the code, matching `AddChip`. */
+  sublabel?: string;
   note?: string;
   onRemove: () => void;
   removeLabel: string;
@@ -119,10 +122,18 @@ export function RemovableChip({
       className={cx(
         "flex min-h-10 items-center gap-1.5 rounded-full border border-accent-500 bg-accent-500/10 py-1 pr-1 pl-4 text-body-regular text-accent-500",
         "pointer-coarse:min-h-11",
+        sublabel && "py-2",
       )}
     >
-      <span>{children}</span>
-      {note ? <span className="text-caption-2-regular text-text-secondary">{note}</span> : null}
+      <span className="flex min-w-0 flex-col items-start text-left">
+        <span>{children}</span>
+        {sublabel ? (
+          <span className="max-w-[22rem] truncate text-caption-2-regular text-accent-500/80">
+            {sublabel}
+          </span>
+        ) : null}
+        {note ? <span className="text-caption-2-regular text-text-secondary">{note}</span> : null}
+      </span>
       <button
         type="button"
         onClick={onRemove}

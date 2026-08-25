@@ -10,6 +10,8 @@ import {
   SignInNotice,
 } from "@/components/profile";
 import { AppShell } from "@/components/shell/app-shell";
+import { pageIdentityContentClass } from "@/components/shell/page-hero-layout";
+import { PageContent } from "@/components/shell/page-content";
 import { loadProfilePageData } from "@/lib/profile/page-data";
 import { EMPTY_PROFILE } from "@/lib/profile/types";
 
@@ -38,6 +40,18 @@ import { EMPTY_PROFILE } from "@/lib/profile/types";
  * explains what signing in would give them — not a bounce to an auth wall on a
  * product whose whole premise is that browsing costs nothing.
  *
+ * It is a first-class state, though, not the signed-in page with the data
+ * removed. Rendering the full stack for a visitor with no record produced four
+ * cards of empty scaffolding — a statistics strip reading "0 / 0 / 0 of 0 / 0",
+ * a recommendations card titled "0 courses", a coursework card with two inert
+ * buttons — each with a sentence underneath explaining why it was empty. Five
+ * separate surfaces made the same offer ("sign in and declare a degree"), which
+ * is how a page ends up more apology than product.
+ *
+ * So the signed-out route is three things: who you would be, the one control
+ * that gets you there, and what we would hold. Everything below needs a record
+ * to be about, and appears when there is one.
+ *
  * ── Never statically rendered ──────────────────────────────────────────────
  *
  * `force-dynamic`. Every byte on this page is one student's own record, and a
@@ -61,7 +75,7 @@ export default async function ProfilePage() {
 
   return (
     <AppShell activeNav="profile">
-      <div className="mx-auto flex w-full max-w-4xl flex-col items-center gap-4">
+      <PageContent className={pageIdentityContentClass()}>
         <ProfileHero
           profile={profile}
           audit={data.audit}
@@ -72,29 +86,38 @@ export default async function ProfilePage() {
 
         {!signedIn ? <SignInNotice /> : null}
 
-        <OutstandingCard remaining={data.audit.remaining} />
+        {signedIn ? (
+          <>
+            <OutstandingCard remaining={data.audit.remaining} />
 
-        <RecommendedCourses
-          recommendations={data.recommendations}
-          termLabel={data.recommendTermLabel}
-          hasPrograms={data.audit.programs.length > 0}
-        />
+            <RecommendedCourses
+              recommendations={data.recommendations}
+              termLabel={data.recommendTermLabel}
+              hasPrograms={data.audit.programs.length > 0}
+            />
 
-        {data.audit.programs.map((result) => (
-          <ProgramAuditCard key={result.program.id} result={result} />
-        ))}
+            {data.audit.programs.map((result) => (
+              <ProgramAuditCard key={result.program.id} result={result} />
+            ))}
 
-        <CourseworkCard
-          courses={profile.courses}
-          titles={data.titles}
-          suggestions={data.suggestions}
-          unmatchedCourseIds={data.audit.unmatchedCourseIds}
-          crossCounted={data.audit.crossCounted}
-          signedIn={signedIn}
-        />
+            <CourseworkCard
+              courses={profile.courses}
+              titles={data.titles}
+              suggestions={data.suggestions}
+              unmatchedCourseIds={data.audit.unmatchedCourseIds}
+              crossCounted={data.audit.crossCounted}
+              signedIn={signedIn}
+            />
+          </>
+        ) : null}
 
+        {/*
+          Stays on both. What we would hold is most worth reading BEFORE you
+          hand it over, not after — this is the one piece of the page a
+          signed-out visitor has a real reason to want.
+        */}
         <DataCard profile={profile} signedIn={signedIn} />
-      </div>
+      </PageContent>
     </AppShell>
   );
 }

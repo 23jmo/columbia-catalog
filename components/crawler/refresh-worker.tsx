@@ -29,6 +29,9 @@ import { DOC_BASE } from "@/lib/constants";
 /** Visitors who set this to "off" are never enrolled again. */
 export const WORKER_OPT_OUT_KEY = "cc:crawl-worker";
 
+/** Fired when a visitor toggles the setting in Settings. */
+export const WORKER_PREFERENCE_EVENT = "cc:crawl-worker-preference";
+
 const LEASE_ENDPOINT = "/api/crawl/lease";
 const SUBMIT_ENDPOINT = "/api/crawl/submit";
 
@@ -100,6 +103,23 @@ function optedOut(): boolean {
     // rely on the other switches.
     return false;
   }
+}
+
+/** Whether the idle seat-refresh worker may run in this browser. */
+export function isCrawlWorkerEnabled(): boolean {
+  if (typeof window === "undefined") return true;
+  return !optedOut();
+}
+
+/** Persist opt-out and notify the mounted worker (if any). */
+export function setCrawlWorkerEnabled(enabled: boolean): void {
+  try {
+    if (enabled) window.localStorage.removeItem(WORKER_OPT_OUT_KEY);
+    else window.localStorage.setItem(WORKER_OPT_OUT_KEY, "off");
+  } catch {
+    // Non-fatal — preference simply will not stick.
+  }
+  window.dispatchEvent(new Event(WORKER_PREFERENCE_EVENT));
 }
 
 /** Do not spend a metered or battery-saving connection on background crawling. */
@@ -246,12 +266,19 @@ export function RefreshWorker({ enabled = true }: RefreshWorkerProps): null {
       else stop();
     };
 
+    const onPreferenceChange = () => {
+      if (optedOut() || connectionIsUnsuitable()) stop();
+      else if (document.visibilityState === "visible") start();
+    };
+
     document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener(WORKER_PREFERENCE_EVENT, onPreferenceChange);
     window.addEventListener("pagehide", stop);
     start();
 
     return () => {
       document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener(WORKER_PREFERENCE_EVENT, onPreferenceChange);
       window.removeEventListener("pagehide", stop);
       stop();
     };

@@ -7,6 +7,7 @@ import {
   RiLockUnlockLine,
   RiRouteLine,
 } from "@remixicon/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Button } from "@/components/base/buttons/button";
 import { Chip } from "@/components/base/badges/chip";
 import {
@@ -29,6 +30,18 @@ import { cx } from "@/utils/cx";
  * count. A student about to plan four years around this needs to be able to
  * check our reading against the registrar's words.
  */
+
+/**
+ * Shorter than the map's 320ms camera move on purpose: the panel should have
+ * resolved and be readable by the time the camera settles, rather than still
+ * arriving after it.
+ *
+ * The curve is a literal only because `motion` JS configs cannot read a CSS
+ * custom property. It is the same cubic-bezier as the `--ease-out` token in
+ * styles/theme.css -- if that token is ever retuned, this array has to be
+ * updated by hand to match.
+ */
+const PANEL_TRANSITION = { duration: 0.18, ease: [0.23, 1, 0.32, 1] } as const;
 
 export interface CourseDetailPanelProps {
   graph: ProgressionGraph;
@@ -59,6 +72,14 @@ export function CourseDetailPanel({
   const reach = descendants(graph, courseId).length;
   const chain = ancestors(graph, courseId).length;
   const isCompleted = completed.has(courseId);
+  /*
+   * Reduced motion keeps the crossfade and drops the 4px travel. The fade is
+   * the comprehension aid here -- it is what tells the reader the panel now
+   * describes a different course -- so suppressing it entirely would remove the
+   * signal rather than soften it.
+   */
+  const shouldReduceMotion = useReducedMotion();
+  const offset = shouldReduceMotion ? 0 : 4;
 
   if (!course) {
     return (
@@ -75,7 +96,25 @@ export function CourseDetailPanel({
   const status = STATUS_CHIP[evaluation.status];
 
   return (
-    <aside className="flex min-w-0 flex-col gap-4 rounded-2lg border border-border-table bg-background-primary-default p-4">
+    <aside className="rounded-2lg border border-border-table bg-background-primary-default p-4">
+      {/*
+        The frame -- border, background, radius, padding -- deliberately does not
+        move. Only what it contains is replaced, so the panel reads as being
+        re-filled rather than swapped out.
+
+        `mode="wait"` so the outgoing course clears before the incoming one
+        arrives; overlapping them puts two titles on top of each other mid-fade.
+        `initial={false}` so nothing animates on first paint.
+      */}
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={courseId}
+          initial={{ opacity: 0, transform: `translateY(${offset}px)` }}
+          animate={{ opacity: 1, transform: "translateY(0px)" }}
+          exit={{ opacity: 0, transform: `translateY(-${offset}px)` }}
+          transition={PANEL_TRANSITION}
+          className="flex min-w-0 flex-col gap-4"
+        >
       <header className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-caption-1-semibold tracking-[0.08em] text-text-tertiary uppercase">
@@ -205,7 +244,7 @@ export function CourseDetailPanel({
                     type="button"
                     onClick={() => onSelectCourse(unlockedId)}
                     className={cx(
-                      "flex w-full items-baseline gap-2 rounded-md px-1.5 py-1 text-left transition-colors duration-150 ease",
+                      "flex w-full items-baseline gap-2 rounded-md px-1.5 py-1 text-left transition-colors duration-150",
                       "hover:bg-background-secondary-hover",
                     )}
                   >
@@ -239,6 +278,8 @@ export function CourseDetailPanel({
           </p>
         </Section>
       )}
+        </motion.div>
+      </AnimatePresence>
     </aside>
   );
 }

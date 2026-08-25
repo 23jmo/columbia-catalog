@@ -39,8 +39,11 @@
 
 import { getToolName, isToolUIPart, type UIMessage } from "ai";
 
+import type { CampusMapArtifact, InstructorArtifact, ScheduleArtifact } from "@/lib/agent/present";
+import { ALL_WEEKDAYS } from "@/lib/constants";
 import type { FeedCard } from "@/lib/recommend/feed";
 import { formatCourseId, toCourseId, type CourseId } from "@/lib/requirements/code";
+import type { Weekday } from "@/lib/types";
 
 /* ==========================================================================
  * Tool activity
@@ -94,6 +97,9 @@ const TOOL_LABELS: Record<string, string> = {
   get_courses_taken: "Reading your coursework",
   get_unmet_requirements: "Working out what your degree still needs",
   recommend_courses: "Ranking courses for you",
+  show_schedule: "Putting your week on screen",
+  show_campus_map: "Putting the campus map on screen",
+  show_instructor: "Putting the instructor on screen",
 };
 
 export function toolLabel(name: string): string {
@@ -167,6 +173,16 @@ function asArray(value: unknown): unknown[] {
 
 function asString(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function asWeekday(value: unknown): Weekday | null {
+  return typeof value === "string" && (ALL_WEEKDAYS as readonly string[]).includes(value)
+    ? (value as Weekday)
+    : null;
+}
+
+function asTone(value: unknown): ScheduleArtifact["blocks"][number]["tone"] {
+  return value === "candidate" || value === "conflict" ? value : "plan";
 }
 
 /**
@@ -341,6 +357,40 @@ export function feedCards(message: UIMessage): FeedCard[] {
   return [...seen.values()];
 }
 
+/**
+ * Course ids already rendered as cards earlier in the thread.
+ *
+ * The recommend tool merges these into `excludeCourseIds` so a follow-up
+ * cannot reprint the same six even if the model forgets to pass them.
+ */
+export function shownCourseIds(messages: readonly UIMessage[]): string[] {
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  for (const message of messages) {
+    if (message.role !== "assistant") continue;
+    for (const card of feedCards(message)) {
+      if (seen.has(card.courseId)) continue;
+      seen.add(card.courseId);
+      ids.push(card.courseId);
+    }
+  }
+  return ids;
+}
+
+/**
+ * Drop cards this thread has already shown.
+ *
+ * A second unfiltered `recommend_courses` returns the same ranked list.
+ * Hiding the repeats is the last line of defence when the model still
+ * called with empty filters.
+ */
+export function unseenFeedCards(
+  cards: readonly FeedCard[],
+  alreadyShown: ReadonlySet<string>,
+): FeedCard[] {
+  return cards.filter((card) => !alreadyShown.has(card.courseId));
+}
+
 function readFeedCard(row: unknown): FeedCard | null {
   const record = asPayload(row);
   if (!record) return null;
@@ -351,6 +401,242 @@ function readFeedCard(row: unknown): FeedCard | null {
   if (!best || !asString(best.sectionId) || !asString(best.vergilUrl)) return null;
 
   return record as unknown as FeedCard;
+}
+
+/* ==========================================================================
+ * Schedule and campus map
+ * ========================================================================== */
+
+/**
+ * Calendars and maps the present tools returned.
+ *
+ * Same shallow guard as `readFeedCard`: the server just serialised these, so
+ * we check the handful a card cannot render without and skip the rest. A
+ * payload missing `kind` is some other tool's JSON that happens to have
+ * `blocks` or `buildingNames`.
+ */
+export function scheduleArtifacts(message: UIMessage): ScheduleArtifact[] {
+  const found: ScheduleArtifact[] = [];
+  for (const payload of toolPayloads(message)) {
+    if (payload.kind !== "schedule_card") continue;
+    const artifact = readScheduleArtifact(payload);
+    if (artifact) found.push(artifact);
+  }
+  return found;
+}
+
+export function campusMapArtifacts(message: UIMessage): CampusMapArtifact[] {
+  const found: CampusMapArtifact[] = [];
+  for (const payload of toolPayloads(message)) {
+    if (payload.kind !== "campus_map_card") continue;
+    const artifact = readCampusMapArtifact(payload);
+    if (artifact) found.push(artifact);
+  }
+  return found;
+}
+
+export function instructorArtifacts(message: UIMessage): InstructorArtifact[] {
+  const found: InstructorArtifact[] = [];
+  for (const payload of toolPayloads(message)) {
+    if (payload.kind !== "instructor_card") continue;
+    const artifact = readInstructorArtifact(payload);
+    if (artifact) found.push(artifact);
+  }
+  return found;
+}
+
+/**
+ * One visual beat in a turn, in the order `message.parts` actually arrived.
+ *
+ * The thread used to concatenate every text part, then dump every card under
+ * that blob. That threw away the only order the SDK preserves: the model
+ * writes, a tool returns, the model writes again. Walk the parts instead.
+ * Lookup tools (search, get_course, …) produce no beat — they still show in
+ * the activity strip — so prose on either side of a lookup stays one block.
+ *
+ * A model that writes the whole answer and only then calls tools will still
+ * land the cards at the end. That is the order it produced, not a renderer
+ * limitation.
+ */
+export type TurnBlock =
+  | { kind: "text"; text: string }
+  | { kind: "schedule"; artifact: ScheduleArtifact }
+  | { kind: "campus_map"; artifact: CampusMapArtifact }
+  | { kind: "instructor"; artifact: InstructorArtifact }
+  | { kind: "feed"; cards: FeedCard[] };
+
+export function turnBlocks(
+  message: UIMessage,
+  alreadyShown: ReadonlySet<string> = new Set(),
+): TurnBlock[] {
+  const blocks: TurnBlock[] = [];
+  const seen = new Set(alreadyShown);
+  const pending: string[] = [];
+
+  const flushText = () => {
+    const text = pending.splice(0).join("\n\n");
+    if (text) blocks.push({ kind: "text", text });
+  };
+
+  for (const part of message.parts) {
+    if (part.type === "text") {
+      if (part.text.trim().length > 0) pending.push(part.text);
+      continue;
+    }
+    if (!isToolUIPart(part) || part.state !== "output-available") continue;
+    const payload = readOutput(part.output);
+    if (!payload) continue;
+    const visual = visualBlock(payload, seen);
+    if (!visual) continue;
+    flushText();
+    blocks.push(visual);
+  }
+
+  flushText();
+  return blocks;
+}
+
+function visualBlock(payload: Payload, seen: Set<string>): TurnBlock | null {
+  if (payload.kind === "schedule_card") {
+    const artifact = readScheduleArtifact(payload);
+    return artifact ? { kind: "schedule", artifact } : null;
+  }
+  if (payload.kind === "campus_map_card") {
+    const artifact = readCampusMapArtifact(payload);
+    return artifact ? { kind: "campus_map", artifact } : null;
+  }
+  if (payload.kind === "instructor_card") {
+    const artifact = readInstructorArtifact(payload);
+    return artifact ? { kind: "instructor", artifact } : null;
+  }
+
+  const cards: FeedCard[] = [];
+  for (const row of asArray(payload.cards)) {
+    const card = readFeedCard(row);
+    if (!card || seen.has(card.courseId)) continue;
+    seen.add(card.courseId);
+    cards.push(card);
+  }
+  return cards.length > 0 ? { kind: "feed", cards } : null;
+}
+
+function toolPayloads(message: UIMessage): Payload[] {
+  const payloads: Payload[] = [];
+  for (const part of message.parts) {
+    if (!isToolUIPart(part) || part.state !== "output-available") continue;
+    const payload = readOutput(part.output);
+    if (payload) payloads.push(payload);
+  }
+  return payloads;
+}
+
+function readScheduleArtifact(record: Payload): ScheduleArtifact | null {
+  const termCode = asString(record.termCode);
+  if (!termCode) return null;
+  const blocks = asArray(record.blocks).flatMap((row) => {
+    const block = asPayload(row);
+    if (!block) return [];
+    const blockId = asString(block.blockId);
+    const label = asString(block.label);
+    const weekday = asWeekday(block.weekday);
+    if (!blockId || !label || !weekday) return [];
+    if (typeof block.startMinute !== "number" || typeof block.endMinute !== "number") return [];
+    return [
+      {
+        blockId,
+        label,
+        sublabel: asString(block.sublabel),
+        weekday,
+        startMinute: block.startMinute,
+        endMinute: block.endMinute,
+        tone: asTone(block.tone),
+      },
+    ];
+  });
+  return {
+    kind: "schedule_card",
+    termCode,
+    planId: asString(record.planId),
+    planName: asString(record.planName),
+    blocks,
+    ...(asArray(record.weekdays).length > 0
+      ? {
+          weekdays: asArray(record.weekdays).filter((day): day is Weekday => asWeekday(day) !== null),
+        }
+      : {}),
+    commitmentIds: asArray(record.commitmentIds).filter((id): id is string => typeof id === "string"),
+    unknownMeetingSectionIds: asArray(record.unknownMeetingSectionIds).filter(
+      (id): id is string => typeof id === "string",
+    ),
+    unresolvedSectionIds: asArray(record.unresolvedSectionIds).filter((id): id is string => typeof id === "string"),
+  };
+}
+
+function readCampusMapArtifact(record: Payload): CampusMapArtifact | null {
+  const buildingNames = asArray(record.buildingNames).filter(
+    (name): name is string | null => typeof name === "string" || name === null,
+  );
+  const routeStops = asArray(record.routeStops).flatMap((row) => {
+    const stop = asPayload(row);
+    if (!stop) return [];
+    const label = asString(stop.label);
+    if (!label) return [];
+    return [
+      {
+        buildingNames: asArray(stop.buildingNames).filter(
+          (name): name is string | null => typeof name === "string" || name === null,
+        ),
+        label,
+        meta: asString(stop.meta),
+        highlighted: stop.highlighted === true,
+      },
+    ];
+  });
+  return {
+    kind: "campus_map_card",
+    buildingNames,
+    roomLabel: asString(record.roomLabel),
+    label: asString(record.label),
+    meta: asString(record.meta),
+    routeStops: routeStops.length > 0 ? routeStops : null,
+    connectStops: record.connectStops === true,
+    weekday: asWeekday(record.weekday),
+  };
+}
+
+function readInstructorArtifact(record: Payload): InstructorArtifact | null {
+  if (record.found === false) return null;
+  const name = asString(record.name);
+  const slug = asString(record.slug);
+  if (!name || !slug) return null;
+
+  const courses = asArray(record.courses).flatMap((row) => {
+    const course = asPayload(row);
+    if (!course) return [];
+    const courseId = asString(course.courseId);
+    const code = asString(course.code);
+    const title = asString(course.title);
+    if (!courseId || !code || !title) return [];
+    return [{ courseId, code, title }];
+  });
+
+  const reputation = asPayload(record.reputation);
+
+  return {
+    kind: "instructor_card",
+    found: true,
+    name,
+    slug,
+    subtitle: asString(record.subtitle),
+    subjects: asArray(record.subjects).filter((value): value is string => typeof value === "string"),
+    termLabel: asString(record.termLabel),
+    courseCount: typeof record.courseCount === "number" ? record.courseCount : courses.length,
+    sectionCount: typeof record.sectionCount === "number" ? record.sectionCount : 0,
+    courses,
+    teachingDays: asArray(record.teachingDays).filter((day): day is Weekday => asWeekday(day) !== null),
+    buildings: asArray(record.buildings).filter((value): value is string => typeof value === "string"),
+    reputation: reputation && typeof reputation.sampleSize === "number" ? (reputation as unknown as InstructorArtifact["reputation"]) : null,
+  };
 }
 
 /* ==========================================================================
@@ -397,6 +683,7 @@ export function suggestedFollowUps(message: UIMessage): string[] {
 
   if (names.has("recommend_courses") && courses.length > 0) {
     suggestions.push("Why these and not others?");
+    suggestions.push("Show me more like these");
   }
   if (names.has("get_unmet_requirements")) {
     suggestions.push("What's the fastest way to finish?");
@@ -406,6 +693,15 @@ export function suggestedFollowUps(message: UIMessage): string[] {
   }
   if (names.has("search_courses") && !names.has("recommend_courses")) {
     suggestions.push("Which of these fits my degree?");
+  }
+  if (names.has("show_schedule") && !names.has("show_campus_map")) {
+    suggestions.push("Where do these meet?");
+  }
+  if (names.has("show_campus_map") && !names.has("show_schedule")) {
+    suggestions.push("Does this fit my week?");
+  }
+  if (names.has("show_instructor")) {
+    suggestions.push("Where do they teach?");
   }
 
   return suggestions.slice(0, 3);

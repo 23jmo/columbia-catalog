@@ -66,7 +66,7 @@ export function CalendarMonthWeek({
           type="button"
           onClick={() => onSelectDay(day)}
           className={cx(
-            "row-start-1 m-0.5 inline-flex h-6 min-w-6 justify-self-end rounded-full px-1 py-1 text-xs font-semibold",
+            "row-start-1 m-0.5 inline-flex h-6 min-w-6 justify-self-end rounded-full px-1 py-1 text-caption-1-semibold",
             "items-center justify-center select-none transition-colors focus-visible:outline-3",
             isToday(day)
               ? "bg-accent-500 text-white"
@@ -127,7 +127,7 @@ export function CalendarMonthWeek({
               <button
                 type="button"
                 onClick={() => onSelectDay(day)}
-                className="mx-0.5 self-start px-1.5 py-0.5 text-start text-xs text-text-tertiary"
+                className="mx-0.5 self-start px-1.5 py-0.5 text-start text-caption-1-regular text-text-tertiary"
                 style={{ gridColumn: index + 1, gridRow: moreSlot + 2 }}
               >
                 <span className="lg:hidden">+{hidden}</span>

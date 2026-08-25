@@ -25,7 +25,16 @@ export function AgentAnnouncement() {
         its native scale its content line sat at 424 while the header sat at 412
         and both cards at 436: three left edges in one column.
       */
-      className="rounded-[20px] p-5 sm:p-6"
+      /*
+        The dismiss is a `CloseButton size="xs"` — a 20px circle, under the
+        WCAG 2.5.8 floor. `Announcement` lives in `components/base`, which this
+        project does not modify, and it exposes no handle on that button, so the
+        hit area is asked for from out here by descendant selector. The circle
+        keeps its 20px look; only the pressable region grows to 44, and it grows
+        up and to the right into the card's own padding, where the nearest other
+        control ("Set up") is a full row away.
+      */
+      className="rounded-[20px] p-5 sm:p-6 pointer-coarse:[&_button[aria-label='Dismiss']]:before:absolute pointer-coarse:[&_button[aria-label='Dismiss']]:before:-inset-3 pointer-coarse:[&_button[aria-label='Dismiss']]:before:content-['']"
     />
   );
 }

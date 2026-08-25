@@ -1,7 +1,9 @@
+import { Fact } from "@/components/course/panel";
 import { InstructorLinks } from "@/components/instructor/instructor-link";
 import type { InstructorPageData } from "@/lib/data/instructors";
 import { cx } from "@/utils/cx";
 import { countLabel, weekdayListLabel } from "./format";
+import { InstructorSection } from "./section-block";
 
 /**
  * The facts that do not fit a chart: which days they are on campus, which
@@ -12,15 +14,6 @@ import { countLabel, weekdayListLabel } from "./format";
  * published nothing — an empty row invites the reader to believe we checked and
  * found zero, which is a different claim from "not published".
  */
-
-function Fact({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex min-w-0 flex-col gap-0.5 rounded-2lg bg-background-primary-default p-3">
-      <dt className="text-caption-2-regular text-text-tertiary">{label}</dt>
-      <dd className="text-body-medium text-pretty text-text-primary">{children}</dd>
-    </div>
-  );
-}
 
 export interface InstructorDetailsCardProps {
   data: InstructorPageData;
@@ -37,21 +30,17 @@ export function InstructorDetailsCard({ data, className }: InstructorDetailsCard
   if (!hasAnything) return null;
 
   return (
-    <section
-      className={cx(
-        "flex w-full flex-col gap-2.5 rounded-[20px] bg-background-secondary-default px-2.5 py-3",
-        className,
-      )}
-      aria-labelledby="instructor-details-heading"
-    >
-      <p
-        id="instructor-details-heading"
-        className="px-1.5 pt-1 text-body-medium text-text-secondary"
-      >
-        On campus
-      </p>
-
-      <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+    <div className={cx("w-full", className)}>
+      <InstructorSection id="instructor-details" title="On campus">
+        {/*
+          The shared `Fact` from the drawer's panel kit, not a local one. This
+          file used to define its own component of the same name that rendered a
+          filled `bg-background-primary-default` tile — so the course page's
+          "Workload and grading" facts were small-caps labels over strong values
+          sitting flush against the block, and these were pale slabs indented
+          inside it. Same component name, same job, two looks.
+        */}
+        <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {data.teachingDays.length > 0 ? (
           <Fact label="Teaching days">{weekdayListLabel(data.teachingDays)}</Fact>
         ) : null}
@@ -86,7 +75,8 @@ export function InstructorDetailsCard({ data, className }: InstructorDetailsCard
             <InstructorLinks names={data.coTeachers} separator=" · " />
           </Fact>
         ) : null}
-      </dl>
-    </section>
+        </dl>
+      </InstructorSection>
+    </div>
   );
 }

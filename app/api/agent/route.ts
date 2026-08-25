@@ -33,6 +33,7 @@ import { createAgentUIStreamResponse, validateUIMessages, type UIMessage } from 
 import { buildAgent, usingOpenAI } from "@/lib/agent/agent";
 import { appendMessage, resolveConversation, textOf } from "@/lib/agent/conversation";
 import { checkGrounding } from "@/lib/agent/grounding";
+import { shownCourseIds } from "@/lib/agent/transcript";
 import { buildAgentToolContext } from "@/lib/agent/tools";
 import { checkPromptBudget, recordPrompt } from "@/lib/agent/usage";
 import { getSessionUser } from "@/lib/db/auth";
@@ -158,7 +159,12 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const baseUrl = new URL(request.url).origin;
-  const context = buildAgentToolContext(account.userId, account.email, baseUrl);
+  const context = buildAgentToolContext(
+    account.userId,
+    account.email,
+    baseUrl,
+    shownCourseIds(messages),
+  );
   const agent = buildAgent(context);
 
   return createAgentUIStreamResponse({

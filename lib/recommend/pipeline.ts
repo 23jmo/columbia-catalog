@@ -29,7 +29,7 @@
  * carries a `required` reason.
  */
 
-import { getAllCourses, getCoursesByIds } from "@/lib/data/catalog";
+import { getCourseListings, getCoursesByIds, type CourseListing } from "@/lib/data/catalog";
 import { loadStudentProfile } from "@/lib/db/student-profile";
 import { ACTIVE_TERMS } from "@/lib/constants";
 import { auditProfile, type ProfileAudit } from "@/lib/profile/audit";
@@ -196,21 +196,33 @@ export async function loadStudent(): Promise<LoadedStudent> {
  * The catalog side
  * ========================================================================== */
 
+export type { CourseListing };
+
 export interface LoadedCatalog {
-  /** One entry per course offered in `terms`, sections attached. */
-  courses: CourseWithSections[];
-  /** The same courses, narrowed to what the engine scores. */
+  /** Offered in `terms`. No sections — ranking does not need them. */
+  listings: CourseListing[];
+  /** The same rows, narrowed to what the engine scores. */
   candidates: CandidateCourse[];
 }
 
+function toCandidate(listing: CourseListing): CandidateCourse {
+  return {
+    courseId: listing.courseId,
+    code: `${listing.subjectCode} ${listing.number}${listing.qualifier ?? ""}`,
+    title: listing.title,
+    // `pointsMin`, matching the audit: counting a variable-credit course at
+    // its maximum would let a points requirement look satisfied on credit the
+    // student may not earn.
+    points: listing.pointsMin ?? listing.pointsMax,
+  };
+}
+
 /**
- * Every course on offer in the active terms, with its sections.
+ * Every course on offer in the active terms, as ranking input.
  *
- * The sections come along because the feed's card is a SECTION card — the
- * instructor and the time slot are most of the decision — and re-fetching them
- * per recommendation would be twenty round trips to re-read rows this call
- * already returned. `getAllCourses` memoises per term for 60 seconds, so the
- * cost here is amortised across every request in that window.
+ * Sections stay off this path. The engine scores courses; `hydrateCourses`
+ * loads meetings only for the shortlist the feed will actually render.
+ * Fetching both terms in parallel — they do not depend on each other.
  *
  * Narrowed to the active terms BEFORE scoring, never after: scoring the whole
  * 8,189-course catalog and filtering afterwards would rank a course the student
@@ -219,21 +231,42 @@ export interface LoadedCatalog {
 export async function loadCatalog(
   terms: readonly TermCode[] = ACTIVE_TERMS,
 ): Promise<LoadedCatalog> {
-  const byId = new Map<string, CourseWithSections>();
+  const perTerm = await Promise.all(terms.map((termCode) => getCourseListings(termCode)));
+  const byId = new Map<string, CourseListing>();
+  for (const listings of perTerm) {
+    for (const listing of listings) {
+      if (!byId.has(listing.courseId)) byId.set(listing.courseId, listing);
+    }
+  }
 
-  for (const termCode of terms) {
-    for (const course of await getAllCourses(termCode)) {
+  const listings = [...byId.values()];
+  return { listings, candidates: listings.map(toCandidate) };
+}
+
+/**
+ * Full course+section records for a shortlist, sections from every named term.
+ *
+ * A course offered in both Fall and Spring arrives as two reads; merging is
+ * what lets a card say "also offered in Spring" instead of seeing half the
+ * timetable. Callers pass only the ids they intend to render.
+ */
+export async function hydrateCourses(
+  courseIds: readonly string[],
+  terms: readonly TermCode[] = ACTIVE_TERMS,
+): Promise<Map<string, CourseWithSections>> {
+  const byId = new Map<string, CourseWithSections>();
+  if (courseIds.length === 0 || terms.length === 0) return byId;
+
+  const ids = [...courseIds];
+  const perTerm = await Promise.all(terms.map((termCode) => getCoursesByIds(ids, termCode)));
+
+  for (const courses of perTerm) {
+    for (const course of courses) {
       const existing = byId.get(course.courseId);
       if (!existing) {
         byId.set(course.courseId, course);
         continue;
       }
-      /*
-       * A course offered in both terms arrives twice, each copy carrying only
-       * that term's sections. Merging rather than first-wins is what lets a
-       * card say "also offered in Spring" and lets section selection consider
-       * both terms' meeting patterns instead of silently seeing half of them.
-       */
       byId.set(course.courseId, {
         ...existing,
         sections: [...existing.sections, ...course.sections],
@@ -241,20 +274,7 @@ export async function loadCatalog(
     }
   }
 
-  const courses = [...byId.values()];
-
-  return {
-    courses,
-    candidates: courses.map((course) => ({
-      courseId: course.courseId,
-      code: `${course.subjectCode} ${course.number}${course.qualifier ?? ""}`,
-      title: course.title,
-      // `pointsMin`, matching the audit: counting a variable-credit course at
-      // its maximum would let a points requirement look satisfied on credit the
-      // student may not earn.
-      points: course.pointsMin ?? course.pointsMax,
-    })),
-  };
+  return byId;
 }
 
 /* ==========================================================================
@@ -262,26 +282,57 @@ export async function loadCatalog(
  * ========================================================================== */
 
 /**
- * The prerequisite graph is memoised, and the memo is a PROMISE.
+ * The prerequisite graph is memoised for the lifetime of the process, and the
+ * memo is a PROMISE.
  *
  * `loadProgressionGraph` pages all 8,189 courses — nine round trips and a few
  * MB — to build a structure that is identical for every student and changes
- * only when an ingest runs. Paying that per request would put seconds on the
- * feed. Caching the in-flight promise also coalesces the concurrent misses a
- * cold process sees during a reload storm.
+ * only when an ingest rewrites `courses.prerequisite_formula`. Paying that per
+ * request would put seconds on the feed. Caching the in-flight promise also
+ * coalesces the concurrent misses a cold process sees during a reload storm.
  *
- * The TTL matches `lib/data/catalog.ts`'s catalog memo for the same reason it
- * gives: the underlying rows move on an ingest cadence measured in hours, so a
- * short window bounds staleness without re-reading the catalog per navigation.
- * A rejection is never memoised — `load` resolves to a degraded source instead.
+ * Staleness is handled by explicit invalidation, not a TTL: call
+ * `invalidatePrereqCache()` after any ingest that touches prerequisite formulas,
+ * or POST `/api/internal/revalidate-prereqs` from an operator script so every
+ * running app instance drops its copy. A transient load failure is never cached —
+ * the memo is cleared and the next caller retries.
  */
-const PREREQ_TTL_MS = 300_000;
+let prereqMemo: Promise<PrereqSource> | null = null;
 
-let prereqMemo: { expiresAt: number; source: Promise<PrereqSource> } | null = null;
-
-/** Drop the memo. For tests and for an ingest that rewrote the formulas. */
+/** Drop the in-process graph. Called by ingest jobs and the revalidate route. */
 export function invalidatePrereqCache(): void {
   prereqMemo = null;
+}
+
+/**
+ * Ask a running deployment to drop its prereq graph after a DB backfill.
+ *
+ * No-op when `NEXT_PUBLIC_SITE_URL` or `CRON_SECRET` is missing — local dev
+ * without a server simply rebuilds on next cold load.
+ */
+export async function notifyPrereqGraphStale(): Promise<void> {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  const secret = process.env.CRON_SECRET?.trim();
+  if (!siteUrl || !secret) {
+    console.log(
+      "prereq cache: skipped app invalidation (need NEXT_PUBLIC_SITE_URL + CRON_SECRET)",
+    );
+    return;
+  }
+
+  try {
+    const response = await fetch(`${siteUrl}/api/internal/revalidate-prereqs`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${secret}` },
+    });
+    if (!response.ok) {
+      console.warn(`prereq cache: app invalidation failed (${response.status})`);
+      return;
+    }
+    console.log("prereq cache: running app notified");
+  } catch (cause) {
+    console.warn("prereq cache: app invalidation error:", cause);
+  }
 }
 
 /**
@@ -296,24 +347,20 @@ export function invalidatePrereqCache(): void {
  * because a query failed.
  */
 export function loadPrereqSource(): Promise<PrereqSource> {
-  const now = Date.now();
-  if (prereqMemo && prereqMemo.expiresAt > now) return prereqMemo.source;
+  if (prereqMemo) return prereqMemo;
 
   const source = (async () => {
     try {
       return graphPrereqSource(await loadProgressionGraph());
     } catch (cause) {
       console.error("recommend: prerequisite graph unavailable, degrading to unknown:", cause);
-      /*
-       * Evict, so a transient outage is not remembered as an answer for five
-       * minutes. The next caller retries and gets the real graph.
-       */
+      // Do not remember a failed load — the next caller retries the graph.
       prereqMemo = null;
       return unknownPrereqSource();
     }
   })();
 
-  prereqMemo = { expiresAt: now + PREREQ_TTL_MS, source };
+  prereqMemo = source;
   return source;
 }
 

@@ -55,7 +55,7 @@ export function FolderChip({
     "border border-border-table bg-background-secondary-default",
     size === "sm" ? "px-2 py-0.5 text-caption-1-regular" : "px-2.5 py-1 text-body-regular",
     "text-text-secondary",
-    href && "transition-colors duration-150 ease hover:bg-background-secondary-hover",
+    href && "transition-colors duration-150 hover:bg-background-secondary-hover",
     href && "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
     className,
   );

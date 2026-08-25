@@ -9,6 +9,33 @@
   --control-bg: color-mix(in oklab, var(--color-text-primary) 5%, transparent);
 }
 
+/*
+ * Below `sm` the toolbar is two rows, so the reservation has to be two rows.
+ *
+ * `--ui-header-height` is not a description of the toolbar — it is the space
+ * the *grid* sets aside for it. `CalendarWeek` pads its scroller by
+ * `calc(var(--ui-header-height) + 0.5rem + chrome)` and pins the day-header
+ * row at `calc(var(--ui-header-height) + 0.5rem)`, while the toolbar itself is
+ * only `min-h-[...]` and free to grow.
+ *
+ * It does grow. Below 40rem the view switcher takes its own full-width row —
+ * "Day | Week | Month" plus the month title plus the trailing actions do not
+ * share one 390px line — and the toolbar goes from 72px to 105px. Against a
+ * constant 4rem reservation that left the switcher's row painted over by the
+ * day header on every phone.
+ *
+ * The height is a step function of the breakpoint, not a continuum: 72px at
+ * `sm` and up, 105px below it, measured at 390/430/640/900. So the reservation
+ * steps with it rather than being measured at runtime, which keeps the whole
+ * calendar's geometry the pure-CSS constant the rest of this file assumes.
+ * 6.5rem + 0.5rem = 112px leaves 7px of slack above the first hour line.
+ */
+@media (width < 40rem) {
+  .calendar-root {
+    --ui-header-height: 6.5rem;
+  }
+}
+
 .calendar-glass {
   -webkit-backdrop-filter: blur(24px) saturate(180%) brightness(105%);
   backdrop-filter: blur(24px) saturate(180%) brightness(105%);

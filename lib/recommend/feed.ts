@@ -39,8 +39,10 @@ import { getTypicalMeetings } from "@/lib/db/typical-meetings";
 import { loadPrimaryPlanSnapshot } from "@/lib/db/primary-plan-snapshot";
 import type { CourseWithSections, Meeting, TermCode } from "@/lib/types";
 
+import { candidateIdsForClears, recommendationClears } from "./clears";
 import { recommend, WEIGHTS } from "./index";
 import {
+  hydrateCourses,
   loadCatalog,
   loadPrereqSource,
   loadStudent,
@@ -56,6 +58,7 @@ import type {
   RecommendationCaveat,
   RecommendationReason,
   ScoreComponents,
+  ScoredRecommendation,
   WithheldCourse,
 } from "./types";
 
@@ -191,6 +194,15 @@ export interface BuildFeedOptions {
   terms?: readonly TermCode[];
   /** Restrict to these subject codes, e.g. `["COMS"]`. Used by the UI filter. */
   subjects?: readonly string[];
+  /** Drop these course ids — already on screen this conversation. */
+  excludeCourseIds?: readonly string[];
+  /**
+   * Keep only courses whose requirement reason matches this label, e.g.
+   * `"Global Core"`. Substring, case-insensitive. The unfiltered feed is
+   * dominated by a CS major's outstanding CS groups; without this, asking
+   * for Core reprints Computer Vision.
+   */
+  clears?: string;
 }
 
 export async function buildFeed(options: BuildFeedOptions = {}): Promise<FeedResult> {
@@ -198,9 +210,8 @@ export async function buildFeed(options: BuildFeedOptions = {}): Promise<FeedRes
   const terms = options.terms ?? ACTIVE_TERMS;
 
   /*
-   * Everything that can be fetched in parallel is. The prerequisite graph and
-   * the catalog are the two expensive reads and neither depends on the other;
-   * serialising them would add a second to a page that must feel instant.
+   * Rank from a skinny listing (id, code, title, points, number). Sections
+   * are loaded after `recommend()` for the shortlist only — see hydrate below.
    */
   const [student, catalog, prereqs, vectors] = await Promise.all([
     loadStudent(),
@@ -212,9 +223,14 @@ export async function buildFeed(options: BuildFeedOptions = {}): Promise<FeedRes
   const personalized = student.engine.taken.length > 0 || student.outstanding.length > 0;
 
   const wantedSubjects = options.subjects?.map((subject) => subject.toUpperCase());
-  const coursesById = new Map(catalog.courses.map((course) => [course.courseId, course]));
+  const skip = new Set(options.excludeCourseIds ?? []);
+  const listingById = new Map(catalog.listings.map((listing) => [listing.courseId, listing]));
+
+  const auditPool = candidateIdsForClears(student.outstanding, options.clears);
 
   const candidates = catalog.candidates.filter((candidate) => {
+    if (skip.has(candidate.courseId)) return false;
+    if (auditPool && !auditPool.has(candidate.courseId)) return false;
     if (wantedSubjects?.length && !wantedSubjects.includes(candidate.code.split(" ")[0])) {
       return false;
     }
@@ -238,11 +254,15 @@ export async function buildFeed(options: BuildFeedOptions = {}): Promise<FeedRes
      * graduate student's record speaks for itself.
      */
     if (!personalized) {
-      const course = coursesById.get(candidate.courseId);
-      if (course && course.number >= GRADUATE_LEVEL_FLOOR) return false;
+      const listing = listingById.get(candidate.courseId);
+      if (listing && listing.number >= GRADUATE_LEVEL_FLOOR) return false;
     }
     return true;
   });
+
+  const rankLimit = options.clears?.trim()
+    ? Math.max(limit * SHORTLIST_MULTIPLIER, 80)
+    : limit * SHORTLIST_MULTIPLIER;
 
   const ranked = recommend({
     profile: student.engine,
@@ -250,7 +270,7 @@ export async function buildFeed(options: BuildFeedOptions = {}): Promise<FeedRes
     outstanding: student.outstanding,
     prereqs,
     vectors,
-    limit: limit * SHORTLIST_MULTIPLIER,
+    limit: rankLimit,
     /*
      * The feed shows none of this. It is counted for the honest line at the
      * bottom of the page and, in time, for answering "why not X" — so a small
@@ -260,6 +280,19 @@ export async function buildFeed(options: BuildFeedOptions = {}): Promise<FeedRes
   });
 
   /*
+   * Restricting the candidate pool is not enough on its own. A CS course can
+   * still rank when the audit list was empty (open Core selector) or when the
+   * needle was loose. Drop anything whose reason does not name the group.
+   */
+  const recommendations = options.clears?.trim()
+    ? ranked.recommendations.filter((entry) =>
+        recommendationClears(entry.reasons, options.clears),
+      )
+    : ranked.recommendations;
+
+  const shortlistIds = recommendations.map((entry) => entry.course.courseId);
+
+  /*
    * The student's existing week. Read once and shared across every candidate
    * section; asking per card would be twenty reads of the same plan.
    *
@@ -267,10 +300,57 @@ export async function buildFeed(options: BuildFeedOptions = {}): Promise<FeedRes
    * student does not have a Spring plan while registering for Fall — so a
    * failure or absence here simply means no conflicts are claimed, which is the
    * same answer a guest gets.
+   *
+   * Hydrate runs in parallel: the shortlist is a few dozen ids, not the term.
    */
-  const busy = student.app ? await loadBusyIntervals(terms[0]) : [];
+  const [busy, coursesById] = await Promise.all([
+    student.app ? loadBusyIntervals(terms[0]) : Promise.resolve([] as BusyInterval[]),
+    hydrateCourses(shortlistIds, terms),
+  ]);
 
-  /* ── Pass one: choose a section and fold offering into the score ───────── */
+  const cards = await assembleFeedCards({
+    recommendations,
+    coursesById,
+    limit,
+    terms,
+    busy,
+  });
+
+  return {
+    cards,
+    personalized,
+    signedIn: student.app != null,
+    takenCount: student.engine.taken.length,
+    outstandingCount: student.outstanding.length,
+    vectorModel: vectors.size > 0 ? vectors.model : null,
+    withheldCount: ranked.withheld.length,
+    withheld: ranked.withheld,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+/* ==========================================================================
+ * Section assembly — shared by the home feed and the onboarding preview
+ * ========================================================================== */
+
+/**
+ * Turn ranked COURSES into the section cards the UI actually renders.
+ *
+ * Onboarding used to pick "the first section with an instructor" and throw
+ * away meetings, seats, and Vergil. That made the last wizard screen a
+ * different object from the home feed, and a second generate after sign-in
+ * was the only way to get the real cards. Both surfaces now go through this
+ * so the teaser and the catalog are the same recommendation.
+ */
+export async function assembleFeedCards(input: {
+  recommendations: readonly ScoredRecommendation[];
+  coursesById: Map<string, CourseWithSections>;
+  limit: number;
+  terms: readonly TermCode[];
+  busy?: BusyInterval[];
+}): Promise<FeedCard[]> {
+  const busy = input.busy ?? [];
+  const { terms, coursesById, limit } = input;
 
   interface Shortlisted {
     course: CourseWithSections;
@@ -286,7 +366,7 @@ export async function buildFeed(options: BuildFeedOptions = {}): Promise<FeedRes
 
   const shortlist: Shortlisted[] = [];
 
-  for (const entry of ranked.recommendations) {
+  for (const entry of input.recommendations) {
     const course = coursesById.get(entry.course.courseId);
     if (!course) continue;
 
@@ -315,8 +395,6 @@ export async function buildFeed(options: BuildFeedOptions = {}): Promise<FeedRes
   shortlist.sort((a, b) => b.score - a.score || a.course.courseId.localeCompare(b.course.courseId));
   const winners = shortlist.slice(0, limit);
 
-  /* ── Pass two: fill in historical times for the cards that need them ───── */
-
   /*
    * Only for the cards that will actually render, and only for sections with no
    * published time. 44.8% of sections have none, so asking for the whole
@@ -332,7 +410,7 @@ export async function buildFeed(options: BuildFeedOptions = {}): Promise<FeedRes
     ? await getTypicalMeetings(timelessSectionIds)
     : new Map();
 
-  const cards: FeedCard[] = winners.map((entry) => {
+  return winners.map((entry) => {
     /*
      * Re-choose with the historical patterns in hand. This can change WHICH
      * section wins — a section that was "time TBA" may now have an estimate and
@@ -356,18 +434,6 @@ export async function buildFeed(options: BuildFeedOptions = {}): Promise<FeedRes
       others: choice.others.slice(0, OTHER_SECTIONS_SHOWN).map(toSectionView),
     };
   });
-
-  return {
-    cards,
-    personalized,
-    signedIn: student.app != null,
-    takenCount: student.engine.taken.length,
-    outstandingCount: student.outstanding.length,
-    vectorModel: vectors.size > 0 ? vectors.model : null,
-    withheldCount: ranked.withheld.length,
-    withheld: ranked.withheld,
-    generatedAt: new Date().toISOString(),
-  };
 }
 
 /* ==========================================================================

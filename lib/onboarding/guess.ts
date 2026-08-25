@@ -205,6 +205,22 @@ export function impliedPrerequisites(
   return implied;
 }
 
+/**
+ * Unambiguous prerequisites of one course, as if nothing else were confirmed.
+ *
+ * A choice with one option is a course we can name. A choice with three is
+ * not — "they took one of these" is not a chip.
+ */
+export function unambiguousPrereqsOf(courseId: CourseId, prereqs: PrereqSource): CourseId[] {
+  const status = prereqs.statusFor(courseId, new Set());
+  const implied: CourseId[] = [];
+  for (const choice of status.outstanding) {
+    if (choice.length !== 1) continue;
+    implied.push(choice[0] as CourseId);
+  }
+  return implied;
+}
+
 /* ==========================================================================
  * The deck
  * ========================================================================== */
@@ -232,9 +248,23 @@ export interface GuessCandidate {
   score: number;
 }
 
+/** Code/title we can put on a chip without another round trip. */
+export interface GuessFacts {
+  courseId: CourseId;
+  code: string;
+  title: string | null;
+  points: number | null;
+}
+
 export interface GuessDeck {
   tier1: GuessCandidate[];
   tier2: GuessCandidate[];
+  /**
+   * Confirming the key means we think they also took these — unambiguous
+   * single-option prerequisites. Applied on the client immediately, so the
+   * strip does not wait for a re-rank round trip to say "and therefore Intro".
+   */
+  impliesTaken: Record<string, GuessFacts[]>;
 }
 
 export interface GuessDeckInput {
@@ -258,7 +288,12 @@ export interface GuessDeckInput {
   now?: Date;
 }
 
-const DEFAULT_TIER_LIMIT = 24;
+/**
+ * Per-tier cap. A rising senior has a long optional list (Core choices,
+ * intro-or-this, electives) and 18–24 used to drop most of it. 36 is enough
+ * for the maybe-strip to fill without auto-checking courses we cannot know.
+ */
+export const DEFAULT_TIER_LIMIT = 36;
 
 export function buildGuessDeck(input: GuessDeckInput): GuessDeck {
   const limit = input.limit ?? DEFAULT_TIER_LIMIT;
@@ -424,7 +459,31 @@ export function buildGuessDeck(input: GuessDeckInput): GuessDeck {
     (tier === 1 ? tier1 : tier2).push(candidate);
   }
 
-  return { tier1: order(tier1).slice(0, limit), tier2: order(tier2).slice(0, limit) };
+  /*
+   * Per-course implications, from the FULL evidence set rather than the
+   * sliced tiers. A confirmation of a course that did not fit on the strip
+   * should still instantly name its intro.
+   */
+  const impliesTaken: Record<string, GuessFacts[]> = {};
+  for (const courseId of evidence.keys()) {
+    const prereqIds = unambiguousPrereqsOf(courseId, input.prereqs);
+    if (prereqIds.length === 0) continue;
+    impliesTaken[courseId] = prereqIds.map((id) => {
+      const facts = input.catalog.get(id);
+      return {
+        courseId: id,
+        code: facts?.code ?? formatCourseId(id),
+        title: facts?.title ?? null,
+        points: facts?.points ?? null,
+      };
+    });
+  }
+
+  return {
+    tier1: order(tier1).slice(0, limit),
+    tier2: order(tier2).slice(0, limit),
+    impliesTaken,
+  };
 }
 
 /**

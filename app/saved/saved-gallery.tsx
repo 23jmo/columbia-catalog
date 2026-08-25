@@ -121,7 +121,7 @@ function FolderCard({
         className={cx(
           "group/card flex flex-col overflow-hidden rounded-2xl",
           "border border-border-table bg-background-primary-default",
-          "transition-shadow duration-150 ease hover:shadow-dropdown",
+          "transition-shadow duration-150 hover:shadow-dropdown",
           "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
         )}
       >

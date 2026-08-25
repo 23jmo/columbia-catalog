@@ -40,6 +40,8 @@ import * as db from "@/lib/db/catalog-queries";
 import { isConfigured } from "@/lib/db/client";
 import seed from "@/lib/seed/coms-fall2026.json";
 
+import { instructorSlug } from "./instructor-slug";
+
 const SEED = seed as unknown as CourseWithSections[];
 
 function clone<T>(v: T): T {
@@ -82,6 +84,8 @@ function clone<T>(v: T): T {
 // which is the volatile half of the spec section 9 split and stays uncached on purpose.
 
 const CATALOG_TTL_MS = 60_000;
+/** Listings carry no seats, so they can live as long as the fat catalog cache in queries. */
+const LISTING_TTL_MS = 5 * 60 * 1000;
 
 interface CatalogCacheEntry {
   expiresAt: number;
@@ -89,11 +93,72 @@ interface CatalogCacheEntry {
 }
 
 const catalogCache = new Map<TermCode, CatalogCacheEntry>();
+const listingCache = new Map<TermCode, { expiresAt: number; listings: Promise<CourseListing[]> }>();
 
 /** Drop every memoised term. Exported for ingest jobs and tests. */
 export function invalidateCatalogCache(termCode?: TermCode): void {
-  if (termCode) catalogCache.delete(termCode);
-  else catalogCache.clear();
+  if (termCode) {
+    catalogCache.delete(termCode);
+    listingCache.delete(termCode);
+    return;
+  }
+  catalogCache.clear();
+  listingCache.clear();
+}
+
+/**
+ * One course as the engine ranks it: identity and credit, no sections.
+ *
+ * The feed scores thousands of these, then hydrates sections only for the
+ * shortlist. Putting meetings on this type would drag them back into ranking.
+ */
+export interface CourseListing {
+  courseId: string;
+  subjectCode: string;
+  number: number;
+  qualifier: string | null;
+  title: string;
+  pointsMin: number | null;
+  pointsMax: number | null;
+}
+
+function listingFromCourse(course: CourseWithSections): CourseListing {
+  return {
+    courseId: course.courseId,
+    subjectCode: course.subjectCode,
+    number: course.number,
+    qualifier: course.qualifier,
+    title: course.title,
+    pointsMin: course.pointsMin,
+    pointsMax: course.pointsMax,
+  };
+}
+
+/**
+ * Courses offered in a term, without nested sections.
+ *
+ * Ranking does not need meetings or instructors. Those are fetched later for
+ * the few dozen winners via `getCoursesByIds`.
+ */
+export async function getCourseListings(
+  termCode: TermCode = CURRENT_TERM,
+): Promise<CourseListing[]> {
+  if (!isConfigured()) {
+    return SEED.filter((course) => course.sections.some((section) => section.termCode === termCode)).map(
+      listingFromCourse,
+    );
+  }
+
+  const now = Date.now();
+  const cached = listingCache.get(termCode);
+  if (cached && cached.expiresAt > now) return cached.listings;
+
+  const listings = db.getCourseListings(termCode);
+  listingCache.set(termCode, { expiresAt: now + LISTING_TTL_MS, listings });
+  listings.catch(() => {
+    if (listingCache.get(termCode)?.listings === listings) listingCache.delete(termCode);
+  });
+  return listings;
 }
 
 /** Every course in a term, sections attached. Used to build the search index. */
@@ -216,6 +281,66 @@ export async function getCourseAcrossTerms(
   const sections = found.sections.filter((s) => wanted.has(s.termCode));
   if (sections.length === 0) return null;
   return clone({ ...found, sections });
+}
+
+export interface InstructorCoursesResult {
+  name: string;
+  courses: CourseWithSections[];
+}
+
+function instructorCoursesFromSeed(
+  slug: string,
+  termCode: TermCode,
+): InstructorCoursesResult | null {
+  const names = new Set<string>();
+  for (const course of SEED) {
+    for (const section of course.sections) {
+      if (section.termCode !== termCode) continue;
+      for (const person of section.instructors) names.add(person);
+    }
+  }
+  const name = [...names].find((candidate) => instructorSlug(candidate) === slug);
+  if (!name) return null;
+
+  const courses: CourseWithSections[] = [];
+  for (const course of SEED) {
+    const sections = course.sections.filter(
+      (section) => section.termCode === termCode && section.instructors.includes(name),
+    );
+    if (sections.length === 0) continue;
+    courses.push(clone({ ...course, sections: sections.map((section) => clone(section)) }));
+  }
+
+  courses.sort((a, b) =>
+    `${a.subjectCode} ${a.number}`.localeCompare(`${b.subjectCode} ${b.number}`, undefined, {
+      numeric: true,
+    }),
+  );
+  return courses.length > 0 ? { name, courses } : null;
+}
+
+/**
+ * Courses one instructor teaches in a term — only their sections attached.
+ *
+ * The instructor page used to call `getAllCourses` and scan the whole term.
+ * This is the targeted read: resolve the slug against `instructors`, then join
+ * through `section_instructors`.
+ */
+export async function getInstructorCourses(
+  slugOrName: string,
+  termCode: TermCode = CURRENT_TERM,
+): Promise<InstructorCoursesResult | null> {
+  const slug = instructorSlug(decodeURIComponent(slugOrName));
+
+  if (!isConfigured()) return instructorCoursesFromSeed(slug, termCode);
+
+  const resolved = await db.findInstructorBySlug(slug);
+  if (!resolved) return null;
+
+  const courses = await db.getCoursesTaughtByInstructor(resolved.instructorId, termCode);
+  if (courses.length === 0) return null;
+
+  return { name: resolved.fullName, courses };
 }
 
 export async function getSection(sectionId: string): Promise<Section | null> {

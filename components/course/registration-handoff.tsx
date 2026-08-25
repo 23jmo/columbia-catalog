@@ -105,7 +105,7 @@ export function CallNumberCopy({
         "group inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5",
         "font-mono text-body-medium tabular-nums text-text-primary",
         "bg-background-secondary-default hover:bg-background-tertiary-default",
-        "cursor-pointer transition-colors duration-150 ease",
+        "cursor-pointer transition-colors duration-150",
         "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
         className,
       )}
