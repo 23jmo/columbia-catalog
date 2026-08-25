@@ -26,7 +26,9 @@ import {
   goBack,
   goToStep,
   ONBOARDING_STEPS,
+  NO_MINORS_PROGRAM_ID,
   previousStep,
+  reconcileDegreeChange,
   removeCourse,
   RERANK_BATCH_SIZE,
   serialize,
@@ -438,6 +440,138 @@ describe("unmatched coursework", () => {
 /* ==========================================================================
  * The guess deck
  * ========================================================================== */
+
+describe("changing a degree answer retires the guesses made from the old one", () => {
+  /** A student mid-flow: three of our guesses, one course they found themselves. */
+  function afterCoursework(): GuestOnboardingState {
+    let state = emptyGuestState();
+    state = { ...state, school: "SEAS", classYear: "2028", programIds: ["seas-major-cs"] };
+    state = upsertCourse(state, course({ courseId: "COMS1004W" }));
+    state = upsertCourse(state, course({ courseId: "COMS3134W" }));
+    state = upsertCourse(state, course({ courseId: "COMS3157W" }));
+    state = upsertCourse(state, course({ courseId: "ECON1105W", source: "picker" }));
+    return state;
+  }
+
+  const withMajor = (state: GuestOnboardingState, programIds: string[]) => ({
+    ...state,
+    programIds,
+  });
+
+  it("drops guesses when the major changes, and keeps what the student added", () => {
+    // The bug: the coursework screen writes tier 1 straight onto the record, so
+    // a student who stepped back and switched major returned to "here's what we
+    // think you've taken" still holding the old major's course list.
+    const before = afterCoursework();
+    const after = reconcileDegreeChange(before, withMajor(before, ["cc-major-economics"]));
+
+    expect(after.courses.map((row) => row.courseId)).toEqual(["ECON1105W"]);
+  });
+
+  it("drops guesses when the class year changes", () => {
+    // Class year sets the level ceiling — a rising senior's pre-checked list is
+    // not a first-year's, in either direction.
+    const before = afterCoursework();
+    const after = reconcileDegreeChange(before, { ...before, classYear: "2026" });
+
+    expect(after.courses.map((row) => row.courseId)).toEqual(["ECON1105W"]);
+  });
+
+  it("drops guesses when the school changes", () => {
+    const before = afterCoursework();
+    const after = reconcileDegreeChange(before, { ...before, school: "CC" });
+
+    expect(after.courses.map((row) => row.courseId)).toEqual(["ECON1105W"]);
+  });
+
+  it("keeps a guess the student answered the love screen about", () => {
+    // Answering "did you like this?" is an implicit confirmation that they took
+    // it, and a stronger statement than the guess that put it there. Dropping
+    // the row would also throw the opinion away.
+    let before = afterCoursework();
+    before = setLiked(before, "COMS3134W", true);
+    before = setLiked(before, "COMS3157W", false);
+
+    const after = reconcileDegreeChange(before, withMajor(before, ["cc-major-economics"]));
+
+    expect(after.courses.map((row) => row.courseId)).toEqual([
+      "COMS3134W",
+      "COMS3157W",
+      "ECON1105W",
+    ]);
+    expect(after.courses.find((row) => row.courseId === "COMS3134W")?.liked).toBe(true);
+  });
+
+  it("keeps transcript rows, which are the student's own record", () => {
+    let before = afterCoursework();
+    before = upsertCourse(
+      before,
+      course({ courseId: "MATH1101UN", source: "transcript_pdf", termLabel: "Fall 2024" }),
+    );
+
+    const after = reconcileDegreeChange(before, withMajor(before, ["cc-major-economics"]));
+
+    expect(after.courses.map((row) => row.courseId)).toEqual(["ECON1105W", "MATH1101UN"]);
+  });
+
+  it("keeps refusals, which stay true across a change of major", () => {
+    // "I did not take Calculus II" is a fact about the student, not about their
+    // degree. Clearing it would let the rebuilt deck re-tick what they unticked.
+    let before = afterCoursework();
+    before = removeCourse(before, "COMS3157W");
+
+    const after = reconcileDegreeChange(before, withMajor(before, ["cc-major-economics"]));
+
+    expect(after.dismissedCourseIds).toEqual(["COMS3157W"]);
+  });
+
+  it("leaves the record alone when the answer did not actually change", () => {
+    // Re-picking the same school, or toggling a minor off and straight back on,
+    // must not cost a student their pre-checked list.
+    const before = afterCoursework();
+    const next = { ...before, school: "SEAS" as const };
+    const after = reconcileDegreeChange(before, next);
+
+    // Returned untouched, not rebuilt: nothing downstream should see a new
+    // object and re-run because a student re-picked the answer they had.
+    expect(after).toBe(next);
+    expect(after.courses.map((row) => row.courseId)).toEqual([
+      "COMS1004W",
+      "COMS3134W",
+      "COMS3157W",
+      "ECON1105W",
+    ]);
+  });
+
+  it("does not read declining minors as a change of degree", () => {
+    // The sentinel is guest-only bookkeeping and names no program, so it must
+    // not invalidate a deck the student has already corrected.
+    const before = afterCoursework();
+    const after = reconcileDegreeChange(
+      before,
+      withMajor(before, ["seas-major-cs", NO_MINORS_PROGRAM_ID]),
+    );
+
+    expect(after.courses).toHaveLength(4);
+  });
+
+  it("does not read a reordered program list as a change of degree", () => {
+    const before = withMajor(afterCoursework(), ["seas-major-cs", "cc-minor-math"]);
+    const after = reconcileDegreeChange(
+      before,
+      withMajor(before, ["cc-minor-math", "seas-major-cs"]),
+    );
+
+    expect(after.courses).toHaveLength(4);
+  });
+
+  it("rewinds the re-rank counter, since the deck it was pacing is gone", () => {
+    const before = { ...afterCoursework(), confirmationsSinceRerank: 1 };
+    const after = reconcileDegreeChange(before, withMajor(before, ["cc-major-economics"]));
+
+    expect(after.confirmationsSinceRerank).toBe(0);
+  });
+});
 
 describe("guess deck", () => {
   const catalog = new Map(
