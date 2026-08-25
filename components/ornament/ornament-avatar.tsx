@@ -28,9 +28,11 @@ import { cx } from "@/utils/cx";
  *             turn to one side, swivels slowly to the other, and blinks. A face
  *             that stares out of the screen while nothing is happening is
  *             unnerving; one that is looking off somewhere reads as at ease.
- *   tracking  the head turns to follow the pointer. Used where the student is
- *             being asked something and the ornament should look like it is
- *             listening — the onboarding screens.
+ *   tracking  the head turns to follow the pointer, but only while the pointer
+ *             is near something clickable; the rest of the time it idles like
+ *             `resting`. Used where the student is being asked something and
+ *             the ornament should look like it is watching them answer — the
+ *             onboarding screens.
  *   thinking  the gaze breaks upward and swivels faster, and the body turns
  *             underneath the face so the grain boils. Reads as work happening
  *             rather than as a progress bar lying about progress.
@@ -72,8 +74,8 @@ const BODY_SIZE = 92;
 const EYE_WIDTH = 20;
 const EYE_HEIGHT = 32;
 const EYE_GAP = 14;
-/** Centre of the pair lands at 44, a touch above the disc's own centre of 46. */
-const EYE_TOP = 28;
+/** Centre of the pair lands at 38, well above the disc's own centre of 46. */
+const EYE_TOP = 22;
 
 const EYES_WIDTH = EYE_WIDTH * 2 + EYE_GAP;
 const EYE_LEFT_X = (BODY_SIZE - EYES_WIDTH) / 2;
@@ -112,11 +114,11 @@ const EYE_RIGHT_X = EYE_LEFT_X + EYE_WIDTH + EYE_GAP;
  * is not allowed to move — so the shape of the model is kept and the
  * magnitudes are set by eye.
  */
-const YAW_TRAVEL = 7;
-const YAW_CONVERGE = 3;
+const YAW_TRAVEL = 10.5;
+const YAW_CONVERGE = 4.2;
 const YAW_FORESHORTEN = 0.46;
 /** Vertical is a glance, not a turn, so it stays small. */
-const PITCH_TRAVEL = 2.8;
+const PITCH_TRAVEL = 3.4;
 
 /**
  * Pointer distance, in CSS px, at which the head is fully turned. Roughly a
@@ -124,6 +126,37 @@ const PITCH_TRAVEL = 2.8;
  * at full yaw for the whole screen, which stops reading as tracking.
  */
 const POINTER_REACH = 340;
+
+/**
+ * What counts as worth looking at.
+ *
+ * `tracking` does not mean "follow the pointer everywhere". A face that locks
+ * on the moment the cursor enters the window follows it across dead space, over
+ * the headline, out to the scrollbar — and a thing that watches you do nothing
+ * is not attentive, it is staring. What makes it read as attention is that it
+ * only engages when the pointer is over something the student could actually
+ * act on, and looks away again when they drift off it.
+ *
+ * So the pointer is hit-tested against the controls on the page rather than
+ * against the window, and the rest of the time the idle swivel keeps running.
+ */
+const CLICKABLE_SELECTOR =
+  'button, a[href], input, select, textarea, summary, label, [role="button"], [role="option"], [role="checkbox"], [role="radio"], [tabindex]:not([tabindex="-1"])';
+
+/**
+ * How far outside a control still counts as approaching it. Generous on
+ * purpose: the glance should start on the way to the button, not on contact —
+ * arriving at the same instant as the click is a reaction, not attention.
+ */
+const NEAR_PADDING = 56;
+
+/**
+ * Rects go stale on scroll, resize and every re-render of the answer list, and
+ * measuring them on every pointer event would be a forced layout per mouse
+ * move. A short cache is the whole mitigation: at this age the worst case is
+ * one glance aimed at where a button was a third of a second ago.
+ */
+const RECT_CACHE_MS = 300;
 
 /**
  * Per-frame approach toward the target pose. Deliberately slow: at 60fps this
@@ -136,11 +169,17 @@ export function OrnamentAvatar({
   hue = "roseBlue",
   mood = "resting",
   size = BODY_SIZE,
+  trackNear = CLICKABLE_SELECTOR,
   className,
 }: {
   hue?: OrnamentHue;
   mood?: OrnamentMood;
   size?: number;
+  /**
+   * In `tracking`, the controls the pointer has to be near before the face
+   * engages. Narrow it when a surface has chrome the ornament should ignore.
+   */
+  trackNear?: string;
   className?: string;
 }) {
   const boxRef = useRef<HTMLDivElement | null>(null);
@@ -224,10 +263,10 @@ export function OrnamentAvatar({
 
     const scheduleBlink = () => {
       // Thinking blinks less: a face concentrating on something holds its eyes.
-      const minimumDelay = mood === "thinking" ? 3400 : 2200;
-      const spread = mood === "thinking" ? 4200 : 4600;
+      const minimumDelay = mood === "thinking" ? 1900 : 1000;
+      const spread = mood === "thinking" ? 3000 : 2300;
       blinkTimer = setTimeout(() => {
-        const isDoubleBlink = Math.random() < 0.22;
+        const isDoubleBlink = Math.random() < 0.36;
         closeAndOpen(
           isDoubleBlink
             ? () => {
@@ -239,43 +278,97 @@ export function OrnamentAvatar({
     };
     scheduleBlink();
 
-    /* ── Where it looks ───────────────────────────────────────────────────  */
+    /* ── Where it looks ───────────────────────────────────────────────────
+       The idle swivel runs in every mood, including `tracking`. It is what the
+       face does whenever it is not engaged with something, and in `tracking`
+       that is most of the time — the pointer is only near a control for a
+       fraction of a session.                                                  */
+    const isThinking = mood === "thinking";
+    let isEngaged = false;
     let swivelTimer: ReturnType<typeof setTimeout> | undefined;
+    let side = 1;
+
+    /*
+     * Swivel between the two three-quarter poses, alternating sides so it reads
+     * as looking around rather than twitching. It never targets a centred,
+     * straight-out-of-the-screen pose: the whole point of the idle state is
+     * that it is not watching you.
+     */
+    const glanceAway = () => {
+      side = -side;
+      targetPose.yaw = side * (0.62 + Math.random() * 0.38);
+      targetPose.pitch = isThinking
+        ? // Up and away — the universal "working on it" tell.
+          -0.55 - Math.random() * 0.45
+        : -0.2 + Math.random() * 0.45;
+    };
+
+    const scheduleSwivel = () => {
+      swivelTimer = setTimeout(
+        () => {
+          if (!isEngaged) glanceAway();
+          scheduleSwivel();
+        },
+        isThinking ? 900 + Math.random() * 700 : 2000 + Math.random() * 2600,
+      );
+    };
+    glanceAway();
+    scheduleSwivel();
+
     let removePointerListener: (() => void) | undefined;
 
     if (mood === "tracking") {
+      let cachedRects: DOMRect[] = [];
+      let cachedAt = -Infinity;
+
+      const clickableRects = () => {
+        const now = performance.now();
+        if (now - cachedAt > RECT_CACHE_MS) {
+          cachedRects = [...document.querySelectorAll(trackNear)]
+            .map((element) => element.getBoundingClientRect())
+            // A zero-area rect is a control that is display:none or not laid
+            // out yet, and its rect sits at the origin — without this the face
+            // stares into the top-left corner of the page.
+            .filter((rect) => rect.width > 0 && rect.height > 0);
+          cachedAt = now;
+        }
+        return cachedRects;
+      };
+
+      const isNearAControl = (x: number, y: number) =>
+        clickableRects().some(
+          (rect) =>
+            x >= rect.left - NEAR_PADDING &&
+            x <= rect.right + NEAR_PADDING &&
+            y >= rect.top - NEAR_PADDING &&
+            y <= rect.bottom + NEAR_PADDING,
+        );
+
       const onPointerMove = (event: PointerEvent) => {
+        if (!isNearAControl(event.clientX, event.clientY)) {
+          if (isEngaged) {
+            // Break off the moment they leave, rather than holding the last
+            // pose until the next scheduled glance — a face frozen mid-turn
+            // pointing at nothing is worse than one that was never tracking.
+            isEngaged = false;
+            clearTimeout(swivelTimer);
+            glanceAway();
+            scheduleSwivel();
+          }
+          return;
+        }
+
+        isEngaged = true;
         const rect = box.getBoundingClientRect();
         const dx = event.clientX - (rect.left + rect.width / 2);
         const dy = event.clientY - (rect.top + rect.height / 2);
         targetPose.yaw = clampToUnit(dx / POINTER_REACH);
         targetPose.pitch = clampToUnit(dy / (POINTER_REACH * 0.6));
       };
+
       window.addEventListener("pointermove", onPointerMove, { passive: true });
       removePointerListener = () =>
         window.removeEventListener("pointermove", onPointerMove);
-    } else {
-      /*
-       * Swivel between the two three-quarter poses, alternating sides so it
-       * reads as looking around rather than twitching. It never targets a
-       * centred, straight-out-of-the-screen pose: the whole point of the
-       * resting state is that it is not watching you.
-       */
-      const isThinking = mood === "thinking";
-      let side = 1;
-      const scheduleSwivel = () => {
-        side = -side;
-        targetPose.yaw = side * (0.62 + Math.random() * 0.38);
-        targetPose.pitch = isThinking
-          ? // Up and away — the universal "working on it" tell.
-            -0.55 - Math.random() * 0.45
-          : -0.2 + Math.random() * 0.45;
-        swivelTimer = setTimeout(
-          scheduleSwivel,
-          isThinking ? 900 + Math.random() * 700 : 2000 + Math.random() * 2600,
-        );
-      };
-      scheduleSwivel();
     }
 
     return () => {
@@ -285,7 +378,7 @@ export function OrnamentAvatar({
       clearTimeout(swivelTimer);
       removePointerListener?.();
     };
-  }, [mood]);
+  }, [mood, trackNear]);
 
   const scale = size / BODY_SIZE;
 
