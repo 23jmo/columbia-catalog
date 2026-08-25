@@ -25,9 +25,10 @@ import { cx } from "@/utils/cx";
  * ── The three moods ────────────────────────────────────────────────────────
  *
  *   resting   idle, and pointedly not looking at you. It holds a three-quarter
- *             turn to one side, swivels slowly to the other, and blinks. A face
- *             that stares out of the screen while nothing is happening is
- *             unnerving; one that is looking off somewhere reads as at ease.
+ *             turn to one side, swivels slowly to the other, looks up and down
+ *             as it goes, and blinks. A face that stares out of the screen
+ *             while nothing is happening is unnerving; one that is glancing
+ *             around the room reads as at ease.
  *   tracking  the head turns to follow the pointer, but only while the pointer
  *             is near something clickable; the rest of the time it idles like
  *             `resting`. Used where the student is being asked something and
@@ -117,8 +118,15 @@ const EYE_RIGHT_X = EYE_LEFT_X + EYE_WIDTH + EYE_GAP;
 const YAW_TRAVEL = 10.5;
 const YAW_CONVERGE = 4.2;
 const YAW_FORESHORTEN = 0.46;
-/** Vertical is a glance, not a turn, so it stays small. */
-const PITCH_TRAVEL = 3.4;
+/**
+ * Vertical travel. There is no foreshortening trick for pitch — a head nodding
+ * up or down moves both eyes the same way by the same amount — so the only
+ * thing carrying it is the distance, and it has to be big enough to read as a
+ * separate movement rather than as noise on the swivel. The eyes sit high on
+ * the disc with 22 units of clearance above and 38 below, so this stays well
+ * inside the face at full deflection either way.
+ */
+const PITCH_TRAVEL = 5;
 
 /**
  * Pointer distance, in CSS px, at which the head is fully turned. Roughly a
@@ -295,12 +303,27 @@ export function OrnamentAvatar({
      * that it is not watching you.
      */
     const glanceAway = () => {
-      side = -side;
-      targetPose.yaw = side * (0.62 + Math.random() * 0.38);
+      /*
+       * Most glances swing to the other side, but not all of them. If every
+       * glance flipped sides, the vertical component would only ever move
+       * during a horizontal swivel, and it would read as wobble on the swivel
+       * rather than as looking up or down. Holding the side some of the time
+       * gives the pitch its own movements to be seen in.
+       *
+       * Thinking never holds: the point of that state is that it is casting
+       * about, so it keeps swinging.
+       */
+      const holdsSide = !isThinking && Math.random() < 0.38;
+      if (!holdsSide) side = -side;
+
+      targetPose.yaw =
+        side * (holdsSide ? 0.42 + Math.random() * 0.52 : 0.62 + Math.random() * 0.38);
       targetPose.pitch = isThinking
         ? // Up and away — the universal "working on it" tell.
           -0.55 - Math.random() * 0.45
-        : -0.2 + Math.random() * 0.45;
+        : // The full range, tilted a little upward. An idle face that spends
+          // its time looking at the floor reads as dejected, not relaxed.
+          -0.85 + Math.random() * 1.55;
     };
 
     const scheduleSwivel = () => {
