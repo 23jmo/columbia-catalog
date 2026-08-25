@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.46",
-    "@ai-sdk/react": "^3.0.268",
+    "@ai-sdk/react": "^4.0.81",
     "@internationalized/date": "^3.12.3",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@react-three/drei": "^10.7.8",
