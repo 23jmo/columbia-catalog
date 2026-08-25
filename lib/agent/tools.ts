@@ -52,9 +52,9 @@ import { recommend } from "@/lib/recommend";
 import {
   graphPrereqSource,
   loadProgressionGraph,
-  noVectorSource,
   unknownPrereqSource,
 } from "@/lib/recommend/sources";
+import { loadVectorSource } from "@/lib/recommend/pipeline";
 import type {
   CandidateCourse,
   PrereqSource,
@@ -439,10 +439,11 @@ function engineTools(context: AgentToolContext): ToolSet {
           .describe("Also return courses blocked by prerequisites. Use when asked why, or why not."),
       }),
       async execute({ limit, subjects, includeWithheld }) {
-        const [{ profile, audit }, allCandidates, prereqs] = await Promise.all([
+        const [{ profile, audit }, allCandidates, prereqs, vectors] = await Promise.all([
           loadStudentAudit(),
           loadCandidates(),
           prereqSourceOrDegrade(),
+          loadVectorSource(),
         ]);
 
         const wanted = subjects?.map((subject) => subject.toUpperCase());
@@ -458,16 +459,23 @@ function engineTools(context: AgentToolContext): ToolSet {
           ),
           prereqs,
           /*
-           * No vectors yet. The LSA artifact is built for the browser
-           * (`public/index/*.emb.bin`) and decoding it server-side is separate
-           * work. Until then taste scores zero, every result carries a
-           * `no_vector` caveat, and ranking falls back to requirement fit and
-           * unlock — a real feed, the "what your degree needs" half working
-           * without the "what you might like" half. Visible in the output
-           * rather than silently absent, which is why the caveat is not
-           * stripped before the model sees it.
+           * The same semantic index the feed ranks with.
+           *
+           * This read `noVectorSource()` for as long as decoding the LSA
+           * artifact server-side was unfinished, and the comment here said so.
+           * `lib/recommend/course-vectors.ts` finished it, and leaving the stub
+           * behind would have left the agent answering "something like the
+           * courses I liked" out of requirement fit alone — the half of the
+           * engine that cannot express taste — while the feed on the same page
+           * used both halves. Two different answers to one question, from one
+           * engine, with nothing on screen to explain the difference.
+           *
+           * `loadVectorSource` degrades internally: a missing artifact returns
+           * the same empty source as before and every result keeps its
+           * `no_vector` caveat, so the failure mode is unchanged and still
+           * visible to the model rather than silently absent.
            */
-          vectors: noVectorSource(),
+          vectors,
           limit,
           withheldLimit: includeWithheld ? limit : 0,
         });
