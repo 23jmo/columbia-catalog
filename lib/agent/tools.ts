@@ -215,6 +215,7 @@ async function loadStudentAudit() {
     provider: createSupabaseCandidateProvider({ terms: ACTIVE_TERMS }),
     // Never suggest what the student has already done.
     exclude: profile.courses.map((course) => course.courseId),
+    limit: 250,
   });
 
   return { profile, audit: { ...audit, programs }, facts };
@@ -363,6 +364,11 @@ function engineTools(context: AgentToolContext): ToolSet {
         "subjects (department codes), or excludeCourseIds (every courseId already " +
         "shown). Prefer it over search_courses unless the student named a course " +
         "they already know.\n\n" +
+        "clears still works when get_unmet_requirements has no programs — pass " +
+        '"Global Core" or "Science Requirement" and the catalog filters by the ' +
+        "Bulletin list. Do NOT treat a withheld list as the answer to an " +
+        '"easy" / Core question: withheld courses are gated, which is the ' +
+        "opposite of easy.\n\n" +
         "Each card carries `best` (the section the card is about) and `others` " +
         "(its siblings). Courses whose prerequisites the student has not met are " +
         "EXCLUDED from `cards`; set includeWithheld to see them under `withheld`. " +
@@ -378,7 +384,24 @@ function engineTools(context: AgentToolContext): ToolSet {
           .string()
           .optional()
           .describe(
-            'Requirement group label, copied exactly from get_unmet_requirements. Example: "Global Core".',
+            'Requirement group label. Copy from get_unmet_requirements when you have it; ' +
+              'otherwise pass the name the student used, e.g. "Global Core".',
+          ),
+        levelMin: z
+          .number()
+          .int()
+          .min(0)
+          .max(9999)
+          .optional()
+          .describe("Inclusive course-number floor, e.g. 3000."),
+        levelMax: z
+          .number()
+          .int()
+          .min(0)
+          .max(9999)
+          .optional()
+          .describe(
+            "Inclusive course-number ceiling. For easy / intro / manageable / light, pass 3999.",
           ),
         excludeCourseIds: z
           .array(z.string())
@@ -387,9 +410,12 @@ function engineTools(context: AgentToolContext): ToolSet {
         includeWithheld: z
           .boolean()
           .default(false)
-          .describe("Also return courses blocked by prerequisites. Use when asked why, or why not."),
+          .describe(
+            "Also return courses blocked by prerequisites. Use when asked why, or why not — " +
+              "never as the answer to an easy / intro / Global Core question.",
+          ),
       }),
-      async execute({ limit, subjects, clears, excludeCourseIds, includeWithheld }) {
+      async execute({ limit, subjects, clears, levelMin, levelMax, excludeCourseIds, includeWithheld }) {
         /*
          * The feed's builder, not the bare engine.
          *
@@ -418,6 +444,8 @@ function engineTools(context: AgentToolContext): ToolSet {
           limit,
           ...(subjects?.length ? { subjects } : {}),
           ...(clears?.trim() ? { clears: clears.trim() } : {}),
+          ...(levelMin != null ? { levelMin } : {}),
+          ...(levelMax != null ? { levelMax } : {}),
           ...(exclude.length ? { excludeCourseIds: exclude } : {}),
         });
 

@@ -14,6 +14,7 @@ describe("loadCatalog", () => {
     expect(catalog.listings.length).toBeGreaterThan(0);
     expect(catalog.candidates.length).toBe(catalog.listings.length);
     expect(catalog.listings[0]).not.toHaveProperty("sections");
+    expect(catalog.listings[0]?.requirementFlags).toEqual({});
     expect(catalog.candidates[0]?.courseId).toBe(catalog.listings[0]?.courseId);
     expect(catalog.candidates[0]?.title).toBe(catalog.listings[0]?.title);
   });

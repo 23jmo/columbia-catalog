@@ -14,7 +14,7 @@
 
 import { CURRENT_TERM } from "@/lib/constants";
 import { instructorSlug } from "@/lib/data/instructor-slug";
-import type { CourseWithSections, Section, TermCode } from "@/lib/types";
+import type { CourseWithSections, RequirementFlags, Section, TermCode } from "@/lib/types";
 
 import {
   createAnonServerClient,
@@ -24,11 +24,13 @@ import {
 } from "./client";
 import {
   SECTION_SELECT,
+  parseRequirementFlags,
   rowToCourse,
   rowToCourseWithSections,
   rowToSection,
   type CourseRow,
   type CourseRowWithSections,
+  type Json,
   type SectionRow,
   type SectionRowWithRelations,
 } from "./schema";
@@ -256,7 +258,7 @@ async function fetchAllCourses(termCode: TermCode): Promise<CourseWithSections[]
  * stub so the term filter still works.
  */
 const COURSE_LISTING_SELECT =
-  "course_id, subject_code, course_number, qualifier, title, points_min, points_max, sections!inner(term_code)";
+  "course_id, subject_code, course_number, qualifier, title, points_min, points_max, requirement_flags, sections!inner(term_code)";
 
 interface CourseListingRow {
   course_id: string;
@@ -266,6 +268,7 @@ interface CourseListingRow {
   title: string;
   points_min: number | string | null;
   points_max: number | string | null;
+  requirement_flags: Json | null;
 }
 
 interface CourseListing {
@@ -276,6 +279,7 @@ interface CourseListing {
   title: string;
   pointsMin: number | null;
   pointsMax: number | null;
+  requirementFlags: RequirementFlags;
 }
 
 function listingFromRow(row: CourseListingRow): CourseListing {
@@ -289,6 +293,7 @@ function listingFromRow(row: CourseListingRow): CourseListing {
     title: row.title,
     pointsMin: pointsMin != null && Number.isFinite(pointsMin) ? pointsMin : null,
     pointsMax: pointsMax != null && Number.isFinite(pointsMax) ? pointsMax : null,
+    requirementFlags: parseRequirementFlags(row.requirement_flags),
   };
 }
 

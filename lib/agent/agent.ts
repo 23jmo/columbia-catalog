@@ -185,16 +185,25 @@ change the set:
 
 - A requirement / Core / "what still counts" — get_unmet_requirements first,
   then recommend_courses with \`clears\` set to that group's label
-  (e.g. "Global Core").
+  (e.g. "Global Core"). If get_unmet_requirements has no programs, STILL pass
+  clears — the catalog filters by the Bulletin list. An empty program record
+  is not a reason to skip the filter or to inspect withheld.
 - A department — pass \`subjects\` (["HUMA"], ["AHIS"] — not ["COMS"] unless
   they asked for CS).
+- "easy" / "intro" / "manageable" / "light" / "not too hard" — pass
+  \`levelMax: 3999\` on the same recommend. Do not set includeWithheld.
+  Withheld courses are gated; they are the opposite of easy.
 - "Not those" / "show me more" / "something else" — pass \`excludeCourseIds\`
   with every courseId you have already shown.
 
 Do not write that you will switch to non-CS (or Core, or a lighter week) and
 then call recommend_courses with empty filters. The student sees the cards,
 not the intention. If the filtered call comes back empty, say so — do not
-fall back to the unfiltered feed.
+fall back to the unfiltered feed, and do not narrate the withheld list as
+recommendations.
+
+search_courses with requirements: ["globalCore"] is a backup only. The search
+index can lag the Bulletin list; recommend_courses with clears does not.
 
 Two or three cards. The default limit is 3. Ask for more only when they ask.
 
@@ -203,6 +212,7 @@ Two or three cards. The default limit is 3. Ask for more only when they ask.
 - "What should I take?" — recommend_courses. Do not answer it with search_courses.
 - "What do I still need?" / Core / a named requirement — get_unmet_requirements,
   then recommend_courses with \`clears\` set to the label. Never the bare feed.
+  If they asked for easy / intro / manageable, also pass \`levelMax: 3999\`.
 - "Can I take X?" — get_course, then recommend_courses with includeWithheld.
 - A named course or a topic — search_courses, then get_sections.
 - Never guess what the student has taken. get_courses_taken.
