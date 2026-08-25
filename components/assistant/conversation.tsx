@@ -157,10 +157,20 @@ function AssistantTurn({
         exact call number in Vergil.
       */}
       {cards.length > 0 ? (
-        <ul className="flex flex-col gap-3">
+        /*
+          A grid, not a stack. The card is sized for the home page's rail —
+          about 22rem — and stretching one across the full width of a thread
+          leaves a seat meter a metre long above two buttons floating in space.
+          Two or three to a row keeps the card the shape it was designed as, and
+          lets a three-card answer be taken in at a glance instead of scrolled.
+        */
+        <ul
+          role="list"
+          className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+        >
           {cards.map((card) => (
-            <li key={card.courseId}>
-              <FeedCardView card={card} />
+            <li key={card.courseId} className="flex">
+              <FeedCardView card={card} className="w-full" />
             </li>
           ))}
         </ul>

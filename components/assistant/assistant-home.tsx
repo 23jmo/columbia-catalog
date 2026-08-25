@@ -1,9 +1,14 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { DefaultChatTransport } from "ai";
 import { useChat } from "@ai-sdk/react";
-import { RiChat1Line, RiErrorWarningLine, RiLockLine } from "@remixicon/react";
+import {
+  RiChat1Line,
+  RiErrorWarningLine,
+  RiLockLine,
+  RiRestartLine,
+} from "@remixicon/react";
 
 import { describeFailure, planSubmission, type Gate } from "@/lib/agent/gate";
 import { Composer } from "@/components/assistant/composer";
@@ -68,6 +73,28 @@ export interface AssistantHomeProps {
   termLabel: string;
   promptsUsed: number;
   promptsLimit: number;
+  /**
+   * The student's first name, or `null` when we do not honestly have one.
+   *
+   * `toSessionAccount` falls back through `full_name` → `name` → the local part
+   * of the email → the literal `"Signed in"`, and only the first two of those
+   * are a name. The page decides which it has; this component only decides
+   * whether to greet, because "Welcome back, 2023johnathanmo" is worse than no
+   * greeting at all.
+   */
+  greetingName?: string | null;
+  /**
+   * The recommendation feed, rendered on the server and handed down as an
+   * element.
+   *
+   * It has to arrive this way. `buildFeed` reads the student's record through
+   * the cookie-scoped Supabase client and pages the active catalog, none of
+   * which can happen in a `"use client"` module — but a server component passed
+   * as a prop is rendered by the server and slotted in here, so the feed stays
+   * server-rendered inside a client shell. That is also what lets `/` stream
+   * it: the `<Suspense>` boundary lives around the element, not around this.
+   */
+  feed?: ReactNode;
 }
 
 export function AssistantHome({
@@ -75,6 +102,8 @@ export function AssistantHome({
   termLabel,
   promptsUsed: initialPromptsUsed,
   promptsLimit,
+  greetingName,
+  feed,
 }: AssistantHomeProps) {
   const [input, setInput] = useState("");
   const [gate, setGate] = useState<Gate | null>(null);
@@ -198,6 +227,51 @@ export function AssistantHome({
 
   const hasThread = messages.length > 0;
 
+  /*
+   * Going Home puts the feed back.
+   *
+   * `/` is already the current route, so every nav link to it — the sidebar
+   * item, the mobile tab, the wordmark — is a soft navigation onto the page it
+   * is already on. React reconciles the same tree, this component never
+   * unmounts, and the thread would sit there unchanged while the student's
+   * click did visibly nothing. That is the worst kind of dead control: it looks
+   * like the app ignored them.
+   *
+   * A delegated listener rather than a signal threaded through the shell. The
+   * alternative is making `ShellNav`, `CatalogSidebar` and `MobileTabBar` — all
+   * three of which render the Home link, and two of which are server components
+   * today — aware that one page has state worth clearing. That is a lot of
+   * shared surface bent around one screen. This asks a narrower and more honest
+   * question instead: did the student just click something that means "take me
+   * home"? Anything that answers yes gets the feed back, including links this
+   * component has never heard of.
+   */
+  useEffect(() => {
+    if (!hasThread) return;
+
+    function onDocumentClick(event: MouseEvent) {
+      // Modified clicks open a new tab; the thread here should survive that.
+      if (event.defaultPrevented || event.button !== 0) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+      const anchor = (event.target as Element | null)?.closest?.("a");
+      if (!anchor || anchor.target === "_blank") return;
+
+      const href = anchor.getAttribute("href");
+      if (!href) return;
+
+      const destination = new URL(href, window.location.href);
+      const isHome =
+        destination.origin === window.location.origin &&
+        destination.pathname === "/" &&
+        destination.search === "";
+      if (isHome) startNewThread();
+    }
+
+    document.addEventListener("click", onDocumentClick);
+    return () => document.removeEventListener("click", onDocumentClick);
+  }, [hasThread, startNewThread]);
+
   return (
     /*
      * The column fills the viewport so the sticky composer lands on its bottom
@@ -206,10 +280,31 @@ export function AssistantHome({
      * where the mobile tab bar's reserve is included, and 56px at and above it.
      */
     <div className="flex min-h-[calc(100dvh-6rem)] w-full min-w-0 flex-col lg:min-h-[calc(100dvh-3.5rem)]">
-      <Breadcrumb messages={messages} />
+      {hasThread ? <ThreadHeader messages={messages} onNewThread={startNewThread} /> : null}
 
-      <div className="flex flex-1 flex-col justify-end pt-8">
-        {hasThread ? <Conversation messages={messages} status={status} onAsk={ask} /> : null}
+      {/*
+        Two states, one column.
+
+        With a thread, the messages hang off the bottom of the region
+        (`justify-end`) so the newest turn sits against the composer and the
+        conversation grows upward out of it. With no thread, the greeting and
+        the feed start at the top and the empty space falls below them, which
+        is what keeps the box on the bottom edge in both states.
+      */}
+      <div
+        className={cx(
+          "flex flex-1 flex-col",
+          hasThread ? "justify-end pt-8" : "gap-6 pt-1",
+        )}
+      >
+        {hasThread ? (
+          <Conversation messages={messages} status={status} onAsk={ask} />
+        ) : (
+          <>
+            {greetingName ? <Greeting name={greetingName} /> : null}
+            {feed}
+          </>
+        )}
       </div>
 
       {gate ? <GateNotice gate={gate} onDismiss={() => setGate(null)} /> : null}
@@ -249,12 +344,52 @@ export function AssistantHome({
 }
 
 /**
- * `Assistant › <this thread>` — the template's header line.
+ * The greeting, and the only thing on this page that is about the student
+ * rather than about courses.
+ *
+ * It is a real `<h1>`, and it is the page's only one: `/` previously opened on
+ * a nav landmark and a breadcrumb, which is a document with no title. It also
+ * earns its place beyond politeness — it is the fastest available proof that
+ * the feed underneath is being computed for *this* account and not showing the
+ * catalog's greatest hits, which is the ambiguity `FeedHeader`'s Personalized
+ * chip exists to settle and can only settle in words.
+ */
+function Greeting({ name }: { name: string }) {
+  return (
+    <h1
+      className={cx(
+        "px-1 text-title-1-semibold -tracking-[0.01em] text-text-primary",
+        "sm:text-display-4-semibold",
+      )}
+    >
+      Welcome back, {name}
+    </h1>
+  );
+}
+
+/**
+ * `Assistant › <this thread>` — the template's header line, plus the way back.
  *
  * It names the thread after the question that started it, which is the only
  * name a conversation can honestly have before it has an answer in it.
+ *
+ * ── Why the exit is here as well as in the composer ────────────────────────
+ *
+ * The composer's `+` already clears the thread, and on a desktop screen so does
+ * the sidebar's Home. Neither reads as an exit on a phone: the `+` is an
+ * unlabelled icon that sits where "attach a file" lives in every other chat
+ * surface, and the sidebar is collapsed into a tab bar that is behind the
+ * keyboard the moment the student is typing. So the way out is also stated in
+ * words, at the top, next to the name of the thing it closes — the one place a
+ * reader is already looking to find out where they are.
  */
-function Breadcrumb({ messages }: { messages: readonly { role: string; parts: unknown[] }[] }) {
+function ThreadHeader({
+  messages,
+  onNewThread,
+}: {
+  messages: readonly { role: string; parts: unknown[] }[];
+  onNewThread: () => void;
+}) {
   const first = messages.find((message) => message.role === "user");
   const title = first
     ? firstLine(
@@ -266,14 +401,33 @@ function Breadcrumb({ messages }: { messages: readonly { role: string; parts: un
     : "New question";
 
   return (
-    <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 px-1">
-      <RiChat1Line aria-hidden className="size-4 shrink-0 text-foreground-icon-quaternary" />
-      <span className="shrink-0 text-body-medium text-text-secondary">Assistant</span>
-      <span aria-hidden className="shrink-0 text-foreground-icon-quaternary">
-        ›
-      </span>
-      <span className="min-w-0 flex-1 truncate text-body-medium text-text-secondary">{title}</span>
-    </nav>
+    <div className="flex min-w-0 items-center gap-3 px-1">
+      <nav aria-label="Breadcrumb" className="flex min-w-0 flex-1 items-center gap-1.5">
+        <RiChat1Line aria-hidden className="size-4 shrink-0 text-foreground-icon-quaternary" />
+        <span className="shrink-0 text-body-medium text-text-secondary">Assistant</span>
+        <span aria-hidden className="shrink-0 text-foreground-icon-quaternary">
+          ›
+        </span>
+        <span className="min-w-0 flex-1 truncate text-body-medium text-text-secondary">
+          {title}
+        </span>
+      </nav>
+
+      <button
+        type="button"
+        onClick={onNewThread}
+        className={cx(
+          "flex shrink-0 items-center gap-1.5 rounded-full",
+          "border border-border-table bg-background-primary-default px-2.5 py-1",
+          "text-caption-1-medium text-text-secondary",
+          "transition-colors hover:bg-background-primary-hover hover:text-text-primary",
+          "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
+        )}
+      >
+        <RiRestartLine aria-hidden className="size-3.5 shrink-0" />
+        New chat
+      </button>
+    </div>
   );
 }
 

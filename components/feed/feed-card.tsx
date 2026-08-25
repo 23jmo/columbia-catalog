@@ -1,63 +1,59 @@
 import Link from "next/link";
-import { RiArrowRightSLine } from "@remixicon/react";
+import { RiArrowRightUpLine } from "@remixicon/react";
 
-import { creditsLabel } from "@/components/course/format";
+import { BookmarkControls } from "@/components/bookmarks/bookmark-controls";
+import { EnrollmentBar } from "@/components/catalog/enrollment-bar";
+import { formatSectionMeetings } from "@/components/catalog/meetings";
+import { provenanceLabel } from "@/components/course/format";
+import { formatCourseId } from "@/lib/requirements/code";
 import { displayCourseTitle } from "@/lib/onboarding/course-title";
-import type { FeedCard as FeedCardData } from "@/lib/recommend/feed";
+import type { FeedCard as FeedCardData, FeedSectionView } from "@/lib/recommend/feed";
+import type { RecommendationCaveat, RecommendationReason } from "@/lib/recommend/types";
 import { cx } from "@/utils/cx";
 
-import { CaveatNotes, ReasonChips } from "./reason-chips";
-import { SectionLine } from "./section-line";
-
 /**
- * One recommendation, as a card.
+ * One section, as a card.
  *
- * ── One card per course, showing its best section ──────────────────────────
+ * ── A section, not a course ────────────────────────────────────────────────
  *
- * The card is about a SECTION — the instructor and the time slot are most of
- * the decision, and bookmarks are already section-level — but there is exactly
- * one card per course. COMS W1004 has twelve sections; twelve cards for one
- * course would push every other recommendation off the first screen and turn a
- * feed into a section listing. The siblings live in a disclosure underneath,
- * which is the honest compromise: nothing is hidden, but the scan is over
- * courses.
+ * The card used to be a course with its best section nested inside it and a
+ * "4 other sections" disclosure underneath. That is the shape of a catalog
+ * entry, and a catalog entry is not a thing anyone can do — you cannot register
+ * for COMS W4111, you register for section 001, call number 14501, Gravano,
+ * Tuesday and Thursday at 1:10. So the card is that, and the course page behind
+ * the title is where the other sections live. One decision per card.
  *
- * ── One box, and rules instead of boxes ────────────────────────────────────
+ * ── Five lines, and every one of them is a fact you would act on ───────────
  *
- * Every part of this card used to arrive in its own container: a tinted panel
- * around the chosen section, four coloured chips above it, a pill around the
- * seat count, a bordered box around the caveat. Four nested surfaces to say
- * four things about one class, and the reader had to work out the nesting
- * before they could read any of it.
+ * The previous version printed the reason chips, the section topic, the
+ * instructor, the meeting pattern, an estimate disclaimer, a provenance
+ * sentence, a disclosure summary and the registrar's full prerequisite advisory
+ * — up to two hundred words on a card whose job is to be glanced at. It was
+ * accurate and unreadable, which for a card in a scrolling rail is the same as
+ * being wrong.
  *
- * There is one border now — the card — and the internal structure is carried
- * by hairlines and by type. That is not just tidier: the card sits inside a
- * chat thread underneath a paragraph of the assistant's prose, and a stack of
- * heavily-chromed cards under a plain paragraph reads as advertising rather
- * than as the answer. It should read as the continuation of the sentence above
- * it, with exactly one thing to press.
+ * What survived: why it is here, what it is, who teaches it, when it meets, and
+ * how full it is. Everything cut is one tap away on the course page behind the
+ * title.
  *
- * ── Why the disclosure is a `<details>` ────────────────────────────────────
+ * ── The two actions are icons in the corner ────────────────────────────────
  *
- * It is the whole interaction, it works before hydration, it keeps this a
- * server component, and it means a feed of twelve cards ships no JavaScript of
- * its own. A `useState` toggle would have cost a client boundary per card for a
- * behaviour the platform already has.
+ * Save, and open in Vergil. Both were full-width controls along the bottom,
+ * which gave "leave this app" more weight than the class it was about. The
+ * card's subject is the section; the actions are what you do after you have
+ * read it, and they are one tap either way whether or not they carry a word.
  */
 
-export function FeedCardView({
-  card,
-  className,
-}: {
-  card: FeedCardData;
-  className?: string;
-}) {
-  // `displayCourseTitle`, not `prettyTitle`: the latter renders "CALCULUS III"
-  // as "Calculus Iii" and "INTRODUCTION TO AI" as "Introduction to Ai". The
-  // repairs and their reasoning live in `lib/onboarding/course-title.ts`.
+export function FeedCardView({ card, className }: { card: FeedCardData; className?: string }) {
+  const section = card.best;
+
+  /*
+   * `displayCourseTitle`, not `prettyTitle`: the latter renders "CALCULUS III"
+   * as "Calculus Iii" and "INTRODUCTION TO AI" as "Introduction to Ai".
+   */
   const title = displayCourseTitle(card.title);
-  const credits = creditsLabel(card.points, card.points);
-  const otherCount = card.others.length;
+  const reason = card.reasons.map(reasonLine).find(Boolean) ?? null;
+  const sectionHref = `/course/${card.courseId}?section=${encodeURIComponent(section.sectionCode)}`;
 
   return (
     <article
@@ -67,71 +63,276 @@ export function FeedCardView({
         className,
       )}
     >
-      <header className="min-w-0">
+      <header className="flex min-w-0 items-start gap-2">
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          {reason ? (
+            <p className="truncate text-caption-1-medium text-accent-600">{reason}</p>
+          ) : null}
+
+          {/*
+            The title links to the course page, not to Vergil. Vergil is where
+            you register; this is where you decide, and the other sections, the
+            full prerequisite text and the reviews are all there.
+          */}
+          <h3 className="text-title-3-semibold -tracking-[0.01em] text-text-primary">
+            <Link
+              href={sectionHref}
+              className={cx(
+                "line-clamp-2 rounded-sm outline-none transition-colors duration-100 ease",
+                "hover:text-accent-600 focus-visible:ring-2 focus-visible:ring-border-focus-ring",
+              )}
+            >
+              {title}
+            </Link>
+          </h3>
+
+          {/*
+            Section before credits, and no credits at all.
+
+            This line truncates on a 22rem card, and what it was dropping was
+            the section number — on a card whose whole subject is one section.
+            Credits went instead: they are on the course page, they are the same
+            for every section of a course, and nobody chooses between two
+            classes on 3 versus 2.5 points. The term stays because the feed
+            spans two of them.
+          */}
+          <p className="truncate text-caption-1-regular tabular-nums text-text-tertiary">
+            {card.code} · Sec {section.sectionCode} · {section.termLabel}
+          </p>
+        </div>
 
         {/*
-          The title is the link, and it goes to the course page rather than to
-          Vergil. Vergil is where you register; this is where you decide, and
-          conflating the two would send a student off-site before they had read
-          anything. It is set one weight above the assistant's prose rather
-          than one size above it — the card is part of the answer, not a
-          headline interrupting it.
+          Both actions in the corner, as icons.
+
+          The Vergil link used to be a full-width button across the bottom of
+          the card, which made "leave this app" the most prominent thing on a
+          card about a class. It is still the legitimacy proof — one click to
+          the registrar's own page for this exact call number verifies
+          everything above it — but it is a way out, not the subject, and a way
+          out belongs in the corner. The accessible name carries the whole
+          sentence, so nothing is lost to anyone reading with a screen reader.
+
+          It opens in a new tab, where their UNI login and their own click do
+          the work. We never register, drop, or waitlist anyone.
         */}
-        <h3 className="text-headline-semibold -tracking-[0.01em] text-text-primary">
-          <Link
-            href={`/course/${card.courseId}`}
-            className="rounded-sm outline-none transition-colors duration-100 ease hover:text-accent-600 focus-visible:ring-2 focus-visible:ring-border-focus-ring"
-          >
-            {title}
-          </Link>
-        </h3>
-
-        <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption-2-regular text-text-tertiary">
-          <span className="tabular-nums tracking-[0.04em]">{card.code}</span>
-          {credits ? <span>· {credits}</span> : null}
-        </p>
-
-        <ReasonChips reasons={card.reasons} className="mt-1" />
-      </header>
-
-      <div className="border-t border-border-table pt-3">
-        <SectionLine section={card.best} courseId={card.courseId} courseCode={card.code} />
-      </div>
-
-      {otherCount > 0 ? (
-        <details className="group border-t border-border-table pt-3">
-          <summary
+        <div className="flex shrink-0 items-center gap-0.5">
+          <BookmarkControls
+            sectionId={section.sectionId}
+            sectionCode={section.sectionCode}
+            courseLabel={card.code}
+            size="xs"
+          />
+          <a
+            href={section.vergilUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Open in Vergil"
+            aria-label={`Open ${card.code} section ${section.sectionCode}, call number ${section.callNumber}, in Vergil`}
             className={cx(
-              "flex cursor-pointer list-none items-center gap-1 rounded-md",
-              "text-caption-1-regular text-text-tertiary",
-              "outline-none hover:text-text-primary focus-visible:ring-2 focus-visible:ring-border-focus-ring",
+              "flex size-7 shrink-0 items-center justify-center rounded-lg",
+              "text-foreground-icon-tertiary transition-colors",
+              "hover:bg-background-primary-hover hover:text-text-primary",
+              "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
             )}
           >
-            <RiArrowRightSLine
-              className="size-3.5 shrink-0 transition-transform duration-150 ease group-open:rotate-90 motion-reduce:transition-none"
-              aria-hidden
-            />
-            {otherCount} other {otherCount === 1 ? "section" : "sections"}
-          </summary>
+            <RiArrowRightUpLine aria-hidden className="size-4" />
+          </a>
+        </div>
+      </header>
 
-          <ul className="flex flex-col">
-            {card.others.map((section) => (
-              <li
-                key={section.sectionId}
-                className="border-t border-border-table py-3 first:border-t-0 last:pb-0"
-              >
-                <SectionLine
-                  section={section}
-                  courseId={card.courseId}
-                  courseCode={card.code}
-                />
-              </li>
-            ))}
-          </ul>
-        </details>
-      ) : null}
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <p className="truncate text-body-2-medium text-text-secondary">
+          {instructorLine(section) ?? (
+            <span className="text-text-tertiary">Instructor not yet announced</span>
+          )}
+        </p>
+        <TimeLine section={section} />
+      </div>
 
-      <CaveatNotes caveats={card.caveats} className="border-t border-border-table pt-3" />
+      {/*
+        Spec §3 asks that a seat number never render without the directory's own
+        stamp, and the printed line under the meter was where it lived. The
+        owner cut that line (2026-08-25) — it was a third grey sentence on a card
+        whose job is to be glanced at — so the timestamp moved onto the meter as
+        its title instead. It is still attached to the number and still reachable
+        on hover and on the course page; it is no longer competing with the class
+        for the reader's attention.
+      */}
+      <Footnote section={section} caveats={card.caveats} />
+
+      {/*
+        `mt-auto` is what makes a rail of cards readable rather than a row of
+        boxes. Cards stretch to the tallest in the run, so without it each
+        meter sits wherever its own card's text happened to end and the reader
+        has to find the bar again on every card. Pinned to the bottom they land
+        on one line, and "which of these has room" becomes a single glance
+        across instead of five separate readings.
+      */}
+      <div title={seatProvenanceTitle(section.sourceAsOf)} className="mt-auto min-w-0">
+        <EnrollmentBar
+          status={section.status}
+          enrollmentCount={section.enrollmentCount}
+          enrollmentCap={section.enrollmentCap}
+          waitlistCount={section.waitlistCount}
+          className="min-w-0"
+        />
+      </div>
     </article>
   );
+}
+
+/* ==========================================================================
+ * Lines
+ * ========================================================================== */
+
+/** Real names only — the registrar writes "TBA" into this field. */
+function instructorLine(section: FeedSectionView): string | null {
+  const names = section.instructors.filter(
+    (name) => name.trim().length > 0 && !/^(tba|tbd)$/i.test(name.trim()),
+  );
+  return names.length > 0 ? names.join(", ") : null;
+}
+
+/**
+ * When it meets — in three states, never two.
+ *
+ * 44.8% of sections have no published meeting pattern, and printing a
+ * historical one without saying so is the single most damaging thing this
+ * surface could do: a student would build a week around last year's schedule.
+ * The estimate therefore names the term it came from, inline and in the warning
+ * hue, and "not published" is stated outright rather than left as a blank row.
+ */
+function TimeLine({ section }: { section: FeedSectionView }) {
+  if (section.timeKind === "tba") {
+    return (
+      <p className="truncate text-body-2-regular text-text-tertiary">
+        Meeting time not published
+      </p>
+    );
+  }
+
+  const meeting = formatSectionMeetings(section);
+  if (!meeting) {
+    return (
+      <p className="truncate text-body-2-regular text-text-tertiary">
+        Meeting time not published
+      </p>
+    );
+  }
+
+  if (section.timeKind === "estimated") {
+    return (
+      <p className="truncate text-body-2-regular tabular-nums text-status-yellow-text">
+        {meeting} · estimated, not confirmed
+      </p>
+    );
+  }
+
+  return (
+    <p className="truncate text-body-2-regular tabular-nums text-text-tertiary">{meeting}</p>
+  );
+}
+
+/**
+ * The one disclosure that cannot be dropped, in a single quiet line.
+ *
+ * We could not parse the prerequisite sentence for about 43% of the catalog,
+ * and a card that stays silent about that is presenting an uncertainty as a
+ * fact. It is three words here and the registrar's full wording on the course
+ * page, which is where a student who is actually about to register is going
+ * anyway.
+ *
+ * A plan clash joins it when there is one: same kind of statement — something
+ * true about this section that the numbers above do not show — and short enough
+ * to belong on the same line rather than in a box of its own.
+ */
+function Footnote({
+  section,
+  caveats,
+}: {
+  section: FeedSectionView;
+  caveats: readonly RecommendationCaveat[];
+}) {
+  const clashes = section.conflictsWithPlan;
+  const unverified = caveats.some((caveat) => caveat.kind === "prereq_unknown");
+  if (!clashes && !unverified) return null;
+
+  return (
+    <p className="truncate text-caption-1-regular text-text-tertiary">
+      {clashes ? <span className="text-status-rose-text">Clashes with your plan</span> : null}
+      {clashes && unverified ? " · " : null}
+      {unverified ? "Prerequisites unverified" : null}
+    </p>
+  );
+}
+
+/**
+ * The directory's own reading time, as a hover title on the meter.
+ *
+ * A seat count is a reading, not a live number, and detaching it from when it
+ * was taken is how "23 seats left" becomes something a student believes on
+ * registration morning. The line that said so in print is gone by owner
+ * decision; this keeps the two together for anyone who goes looking, and the
+ * course page still states it outright.
+ */
+function seatProvenanceTitle(sourceAsOf: string | null): string | undefined {
+  const label = provenanceLabel(sourceAsOf);
+  return label ? `Seat counts read from the directory ${label}` : undefined;
+}
+
+/* ==========================================================================
+ * The reason
+ * ========================================================================== */
+
+/**
+ * Why this card is here, in one clause.
+ *
+ * ── One reason, not all of them ────────────────────────────────────────────
+ *
+ * The engine can return several, and the card shows the first — they arrive
+ * ranked, so the first is the strongest. Printing three chips made the reasons
+ * the loudest thing on a card whose subject is a class, and a student who reads
+ * "clears the Global Core" has already got what they came for.
+ *
+ * ── The kinds stay apart, and the verb is what keeps them apart ────────────
+ *
+ * "It clears the Global Core" and "you might like it" are different claims with
+ * different consequences, and `RecommendationReason` keeps them distinct on
+ * purpose. Collapsing them into one relevance score — a number, a star rating,
+ * one undifferentiated chip — is the exact move that turns a recommender into
+ * decoration: the student cannot tell whether the app is talking about their
+ * degree or their taste, so they stop trusting it about both. The distinction
+ * survives here as the verb, which costs no ink at all.
+ *
+ * Codes are named rather than counted wherever one will fit, because "because
+ * the model says so" is not a reason anyone can argue with — and being able to
+ * argue with it is what makes it useful. If the named course is wrong, the
+ * student knows to go fix their record.
+ */
+function reasonLine(reason: RecommendationReason): string | null {
+  switch (reason.kind) {
+    case "required":
+      return `Clears ${reason.groupLabel}`;
+    case "interesting_and_counts":
+      return `Your kind of thing — clears ${reason.groupLabel}`;
+    case "because_you_took":
+      return `Like ${andMore(reason.similarTo)}`;
+    /*
+     * `unlocks` is computed and deliberately not printed (owner decision,
+     * 2026-08-25). "Opens up PSYC UN1450 +2" asks the reader to hold three
+     * course codes they have never seen in order to evaluate a fourth, which is
+     * work, and on a cold feed it was the reason on almost every card — so it
+     * read as boilerplate rather than as a reason. It still earns the course its
+     * place in the ranking; it just does not spend a line saying so.
+     */
+    case "unlocks":
+      return null;
+  }
+}
+
+/** `"COMS W3134"`, or `"COMS W3134 +2"`. Printed form, never the stored id. */
+function andMore(courseIds: readonly string[]): string {
+  const [first, ...rest] = courseIds;
+  if (!first) return "";
+  return rest.length > 0 ? `${formatCourseId(first)} +${rest.length}` : formatCourseId(first);
 }
