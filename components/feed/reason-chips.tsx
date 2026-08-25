@@ -1,10 +1,4 @@
-import {
-  RiCheckboxCircleLine,
-  RiCompass3Line,
-  RiErrorWarningLine,
-  RiKey2Line,
-  RiSparkling2Line,
-} from "@remixicon/react";
+import { RiErrorWarningLine, RiSparkling2Line } from "@remixicon/react";
 
 import { Chip } from "@/components/base/badges/chip";
 import { formatCourseId } from "@/lib/requirements/code";
@@ -17,16 +11,25 @@ import { cx } from "@/utils/cx";
  * ── The three kinds are rendered as three kinds ────────────────────────────
  *
  * "It clears the Global Core", "you might like it", and "it does both" are
- * different claims with different consequences, and the engine keeps them
- * apart deliberately (`RecommendationReason`). Collapsing them into one
- * relevance score — a number, a star rating, a single grey chip — is the exact
+ * different claims with different consequences, and the engine keeps them apart
+ * deliberately (`RecommendationReason`). Collapsing them into one relevance
+ * score — a number, a star rating, one undifferentiated chip — is the exact
  * move that turns a recommender into decoration: the student cannot tell
  * whether the app is telling them something about their degree or something
  * about their taste, so they stop trusting both.
  *
- * So each kind gets its own colour and its own verb, and `interesting_and_counts`
- * is visibly the strongest card rather than a slightly different shade of the
- * other two.
+ * ── …but the distinction is the verb, not the hue ─────────────────────────
+ *
+ * These used to be four saturated chips — lime, blue, purple, cyan — one per
+ * kind. Four hues on a card that also carries a seat meter, a caveat and a
+ * button made the reasons the loudest thing on it, which is backwards: the
+ * reason is why you are reading the card, not what you do with it.
+ *
+ * `Chip color="soft"` is the same chip the search results use for requirement
+ * labels, so a student who has seen one has seen the other. `gray` is the same
+ * chip one step darker, spent on `interesting_and_counts` — the strongest
+ * thing this product can say — along with the one glyph on the card. Two tints
+ * of one neutral still read as two ranks; they just do not shout.
  *
  * ── Caveats are not reasons ────────────────────────────────────────────────
  *
@@ -58,7 +61,7 @@ export function ReasonChips({
   if (reasons.length === 0) return null;
 
   return (
-    <ul className={cx("flex flex-wrap items-center gap-1.5", className)}>
+    <ul className={cx("flex min-w-0 flex-wrap items-center gap-1", className)}>
       {reasons.map((reason, index) => (
         <li key={`${reason.kind}-${index}`} className="flex">
           <ReasonChip reason={reason} />
@@ -67,6 +70,15 @@ export function ReasonChips({
     </ul>
   );
 }
+
+/**
+ * A reason is a sentence, not a status word. `Chip`'s base is
+ * `whitespace-nowrap`, which is right for "Open" and "+3.4%" and wrong for
+ * "Your kind of thing — and it clears CS Track Elective": on a 390px screen
+ * that chip is 330px of unbreakable text and it pushes the whole page into
+ * horizontal scroll.
+ */
+const REASON_CHIP = "max-w-full whitespace-normal text-left";
 
 function ReasonChip({ reason }: { reason: RecommendationReason }) {
   switch (reason.kind) {
@@ -77,16 +89,15 @@ function ReasonChip({ reason }: { reason: RecommendationReason }) {
      */
     case "interesting_and_counts":
       return (
-        <Chip variant="caption" color="lime" className="gap-1">
-          <RiSparkling2Line className="size-3 shrink-0" aria-hidden />
+        <Chip variant="caption" color="gray" className={REASON_CHIP + " gap-1"}>
+          <RiSparkling2Line className="size-3 shrink-0 text-foreground-icon-tertiary" aria-hidden />
           Your kind of thing — and it clears {reason.groupLabel}
         </Chip>
       );
 
     case "required":
       return (
-        <Chip variant="caption" color="blue" className="gap-1">
-          <RiCheckboxCircleLine className="size-3 shrink-0" aria-hidden />
+        <Chip variant="caption" color="soft" className={REASON_CHIP}>
           Clears {reason.groupLabel}
         </Chip>
       );
@@ -98,16 +109,14 @@ function ReasonChip({ reason }: { reason: RecommendationReason }) {
      */
     case "because_you_took":
       return (
-        <Chip variant="caption" color="purple" className="gap-1">
-          <RiCompass3Line className="size-3 shrink-0" aria-hidden />
+        <Chip variant="caption" color="soft" className={REASON_CHIP}>
           Because you took {joinCodes(printed(reason.similarTo))}
         </Chip>
       );
 
     case "unlocks":
       return (
-        <Chip variant="caption" color="cyan" className="gap-1">
-          <RiKey2Line className="size-3 shrink-0" aria-hidden />
+        <Chip variant="caption" color="soft" className={REASON_CHIP}>
           Opens up {joinCodes(printed(reason.courseIds))}
         </Chip>
       );
@@ -133,12 +142,17 @@ export function CaveatNotes({
   return (
     <div className={cx("flex flex-col gap-1.5", className)}>
       {prereqUnknown ? (
-        <div className="flex items-start gap-2 rounded-lg border border-border-table bg-background-secondary-default px-2.5 py-2">
+        /*
+         * No box. It was a bordered, tinted panel — a fourth container on a
+         * card that already had three — and the warning glyph carries the
+         * tone on its own now that nothing else on the card is coloured.
+         */
+        <p className="flex items-start gap-1.5 text-caption-2-regular text-text-secondary">
           <RiErrorWarningLine
             className="mt-px size-3.5 shrink-0 text-status-yellow-text"
             aria-hidden
           />
-          <p className="min-w-0 text-caption-1-regular text-text-secondary">
+          <span className="min-w-0">
             <span className="text-text-primary">We could not verify the prerequisites.</span>{" "}
             {prereqUnknown.advisories.length > 0 ? (
               <>
@@ -151,13 +165,13 @@ export function CaveatNotes({
             ) : (
               <>Read the course page before you register.</>
             )}
-          </p>
-        </div>
+          </span>
+        </p>
       ) : null}
 
       {noVector ? (
         /*
-         * Quiet, one line, no box. This is a statement about OUR data — the
+         * Quiet, one line, no glyph. This is a statement about OUR data — the
          * course's description was too thin to embed — not about the course,
          * and dressing it up as a warning would read as a mark against a
          * perfectly good class from a small department.
