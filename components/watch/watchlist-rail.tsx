@@ -229,10 +229,10 @@ function RailShell({
 /**
  * Recent movement across watched sections.
  *
- * Each row is one change: the table is change-only, so there is no such thing
- * here as a row that says "still 42". Direction is computed against the row
- * before it for the same section, and the first row we hold for a section gets
- * no arrow rather than a guessed one.
+ * Each row is one change: heartbeats (same count as the previous look) are
+ * stripped before they get here. Direction is computed against the row before
+ * it for the same section, and the first row we hold for a section gets no
+ * arrow rather than a guessed one.
  */
 function MovementFeed({
   rows,

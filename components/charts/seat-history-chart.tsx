@@ -11,9 +11,9 @@
  *
  * Two decisions carry all the correctness:
  *
- *   1. Interpolation is `stepAfter`. Snapshots are change-only, so a straight
- *      segment between two observations would draw a slow ramp where the data
- *      says "flat, then a cliff". See `./series` for the expansion.
+ *   1. Interpolation is `stepAfter`. A straight segment between two looks
+ *      would draw a slow ramp where the data says "flat, then a cliff".
+ *      See `./series` for the expansion.
  *   2. Ghost lines are emitted before live lines (SVG paints in order) and
  *      slid onto the live term's registration clock, with the slide disclosed.
  *

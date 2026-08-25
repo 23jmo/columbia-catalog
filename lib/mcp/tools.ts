@@ -310,9 +310,9 @@ export const TOOLS: ToolDefinition[] = [
     name: "get_seat_history",
     title: "Get seat history",
     description:
-      "Every recorded change in a section's enrollment, oldest first. The history is " +
-      "change-only: consecutive entries are consecutive DIFFERENT readings, and the gap " +
-      "between two entries means the count held steady, not that we stopped looking.",
+      "Every recorded look at a section's enrollment, oldest first. Unchanged counts " +
+      "are still rows — a gap would mean we stopped looking, not that the count held. " +
+      "Interpolate step-after so equal points stay flat and jumps stay jumps.",
     scopes: [],
     inputSchema: {
       sectionId: z.string().describe('Section id, e.g. "20263COMS4118W001".'),

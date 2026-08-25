@@ -10,11 +10,11 @@
  * an ingest run that writes 160 sections would hold that transaction open
  * across 160 network calls to a third party.
  *
- * So the transition is *detected* in SQL (`sections_opened_since`, which reads
- * the change-only history with LAG and therefore sees true consecutive
- * readings) and *delivered* out of band by this sweep. The cost is latency
- * bounded by the cron interval; the benefit is that email never sits in the
- * write path of the catalog.
+ * So the transition is *detected* in SQL (`sections_opened_since`, which uses
+ * LAG and `has_open_seat` so heartbeat rows with the same open/closed state
+ * are not treated as openings) and *delivered* out of band by this sweep. The
+ * cost is latency bounded by the cron interval; the benefit is that email
+ * never sits in the write path of the catalog.
  *
  * ── The ordering that matters ──────────────────────────────────────────────
  *

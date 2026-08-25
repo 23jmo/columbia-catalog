@@ -25,10 +25,9 @@
  * would mean two implementations of the rule that decides whether the catalog
  * is allowed to shrink.
  *
- * No enrollment-snapshot write either. `trg_sections_capture_snapshot` mirrors
- * every seat reading into `enrollment_snapshots` with change-only semantics
- * (spec §11) as part of the same transaction — writing them from here would
- * double every row.
+ * No enrollment-snapshot write either. `trg_sections_capture_snapshot` appends
+ * every seat look into `enrollment_snapshots` as part of the same transaction
+ * — writing them from here would double every row.
  */
 
 import type { CatalogWriter, IngestPayload } from "@/lib/crawler/contracts";

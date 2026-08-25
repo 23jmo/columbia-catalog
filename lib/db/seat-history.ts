@@ -1,23 +1,19 @@
 /**
  * Reads over `enrollment_snapshots`.
  *
- * The table is change-only: a row exists only where a reading differed from
- * the one before it for that section. Two consequences shape everything here.
+ * The table is append-only and records every look: a poll that sees the same
+ * count as last time still writes a row. Two consequences shape everything here.
  *
- * ── Consecutive rows really are consecutive readings ───────────────────────
+ * ── Consecutive rows are consecutive looks, not consecutive changes ────────
  *
- * There is no gap-filling to do and no de-duplication to perform. Every row is
- * a moment something moved. That is why the feed below can be a plain
- * `order by observed_at desc limit n` and still be a true "what changed
- * recently" list rather than a sample of a polling log.
+ * A flat stretch of equal counts is proof we kept checking. Charts still draw
+ * with step-after interpolation (see components/charts/seat-history-chart.tsx)
+ * so equal points stay flat and a real jump stays a jump, never a slope.
  *
- * ── A flat line is data, not missing data ──────────────────────────────────
+ * ── The Home movement feed is the exception ────────────────────────────────
  *
- * The absence of rows between two points means the count held steady, not that
- * we stopped looking. The chart draws with step-after interpolation for
- * exactly this reason (see components/charts/seat-history-chart.tsx): sloping
- * between two observations would claim seats drained at a steady rate they
- * never drained at.
+ * That feed wants changes, not heartbeats. `keepChangedReadings` drops rows
+ * whose seat fields match the previous look for that section.
  *
  * Both functions here read a world-readable table, so they work signed out.
  * Which sections a *particular* person cares about is the caller's business
@@ -27,8 +23,16 @@
 import { createAnonServerClient, getBrowserClient, isConfigured } from "./client";
 import type { EnrollmentStatusCode } from "@/lib/types";
 
-/** Points per section on a chart read. Two terms of change history for a busy section. */
+/** Points per section on a chart read. Two terms of hourly looks, roughly. */
 const MAX_HISTORY_POINTS = 500;
+
+/**
+ * How many newest rows to pull before filtering heartbeats out of the
+ * movement feed. The table now stores every look, so `limit` raw rows would
+ * often be a run of unchanged polls.
+ */
+const MOVEMENT_OVERFETCH = 50;
+const MOVEMENT_OVERFETCH_CAP = 2000;
 
 export interface SeatSnapshot {
   sectionId: string;
@@ -44,8 +48,48 @@ function readClient() {
   return typeof window === "undefined" ? createAnonServerClient() : getBrowserClient();
 }
 
+function sameReading(a: SeatSnapshot, b: SeatSnapshot): boolean {
+  return (
+    a.enrollmentCount === b.enrollmentCount &&
+    a.enrollmentCap === b.enrollmentCap &&
+    a.waitlistCount === b.waitlistCount &&
+    a.status === b.status
+  );
+}
+
 /**
- * Full change history for one section, oldest first — the order a chart wants
+ * Drop heartbeat rows. `rows` is newest-first, mixed sections.
+ *
+ * Walks each section oldest-first and keeps a row when it differs from the
+ * previous look. The oldest row in the fetched window is kept — we cannot
+ * see the look before it, so a heartbeat at the window edge can leak through.
+ * Over-fetching on the query keeps that edge far from "recent".
+ */
+export function keepChangedReadings(rows: SeatSnapshot[], limit: number): SeatSnapshot[] {
+  const bySection = new Map<string, SeatSnapshot[]>();
+  for (const row of rows) {
+    const bucket = bySection.get(row.sectionId);
+    if (bucket) bucket.push(row);
+    else bySection.set(row.sectionId, [row]);
+  }
+
+  const changed: SeatSnapshot[] = [];
+  for (const bucket of bySection.values()) {
+    // Query returns newest-first; oldest-first is what "differs from previous" needs.
+    const oldestFirst = bucket.slice().reverse();
+    let previous: SeatSnapshot | null = null;
+    for (const row of oldestFirst) {
+      if (!previous || !sameReading(previous, row)) changed.push(row);
+      previous = row;
+    }
+  }
+
+  changed.sort((a, b) => (a.observedAt < b.observedAt ? 1 : a.observedAt > b.observedAt ? -1 : 0));
+  return changed.slice(0, limit);
+}
+
+/**
+ * Full look history for one section, oldest first — the order a chart wants
  * to draw in.
  */
 export async function getSeatHistory(sectionId: string): Promise<SeatSnapshot[]> {
@@ -64,18 +108,15 @@ export async function getSeatHistory(sectionId: string): Promise<SeatSnapshot[]>
 }
 
 /**
- * Change history for several sections at once, oldest first.
+ * Look history for several sections at once, oldest first.
  *
  * The chart draws one line per section of a course, and a course can have
  * twenty. Calling `getSeatHistory` in a loop would be twenty round trips for
  * one page render, so this is a single `in` query grouped afterwards.
  *
- * The cap is per section and per read: `MAX_HISTORY_POINTS * sectionIds.length`
- * would let one very busy course pull tens of thousands of rows, so the limit
- * is applied per section after grouping. Rows arrive newest-first for that
- * reason — the truncation has to keep the *recent* end of a long history, and
- * a chart that silently dropped the last week to keep the first would be worse
- * than one that showed a shorter window.
+ * Rows arrive newest-first so truncation keeps the recent end of a long
+ * history. A chart that silently dropped last week to keep the first look
+ * would be worse than one that showed a shorter window.
  */
 export async function getSeatHistoryForSections(
   sectionIds: string[],
@@ -113,9 +154,9 @@ export async function getSeatHistoryForSections(
  * The most recent movements across a set of sections, newest first — the Home
  * feed in spec §5.
  *
+ * Heartbeats are stripped so a quiet hour of polls does not look like news.
  * Deliberately not filtered to "seats opened". A section going from 3 open to
- * 1 open is the movement that tells someone to stop deliberating, and hiding
- * it would leave the feed showing only good news.
+ * 1 open is the movement that tells someone to stop deliberating.
  */
 export async function getRecentSeatMovement(
   sectionIds: string[],
@@ -125,17 +166,19 @@ export async function getRecentSeatMovement(
   const db = readClient();
   if (!db) return [];
 
+  const overfetch = Math.min(Math.max(limit * MOVEMENT_OVERFETCH, limit), MOVEMENT_OVERFETCH_CAP);
+
   const { data, error } = await db
     .from("enrollment_snapshots")
     .select("section_id, observed_at, enrollment_count, enrollment_cap, waitlist_count, status")
     .in("section_id", sectionIds)
     .order("observed_at", { ascending: false })
-    .limit(limit);
+    .limit(overfetch);
 
   // Never throws: the feed is the least important thing on Home, and it must
   // not be able to take the week grid down with it.
   if (error) return [];
-  return (data ?? []).map(toSnapshot);
+  return keepChangedReadings((data ?? []).map(toSnapshot), limit);
 }
 
 function toSnapshot(row: {

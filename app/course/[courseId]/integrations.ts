@@ -49,10 +49,10 @@ export const courseDetailIntegrations: CourseDetailIntegrations = {
    */
 
   /*
-   * The charts lane's real Recharts implementation. It draws change-only
-   * snapshots with step-after interpolation, so the line holds flat between
-   * observations instead of sloping between them and implying seats drained
-   * at a steady rate they never drained at.
+   * The charts lane's real Recharts implementation. It draws looks with
+   * step-after interpolation, so the line holds flat between observations
+   * instead of sloping between them and implying seats drained at a steady
+   * rate they never drained at.
    */
   seatHistoryChart: SeatHistoryChart,
 

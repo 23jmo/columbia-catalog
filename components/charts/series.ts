@@ -1,15 +1,14 @@
 /**
  * Seat-history chart math.
  *
- * Deliberately JSX-free so the interesting part — how a change-only snapshot
- * stream becomes a truthful line — is unit-testable without a DOM.
+ * Deliberately JSX-free so the interesting part — how a snapshot stream
+ * becomes a truthful line — is unit-testable without a DOM.
  *
- * THE CENTRAL FACT (spec §10, §13): the ingest writes an `EnrollmentSnapshot`
- * only when a number actually MOVED. A series of `[09:00 → 12, 14:00 → 30]`
- * does not mean enrollment crept from 12 to 30 across five hours; it means it
- * sat at 12 the whole time and then jumped. A naive line chart draws the crept
- * version and lies about exactly the thing the chart exists to show ("it filled
- * in 90 seconds during senior registration").
+ * THE CENTRAL FACT: each point is a look, not a slope. `[09:00 → 12, 10:00 →
+ * 12, 14:00 → 30]` means we saw 12 twice and then 30, not that enrollment
+ * crept. A naive line chart draws the crept version and lies about exactly the
+ * thing the chart exists to show ("it filled in 90 seconds during senior
+ * registration").
  *
  * So every value here is carried FORWARD from the last observation, and the
  * chart draws with step-after interpolation so the pixels agree with the data.

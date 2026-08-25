@@ -284,8 +284,8 @@ export type IngestPayload =
   | { kind: "academic_calendar"; calendar: ParsedAcademicCalendar };
 
 /**
- * Implemented in `lib/db/**`. Writes are expected to be transactional and to
- * apply change-only semantics to `enrollment_snapshots` (spec §11).
+ * Implemented in `lib/db/**`. Writes are expected to be transactional.
+ * Seat looks are appended to `enrollment_snapshots` by a sections trigger.
  */
 export interface CatalogWriter {
   applyIngest(payload: IngestPayload, observedAt: string): Promise<number>;

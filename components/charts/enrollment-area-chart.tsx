@@ -13,11 +13,11 @@
  *
  * ── What is borrowed from the full chart, because it is correctness ────────
  *
- * Interpolation stays `stepAfter`. `enrollment_snapshots` is change-only: a
- * row exists only where a reading differed from the one before it. A smooth
- * curve between two observations would draw seats draining at a steady rate
- * they never drained at — it would invent the shape of the fill. The steps are
- * the honest silhouette, and the area under them is still an area.
+ * Interpolation stays `stepAfter`. Each row is a look, including unchanged
+ * counts. A smooth curve between two observations would draw seats draining
+ * at a steady rate they never drained at — it would invent the shape of the
+ * fill. The steps are the honest silhouette, and the area under them is still
+ * an area.
  *
  * ── Colour carries the current state, not a fixed brand green ──────────────
  *
@@ -108,17 +108,15 @@ export function EnrollmentAreaChart({
      * The current level has to be drawn as a segment, not as a corner.
      *
      * `stepAfter` holds each value until the next observation and then steps.
-     * That is the right shape for change-only data, but it means the FINAL
-     * value steps up exactly at the last x — zero width — so a section that
-     * went 66 → 86 draws as a flat line at 66 with a hairline at the right
-     * edge. The reader's eye takes the silhouette as the story, and the story
-     * it tells is the previous value.
+     * That is the right shape, but it means the FINAL value steps up exactly
+     * at the last x — zero width — so a section that went 66 → 86 draws as a
+     * flat line at 66 with a hairline at the right edge. The reader's eye
+     * takes the silhouette as the story, and the story it tells is the
+     * previous value.
      *
-     * Extending past the last observation is not invention: in a change-only
-     * table the absence of later rows means the count did not move. So the line
-     * holds at its last known level for a short tail, which is exactly what the
-     * data says, and the current number now has a shape you can see. How stale
-     * the whole reading is stays the provenance stamp's job, under the chip.
+     * Extending past the last look is a short tail so the current number has
+     * a shape you can see. How stale the whole reading is stays the provenance
+     * stamp's job, under the chip.
      */
     const drawn = [...sorted, { t: last.t + span * 0.12, enrolled: last.enrolled }];
 

@@ -112,7 +112,7 @@ export interface RatingsPort {
 // ---------------------------------------------------------------------------
 
 /**
- * One change in the seat history.
+ * One look in the seat history.
  *
  * Declared here rather than reusing `EnrollmentSnapshot` from lib/types
  * because that type has a non-null `enrollmentCap`, and the directory really
