@@ -186,26 +186,38 @@ export function SearchScreen({ initialFilters, termCode }: SearchScreenProps) {
       scrollable. See the note there.
     */
     <PageContent>
-      <PageHeader title="Search" hideTitleOnMobile>
-        <div className="flex items-start gap-2">
-          <SearchBar
-            query={filters.q ?? ""}
-            onQueryChange={onQueryChange}
-            resultSummary={resultSummary}
-            elapsedMs={engine ? result.elapsedMs : undefined}
-            appearance="hero"
-            className="min-w-0 flex-1"
-          />
-          <FilterPopover
-            filters={filters}
-            onChange={onFiltersChange}
-            facets={facets}
-            hasNoReviewData
-            meetingFiltersAvailable={meetingFiltersAvailable}
-            activeFilterCount={activeFilterCount}
-          />
-        </div>
-      </PageHeader>
+      {/*
+        Sticky search. The shell scrolls its own column, not the window, so
+        `position: sticky; top: 0` pins to that column — right under the
+        mobile hamburger bar. Solid fill so result rows cannot show through
+        while they pass underneath.
+
+        `sm:-mx-3` / matching width + padding cancels PageContent's gutter the
+        same way ResultsList does, so a scrolling row cannot peek in the 12px
+        beside the field.
+      */}
+      <div className="sticky top-0 z-20 bg-background-full pb-3 pt-1 sm:-mx-3 sm:w-[calc(100%+1.5rem)] sm:px-3">
+        <PageHeader title="Search" hideTitleOnMobile>
+          <div className="flex items-start gap-2">
+            <SearchBar
+              query={filters.q ?? ""}
+              onQueryChange={onQueryChange}
+              resultSummary={resultSummary}
+              elapsedMs={engine ? result.elapsedMs : undefined}
+              appearance="hero"
+              className="min-w-0 flex-1"
+            />
+            <FilterPopover
+              filters={filters}
+              onChange={onFiltersChange}
+              facets={facets}
+              hasNoReviewData
+              meetingFiltersAvailable={meetingFiltersAvailable}
+              activeFilterCount={activeFilterCount}
+            />
+          </div>
+        </PageHeader>
+      </div>
 
       <div className="flex min-w-0 flex-col gap-3">
         <ActiveFilterChips filters={filters} onChange={onFiltersChange} />
