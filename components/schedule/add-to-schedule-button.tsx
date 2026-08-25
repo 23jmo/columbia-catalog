@@ -6,6 +6,7 @@ import { Button } from "@/components/base/buttons/button";
 import { usePlans } from "@/hooks/use-plans";
 import { useSessionAccount } from "@/hooks/use-session-account";
 import { CURRENT_TERM } from "@/lib/constants";
+import { haptic } from "@/lib/haptics";
 import { PlanWriteDeniedError, planStore } from "@/lib/schedule/plans";
 import { toast } from "@/lib/toast/store";
 import type { TermCode } from "@/lib/types";
@@ -111,14 +112,21 @@ export function AddToScheduleButton({
       // First use in a term has no plan yet. Creating one as a side effect of
       // the first add is the whole "no dialog before the click" idea.
       const plan = primary ?? planStore.createPlan({ name: "My schedule", termCode });
-      if (isOnSchedule) planStore.removeSection(plan.planId, sectionId);
-      else planStore.addSection(plan.planId, sectionId);
+      if (isOnSchedule) {
+        // Quiet tick on remove — same discipline as un-bookmark.
+        haptic("selection");
+        planStore.removeSection(plan.planId, sectionId);
+      } else {
+        haptic("success");
+        planStore.addSection(plan.planId, sectionId);
+      }
     } catch (cause) {
       // A refusal used to render as a caption under the button, which in a
       // dense section list is both easy to miss and a layout shift on every
       // failure. It goes to the shared toast surface instead — the same place
       // every other refused write in the app now reports itself.
       if (cause instanceof PlanWriteDeniedError) {
+        haptic("error");
         toast.error({
           title: "Couldn't update your schedule",
           description: cause.message,

@@ -5,6 +5,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { RiArrowLeftLine, RiArrowRightLine } from "@remixicon/react";
 
 import { OrnamentAvatar } from "@/components/ornament/ornament-avatar";
+import { haptic } from "@/lib/haptics";
 import { cx } from "@/utils/cx";
 
 import { TypewriterQuestion } from "./typewriter-question";
@@ -397,7 +398,10 @@ function SignInChip({ onClick, error }: { onClick: () => void; error?: string | 
     <div className="absolute top-4 right-4 z-10 flex flex-col items-end sm:top-6 sm:right-6">
       <button
         type="button"
-        onClick={onClick}
+        onClick={() => {
+          haptic("impact");
+          onClick();
+        }}
         className="flex h-10 cursor-pointer items-center rounded-xl border border-border-button-default bg-background-full px-3.5 text-body-medium text-text-secondary transition-colors hover:bg-background-secondary-hover hover:text-text-primary pointer-coarse:h-11"
       >
         Log in
@@ -418,7 +422,10 @@ function BackArrow({ onClick }: { onClick: () => void }) {
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={() => {
+        haptic("selection");
+        onClick();
+      }}
       aria-label="Back"
       className="absolute top-4 left-4 z-10 flex size-10 cursor-pointer items-center justify-center rounded-xl border border-border-button-default bg-background-full text-text-secondary transition-colors hover:bg-background-secondary-hover hover:text-text-primary sm:top-6 sm:left-6 pointer-coarse:size-11"
     >
@@ -453,7 +460,11 @@ function AdvanceArrow({
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={() => {
+        // Advancing is the completed beat of each screen.
+        haptic("success");
+        onClick();
+      }}
       disabled={disabled}
       aria-label={label}
       className={cx(

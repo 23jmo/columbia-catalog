@@ -9,6 +9,7 @@ import {
 } from "@remixicon/react";
 import { Button, ButtonLink } from "@/components/base/buttons/button";
 import { termLabel, vergilSectionUrl } from "@/lib/constants";
+import { haptic } from "@/lib/haptics";
 import type { Section } from "@/lib/types";
 import { cx } from "@/utils/cx";
 
@@ -61,12 +62,18 @@ function useCopy(): [boolean, (value: string) => void] {
 
   const copy = (value: string) => {
     const finish = () => {
+      // Call-number copy is a phone-at-7am action — confirm it in the hand.
+      haptic("success");
       setCopied(true);
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => setCopied(false), 1800);
     };
+    const fail = () => {
+      haptic("error");
+      setCopied(false);
+    };
     if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(value).then(finish).catch(() => setCopied(false));
+      navigator.clipboard.writeText(value).then(finish).catch(fail);
       return;
     }
     // Clipboard API is unavailable on insecure origins; select-and-copy still works.
@@ -80,6 +87,8 @@ function useCopy(): [boolean, (value: string) => void] {
     try {
       document.execCommand("copy");
       finish();
+    } catch {
+      fail();
     } finally {
       document.body.removeChild(field);
     }

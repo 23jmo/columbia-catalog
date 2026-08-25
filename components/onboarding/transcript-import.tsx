@@ -14,6 +14,7 @@ import {
 } from "@/lib/onboarding/transcript";
 // Type-only: `server.ts` reaches the database and must not enter this bundle.
 import type { ResolvedCourse } from "@/lib/onboarding/server";
+import { haptic } from "@/lib/haptics";
 import { cx } from "@/utils/cx";
 
 /**
@@ -76,6 +77,7 @@ export function TranscriptImport({ onImport, onClose }: TranscriptImportProps) {
 
   const onFile = (file: File | undefined) => {
     if (!file) return;
+    haptic("impact");
     startTransition(async () => {
       const result = await readTranscriptFile(file);
       accept(result.candidates, result.problem);
@@ -83,6 +85,7 @@ export function TranscriptImport({ onImport, onClose }: TranscriptImportProps) {
   };
 
   const onPaste = () => {
+    haptic("impact");
     const found = parseTranscript(pasted);
     accept(
       found,
@@ -92,6 +95,7 @@ export function TranscriptImport({ onImport, onClose }: TranscriptImportProps) {
 
   const confirm = () => {
     if (!candidates) return;
+    haptic("success");
     const codes = candidates
       .filter((candidate) => selected.has(candidate.courseId))
       .map((candidate) => candidate.code);
@@ -99,6 +103,7 @@ export function TranscriptImport({ onImport, onClose }: TranscriptImportProps) {
     startTransition(async () => {
       const result = await resolveCoursesAction(codes);
       if (!result.ok) {
+        haptic("error");
         setProblem(result.error ?? "We could not look those up.");
         return;
       }
@@ -114,6 +119,7 @@ export function TranscriptImport({ onImport, onClose }: TranscriptImportProps) {
   };
 
   const toggle = (courseId: string) => {
+    haptic("selection");
     setSelected((current) => {
       const next = new Set(current);
       if (next.has(courseId)) next.delete(courseId);
@@ -130,7 +136,10 @@ export function TranscriptImport({ onImport, onClose }: TranscriptImportProps) {
     <div className="relative flex flex-col gap-4 rounded-[20px] border border-border-table bg-background-full p-4 shadow-card sm:p-5">
       <button
         type="button"
-        onClick={onClose}
+        onClick={() => {
+          haptic("selection");
+          onClose();
+        }}
         aria-label="Close transcript import"
         className="absolute top-3 right-3 flex size-8 cursor-pointer items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-background-secondary-hover hover:text-text-primary pointer-coarse:size-11"
       >
@@ -162,7 +171,10 @@ export function TranscriptImport({ onImport, onClose }: TranscriptImportProps) {
           <Button
             variant="secondary"
             size="small"
-            onClick={() => fileInput.current?.click()}
+            onClick={() => {
+              haptic("selection");
+              fileInput.current?.click();
+            }}
             disabled={isPending}
           >
             Choose a file

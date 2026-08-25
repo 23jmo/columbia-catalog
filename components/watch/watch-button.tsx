@@ -4,6 +4,7 @@ import { RiEyeLine, RiEyeOffLine, RiNotification3Fill } from "@remixicon/react";
 
 import { Button } from "@/components/base/buttons/button";
 import { useWatchlist } from "@/hooks/use-watchlist";
+import { haptic } from "@/lib/haptics";
 import { toggleWatch } from "@/lib/watchlist/store";
 import { cx } from "@/utils/cx";
 
@@ -66,7 +67,11 @@ export function WatchButton({
         variant={isWatched ? "primary" : "secondary"}
         iconOnly={iconOnly}
         leadingIcon={isWatched ? RiEyeOffLine : RiEyeLine}
-        onClick={() => void toggleWatch(sectionId)}
+        onClick={() => {
+          // Start watching is the affirmative act; stop is a quiet undo.
+          haptic(isWatched ? "selection" : "impact");
+          void toggleWatch(sectionId);
+        }}
         disabled={isPending || isSignedOut}
         aria-pressed={isWatched}
         aria-label={label}
