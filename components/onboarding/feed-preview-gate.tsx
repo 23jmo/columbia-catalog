@@ -40,7 +40,9 @@ export interface FeedPreviewGateProps {
  * rather than an optional tour.
  *
  * The stack is clipped until then — scrolling the extra cards is the thing
- * the gate is keeping.
+ * the gate is keeping. The sign-in card itself is in the document flow, not
+ * `absolute top-44`: a fixed top on a locked viewport assumed one feed card
+ * plus the panel always fit under the ornament, and on a phone they do not.
  */
 export function FeedPreviewGate({
   state,
@@ -95,19 +97,19 @@ export function FeedPreviewGate({
     /*
      * `min-w-0` is load-bearing on a phone. Without it, a feed card's
      * intrinsic min-content (week strip + nowrap seat chip + icons) can blow
-     * this column wider than the viewport. The absolute gate then stretches
-     * to that width and the right edge of the sign-in card shears off.
+     * this column wider than the viewport. The gate then stretches to that
+     * width and the right edge of the sign-in card shears off.
      */
-    <div
-      className={cx(
-        "relative w-full min-w-0 max-w-full pt-2",
-        gated && "h-full overflow-hidden",
-      )}
-    >
+    <div className="relative w-full min-w-0 max-w-full pt-2">
       <div
         className={cx(
           "flex min-w-0 flex-col gap-3.5 transition-[filter,opacity] duration-300 ease-out",
-          gated && "pointer-events-none select-none",
+          // One-card peek. Extra rows stay in the tree so the blur stack
+          // still reads as a feed, but `max-h` + `overflow-hidden` is what
+          // stops a guest from scrolling them. Do not `flex-1` this: an
+          // unbounded peek would grow to the full card list and the lock
+          // would have nothing left to lock.
+          gated && "pointer-events-none max-h-[min(11rem,28svh)] select-none overflow-hidden sm:max-h-48",
         )}
         aria-hidden={gated}
       >
@@ -134,10 +136,16 @@ export function FeedPreviewGate({
       </div>
 
       {gated ? (
-        <div className="absolute inset-x-0 top-44 z-10 flex min-w-0 flex-col items-center gap-4 px-0 sm:top-48 sm:px-1">
+        <div className="relative z-10 -mt-6 flex min-w-0 shrink-0 flex-col items-center gap-4 px-0 sm:-mt-8 sm:px-1">
+          {/*
+            In the document flow, not `absolute top-44`. The panel keeps its
+            natural height so the Columbia button cannot be clipped by a
+            locked viewport. Negative margin tucks it into the peek so the
+            first card still dissolves into the gate.
+          */}
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-x-0 -top-20 bottom-0 bg-linear-to-b from-transparent from-0% via-background-secondary-default/20 via-45% to-background-secondary-default/80 to-100%"
+            className="pointer-events-none absolute inset-x-0 -top-16 bottom-0 bg-linear-to-b from-transparent from-0% via-background-secondary-default/20 via-45% to-background-secondary-default/80 to-100%"
           />
 
           <FeedGateOverlay
