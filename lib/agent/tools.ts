@@ -41,13 +41,14 @@ import { z } from "zod";
 import { tool, type ToolSet } from "ai";
 
 import { presentTools } from "@/lib/agent/present-tools";
+import { buildOnboardingArtifact } from "@/lib/agent/present-onboarding";
 import { getCoursesByIds } from "@/lib/data/catalog";
 import { createSupabaseCandidateProvider } from "@/lib/db/candidate-source";
 import { loadStudentProfile } from "@/lib/db/student-profile";
 import type { McpAuthInfo } from "@/lib/mcp/auth";
 import { mcpDeps } from "@/lib/mcp/server";
 import { findTool, type ToolContext as McpToolContext } from "@/lib/mcp/tools";
-import { auditProfile } from "@/lib/profile/audit";
+import { auditProfile, programsFor } from "@/lib/profile/audit";
 import { buildFeed } from "@/lib/recommend/feed";
 import { expandCandidatesForPrograms } from "@/lib/requirements/candidates";
 import { formatCourseId } from "@/lib/requirements/code";
@@ -285,6 +286,7 @@ function engineTools(context: AgentToolContext): ToolSet {
           school: profile.school,
           classYear: profile.classYear,
           programIds: profile.programIds,
+          needsOnboarding: programsFor(profile).length === 0,
           interestTags: profile.interestTags,
           count: profile.courses.length,
           courses: profile.courses.map((course) => ({
@@ -308,7 +310,9 @@ function engineTools(context: AgentToolContext): ToolSet {
         "`verification` says how a group was checked: `exact` matched a named course list, " +
         "`flagged` trusted a Bulletin flag, and `attested` is the student's own statement that " +
         "has been verified against nothing — say so when you rely on one. `origin: \"parsed\"` " +
-        "means the program was read automatically from the Bulletin and not checked by a person.",
+        "means the program was read automatically from the Bulletin and not checked by a person. " +
+        "If the payload is `kind: \"onboarding_prompt\"`, there is no school or program on file — " +
+        "that card is the answer. Do not recommend Global Cores as if you know what they still need.",
       inputSchema: z.object({
         programId: z
           .string()
@@ -316,7 +320,17 @@ function engineTools(context: AgentToolContext): ToolSet {
           .describe("Restrict to one program id. Omit for every program the student is in."),
       }),
       async execute({ programId }) {
-        const { audit } = await loadStudentAudit();
+        const { profile, audit } = await loadStudentAudit();
+        if (programsFor(profile).length === 0) {
+          return emit({
+            ...buildOnboardingArtifact(),
+            needsOnboarding: true,
+            school: profile.school,
+            programIds: profile.programIds,
+            programs: [],
+          });
+        }
+
         const wanted = programId
           ? audit.programs.filter((result) => result.program.id === programId)
           : audit.programs;
@@ -364,11 +378,11 @@ function engineTools(context: AgentToolContext): ToolSet {
         "subjects (department codes), or excludeCourseIds (every courseId already " +
         "shown). Prefer it over search_courses unless the student named a course " +
         "they already know.\n\n" +
-        "clears still works when get_unmet_requirements has no programs — pass " +
-        '"Global Core" or "Science Requirement" and the catalog filters by the ' +
-        "Bulletin list. Do NOT treat a withheld list as the answer to an " +
-        '"easy" / Core question: withheld courses are gated, which is the ' +
-        "opposite of easy.\n\n" +
+        "If get_unmet_requirements returned onboarding_prompt, do not call this " +
+        "with clears — there is no degree to clear. A clears call with no school " +
+        "or program also returns that prompt instead of ranking the catalog.\n\n" +
+        "Do NOT treat a withheld list as the answer to an easy / Core question: " +
+        "withheld courses are gated, which is the opposite of easy.\n\n" +
         "Each card carries `best` (the section the card is about) and `others` " +
         "(its siblings). Courses whose prerequisites the student has not met are " +
         "EXCLUDED from `cards`; set includeWithheld to see them under `withheld`. " +
@@ -436,6 +450,15 @@ function engineTools(context: AgentToolContext): ToolSet {
          * `excludeCourseIds`. That stops the same six cards reprinting;
          * `clears` / `subjects` is still what makes Global Core not be CS.
          */
+        const { profile } = await loadStudentAudit();
+        if (clears?.trim() && programsFor(profile).length === 0) {
+          return emit({
+            ...buildOnboardingArtifact(),
+            needsOnboarding: true,
+            cards: [],
+          });
+        }
+
         const exclude = [
           ...context.alreadyShownCourseIds,
           ...(excludeCourseIds ?? []),

@@ -20,6 +20,7 @@ import {
   campusMapArtifacts,
   feedCards,
   instructorArtifacts,
+  onboardingArtifacts,
   proseOf,
   scheduleArtifacts,
   shownCourseIds,
@@ -684,5 +685,26 @@ describe("turn blocks", () => {
       }),
     ]);
     expect(turnBlocks(message, new Set(["COMS4111W"]))).toEqual([]);
+  });
+
+  it("puts an onboarding prompt on the thread instead of ranking Global Core", () => {
+    const message = assistant([
+      toolPart({
+        name: "get_unmet_requirements",
+        state: "output-available",
+        output: {
+          kind: "onboarding_prompt",
+          href: "/onboarding",
+          reason: "no_degree",
+          needsOnboarding: true,
+          programs: [],
+        },
+      }),
+    ]);
+    expect(onboardingArtifacts(message)).toEqual([
+      { kind: "onboarding_prompt", href: "/onboarding", reason: "no_degree" },
+    ]);
+    expect(turnBlocks(message).map((block) => block.kind)).toEqual(["onboarding"]);
+    expect(suggestedFollowUps(message)).not.toContain("What's the fastest way to finish?");
   });
 });

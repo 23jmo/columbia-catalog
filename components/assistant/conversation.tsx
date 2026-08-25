@@ -13,7 +13,7 @@ import {
 } from "@/lib/agent/transcript";
 import { FeedCardView } from "@/components/feed";
 import { AssistantMarkdown } from "@/components/assistant/markdown";
-import { CampusMapArtifactView, InstructorArtifactView, ScheduleArtifactView } from "@/components/assistant/artifacts";
+import { CampusMapArtifactView, InstructorArtifactView, OnboardingArtifactView, ScheduleArtifactView } from "@/components/assistant/artifacts";
 import { JumpToLatest, useStickToBottom } from "@/components/assistant/jump-to-latest";
 import { SourceList } from "@/components/assistant/source-list";
 import { ThinkingLine, ToolActivityCard } from "@/components/assistant/tool-activity-card";
@@ -222,6 +222,9 @@ function TurnBeat({ block }: { block: TurnBlock }) {
   }
   if (block.kind === "instructor") {
     return <InstructorArtifactView artifact={block.artifact} />;
+  }
+  if (block.kind === "onboarding") {
+    return <OnboardingArtifactView artifact={block.artifact} />;
   }
   /*
    * A grid, not a stack. The card is sized for the home page's rail —

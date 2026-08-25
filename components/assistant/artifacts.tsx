@@ -9,11 +9,14 @@ import type {
   InstructorArtifact,
   ScheduleArtifact,
 } from "@/lib/agent/present";
+import type { OnboardingArtifact } from "@/lib/agent/present-onboarding";
 import { InstructorProfileHero } from "@/components/instructor/profile-hero";
 import { InstructorRating } from "@/components/instructor/rating-hero";
 import { weekdayListLabel } from "@/components/instructor/format";
+import { ButtonLink } from "@/components/base/buttons/button";
 import { termLabel } from "@/lib/constants";
 import { cx } from "@/utils/cx";
+import { RiGraduationCapLine } from "@remixicon/react";
 
 /**
  * The calendar and map the present tools put on the thread.
@@ -127,6 +130,26 @@ export function InstructorArtifactView({ artifact }: { artifact: InstructorArtif
           </Link>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+export function OnboardingArtifactView({ artifact }: { artifact: OnboardingArtifact }) {
+  return (
+    <div className="w-full max-w-[28rem] rounded-2xl border border-border-table bg-background-primary-default p-4">
+      <p className="text-headline-semibold text-text-primary">Set up your degree</p>
+      <p className="mt-1 text-body-regular text-text-secondary">
+        I need your school and program before I can tell you which Core or major
+        requirements you still have. Takes a minute.
+      </p>
+      <ButtonLink
+        href={artifact.href}
+        size="small"
+        className="mt-3"
+        leadingIcon={RiGraduationCapLine}
+      >
+        Open onboarding
+      </ButtonLink>
     </div>
   );
 }
