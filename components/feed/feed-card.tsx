@@ -3,6 +3,7 @@ import { RiArrowRightUpLine } from "@remixicon/react";
 
 import { BookmarkControls } from "@/components/bookmarks/bookmark-controls";
 import { EnrollmentBar } from "@/components/catalog/enrollment-bar";
+import { ReasonChip } from "@/components/feed/reason-chip";
 import { InstructorLinks } from "@/components/instructor/instructor-link";
 import { formatSectionMeetings } from "@/components/catalog/meetings";
 import { provenanceLabel } from "@/components/course/format";
@@ -66,9 +67,7 @@ export function FeedCardView({ card, className }: { card: FeedCardData; classNam
     >
       <header className="flex min-w-0 items-start gap-2">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          {reason ? (
-            <p className="truncate text-caption-1-medium text-accent-600">{reason}</p>
-          ) : null}
+          {reason ? <ReasonChip className="mb-0.5 self-start">{reason}</ReasonChip> : null}
 
           {/*
             The title links to the course page, not to Vergil. Vergil is where
@@ -79,7 +78,7 @@ export function FeedCardView({ card, className }: { card: FeedCardData; classNam
             <Link
               href={sectionHref}
               className={cx(
-                "line-clamp-2 rounded-sm outline-none transition-colors duration-100 ease",
+                "line-clamp-2 rounded-sm outline-none transition-colors duration-100",
                 "hover:text-accent-600 focus-visible:ring-2 focus-visible:ring-border-focus-ring",
               )}
             >
@@ -196,7 +195,7 @@ export function FeedCardView({ card, className }: { card: FeedCardData; classNam
         aria-label={`Seats and other sections for ${card.code} section ${section.sectionCode}`}
         className={cx(
           "mt-auto block min-w-0 rounded-md outline-none",
-          "transition-opacity duration-100 ease hover:opacity-80",
+          "transition-opacity duration-100 ease-out hover:opacity-80",
           "focus-visible:ring-2 focus-visible:ring-border-focus-ring",
         )}
       >
@@ -340,11 +339,17 @@ function seatProvenanceTitle(sourceAsOf: string | null): string | undefined {
 function reasonLine(reason: RecommendationReason): string | null {
   switch (reason.kind) {
     case "required":
-      return `Clears ${reason.groupLabel}`;
+      return `Satisfies ${reason.groupLabel}`;
     case "interesting_and_counts":
-      return `Your kind of thing — clears ${reason.groupLabel}`;
+      /*
+       * The requirement leads, and the taste half trails, because the chip
+       * truncates at the card's width and the half that survives should be the
+       * one with a consequence in it. "Satisfies the Science requirement …" is
+       * still an answer; "Your kind of thing · satisfies the Sci…" is not.
+       */
+      return `Satisfies ${reason.groupLabel} · your kind of thing`;
     case "because_you_took":
-      return `Like ${andMore(reason.similarTo)}`;
+      return `Because you took ${andMore(reason.similarTo)}`;
     /*
      * `unlocks` is computed and deliberately not printed (owner decision,
      * 2026-08-25). "Opens up PSYC UN1450 +2" asks the reader to hold three

@@ -14,6 +14,7 @@ import { describeFailure, planSubmission, type Gate } from "@/lib/agent/gate";
 import { Composer } from "@/components/assistant/composer";
 import { Conversation } from "@/components/assistant/conversation";
 import { SignInFlair } from "@/components/assistant/sign-in-flair";
+import { Ornament } from "@/components/onboarding/screen";
 import { SignInPrompt } from "@/components/home/sign-in-prompt";
 import { cx } from "@/utils/cx";
 
@@ -295,14 +296,14 @@ export function AssistantHome({
       <div
         className={cx(
           "flex flex-1 flex-col",
-          hasThread ? "justify-end pt-8" : "gap-6 pt-1",
+          hasThread ? "justify-end pt-8" : "gap-7 pt-6 sm:pt-10",
         )}
       >
         {hasThread ? (
           <Conversation messages={messages} status={status} onAsk={ask} />
         ) : (
           <>
-            {greetingName ? <Greeting name={greetingName} /> : null}
+            <Hero name={greetingName ?? null} />
             {feed}
           </>
         )}
@@ -352,26 +353,91 @@ export function AssistantHome({
 }
 
 /**
- * The greeting, and the only thing on this page that is about the student
- * rather than about courses.
+ * The opening: a greeting, then the question the box answers.
  *
- * It is a real `<h1>`, and it is the page's only one: `/` previously opened on
- * a nav landmark and a breadcrumb, which is a document with no title. It also
- * earns its place beyond politeness — it is the fastest available proof that
- * the feed underneath is being computed for *this* account and not showing the
- * catalog's greatest hits, which is the ambiguity `FeedHeader`'s Personalized
- * chip exists to settle and can only settle in words.
+ * ── Two lines, and the second one is the point ─────────────────────────────
+ *
+ * The shape is Gemini's, at the owner's request, and the reason it works is
+ * that the two lines do different jobs. The first is address — it proves the
+ * page knows who is here, which is the fastest available evidence that the feed
+ * underneath was computed for this account and not just the catalog's greatest
+ * hits. The second is instruction, written as the question the student is
+ * already asking, so the empty field below reads as an invitation rather than
+ * as a search box they have to think of a query for.
+ *
+ * Both at the same size, the second in grey. That is a deliberate copy of the
+ * reference: matching the sizes makes them one sentence in two parts, where
+ * shrinking the second would make it a subtitle and subtitles get skipped.
+ *
+ * ── The gradient is on the line that is about a person ─────────────────────
+ *
+ * Only the greeting is tinted, and it stops at the accent ramp plus one warm
+ * end, so it re-tints with the theme instead of being a fixed brand smear. The
+ * grey line stays flat — a page where everything is gradient has emphasised
+ * nothing.
+ *
+ * ── Signed out still gets a hero ───────────────────────────────────────────
+ *
+ * `toSessionAccount` falls back through `full_name` → `name` → the local part
+ * of the email → the literal `"Signed in"`, and only the first two of those are
+ * a name; `/` passes `null` for the rest, because "Welcome back,
+ * 2023johnathanmo" is worse than no greeting. But no name is not a reason to
+ * open on nothing. A visitor gets the thesis in the greeting's place — the
+ * sentence the whole product exists to answer — and the same instruction under
+ * it, so the page has a subject either way.
  */
-function Greeting({ name }: { name: string }) {
+function Hero({ name }: { name: string | null }) {
   return (
-    <h1
-      className={cx(
-        "px-1 text-balance text-display-4-semibold -tracking-[0.02em] text-text-primary",
-        "sm:text-display-3-semibold",
-      )}
-    >
-      Welcome back, {name}
-    </h1>
+    <header className="flex flex-col px-1">
+      {/*
+        The medallion from onboarding.
+
+        The same component the onboarding screens open with, not a second mark
+        drawn to match — so a student who has been through the flow meets the
+        same object here, and it can only ever drift in one place.
+
+        Scaled rather than parameterised. `Ornament` draws at a fixed 92px and
+        this header wants ~56 above 40px type; adding a `size` prop would mean
+        editing a file another agent is actively rewriting, which AGENTS.md rule
+        3 exists to prevent. A transform costs nothing and is honest about who
+        owns what: the fixed box supplies the 56px of layout the transform does
+        not, and `origin-top-left` keeps the shrink anchored to it.
+      */}
+      <div className="h-14 w-14">
+        <div className="origin-top-left scale-[0.609]">
+          <Ornament />
+        </div>
+      </div>
+
+      <h1
+        className={cx(
+          // `w-fit` is load-bearing: `bg-clip-text` clips a gradient painted
+          // across the ELEMENT's box, and a block-level h1 is as wide as the
+          // column. At full width the words covered only the first 40% of the
+          // ramp and the whole line rendered as one flat blue.
+          "mt-3 w-fit text-balance bg-linear-to-r bg-clip-text text-transparent",
+          "from-accent-700 via-accent-500 to-rose-500",
+          "dark:from-accent-400 dark:via-accent-300 dark:to-rose-300",
+          "text-display-4-semibold -tracking-[0.02em] sm:text-display-3-semibold",
+        )}
+      >
+        {name ? `Welcome back, ${name}` : "What should you take?"}
+      </h1>
+
+      {/*
+        `aria-hidden` is wrong here and `<p>` is right: this is read after the
+        heading and it is the sentence that tells a screen reader user what the
+        field further down is for.
+      */}
+      <p
+        className={cx(
+          "text-balance text-text-tertiary",
+          "text-display-4-semibold -tracking-[0.02em] sm:text-display-3-semibold",
+        )}
+      >
+        {name ? "What should you take next semester?" : "Ask below, or start from what is on offer."}
+      </p>
+    </header>
   );
 }
 

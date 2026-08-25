@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 
 import { Button } from "@/components/base/buttons/button";
 import { GoogleMarkIcon } from "@/components/shell/sign-in-prompt-card";
-import { SignInPromptShader } from "@/components/shell/sign-in-prompt-shader";
+import { SignInPromptArt } from "@/components/shell/sign-in-prompt-art";
 import { signIn } from "@/lib/db/auth";
 import { cx } from "@/utils/cx";
 
@@ -31,14 +31,9 @@ import { cx } from "@/utils/cx";
  * below the fold.
  *
  * So the copy and the artwork are reused and the geometry is not: one row,
- * two lines of text, the button at its natural size on the right. The shader is
- * imported unmodified and still anchors the campus plate to the right edge, so
- * it reads correctly in a landscape box without touching the component.
- *
- * The hover state is owned here for the same reason the card owns it: the water
- * should stir when you approach the thing, not when you point at the decoration
- * — which is `pointer-events-none` and would almost never be pointed at, since
- * the cursor is headed for the button on the other side.
+ * two lines of text, the button at its natural size on the right. The art stack
+ * anchors the campus plate to the right edge, so it reads correctly in a
+ * landscape box without touching the component.
  *
  * A failed sign-in renders inline rather than throwing. The likeliest failure
  * is the Google provider not being enabled on the Supabase project, and saying
@@ -47,7 +42,6 @@ import { cx } from "@/utils/cx";
 export function SignInFlair({ className }: { className?: string }) {
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
-  const [isApproached, setIsApproached] = useState(false);
 
   const start = useCallback(() => {
     if (isPending) return;
@@ -65,25 +59,12 @@ export function SignInFlair({ className }: { className?: string }) {
   return (
     <div
       className={cx(
-        "group relative w-full overflow-hidden rounded-2xl",
+        "relative w-full overflow-hidden rounded-2xl",
         "bg-background-secondary-default",
         className,
       )}
-      onPointerEnter={(event) => {
-        // Touch fires a synthetic enter with no matching leave, and a card left
-        // permanently stirred is worse than one that never stirs.
-        if (event.pointerType === "touch") return;
-        setIsApproached(true);
-      }}
-      onPointerLeave={() => setIsApproached(false)}
-      onFocus={() => setIsApproached(true)}
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-          setIsApproached(false);
-        }
-      }}
     >
-      <SignInPromptShader stirred={isApproached} />
+      <SignInPromptArt />
 
       <div
         className={cx(
