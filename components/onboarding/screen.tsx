@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { RiArrowLeftLine, RiArrowRightLine } from "@remixicon/react";
 
@@ -97,10 +97,13 @@ export interface OnboardingScreenProps {
    *  shifts colour as it advances without ever animating. */
   hue?: OrnamentHue;
   /**
-   * Pin the screen to the viewport and clip overflow.
+   * Last-step guest chrome: compact bottom padding and no document lock.
    *
-   * The last step ranks up to ten cards. Guests must not be able to scroll
-   * past the sign-in overlay and browse them. Signed-in students get the
+   * The ranked cards are clipped inside the gate's peek, not by pinning this
+   * shell to `h-dvh overflow-hidden`. That combination — plus `pb-24` reserved
+   * for an advance arrow this screen does not have — sheared the Columbia
+   * button off the bottom of a phone, and `overflow: hidden` on `<html>`
+   * stopped the student from scrolling to it. Signed-in students get the
    * same stack with the lock off, so they can actually read it.
    */
   lockViewport?: boolean;
@@ -145,20 +148,6 @@ export function OnboardingScreen({
    */
   const shouldReduceMotion = useReducedMotion();
   const offset = shouldReduceMotion ? 0 : STEP_OFFSET_PX;
-  // Belt-and-suspenders for iOS rubber-banding: a child with overflow-hidden
-  // is not always enough; the document itself has to refuse to scroll.
-  useEffect(() => {
-    if (!lockViewport) return;
-    const html = document.documentElement;
-    const previousOverflow = html.style.overflow;
-    const previousOverscroll = html.style.overscrollBehavior;
-    html.style.overflow = "hidden";
-    html.style.overscrollBehavior = "none";
-    return () => {
-      html.style.overflow = previousOverflow;
-      html.style.overscrollBehavior = previousOverscroll;
-    };
-  }, [lockViewport]);
 
   return (
     <div
@@ -166,8 +155,11 @@ export function OnboardingScreen({
         // `min-w-0`: the feed step mounts wide section cards; without a
         // shrink floor they push this shell past 100vw and the locked
         // viewport shears the sign-in card on the right.
-        "relative flex w-full min-w-0 flex-col bg-background-secondary-default",
-        lockViewport ? "h-dvh overflow-hidden overscroll-none" : "min-h-dvh overflow-x-clip",
+        //
+        // Never `h-dvh overflow-hidden` here. That pinned the last screen
+        // to the viewport and clipped the Columbia button; the student
+        // could not scroll to it. Extra cards are clipped in the gate peek.
+        "relative flex min-h-dvh w-full min-w-0 flex-col overflow-x-clip bg-background-secondary-default",
       )}
     >
       {onBack ? <BackArrow onClick={onBack} /> : null}
@@ -184,12 +176,18 @@ export function OnboardingScreen({
       */}
       <div
         className={cx(
-          "mx-auto flex w-full min-w-0 flex-1 flex-col items-center px-4 pt-[13vh] sm:px-5 sm:pt-[15vh]",
+          "mx-auto flex w-full min-w-0 flex-col items-center px-4 pt-[13vh] sm:px-5 sm:pt-[15vh]",
           wide ? "max-w-[760px]" : "max-w-[620px]",
           // Deep enough to clear the toast card at its two-line worst, which is
-          // what a 390px viewport gives it.
-          hasPinnedToast ? "pb-44" : "pb-24",
-          lockViewport && "min-h-0 overflow-hidden",
+          // what a 390px viewport gives it. The locked feed has no advance
+          // arrow and no toast — `pb-24` there was empty space under a
+          // clipped Columbia button.
+          hasPinnedToast
+            ? "pb-44"
+            : lockViewport
+              ? "pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]"
+              : "pb-24",
+          lockViewport ? "min-h-full" : "flex-1",
         )}
       >
         <OrnamentAvatar hue={hue} mood="tracking" />
@@ -205,8 +203,8 @@ export function OnboardingScreen({
           on page load.
 
           The wrapper repeats the column's flex properties because it now sits
-          between the column and the content, and `lockViewport`'s `flex-1`
-          child needs a flex parent to resolve against.
+          between the column and the content. It sizes to that content — a
+          `flex-1 overflow-hidden` child is what used to clip the sign-in card.
         */}
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
@@ -215,22 +213,14 @@ export function OnboardingScreen({
             animate={{ opacity: 1, transform: "translateX(0px)" }}
             exit={{ opacity: 0, transform: `translateX(${-direction * offset}px)` }}
             transition={STEP_TRANSITION}
-            className={cx(
-              "flex w-full min-w-0 flex-col items-center",
-              lockViewport && "min-h-0 flex-1",
-            )}
+            className="flex w-full min-w-0 flex-col items-center"
           >
             <TypewriterQuestion
               text={question}
               className="mt-7 w-full min-w-0 text-center text-display-4-regular -tracking-[0.02em] text-text-primary sm:mt-9 sm:text-display-3-regular"
             />
 
-            <div
-              className={cx(
-                "mt-8 w-full min-w-0 sm:mt-10",
-                lockViewport && "min-h-0 flex-1 overflow-hidden",
-              )}
-            >
+            <div className="mt-8 w-full min-w-0 sm:mt-10">
               {children}
             </div>
           </motion.div>
