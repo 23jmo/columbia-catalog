@@ -42,7 +42,7 @@ The executable code:
 - reconstructs every record against a strict allowlist in the main-world
   sanitizer, isolated bridge, service worker, and contribution handoff;
 - accepts contribution requests only from
-  `https://lionplan.org`, and only after explicit opt-in.
+  `https://www.lionplan.org`, and only after explicit opt-in.
 
 The host page can spoof main-world events, so every server contribution still
 needs independent validation, account authentication, deduplication, and the

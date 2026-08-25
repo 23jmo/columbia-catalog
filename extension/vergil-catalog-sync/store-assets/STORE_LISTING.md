@@ -61,9 +61,9 @@ requested.
 
 ## Required URLs
 
-- Homepage: `https://lionplan.org`
-- Privacy policy: `https://lionplan.org/privacy/extension`
-- Contribution review: `https://lionplan.org/contribute/vergil`
+- Homepage: `https://www.lionplan.org`
+- Privacy policy: `https://www.lionplan.org/privacy/extension`
+- Contribution review: `https://www.lionplan.org/contribute/vergil`
 
 The privacy-policy and contribution-review URLs must be implemented by the
 website lane before submission for review.

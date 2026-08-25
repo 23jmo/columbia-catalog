@@ -37,7 +37,7 @@
     }
   ],
   "externally_connectable": {
-    "matches": ["https://lionplan.org/*"]
+    "matches": ["https://www.lionplan.org/*"]
   },
-  "homepage_url": "https://lionplan.org"
+  "homepage_url": "https://www.lionplan.org"
 }
