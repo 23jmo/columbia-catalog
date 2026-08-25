@@ -91,10 +91,21 @@ export function FeedPreviewGate({
         }));
 
   return (
-    <div className={cx("relative w-full pt-2", gated && "h-full overflow-hidden")}>
+    /*
+     * `min-w-0` is load-bearing on a phone. Without it, a feed card's
+     * intrinsic min-content (week strip + nowrap seat chip + icons) can blow
+     * this column wider than the viewport. The absolute gate then stretches
+     * to that width and the right edge of the sign-in card shears off.
+     */
+    <div
+      className={cx(
+        "relative w-full min-w-0 max-w-full pt-2",
+        gated && "h-full overflow-hidden",
+      )}
+    >
       <div
         className={cx(
-          "flex flex-col gap-3.5 transition-[filter,opacity] duration-300 ease-out",
+          "flex min-w-0 flex-col gap-3.5 transition-[filter,opacity] duration-300 ease-out",
           gated && "pointer-events-none select-none",
         )}
         aria-hidden={gated}
@@ -103,7 +114,7 @@ export function FeedPreviewGate({
           <div
             key={item.key}
             className={cx(
-              "relative transition-opacity duration-300 ease-out",
+              "relative min-w-0 transition-opacity duration-300 ease-out",
               // Contain the card's own stacking (instructor links are
               // `relative z-[1]` so they beat a stretched-link overlay).
               // Without isolation those names paint above this blur.
@@ -122,7 +133,7 @@ export function FeedPreviewGate({
       </div>
 
       {gated ? (
-        <div className="absolute inset-x-0 top-44 z-10 flex flex-col items-center gap-4 px-1 sm:top-48">
+        <div className="absolute inset-x-0 top-44 z-10 flex min-w-0 flex-col items-center gap-4 px-0 sm:top-48 sm:px-1">
           <div
             aria-hidden
             className="pointer-events-none absolute inset-x-0 -top-20 bottom-0 bg-linear-to-b from-transparent from-0% via-background-secondary-default/20 via-45% to-background-secondary-default/80 to-100%"
@@ -251,14 +262,14 @@ function FeedGateOverlay({
   signInError?: string | null;
 }) {
   return (
-    <div className="relative flex w-full max-w-md flex-col items-center gap-4">
+    <div className="relative flex w-full min-w-0 max-w-md flex-col items-center gap-4">
       <FeedSignInPanel
         onSignIn={() => void onSignIn()}
         disabled={signInDisabled}
         error={signInError ?? feedError}
       />
       {signInDisabled ? (
-        <p className="text-center text-caption-1-regular text-text-tertiary">
+        <p className="text-center text-caption-1-regular text-pretty text-text-tertiary">
           Accounts are not configured on this deployment.
         </p>
       ) : null}

@@ -61,7 +61,9 @@ export function FeedCardView({ card, className }: { card: FeedCardData; classNam
   return (
     <article
       className={cx(
-        "flex flex-col gap-3 rounded-2xl border border-border-table",
+        // `min-w-0` keeps a phone column from expanding to the card's
+        // intrinsic min-content (week strip + seat chip + corner icons).
+        "flex min-w-0 w-full flex-col gap-3 rounded-2xl border border-border-table",
         "bg-background-primary-default p-4",
         "transition-colors duration-150 ease-out motion-reduce:transition-none",
         "hover:border-border-button-hover",
