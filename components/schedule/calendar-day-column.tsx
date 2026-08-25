@@ -148,7 +148,8 @@ export function DayColumn({
       onDoubleClick={(event) => {
         if (!onCreateAtPointer) return;
         // Double-tap on phones was opening accidental one-hour blocks.
-        if (event.pointerType === "touch") return;
+        // onDoubleClick is a MouseEvent; pointerType lives on the native event.
+        if ((event.nativeEvent as PointerEvent).pointerType === "touch") return;
         const target = event.target as HTMLElement;
         if (target.closest("[data-event]")) return;
         const startMinute = minuteAt(event.clientY);

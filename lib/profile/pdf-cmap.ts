@@ -27,13 +27,13 @@ function utf16(hex: string): string {
 export function parseToUnicode(source: string): CMap {
   const map: CMap = new Map();
 
-  for (const block of source.matchAll(/\d+\s+beginbfchar(.*?)endbfchar/gs)) {
+  for (const block of source.matchAll(/\d+\s+beginbfchar([\s\S]*?)endbfchar/g)) {
     for (const pair of block[1].matchAll(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/g)) {
       map.set(parseInt(pair[1], 16), utf16(pair[2]));
     }
   }
 
-  for (const block of source.matchAll(/\d+\s+beginbfrange(.*?)endbfrange/gs)) {
+  for (const block of source.matchAll(/\d+\s+beginbfrange([\s\S]*?)endbfrange/g)) {
     const body = block[1];
     let usedArray = false;
     for (const range of body.matchAll(
