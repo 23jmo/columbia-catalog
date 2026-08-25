@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { IBM_Plex_Mono, Inter } from "next/font/google";
 import { Agentation } from "agentation";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 import { DrawerMotionDial } from "@/components/dev/drawer-motion-dial";
 import "@/styles/globals.css";
@@ -69,6 +70,7 @@ export default function RootLayout({
           bake the chosen numbers in and delete it.
         */}
         {process.env.NODE_ENV === "development" && <DrawerMotionDial />}
+        <SpeedInsights />
       </body>
     </html>
   );
