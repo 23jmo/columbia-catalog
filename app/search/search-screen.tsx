@@ -186,7 +186,7 @@ export function SearchScreen({ initialFilters, termCode }: SearchScreenProps) {
       scrollable. See the note there.
     */
     <PageContent>
-      <PageHeader title="Search">
+      <PageHeader title="Search" hideTitleOnMobile>
         <div className="flex items-start gap-2">
           <SearchBar
             query={filters.q ?? ""}

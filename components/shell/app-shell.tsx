@@ -55,7 +55,12 @@ export interface AppShellProps {
 
 export function AppShell({ children, activeNav = "home", contentClassName }: AppShellProps) {
   return (
-    <div className="flex min-h-dvh w-full bg-background-full">
+    <div className="flex h-dvh min-h-0 w-full overflow-hidden bg-background-full">
+      {/*
+        Viewport lock. The rail and the page are siblings, not one document.
+        If this box grows with the article, the sidebar scrolls away with it.
+        h-dvh plus overflow-hidden pins the chrome; only the content column scrolls.
+      */}
       {/* Renders nothing. Keeps localStorage plans and Supabase in step for a
           signed-in student, and claims anonymous plans on first sign-in. */}
       <PlanSyncProvider />
@@ -72,8 +77,8 @@ export function AppShell({ children, activeNav = "home", contentClassName }: App
           confirmation is in the same place whichever screen raised it. */}
       <Toaster />
 
-      {/* Desktop rail — floating panel. `xl`, not `lg`: 1024px is still a tablet. */}
-      <div className="sticky top-0 hidden h-dvh shrink-0 p-3 xl:block">
+      {/* Desktop rail — floating panel. xl, not lg: 1024px is still a tablet. */}
+      <div className="hidden h-full shrink-0 p-3 xl:block">
         <CatalogSidebar activeNav={activeNav} className="h-full" />
       </div>
 
@@ -134,6 +139,7 @@ export function AppShell({ children, activeNav = "home", contentClassName }: App
       <MobileShell
         activeNav={activeNav}
         className={cx(
+          "min-h-0",
           "transition-[padding,min-width] motion-reduce:transition-none",
           "lg:[padding-right:var(--drawer-rail,0px)] lg:[min-width:calc(34rem+var(--drawer-rail,0px))]",
         )}
@@ -147,7 +153,7 @@ export function AppShell({ children, activeNav = "home", contentClassName }: App
       >
         <main
           className={cx(
-            "min-w-0 flex-1 overflow-x-clip px-4 py-5 sm:px-6 xl:overflow-x-visible xl:px-8 xl:py-7",
+            "min-h-0 min-w-0 flex-1 overflow-x-clip px-4 py-5 sm:px-6 xl:overflow-x-visible xl:px-8 xl:py-7",
             contentClassName,
           )}
         >

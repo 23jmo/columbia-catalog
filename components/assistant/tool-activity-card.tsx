@@ -187,15 +187,25 @@ export function ThinkingLine({
   label: string;
   className?: string;
 }) {
+  /*
+   * The disc paints a 116px canvas inside a 92px layout box — feather and
+   * bevel live in that bleed. At 18px the leftover is two pixels, and anything
+   * that clips overflow (the page's `overflow-x-clip` included) shears the
+   * rim. 28px in a 40px well leaves room for the bleed and the thinking
+   * breath, and the label matches the thread rather than caption.
+   */
   return (
     <p
       className={cx(
         ENTER,
-        "flex items-center gap-2 text-caption-1-regular text-text-secondary",
+        "flex items-center gap-2.5 overflow-visible",
+        "text-headline-regular text-text-secondary",
         className,
       )}
     >
-      <OrnamentAvatar size={18} mood="thinking" className="shrink-0" />
+      <span className="flex size-10 shrink-0 items-center justify-center overflow-visible">
+        <OrnamentAvatar size={28} mood="thinking" className="shrink-0" />
+      </span>
       {label}
     </p>
   );

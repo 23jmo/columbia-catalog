@@ -73,7 +73,7 @@ import { FEED_PREVIEW_LIMIT } from "./feed-preview";
 import {
   buildGuessDeck,
   DEFAULT_TIER_LIMIT,
-  unambiguousPrereqsOf,
+  unambiguousPrereqChain,
   type GuessDeck,
 } from "./guess";
 import { declaredProgramIds } from "./program-ids";
@@ -295,9 +295,10 @@ export async function loadGuessDeck(state: GuestOnboardingState): Promise<GuessD
   for (const group of audit.outstanding) {
     for (const courseId of group.candidates) wanted.add(courseId);
   }
-  // Titles for "and therefore you took Intro" chips, not just the successors.
+  // Titles for every hop of "and therefore you took Intro", not just the
+  // course sitting immediately under the confirmation.
   for (const courseId of [...wanted]) {
-    for (const prereqId of unambiguousPrereqsOf(courseId as CourseId, prereqs)) {
+    for (const prereqId of unambiguousPrereqChain(courseId as CourseId, prereqs)) {
       wanted.add(prereqId);
     }
   }
@@ -397,6 +398,20 @@ export interface CourseHit {
 
 const SEARCH_LIMIT = 20;
 
+/** Same window as `getCourseListings`. One merged scan, not two term dumps. */
+const SEARCH_LISTING_TTL_MS = 5 * 60 * 1000;
+
+interface SearchListing {
+  courseId: string;
+  title: string;
+  points: number | null;
+  /** Lowercased id, spaces already gone — course codes are typed with spaces. */
+  idNorm: string;
+  titleLower: string;
+}
+
+let searchListingsCache: { expiresAt: number; listings: Promise<SearchListing[]> } | null = null;
+
 /**
  * Find a course by code or title, for the grid's "I took something else" box.
  *
@@ -404,6 +419,9 @@ const SEARCH_LIMIT = 20;
  * full dump nested every meeting and took ~3s on a cold function; this box
  * does not need a meeting. Same two active terms the audit sees, so a hit
  * here is a course the record can actually store.
+ *
+ * Warm this during degree questions (`warmCourseSearch`). The first keystroke
+ * then scans memory instead of waiting on PostgREST.
  */
 export async function searchCourses(query: string): Promise<CourseHit[]> {
   const trimmed = query.trim();
@@ -421,9 +439,23 @@ export async function warmCourseSearch(): Promise<void> {
   await listingsForSearch();
 }
 
-async function listingsForSearch() {
+async function listingsForSearch(): Promise<SearchListing[]> {
+  const now = Date.now();
+  if (searchListingsCache && searchListingsCache.expiresAt > now) {
+    return searchListingsCache.listings;
+  }
+
+  const listings = buildSearchListings();
+  searchListingsCache = { expiresAt: now + SEARCH_LISTING_TTL_MS, listings };
+  listings.catch(() => {
+    if (searchListingsCache?.listings === listings) searchListingsCache = null;
+  });
+  return listings;
+}
+
+async function buildSearchListings(): Promise<SearchListing[]> {
   const catalogs = await Promise.all(ACTIVE_TERMS.map((termCode) => getCourseListings(termCode)));
-  const byId = new Map<string, { courseId: string; title: string; points: number | null }>();
+  const byId = new Map<string, SearchListing>();
   for (const listings of catalogs) {
     for (const listing of listings) {
       if (byId.has(listing.courseId)) continue;
@@ -431,23 +463,22 @@ async function listingsForSearch() {
         courseId: listing.courseId,
         title: listing.title,
         points: listing.pointsMin ?? listing.pointsMax,
+        idNorm: listing.courseId.toLowerCase(),
+        titleLower: listing.title.toLowerCase(),
       });
     }
   }
   return [...byId.values()];
 }
 
-function matchCourseHits(
-  trimmed: string,
-  listings: readonly { courseId: string; title: string; points: number | null }[],
-): CourseHit[] {
+function matchCourseHits(trimmed: string, listings: readonly SearchListing[]): CourseHit[] {
   const normalized = trimmed.toLowerCase().replace(/\s+/g, "");
   const words = trimmed.toLowerCase().split(/\s+/).filter(Boolean);
   const hits: CourseHit[] = [];
 
   for (const listing of listings) {
-    const idMatch = listing.courseId.toLowerCase().includes(normalized);
-    const titleMatch = words.every((word) => listing.title.toLowerCase().includes(word));
+    const idMatch = listing.idNorm.includes(normalized);
+    const titleMatch = words.every((word) => listing.titleLower.includes(word));
     if (!idMatch && !titleMatch) continue;
     hits.push({
       courseId: listing.courseId,

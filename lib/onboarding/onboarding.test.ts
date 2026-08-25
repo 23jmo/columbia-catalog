@@ -10,6 +10,7 @@ import {
   expectedLevelCeiling,
   impliedPrerequisites,
   namedCoursesOf,
+  unambiguousPrereqChain,
   unambiguousPrereqsOf,
   yearsCompleted,
 } from "./guess";
@@ -587,6 +588,30 @@ describe("guess deck", () => {
       "COMS1004W",
     ]);
     expect(deck.impliesTaken.COMS3134W?.map((facts) => facts.courseId)).toEqual(["COMS1004W"]);
+  });
+
+  it("follows a unique prereq chain, not only the course immediately under the tap", () => {
+    const prereqs = fakePrereqs({
+      COMS4118W: [["COMS3134W"]],
+      COMS3134W: [["COMS1004W"]],
+    });
+
+    expect(unambiguousPrereqChain("COMS4118W", prereqs)).toEqual(["COMS3134W", "COMS1004W"]);
+
+    const deck = buildGuessDeck({
+      programs: [CC_MAJOR_COMPUTER_SCIENCE],
+      classYear: "2027",
+      confirmed: [],
+      catalog,
+      prereqs,
+      vectors: noVectorSource(),
+      now: new Date("2026-09-15T00:00:00Z"),
+    });
+
+    expect(deck.impliesTaken.COMS4118W?.map((facts) => facts.courseId)).toEqual([
+      "COMS3134W",
+      "COMS1004W",
+    ]);
   });
 });
 

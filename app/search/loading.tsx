@@ -13,7 +13,8 @@ export default function SearchLoading() {
     <AppShell activeNav="search">
       <PageContent aria-busy="true">
         <div className="flex flex-col gap-2">
-          <h1 className="text-title-1-semibold text-text-primary">Search</h1>
+          <h1 className="hidden text-title-1-semibold text-text-primary xl:block">Search</h1>
+          <h1 className="sr-only xl:hidden">Search</h1>
           <p className="text-body-regular text-text-secondary">Opening search…</p>
         </div>
 

@@ -44,6 +44,15 @@ export interface PageHeaderProps {
   children?: ReactNode;
   icon?: IconComponent;
   className?: string;
+  /**
+   * Hide the title row below `xl`.
+   *
+   * The mobile shell already prints the page name in the hamburger bar, so a
+   * second "Search" sitting under it is the same word twice. Desktop has no
+   * bar, so the heading stays. An `sr-only` copy keeps a document outline on
+   * the phone.
+   */
+  hideTitleOnMobile?: boolean;
 }
 
 export function PageHeader({
@@ -55,10 +64,18 @@ export function PageHeader({
   children,
   icon: Icon,
   className,
+  hideTitleOnMobile = false,
 }: PageHeaderProps) {
   return (
     <header className={cx("flex flex-col gap-5", className)}>
-      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+      {hideTitleOnMobile ? <h1 className="sr-only xl:hidden">{title}</h1> : null}
+
+      <div
+        className={cx(
+          "flex flex-wrap items-end justify-between gap-x-6 gap-y-4",
+          hideTitleOnMobile && "hidden xl:flex",
+        )}
+      >
         <div className="flex min-w-0 flex-col gap-2">
           {eyebrow ? (
             <span className="text-caption-1-semibold flex items-center gap-2 tracking-[0.08em] text-text-tertiary uppercase">

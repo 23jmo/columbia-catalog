@@ -221,6 +221,31 @@ export function unambiguousPrereqsOf(courseId: CourseId, prereqs: PrereqSource):
   return implied;
 }
 
+/**
+ * The same walk, followed through every unique hop.
+ *
+ * Confirming Operating Systems should name Data Structures AND Intro, not
+ * only the course that sits immediately under it. Cycles are skipped.
+ */
+export function unambiguousPrereqChain(courseId: CourseId, prereqs: PrereqSource): CourseId[] {
+  const out: CourseId[] = [];
+  const seen = new Set<string>([courseId]);
+  const queue: CourseId[] = [courseId];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) break;
+    for (const prereqId of unambiguousPrereqsOf(current, prereqs)) {
+      if (seen.has(prereqId)) continue;
+      seen.add(prereqId);
+      out.push(prereqId);
+      queue.push(prereqId);
+    }
+  }
+
+  return out;
+}
+
 /* ==========================================================================
  * The deck
  * ========================================================================== */
@@ -466,7 +491,7 @@ export function buildGuessDeck(input: GuessDeckInput): GuessDeck {
    */
   const impliesTaken: Record<string, GuessFacts[]> = {};
   for (const courseId of evidence.keys()) {
-    const prereqIds = unambiguousPrereqsOf(courseId, input.prereqs);
+    const prereqIds = unambiguousPrereqChain(courseId, input.prereqs);
     if (prereqIds.length === 0) continue;
     impliesTaken[courseId] = prereqIds.map((id) => {
       const facts = input.catalog.get(id);

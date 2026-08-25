@@ -32,4 +32,10 @@ describe("ThinkingLine", () => {
     expect(html).toContain("Thinking");
     expect(html).not.toContain("animate-spin");
   });
+
+  it("uses thread-sized type and a well wide enough for the disc's bleed", () => {
+    const html = renderToStaticMarkup(<ThinkingLine label="Thinking" />);
+    expect(html).toContain("text-headline-regular");
+    expect(html).toContain("size-10");
+  });
 });

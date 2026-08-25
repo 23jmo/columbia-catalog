@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useTransition } from "react";
 
 import { guessDeckAction } from "@/app/onboarding/actions";
-import { DEFAULT_TIER_LIMIT, type GuessCandidate, type GuessDeck, type GuessFacts } from "@/lib/onboarding/guess";
+import type { GuessCandidate, GuessDeck, GuessFacts } from "@/lib/onboarding/guess";
 import { loadGuessDeckCached, peekCachedGuessDeck } from "@/lib/onboarding/guess-cache";
 import type { CourseHit, ResolvedCourse } from "@/lib/onboarding/server";
 import type { GuestCourse, GuestOnboardingState } from "@/lib/onboarding/state";
@@ -64,9 +64,11 @@ export interface StepCourseworkProps {
 /**
  * Maybe-taken chips under the pre-checked set. 24, not 12: a rising senior's
  * optional list is long, and a dozen looked like we ran out of ideas. Must stay
- * at or below `DEFAULT_TIER_LIMIT` or the extra slots are empty by construction.
+ * at or below the guess deck's own cap, or the extra slots are empty by
+ * construction. 24 is the display ceiling; importing the cap from guess.ts
+ * would pull the recommendation engine (and node:fs) into this client module.
  */
-const STRIP_LIMIT = Math.min(24, DEFAULT_TIER_LIMIT);
+const STRIP_LIMIT = 24;
 
 /** Coalesce rapid taps into one re-rank so the strip does not shuffle mid-aim. */
 const RERANK_DEBOUNCE_MS = 180;
@@ -92,6 +94,13 @@ export function StepCoursework({
 
   /** Candidates already offered once, so auto-confirmation cannot loop. */
   const seenRef = useRef<Set<string>>(new Set());
+
+  /**
+   * True once the warm deck has been painted on this mount. The token-0 fetch
+   * then skips — otherwise adding tier 1 would change the cache key and we
+   * would immediately block on a second ranking pass.
+   */
+  const paintedWarmDeckRef = useRef(false);
 
   const confirmedIds = new Set(state.courses.map((course) => course.courseId));
 
@@ -168,8 +177,43 @@ export function StepCoursework({
     transcriptToastRef.current = null;
   }, []);
 
+  /**
+   * Write tier 1 onto the record. Same filter the async path uses, so a warm
+   * deck and a fetched deck cannot disagree about what gets pre-checked.
+   */
+  const applyDeck = useCallback((next: GuessDeck) => {
+    setError(null);
+    setDeck(next);
+
+    const alreadyConfirmed = new Set(stateRef.current.courses.map((course) => course.courseId));
+    const dismissed = new Set(stateRef.current.dismissedCourseIds);
+    const fresh = next.tier1.filter(
+      (candidate) =>
+        !seenRef.current.has(candidate.courseId) &&
+        !alreadyConfirmed.has(candidate.courseId) &&
+        !dismissed.has(candidate.courseId),
+    );
+    for (const candidate of [...next.tier1, ...next.tier2]) {
+      seenRef.current.add(candidate.courseId);
+    }
+    if (fresh.length > 0) addCoursesRef.current(fresh.map(toGuestCourse));
+  }, []);
+
+  /*
+   * Prefetch finishes during degree questions. Applying it here — before
+   * paint — is why this screen should not sit on the skeleton after a
+   * student who already answered school / major / year.
+   */
+  useLayoutEffect(() => {
+    const cached = peekCachedGuessDeck(stateRef.current);
+    if (!cached) return;
+    paintedWarmDeckRef.current = true;
+    applyDeck(cached);
+  }, [applyDeck]);
+
   useEffect(() => {
     let active = true;
+    if (rerankToken === 0 && paintedWarmDeckRef.current) return;
 
     startTransition(async () => {
       const result = await loadGuessDeckCached(stateRef.current, guessDeckAction);
@@ -180,39 +224,13 @@ export function StepCoursework({
         return;
       }
 
-      setError(null);
-      setDeck(result.deck);
-
-      /*
-       * Pre-fill tier 1 by actually recording it — but only candidates that are
-       * new to this deck AND have not been removed.
-       *
-       * `seenRef` is per-mount, so it alone only stops a re-rank inside one
-       * visit from resurrecting a removal. `dismissedCourseIds` lives in the
-       * guest state and so survives stepping forward and back, which is the
-       * case that actually bites: this screen remounts, builds a fresh deck,
-       * and would otherwise re-add every correction the student made.
-       */
-      const alreadyConfirmed = new Set(
-        stateRef.current.courses.map((course) => course.courseId),
-      );
-      const dismissed = new Set(stateRef.current.dismissedCourseIds);
-      const fresh = result.deck.tier1.filter(
-        (candidate) =>
-          !seenRef.current.has(candidate.courseId) &&
-          !alreadyConfirmed.has(candidate.courseId) &&
-          !dismissed.has(candidate.courseId),
-      );
-      for (const candidate of [...result.deck.tier1, ...result.deck.tier2]) {
-        seenRef.current.add(candidate.courseId);
-      }
-      if (fresh.length > 0) addCoursesRef.current(fresh.map(toGuestCourse));
+      applyDeck(result.deck);
     });
 
     return () => {
       active = false;
     };
-  }, [rerankToken]);
+  }, [applyDeck, rerankToken]);
 
   useEffect(() => {
     return () => {
@@ -238,9 +256,12 @@ export function StepCoursework({
       skip.add(course.courseId);
       for (const id of stateRef.current.dismissedCourseIds) skip.add(id);
 
-      const implied = (deckRef.current?.impliesTaken?.[course.courseId] ?? []).filter(
-        (facts) => !skip.has(facts.courseId) && !seenRef.current.has(facts.courseId),
-      );
+      /*
+       * `seenRef` is "already offered as a chip", not "already taken". Intro
+       * often sits in the strip; confirming Data Structures should still
+       * promote it onto the record immediately.
+       */
+      const implied = collectImplied(course.courseId, skip, deckRef.current?.impliesTaken);
       for (const facts of implied) seenRef.current.add(facts.courseId);
       if (implied.length > 0) addCoursesRef.current(implied.map(toGuestCourseFromFacts));
 
@@ -396,6 +417,38 @@ function toGuestCourse(candidate: GuessCandidate): GuestCourse {
     // `false` actually happens.
     inCatalog: true,
   };
+}
+
+/**
+ * Walk `impliesTaken` from the course they just ticked.
+ *
+ * The deck stores the full unambiguous chain on each key, but walking still
+ * picks up hops that only live on a successor's own entry. Skip confirmed
+ * and dismissed ids; do not skip "already shown in the strip".
+ */
+function collectImplied(
+  courseId: string,
+  skip: ReadonlySet<string>,
+  impliesTaken: GuessDeck["impliesTaken"] | undefined,
+): GuessFacts[] {
+  if (!impliesTaken) return [];
+
+  const out: GuessFacts[] = [];
+  const seen = new Set(skip);
+  const queue = [courseId];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) break;
+    for (const facts of impliesTaken[current] ?? []) {
+      if (seen.has(facts.courseId)) continue;
+      seen.add(facts.courseId);
+      out.push(facts);
+      queue.push(facts.courseId);
+    }
+  }
+
+  return out;
 }
 
 function toGuestCourseFromFacts(facts: GuessFacts): GuestCourse {

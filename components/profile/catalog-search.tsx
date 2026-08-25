@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { RiAddLine, RiSearchLine } from "@remixicon/react";
 
-import { searchCoursesAction } from "@/app/onboarding/actions";
+import { searchCoursesAction, warmCourseSearchAction } from "@/app/onboarding/actions";
 import { Button } from "@/components/base/buttons/button";
 import { Input } from "@/components/base/input/input";
 import { displayCourseTitle } from "@/lib/onboarding/course-title";
@@ -57,6 +57,10 @@ export function CatalogSearch({
 
   // A code the catalog did not return still has a shape we can store.
   const unmatchedCode = unmatchedFromQuery(trimmed, visibleHits, blockedIds);
+
+  useEffect(() => {
+    void warmCourseSearchAction();
+  }, []);
 
   useEffect(() => {
     const next = query.trim();

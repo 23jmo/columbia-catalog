@@ -78,18 +78,42 @@ export function MobileShell({
     return () => window.removeEventListener("keydown", onKey);
   }, [isOpen]);
 
+  /*
+   * The document must not be a scroller. A flex child with `h-dvh` still
+   * grows when `min-height: auto` sizes to its contents, and then `body`
+   * (`min-h-dvh`) takes the overflow — sidebar and page move as one.
+   * Locking overflow here is the bit `app/layout.tsx` cannot say.
+   */
+  useEffect(() => {
+    const html = document.documentElement;
+    const { body } = document;
+    const htmlOverflow = html.style.overflow;
+    const bodyOverflow = body.style.overflow;
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    return () => {
+      html.style.overflow = htmlOverflow;
+      body.style.overflow = bodyOverflow;
+    };
+  }, []);
+
   return (
     <div
       className={cx(
-        "relative min-h-dvh min-w-0 flex-1 overflow-x-clip",
+        "relative h-full min-h-0 min-w-0 flex-1 overflow-hidden",
         "max-xl:bg-background-secondary-default",
       )}
     >
+      {/*
+        `fixed`, not `absolute`. Absolute is tied to this shell, and on
+        mobile the shell still rides a document scroll. Fixed is the
+        viewport, so the rail stays while the page column scrolls.
+      */}
       <div
         id="mobile-catalog-nav"
         inert={!isOpen ? true : undefined}
         aria-hidden={!isOpen}
-        className="absolute inset-y-0 left-0 z-0 w-[260px] xl:hidden"
+        className="fixed inset-y-0 left-0 z-0 h-dvh w-[260px] overflow-hidden xl:hidden"
       >
         <CatalogSidebar
           activeNav={activeNav}
@@ -102,11 +126,9 @@ export function MobileShell({
 
       <div
         className={cx(
-          "relative z-10 flex min-h-dvh w-full flex-col bg-background-full",
+          "relative z-10 flex h-full min-h-0 w-full flex-col bg-background-full",
           "transition-[transform,border-radius,box-shadow] duration-400 motion-reduce:transition-none",
           "ease-[cubic-bezier(0.32,0.72,0,1)]",
-          // No overflow-hidden: toggling it cancelled the transform, and
-          // leaving it on clips the join shadow. Round the header instead.
           isOpen ? "rounded-l-3xl shadow-sidebar" : "rounded-none shadow-none",
         )}
         style={{
@@ -116,11 +138,12 @@ export function MobileShell({
         {/*
           Hamburger + the page name, optically centred. The trailing size-9
           spacer matches the button so "Home" sits in the real middle, not
-          shifted toward the control.
+          shifted toward the control. Not sticky: the page scroller is the
+          column below, so this bar is just out of that flow.
         */}
         <header
           className={cx(
-            "sticky top-0 z-30 flex w-full shrink-0 items-center gap-2 bg-background-full px-3 xl:hidden",
+            "z-30 flex w-full shrink-0 items-center gap-2 bg-background-full px-3 xl:hidden",
             "h-[calc(3.5rem+env(safe-area-inset-top,0px))] pt-[env(safe-area-inset-top,0px)]",
             "transition-[border-radius] duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none",
             isOpen ? "rounded-tl-3xl" : "rounded-none",
@@ -150,7 +173,18 @@ export function MobileShell({
           </p>
           <span className="size-9 shrink-0" aria-hidden />
         </header>
-        <div className={cx("flex min-h-0 min-w-0 flex-1 flex-col", className)} style={style}>
+        {/*
+          The page. `min-h-0` is the flex shrink so this column, not the
+          document, takes the overflow. The rail is a parked sibling and
+          never enters this scroller.
+        */}
+        <div
+          className={cx(
+            "flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overscroll-none",
+            className,
+          )}
+          style={style}
+        >
           {children}
         </div>
       </div>
