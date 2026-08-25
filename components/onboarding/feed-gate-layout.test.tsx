@@ -28,6 +28,7 @@ describe("onboarding feed gate layout", () => {
       </OnboardingScreen>,
     );
     expect(html).toContain("min-h-dvh");
+    expect(html).toContain("pt-14");
     expect(html).not.toContain("h-dvh overflow-hidden");
     expect(html).not.toContain("h-svh overflow-hidden");
     // Room for an advance arrow this screen does not have.
@@ -46,7 +47,7 @@ describe("onboarding feed gate layout", () => {
       />,
     );
     expect(html).toContain("Sign in with Columbia");
-    expect(html).toContain("max-h-[min(11rem,28svh)]");
+    expect(html).toContain("max-h-[min(8.5rem,22svh)]");
     expect(html).not.toContain("top-44");
     expect(html).not.toContain("sm:top-48");
   });

@@ -109,7 +109,7 @@ export function FeedPreviewGate({
           // stops a guest from scrolling them. Do not `flex-1` this: an
           // unbounded peek would grow to the full card list and the lock
           // would have nothing left to lock.
-          gated && "pointer-events-none max-h-[min(11rem,28svh)] select-none overflow-hidden sm:max-h-48",
+          gated && "pointer-events-none max-h-[min(8.5rem,22svh)] select-none overflow-hidden sm:max-h-48",
         )}
         aria-hidden={gated}
       >
