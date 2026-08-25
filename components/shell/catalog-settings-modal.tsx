@@ -25,6 +25,10 @@ export interface CatalogSettingsModalProps {
 
 /**
  * Columbia-specific settings — same BoardUI modal shell, catalog content.
+ *
+ * Desktop keeps the 871×614 two-pane layout. Below `sm` the panel goes
+ * edge-to-edge, the section picker becomes a horizontal tab bar, and the
+ * content column gets the full width.
  */
 export function CatalogSettingsModal({
   isOpen,
@@ -72,7 +76,10 @@ export function CatalogSettingsModal({
   ];
 
   return createPortal(
-    <div className="fixed inset-0 z-100 flex items-center justify-center p-4" role="presentation">
+    <div
+      className="fixed inset-0 z-100 flex items-end justify-center sm:items-center sm:p-4"
+      role="presentation"
+    >
       <button
         type="button"
         aria-label="Close settings"
@@ -86,8 +93,10 @@ export function CatalogSettingsModal({
 
       <div
         className={cx(
-          "relative transform-gpu transition-[opacity,transform,filter] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-[opacity,transform,filter]",
-          visible ? "scale-100 opacity-100 blur-0" : "scale-[0.85] opacity-0 blur-[4px]",
+          "relative w-full transform-gpu transition-[opacity,transform,filter] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-[opacity,transform,filter] sm:w-auto",
+          visible
+            ? "translate-y-0 scale-100 opacity-100 blur-0"
+            : "translate-y-4 scale-[0.98] opacity-0 blur-[4px] sm:translate-y-0 sm:scale-[0.85]",
         )}
       >
         <div
@@ -96,15 +105,25 @@ export function CatalogSettingsModal({
           aria-modal="true"
           aria-label="Settings"
           tabIndex={-1}
-          className="relative flex h-[614px] max-h-[calc(100dvh-32px)] w-[871px] max-w-[calc(100vw-32px)] overflow-clip rounded-3xl bg-background-full shadow-xs outline-none"
+          className={cx(
+            "relative flex overflow-clip bg-background-full shadow-xs outline-none",
+            // Phone: full-height sheet. Desktop: centered card.
+            "h-[100dvh] max-h-[100dvh] w-full flex-col rounded-none",
+            "sm:h-[614px] sm:max-h-[calc(100dvh-32px)] sm:w-[871px] sm:max-w-[calc(100vw-32px)] sm:flex-row sm:rounded-3xl",
+          )}
         >
+          {/* Section picker — horizontal tabs on phone, left rail on desktop */}
           <nav
             aria-label="Settings sections"
-            className="flex w-[274px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-separator-border bg-background-secondary-default p-2.5"
+            className={cx(
+              "shrink-0 border-separator-border bg-background-secondary-default",
+              "flex w-full flex-row gap-1 border-b p-2",
+              "sm:w-[274px] sm:flex-col sm:gap-5 sm:overflow-y-auto sm:border-r sm:border-b-0 sm:p-2.5",
+            )}
           >
-            <div className="flex w-full flex-col gap-1.5 pt-1">
-              <span className="pl-2 text-body-medium text-text-secondary">Settings</span>
-              <div className="flex w-full flex-col gap-1">
+            <div className="flex w-full flex-col gap-1.5 sm:pt-1">
+              <span className="hidden pl-2 text-body-medium text-text-secondary sm:block">Settings</span>
+              <div className="flex w-full flex-row gap-1 sm:flex-col">
                 {navItems.map((item) => {
                   const selected = item.page === page;
                   return (
@@ -117,7 +136,7 @@ export function CatalogSettingsModal({
                         setContentScrolled(false);
                       }}
                       className={cx(
-                        "flex w-full cursor-pointer items-center gap-2 rounded-2lg p-2 text-left outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-border-focus-ring",
+                        "flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-2lg p-2.5 text-left outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-border-focus-ring sm:flex-none sm:justify-start sm:p-2",
                         selected
                           ? "bg-background-secondary-hover"
                           : "hover:bg-background-secondary-hover/60",
@@ -139,15 +158,15 @@ export function CatalogSettingsModal({
             </div>
           </nav>
 
-          <div className="flex min-w-0 flex-1 flex-col">
-            <div className="flex shrink-0 items-center justify-between px-8 pt-8 pb-3">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <div className="flex shrink-0 items-center justify-between px-4 pt-4 pb-2 sm:px-8 sm:pt-8 sm:pb-3">
               <h2 className="text-title-3-medium text-text-primary">{PAGE_TITLES[page]}</h2>
               <button
                 type="button"
                 aria-label="Close settings"
                 onClick={onClose}
                 className={cx(
-                  "flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-full",
+                  "flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full sm:size-6",
                   "bg-background-tertiary-default text-foreground-icon-secondary",
                   "transition-colors duration-150 hover:bg-background-tertiary-hover",
                   "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
@@ -158,7 +177,7 @@ export function CatalogSettingsModal({
             </div>
             <div className="relative min-h-0 flex-1">
               <div
-                className="h-full overflow-y-auto px-8 pb-8"
+                className="h-full overflow-y-auto px-4 pb-6 sm:px-8 sm:pb-8"
                 onScroll={(event) => setContentScrolled(event.currentTarget.scrollTop > 0)}
               >
                 {page === "account" ? (
