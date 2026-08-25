@@ -482,6 +482,23 @@ const SHEET_SCRIM_TRAVEL = 0.7;
  */
 const SHEET_EXPAND_SCROLL_PX = 12;
 
+/**
+ * How long the panel takes to arrive, and how long it takes to leave.
+ *
+ * Asymmetric on purpose. The entrance is the panel explaining where it came
+ * from — it slides up out of the row you tapped, and that story needs long
+ * enough to be read. The exit is a panel you have already finished with, and
+ * every millisecond of it is latency between clicking close and having the
+ * list back, so it is the shortest slide that still reads as a slide rather
+ * than a disappearance.
+ *
+ * The exit number is load-bearing in a second way: `close` holds `router.back()`
+ * for exactly this long, so raising it directly raises the delay on a dismiss.
+ * Treat it as a latency budget that happens to be spent on motion.
+ */
+const DRAWER_ENTER_MS = 300;
+const DRAWER_EXIT_MS = 200;
+
 /** The asymptotic curve described in `SHEET_OVERDRAG_PX`. */
 function overdrag(distance: number): number {
   return (distance * SHEET_OVERDRAG_PX) / (distance + SHEET_OVERDRAG_PX);
@@ -582,17 +599,44 @@ function useSheetDrag({
     (offset: number | null, height: number) => {
       const panel = panelRef.current;
       if (panel) {
-        if (offset === null) panel.style.removeProperty("translate");
-        else panel.style.translate = `0 ${offset}px`;
+        if (offset === null) {
+          /*
+           * Order matters, and it is the whole reason this is two writes
+           * rather than one.
+           *
+           * The panel's resting class carries a `translate` transition for the
+           * entrance. During the gesture that transition has to be off — the
+           * finger is the clock, and 300ms of easing between the pointer and
+           * the sheet is exactly the lag the direct-write channel exists to
+           * avoid. But a cancelled gesture has to ease home, so the transition
+           * must be back in the computed style BEFORE `translate` changes.
+           *
+           * Both writes land in one style recalc, and the spec starts
+           * transitions from the after-change style, so restoring first is
+           * what makes the release animate instead of snapping. Suppressing
+           * via a React class instead would not work: `paint` runs
+           * synchronously inside the pointer handler while the class change
+           * waits for a re-render, so the offset would always be cleared while
+           * `transition-none` was still applied.
+           */
+          panel.style.removeProperty("transition-property");
+          panel.style.removeProperty("translate");
+        } else {
+          panel.style.transitionProperty = "none";
+          panel.style.translate = `0 ${offset}px`;
+        }
       }
       const scrim = scrimRef.current;
       if (!scrim) return;
       // Only the downward half dims: pulling up against the stop is the sheet
       // refusing to move, and the room should not brighten to acknowledge it.
       if (offset === null || offset <= 0) {
+        // Same ordering rule as the panel, for the same reason.
+        scrim.style.removeProperty("transition-property");
         scrim.style.removeProperty("opacity");
         return;
       }
+      scrim.style.transitionProperty = "none";
       const progress = Math.min(1, offset / height);
       scrim.style.opacity = String(1 - SHEET_SCRIM_TRAVEL * progress);
     },
@@ -726,13 +770,35 @@ function useSheetDrag({
       if (isFull) {
         paint(null, drag.height);
         collapse();
-      } else {
-        // Leave the last drag offset in place. Clearing it would snap the
-        // sheet home for a frame before `router.back()` unmounts it.
-        close();
+        return;
       }
+
+      /*
+       * Finish the throw on the same channel that started it.
+       *
+       * `close` runs a class-driven exit, but a class cannot move a panel that
+       * still has an inline `translate` on it from the drag — the inline value
+       * wins, and the sheet would hang at the offset the finger left it at for
+       * the whole exit and then blink out. So the gesture carries it the rest
+       * of the way itself: keep the direct write, but hand the transition back
+       * so the last stretch eases instead of jumping.
+       *
+       * Deliberately not `paint(null, ...)` — that returns the sheet home, and
+       * home is the one place a dismissal must not go.
+       */
+      const panel = panelRef.current;
+      if (panel) {
+        panel.style.transitionProperty = "translate";
+        panel.style.translate = `0 ${drag.height}px`;
+      }
+      const scrim = scrimRef.current;
+      if (scrim) {
+        scrim.style.transitionProperty = "opacity";
+        scrim.style.opacity = "0";
+      }
+      close();
     },
-    [close, collapse, isFull, paint],
+    [close, collapse, isFull, paint, panelRef, scrimRef],
   );
 
   /**
@@ -823,6 +889,14 @@ export function CourseDrawer({ children }: { children: ReactNode }) {
    */
   const isClosingRef = useRef(false);
   const [isClosing, setClosing] = useState(false);
+  /*
+   * False for exactly one frame, so the panel has an off-screen position to
+   * transition FROM. Mounting straight into the resting classes gives the
+   * browser no previous value to interpolate and the sheet simply appears --
+   * which is not a subtle difference, it is the entire animation.
+   */
+  const [isVisible, setVisible] = useState(false);
+  const exitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isPushRail = useIsPushRail();
   const {
     handleRef: resizeHandleRef,
@@ -840,11 +914,17 @@ export function CourseDrawer({ children }: { children: ReactNode }) {
   const [isSheetFull, setSheetFull] = useState(false);
 
   /**
-   * Dismiss: pop the history entry immediately.
+   * Dismiss: play the exit, then pop the history entry.
    *
-   * The drawer is a URL, so `router.back()` is the close. There is no exit
-   * animation to wait for — holding the navigation would just be latency
-   * between clicking close and having the list back.
+   * The drawer is a URL, so `router.back()` is the close — and `back()`
+   * unmounts the panel on the spot, which is why it has to be held rather than
+   * called alongside the exit. There is no `transitionend` to wait on: a
+   * transition on an element that is about to be removed is not guaranteed to
+   * fire one, and a dismiss that depends on an event that may never arrive is a
+   * drawer that never closes. A timer of the same length cannot get stuck.
+   *
+   * `DRAWER_EXIT_MS` is deliberately short. This is latency the reader pays on
+   * every dismiss, so it buys the smallest slide that still reads as one.
    */
   const close = useCallback(() => {
     // Escape during the exit, a second click on the X, the backdrop under a
@@ -856,7 +936,19 @@ export function CourseDrawer({ children }: { children: ReactNode }) {
     if (isExpandingRef.current) return;
     isClosingRef.current = true;
     setClosing(true);
-    router.back();
+    setVisible(false);
+
+    /*
+     * Nothing is animating under reduced motion, so there is nothing to wait
+     * for; waiting anyway would just be a dead click for the reader least able
+     * to interpret one.
+     */
+    const skipsMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (skipsMotion) {
+      router.back();
+      return;
+    }
+    exitTimer.current = setTimeout(() => router.back(), DRAWER_EXIT_MS);
   }, [router]);
 
   /**
@@ -890,6 +982,43 @@ export function CourseDrawer({ children }: { children: ReactNode }) {
     panelRef.current
       ?.querySelector<HTMLElement>("[data-drawer-scroller]")
       ?.scrollTo({ top: 0 });
+  }, []);
+
+  /**
+   * Let the off-screen position paint, then arrive.
+   *
+   * The flag has to flip in a later frame than the mount. Flipping it during
+   * the same one lets the browser coalesce both positions into a single style
+   * recalc, and a transition between two values the compositor never saw
+   * separately is not a transition at all.
+   *
+   * The timer is not belt-and-braces. `requestAnimationFrame` only fires in a
+   * document the browser is actually painting, so a drawer that mounts in a
+   * hidden tab — restored on launch, opened in the background, woken out of
+   * bfcache — would sit off-screen indefinitely and then be handed to a reader
+   * who switched to it and found nothing but a scrim. Whichever lands first
+   * wins; the second `setVisible(true)` is a no-op.
+   */
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setVisible(true));
+    const fallback = setTimeout(() => setVisible(true), 80);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(fallback);
+    };
+  }, []);
+
+  /*
+   * A held `back()` must not outlive the panel that scheduled it. Leaving the
+   * page some other way during the exit — a link inside the drawer, the browser
+   * back button — would otherwise fire a second navigation a moment later and
+   * pop the reader one entry further than they asked for.
+   */
+  useEffect(() => {
+    const pending = exitTimer;
+    return () => {
+      if (pending.current) clearTimeout(pending.current);
+    };
   }, []);
 
   /**
@@ -961,8 +1090,10 @@ export function CourseDrawer({ children }: { children: ReactNode }) {
    * property is simply absent and the fallback `0px` applies, so the shell is
    * fully specified on every page that has never opened one.
    *
-   * Duration is 0ms on purpose: the drawer does not animate, so the page must
-   * not ease around it.
+   * The page rides the drawer's own clock. The rail and the panel are one
+   * movement — the drawer arrives into space the shell gives up for it — so
+   * the two settling at different times reads as the layout catching up with
+   * itself rather than as one gesture.
    */
   useEffect(() => {
     /*
@@ -988,7 +1119,7 @@ export function CourseDrawer({ children }: { children: ReactNode }) {
       // is computed from this one line.
       `calc(var(${RAIL_WIDTH_PROPERTY}, ${RAIL_WIDTH}) + ${RAIL_GAP} * 2)`,
     );
-    root.setProperty("--drawer-push-duration", "0ms");
+    root.setProperty("--drawer-push-duration", `${DRAWER_ENTER_MS}ms`);
   }, [isPushRail]);
 
   /*
@@ -1117,7 +1248,20 @@ export function CourseDrawer({ children }: { children: ReactNode }) {
                * of a scrim is not worth the risk when a media query settles it.
                */
               "lg:hidden",
+              /*
+               * Linear, and slower in than out. The dim is not an object with
+               * momentum, it is a light going down; easing it makes it read as
+               * a thing that moved. It also outlasts the panel's own slide on
+               * the way in, so the room is already dark by the time the sheet
+               * lands rather than brightening underneath it.
+               *
+               * The drag writes `opacity` on this element directly and
+               * suppresses this transition while it does — see `paint`.
+               */
+              "transition-opacity ease-linear motion-reduce:transition-none",
+              isVisible && !isClosing ? "opacity-100" : "opacity-0",
             )}
+            style={{ transitionDuration: `${isClosing ? DRAWER_EXIT_MS : DRAWER_ENTER_MS}ms` }}
           />
 
           <div
@@ -1196,7 +1340,50 @@ export function CourseDrawer({ children }: { children: ReactNode }) {
               // space reserved for it can never disagree.
               "lg:[width:var(--drawer-panel-width,min(30rem,42vw))]",
               "lg:rounded-3xl lg:border lg:border-border-button-white lg:shadow-sidebar",
+              /*
+               * `translate`, not `transform`.
+               *
+               * Tailwind v4 compiles `translate-y-*` to the standalone
+               * `translate` property — the same one the drag writes, as the
+               * note on `useSheetDrag` explains. An arbitrary list naming
+               * `transform` compiles without complaint and then silently does
+               * nothing, which is exactly how this entrance was lost once
+               * already. If you touch this list, check the built CSS, not the
+               * source.
+               *
+               * The other four are the detents: the sheet growing to full
+               * height squares its corners off, and the desktop rail's width
+               * is dragged by its edge handle.
+               */
+              "transition-[translate,height,border-radius,width,max-width]",
+              /*
+               * The axis switches with the shape. At `sm` and up `translate-y`
+               * is pinned to 0 so `translate-x` alone drives the slide; below
+               * `sm` no x-translate is set, so y alone drives it. One
+               * transition, whichever axis is live.
+               */
+              isVisible && !isClosing
+                ? "translate-y-0 sm:translate-x-0"
+                : "translate-y-full sm:translate-y-0 sm:translate-x-full",
+              // A width being dragged by a finger has no business easing.
+              isResizing && "transition-none",
+              "motion-reduce:transition-none",
             )}
+            style={{
+              /*
+               * Inline rather than `duration-*`/`ease-*` classes because both
+               * values differ between arriving and leaving, and a conditional
+               * pair of utilities for each would be four classes racing
+               * tailwind-merge to say what two numbers say plainly.
+               *
+               * Decelerate in, accelerate out: the panel settles into place
+               * when it arrives and gets out of the way when it leaves.
+               */
+              transitionDuration: `${isClosing ? DRAWER_EXIT_MS : DRAWER_ENTER_MS}ms`,
+              transitionTimingFunction: isClosing
+                ? "cubic-bezier(0.4, 0, 1, 1)"
+                : "var(--ease-out)",
+            }}
           >
             {/*
               The seam between the list and the section is a control.
