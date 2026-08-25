@@ -1,12 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 
 import { guessDeckAction } from "@/app/onboarding/actions";
 import type { GuessCandidate, GuessDeck, GuessFacts } from "@/lib/onboarding/guess";
 import { loadGuessDeckCached, peekCachedGuessDeck } from "@/lib/onboarding/guess-cache";
 import type { CourseHit, ResolvedCourse } from "@/lib/onboarding/server";
-import type { GuestCourse, GuestOnboardingState } from "@/lib/onboarding/state";
+import {
+  RERANK_BATCH_SIZE,
+  type GuestCourse,
+  type GuestOnboardingState,
+} from "@/lib/onboarding/state";
+import { sameIds, stabilizeStrip } from "@/lib/onboarding/stable-strip";
 import { displayCourseTitle } from "@/lib/onboarding/course-title";
 import { dismiss, toast } from "@/lib/toast/store";
 
@@ -36,11 +49,13 @@ import { TranscriptImport } from "./transcript-import";
  * ── The strip below is "and probably these too" ─────────────────────────────
  *
  * Tier 2 is the engine's answer to "given what is confirmed, what else has this
- * student almost certainly taken" — prerequisite implications and requirement
- * fit, not the general feed. Confirming a course immediately adds its
- * unambiguous prerequisites ("you took Intro if you took Data Structures")
- * from the deck payload; the strip re-ranks in the background after a short
- * debounce so rapid taps coalesce instead of shuffling under a finger.
+ * student almost certainly taken" — typical first-year schedules, prerequisite
+ * implications, and requirement fit, not the general feed. Confirming a course
+ * immediately adds its unambiguous prerequisites ("you took Intro if you took
+ * Data Structures") from the deck payload. The strip itself stays pinned: a
+ * tap removes that chip and appends a replacement at the end, rather than
+ * reshuffling the row the student was still reading. A full re-rank waits
+ * until a few confirmations have landed.
  *
  * ── Pre-filled means on the record, and removing removes ────────────────────
  *
@@ -91,6 +106,20 @@ export function StepCoursework({
    */
   const [rerankToken, setRerankToken] = useState(0);
   const rerankTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /**
+   * The chips currently on the maybe-strip, in the order the student last
+   * saw them. Re-ranks append; they do not reorder. Empty until the first
+   * deck lands, at which point `stabilizeStrip` fills from the pool.
+   */
+  const [pinnedIds, setPinnedIds] = useState<string[]>([]);
+
+  /**
+   * Local copy of `confirmationsSinceRerank`. The store update is async and
+   * rapid taps would otherwise all read `0` off `stateRef` and never trip
+   * the batch.
+   */
+  const confirmsRef = useRef(state.confirmationsSinceRerank);
 
   /** Candidates already offered once, so auto-confirmation cannot loop. */
   const seenRef = useRef<Set<string>>(new Set());
@@ -238,13 +267,20 @@ export function StepCoursework({
     };
   }, []);
 
+  const scheduleRerank = useCallback(() => {
+    if (rerankTimer.current) clearTimeout(rerankTimer.current);
+    rerankTimer.current = setTimeout(() => {
+      setRerankToken((token) => token + 1);
+    }, RERANK_DEBOUNCE_MS);
+  }, []);
+
   /**
    * Add one course from the strip or the search box.
    *
    * Unambiguous prerequisites land immediately — that is the "you took Intro
-   * too" chip, and it does not need the engine. The strip re-ranks after a
-   * short idle so a burst of taps becomes one fetch, not a shuffle under the
-   * next finger.
+   * too" chip, and it does not need the engine. The remaining chips stay
+   * where they are; a full re-rank waits until a few taps have landed so
+   * the second course a student was aiming at is still there.
    */
   const confirm = useCallback(
     (course: GuestCourse) => {
@@ -266,23 +302,53 @@ export function StepCoursework({
       if (implied.length > 0) addCoursesRef.current(implied.map(toGuestCourseFromFacts));
 
       onConfirmationBatch();
-      if (rerankTimer.current) clearTimeout(rerankTimer.current);
-      rerankTimer.current = setTimeout(() => {
-        setRerankToken((token) => token + 1);
-      }, RERANK_DEBOUNCE_MS);
+      confirmsRef.current += 1;
+      if (confirmsRef.current >= RERANK_BATCH_SIZE) {
+        confirmsRef.current = 0;
+        scheduleRerank();
+      }
     },
-    [addCourse, onConfirmationBatch, retireTranscriptOffer],
+    [addCourse, onConfirmationBatch, retireTranscriptOffer, scheduleRerank],
   );
 
   /**
-   * The strip: tier 2, minus anything already on the record.
+   * "I have not taken this." The chip leaves immediately, the id is
+   * remembered so the next deck cannot resurrect it, and a replacement
+   * is requested so the strip does not shrink.
+   */
+  const dismissSuggestion = useCallback(
+    (courseId: string) => {
+      seenRef.current.add(courseId);
+      removeCourse(courseId);
+      scheduleRerank();
+    },
+    [removeCourse, scheduleRerank],
+  );
+
+  /**
+   * The strip: tier 2, minus anything already on the record or dismissed,
+   * with currently-visible chips held in place. New ids append at the end.
    *
    * Tier 1 is deliberately absent — it is already up top as chips, and offering
    * it here as well would ask the same question twice on one screen.
    */
-  const suggestions = (deck?.tier2 ?? [])
-    .filter((candidate) => !confirmedIds.has(candidate.courseId))
-    .slice(0, STRIP_LIMIT);
+  const pool = useMemo(() => {
+    const confirmed = new Set(state.courses.map((course) => course.courseId));
+    const dismissed = new Set(state.dismissedCourseIds);
+    return (deck?.tier2 ?? []).filter(
+      (candidate) => !confirmed.has(candidate.courseId) && !dismissed.has(candidate.courseId),
+    );
+  }, [deck, state.courses, state.dismissedCourseIds]);
+
+  const suggestions = useMemo(
+    () => stabilizeStrip(pinnedIds, pool, STRIP_LIMIT),
+    [pinnedIds, pool],
+  );
+
+  useEffect(() => {
+    const next = suggestions.map((candidate) => candidate.courseId);
+    setPinnedIds((current) => (sameIds(current, next) ? current : next));
+  }, [suggestions]);
 
   const showSkeleton =
     !error &&
@@ -328,19 +394,21 @@ export function StepCoursework({
         {error ? <p className="text-center text-body-regular text-text-secondary">{error}</p> : null}
 
         {!showSkeleton && suggestions.length > 0 ? (
-          <div
-            className={isPending ? "flex flex-col gap-3 opacity-60 motion-reduce:opacity-100" : "flex flex-col gap-3"}
-          >
+          <div className="flex flex-col gap-3">
             <h2 className="text-center text-caption-2-medium tracking-[0.08em] text-text-tertiary uppercase">
               Students with these usually have these too
             </h2>
-            <ChipWrap className="gap-1.5 sm:gap-2">
+            <ChipWrap className="gap-1.5 overflow-visible px-2.5 pt-2 sm:gap-2">
               {suggestions.map((candidate) => (
                 <AddChip
                   key={candidate.courseId}
                   onPress={() => confirm(toGuestCourse(candidate))}
+                  onDismiss={() => dismissSuggestion(candidate.courseId)}
                   sublabel={candidate.title ? displayCourseTitle(candidate.title) : undefined}
                   label={`Add ${candidate.code}${
+                    candidate.title ? ` — ${displayCourseTitle(candidate.title)}` : ""
+                  }`}
+                  dismissLabel={`I have not taken ${candidate.code}${
                     candidate.title ? ` — ${displayCourseTitle(candidate.title)}` : ""
                   }`}
                 >

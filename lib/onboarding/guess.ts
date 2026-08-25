@@ -14,9 +14,13 @@
  *                    one), taste, and the prerequisite evaluation.
  *
  *   ADDED HERE       seniority (a second-year has not taken a 4000-level
- *                    seminar), and backward prerequisite inference (if you
- *                    confirmed Data Structures, you took the intro course, even
- *                    though nobody ticked it).
+ *                    seminar), backward prerequisite inference (if you
+ *                    confirmed Data Structures, you took the intro course),
+ *                    and typical-year priors (a CC sophomore has usually
+ *                    finished Lit Hum; a SEAS first-year has usually started
+ *                    Calc I). The maybe-strip ranks those above future
+ *                    required 3000-level core, because this is "what have you
+ *                    taken", not "what should you take next".
  *
  * Everything stays a pure function over injected sources, matching
  * `lib/recommend/types.ts`'s reasoning: the deck has to be testable against ten
@@ -47,9 +51,10 @@
 
 import { recommend, type CandidateCourse, type CourseVectorSource, type PrereqSource } from "@/lib/recommend";
 import { formatCourseId, levelOf, toCourseId, type CourseId } from "@/lib/requirements/code";
-import type { GroupResult, Program, RequirementRule } from "@/lib/requirements/types";
+import type { GroupResult, Program, RequirementRule, School } from "@/lib/requirements/types";
 
 import type { GuestCourse } from "./state";
+import { typicalGuesses } from "./typical";
 
 /*
  * The re-rank cadence lives in `./state.ts`, not here, and is re-exported for
@@ -256,6 +261,11 @@ export type GuessReason =
   | { kind: "implied_by"; courseIds: CourseId[] }
   /** Named as required by one of their declared programs. */
   | { kind: "required_by"; programName: string }
+  /**
+   * A first-year / typical-schedule prior. Never enough to pre-check —
+   * "students like you usually took this" is a glance, not a transcript.
+   */
+  | { kind: "typical"; label: string }
   /** One of several options a program's rule offers. */
   | { kind: "option_in"; programName: string; groupLabel: string }
   /** Expanded from an open-ended requirement group. */
@@ -295,9 +305,16 @@ export interface GuessDeck {
 export interface GuessDeckInput {
   /** Declared programs, INCLUDING the school's Core. */
   programs: readonly Program[];
+  /** Drives the school-year typical schedule. */
+  school?: School | null;
   classYear: string | null;
   /** What the student has confirmed so far. */
   confirmed: readonly GuestCourse[];
+  /**
+   * Courses they said they did not take. Kept off the deck so a dismissed
+   * chip cannot come back as a "you might have" on the next re-rank.
+   */
+  dismissed?: readonly string[];
   /** Catalog facts for anything the deck might show. Missing ids still render. */
   catalog: ReadonlyMap<string, { code: string; title: string | null; points: number | null }>;
   prereqs: PrereqSource;
@@ -314,18 +331,20 @@ export interface GuessDeckInput {
 }
 
 /**
- * Per-tier cap. A rising senior has a long optional list (Core choices,
- * intro-or-this, electives) and 18–24 used to drop most of it. 36 is enough
- * for the maybe-strip to fill without auto-checking courses we cannot know.
+ * Per-tier cap. Typical first-year options plus a major's named alternatives
+ * already run past two dozen for a rising senior; 48 leaves reserve chips
+ * the strip can append after a dismiss without a round trip.
  */
-export const DEFAULT_TIER_LIMIT = 36;
+export const DEFAULT_TIER_LIMIT = 48;
 
 export function buildGuessDeck(input: GuessDeckInput): GuessDeck {
   const limit = input.limit ?? DEFAULT_TIER_LIMIT;
   const confirmedIds = input.confirmed.map((course) => course.courseId);
   const confirmedSet = new Set<string>(confirmedIds);
+  const dismissedSet = new Set(input.dismissed ?? []);
 
-  const ceiling = expectedLevelCeiling(yearsCompleted(input.classYear, input.now));
+  const years = yearsCompleted(input.classYear, input.now);
+  const ceiling = expectedLevelCeiling(years);
   const implied = impliedPrerequisites(confirmedIds, input.prereqs);
 
   /*
@@ -338,7 +357,7 @@ export function buildGuessDeck(input: GuessDeckInput): GuessDeck {
   const evidence = new Map<CourseId, { required: boolean; reasons: GuessReason[] }>();
 
   const note = (courseId: CourseId, reason: GuessReason, required: boolean) => {
-    if (confirmedSet.has(courseId)) return;
+    if (confirmedSet.has(courseId) || dismissedSet.has(courseId)) return;
     const existing = evidence.get(courseId) ?? { required: false, reasons: [] };
     existing.required = existing.required || required;
     existing.reasons.push(reason);
@@ -384,6 +403,28 @@ export function buildGuessDeck(input: GuessDeckInput): GuessDeck {
             },
         required,
       );
+    }
+  }
+
+  /*
+   * Typical-year priors, then the unique prereqs of anything already
+   * plausible. Calc III on a CC CS strip should pull Calc I with it even
+   * before the student ticks anything — "first year is mostly prerequisites"
+   * is the whole recall complaint.
+   */
+  const typical = typicalGuesses({
+    school: input.school ?? null,
+    yearsCompleted: years,
+    ceiling,
+    programs: input.programs,
+  });
+  for (const guess of typical) {
+    note(guess.courseId, { kind: "typical", label: guess.label }, false);
+  }
+  for (const courseId of [...evidence.keys()]) {
+    if ((levelOf(courseId) ?? 9000) > ceiling) continue;
+    for (const prereqId of unambiguousPrereqChain(courseId, input.prereqs)) {
+      note(prereqId, { kind: "typical", label: "Usually taken first" }, false);
     }
   }
 
@@ -505,28 +546,28 @@ export function buildGuessDeck(input: GuessDeckInput): GuessDeck {
   }
 
   return {
-    tier1: order(tier1).slice(0, limit),
-    tier2: order(tier2).slice(0, limit),
+    tier1: order(tier1, ceiling).slice(0, limit),
+    tier2: order(tier2, ceiling).slice(0, limit),
     impliesTaken,
   };
 }
 
 /**
- * Evidence kind first, then engine score, then lowest course level, then id.
+ * Plausible-already first, then evidence kind, then lowest level, then score.
  *
- * Open-ended Core lists (every science lecture) score well on requirement-fit
- * and used to bury the major's actual options. The level tiebreak still puts
- * intro courses first within a kind. The id at the end keeps the order stable
- * across re-ranks, which is the property that stops the grid twitching when
- * two courses tie.
+ * The maybe-strip is "what have you taken", not "what should you take next".
+ * Engine score ranks the latter, so a 3000-level required course the student
+ * will take as a junior used to outrank Intro to CS (an `n_of`, so not
+ * required) on a sophomore's strip. Level before score is what puts first-year
+ * cores in front of the major's future core.
  */
-function order(candidates: GuessCandidate[]): GuessCandidate[] {
+function order(candidates: GuessCandidate[], ceiling: number): GuessCandidate[] {
   return [...candidates].sort((a, b) => {
-    const reasonDelta = reasonPriority(a) - reasonPriority(b);
+    const reasonDelta = reasonPriority(a, ceiling) - reasonPriority(b, ceiling);
     if (reasonDelta !== 0) return reasonDelta;
     return (
-      b.score - a.score ||
       (levelOf(a.courseId) ?? 9000) - (levelOf(b.courseId) ?? 9000) ||
+      b.score - a.score ||
       a.courseId.localeCompare(b.courseId)
     );
   });
@@ -536,17 +577,21 @@ function order(candidates: GuessCandidate[]): GuessCandidate[] {
  * Why this is on the strip, as a sort key. Lower is closer to the student's
  * actual transcript.
  *
- * A confirmation's unique prereq beats a named major option, which beats an
- * open-ended Core list (every science lecture in the catalog). Without this,
- * requirement-fit scores the Science requirement so high that Operating
- * Systems never pulls Data Structures into view.
+ * Courses at or below the seniority ceiling are "already plausible". Future
+ * required courses (Advanced Programming on a first-year strip) still appear,
+ * but after the intros the student has actually had time to take.
  */
-function reasonPriority(candidate: GuessCandidate): number {
+function reasonPriority(candidate: GuessCandidate, ceiling: number): number {
   const kinds = new Set(candidate.reasons.map((reason) => reason.kind));
+  const plausible = (levelOf(candidate.courseId) ?? 9000) <= ceiling;
   if (kinds.has("implied_by")) return 0;
-  if (kinds.has("required_by")) return 1;
-  if (kinds.has("option_in")) return 2;
-  return 3;
+  if (plausible && kinds.has("typical")) return 1;
+  if (plausible && kinds.has("required_by")) return 2;
+  if (plausible && kinds.has("option_in")) return 3;
+  if (kinds.has("required_by")) return 4;
+  if (kinds.has("typical")) return 5;
+  if (kinds.has("option_in")) return 6;
+  return 7;
 }
 
 /** Course ids a single rule names, for attributing a candidate to its group. */
