@@ -1,5 +1,5 @@
 /**
- * Columbia Catalog — catalog-wide prerequisite backfill.
+ * LionPlan — catalog-wide prerequisite backfill.
  *
  *   npx tsx --env-file=.env.local scripts/backfill-prereqs.ts status
  *   npx tsx --env-file=.env.local scripts/backfill-prereqs.ts run --dry-run

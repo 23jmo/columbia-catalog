@@ -27,7 +27,7 @@
     return { start, end, total };
   }
 
-  root.ColumbiaCatalogScanHelpers = Object.freeze({
+  root.LionPlanScanHelpers = Object.freeze({
     fullScanUrl,
     normalizeTermCode,
     parsePaginatorRange,

@@ -62,7 +62,7 @@ import { EMPTY_PROFILE } from "@/lib/profile/types";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Your profile — Columbia Catalog",
+  title: "Your profile — LionPlan",
   description:
     "Your major, the courses you have taken, which requirements are filled and which are left, and what to take next term. Self-reported — never a registrar record.",
   robots: { index: false, follow: false },

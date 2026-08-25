@@ -1,5 +1,5 @@
 /**
- * Hand-written row types for the Columbia Catalog Postgres schema, plus the
+ * Hand-written row types for the LionPlan Postgres schema, plus the
  * mappers that convert them to and from the domain types in `@/lib/types`.
  *
  * This file is the ONLY place snake_case becomes camelCase. Nothing outside

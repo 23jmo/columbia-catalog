@@ -5,7 +5,7 @@
   if (globalThis[installerKey]) return;
   globalThis[installerKey] = true;
 
-  const sanitizer = globalThis.ColumbiaCatalogVergilSanitizer;
+  const sanitizer = globalThis.LionPlanVergilSanitizer;
   if (!sanitizer) return;
 
   const CAPTURE_EVENT = "columbia-catalog:vergil-capture:v1";

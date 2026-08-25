@@ -139,7 +139,7 @@ write_port_label() {
   cat >"$workspace/.superset/ports.json" <<JSON
 {
   "ports": [
-    { "port": $port, "label": "Columbia Catalog dev ($name)" }
+    { "port": $port, "label": "LionPlan dev ($name)" }
   ]
 }
 JSON

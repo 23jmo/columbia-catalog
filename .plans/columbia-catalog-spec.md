@@ -1,8 +1,8 @@
-# Columbia Catalog — Product & Technical Spec
+# LionPlan — Product & Technical Spec
 
-**Version:** 0.1 (pre-branding)
+**Version:** 0.2 (LionPlan)
 **Date:** 2026-08-22
-**Working name:** Columbia Catalog (final name and branding TBD)
+**Product name:** LionPlan
 **Companion document:** `vergil_api_spec.md` — data-source reverse engineering, endpoint inventory, and access-control findings. This spec assumes its conclusions and does not repeat them.
 
 ---
@@ -38,7 +38,7 @@
 
 Vergil is slow, opaque, and hostile to the actual decision a student is making. Every search is a network round-trip against an undocumented API; meeting times live in a different system from seat counts; nothing tells you whether a professor is good, whether a waitlist ever clears, or whether you can physically walk from Mudd to Barnard in ten minutes.
 
-Columbia Catalog is a **read-only planning layer** over Columbia's public course data that is fast enough to feel local, opinionated enough to answer the real question, and honest about where its numbers come from.
+LionPlan is a **read-only planning layer** over Columbia's public course data that is fast enough to feel local, opinionated enough to answer the real question, and honest about where its numbers come from.
 
 Three bets:
 
@@ -580,7 +580,7 @@ The app is fully useful before signing in, which preserves course pages as an SE
 
 ## 16. MCP Server
 
-**Replaces the in-app AI chat for v1.** Students point Claude, ChatGPT, or any MCP client at Columbia Catalog and get an agent better than one we'd build, running in a tool they already pay for — at zero inference cost and zero abuse surface to us.
+**Replaces the in-app AI chat for v1.** Students point Claude, ChatGPT, or any MCP client at LionPlan and get an agent better than one we'd build, running in a tool they already pay for — at zero inference cost and zero abuse surface to us.
 
 ### Tools
 
@@ -760,7 +760,7 @@ Archived term backfill, seat-history charts with milestone annotations, year-ove
 
 | Item | Status |
 |---|---|
-| Name and branding | TBD, "Columbia Catalog" is a working title |
+| Name and branding | LionPlan |
 | Public positioning, disclaimers, terms | Explicitly deferred — revisit before public launch |
 | Crowdsourced-ingest disclosure | To be handled in terms and conditions later |
 | In-app AI chat | Only if students ask for it |

@@ -1,4 +1,4 @@
-# Columbia Catalog — agent working agreement
+# LionPlan — agent working agreement
 
 Read this before touching anything. Multiple agents are building this repo in
 parallel right now. Staying inside your lane is more important than being

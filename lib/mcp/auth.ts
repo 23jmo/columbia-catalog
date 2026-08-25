@@ -1,5 +1,5 @@
 /**
- * OAuth 2.0 for the Columbia Catalog MCP server.
+ * OAuth 2.0 for the LionPlan MCP server.
  *
  * Spec §16 chose the proper OAuth flow rather than pasted personal access
  * tokens: the client opens a browser, the student signs in with Google, the

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Columbia Catalog — the browser-side refresh worker.
+ * LionPlan — the browser-side refresh worker.
  *
  * Mount `<RefreshWorker />` once in the shell. On idle it asks the server for
  * due crawl jobs, fetches those public directory pages from the visitor's own

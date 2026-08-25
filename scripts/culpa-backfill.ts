@@ -1,5 +1,5 @@
 /**
- * Columbia Catalog — full CULPA corpus backfill.
+ * LionPlan — full CULPA corpus backfill.
  *
  *   npx tsx --env-file=.env.local scripts/culpa-backfill.ts status
  *   npx tsx --env-file=.env.local scripts/culpa-backfill.ts run

@@ -293,7 +293,7 @@
     });
   }
 
-  root.ColumbiaCatalogVergilSanitizer = Object.freeze({
+  root.LionPlanVergilSanitizer = Object.freeze({
     isSanitizedSection,
     parseMinutes,
     parseWeekdays,

@@ -1,5 +1,5 @@
 /**
- * Columbia Catalog — search Web Worker.
+ * LionPlan — search Web Worker.
  *
  * Search itself fits in a frame, but it should not be *sharing* that frame
  * with React reconciliation, virtualized list measurement and paint. Running

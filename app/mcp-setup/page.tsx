@@ -14,8 +14,8 @@ import { AgentSetupScreen } from "@/components/home/agent-setup-screen";
 import { MCP_PATH, resolveBaseUrl } from "@/lib/mcp/config";
 
 export const metadata: Metadata = {
-  title: "Bring your own agent · Columbia Catalog",
-  description: "Connect Claude, Cursor, or any MCP client to Columbia Catalog.",
+  title: "Bring your own agent · LionPlan",
+  description: "Connect Claude, Cursor, or any MCP client to LionPlan.",
 };
 
 export const dynamic = "force-dynamic";

@@ -1,5 +1,5 @@
 /**
- * Columbia Catalog — shared constants.
+ * LionPlan — shared constants.
  * Authoritative. Import rather than redefining.
  */
 

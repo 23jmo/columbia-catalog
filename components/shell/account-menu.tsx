@@ -272,7 +272,7 @@ function SignInModal({
         )}
       >
         <AriaDialog
-          aria-label="Sign in to Columbia Catalog"
+          aria-label="Sign in to LionPlan"
           className="relative flex w-full flex-col rounded-3xl border border-border-button-default bg-background-primary-default p-6 shadow-xs outline-none sm:p-8 dark:bg-background-secondary-default"
         >
           <CloseButton

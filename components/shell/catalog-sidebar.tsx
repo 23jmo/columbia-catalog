@@ -14,7 +14,7 @@ import { useDrawerPush } from "@/components/shell/use-drawer-push";
 import { cx } from "@/utils/cx";
 
 /**
- * Columbia Catalog sidebar — BoardUI `DashboardSidebar` structure with catalog
+ * LionPlan sidebar — BoardUI `DashboardSidebar` structure with catalog
  * destinations, term switcher, and account menu.
  */
 

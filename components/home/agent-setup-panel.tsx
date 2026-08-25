@@ -66,7 +66,7 @@ export function AgentSetupPanel({
           </span>
         </div>
         <h1 className="text-display-4-semibold -tracking-[0.02em] text-balance text-text-primary">
-          Use Columbia Catalog in your agent
+          Use LionPlan in your agent
         </h1>
       </header>
 

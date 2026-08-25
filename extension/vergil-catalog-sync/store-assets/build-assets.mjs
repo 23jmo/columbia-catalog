@@ -80,7 +80,7 @@ const screenshotBackdrop = `
     <rect x="18" y="31" width="7" height="17" rx="3.5" fill="white"/>
     <rect x="29" y="20" width="7" height="28" rx="3.5" fill="white"/>
     <rect x="40" y="26" width="7" height="22" rx="3.5" fill="white"/>
-    <text x="0" y="122" fill="#1D4ED8" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="800" letter-spacing="2">COLUMBIA CATALOG</text>
+    <text x="0" y="122" fill="#1D4ED8" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="800" letter-spacing="2">LIONPLAN</text>
     <text x="0" y="186" fill="#172033" font-family="Inter, Arial, sans-serif" font-size="52" font-weight="800" letter-spacing="-2">Refresh every course.</text>
     <text x="0" y="231" fill="#657087" font-family="Inter, Arial, sans-serif" font-size="25">Every Fall 2026 course checked in Vergil.</text>
     <g fill="#334056" font-family="Inter, Arial, sans-serif" font-size="22">

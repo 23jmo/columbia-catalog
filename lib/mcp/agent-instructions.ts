@@ -1,6 +1,6 @@
 /**
  * Self-contained prompt a student pastes into Claude, Cursor, or any agent
- * to connect Columbia Catalog's MCP server and know what it can do.
+ * to connect LionPlan's MCP server and know what it can do.
  */
 
 import { SCOPES, SCOPE_DESCRIPTIONS } from "./auth";
@@ -41,7 +41,7 @@ export function buildAgentTasks(): AgentTask[] {
       id: "schedule",
       title: "Read my schedule",
       example: "get_my_schedule",
-      prompt: "Read my saved Columbia Catalog plans with get_my_schedule.",
+      prompt: "Read my saved LionPlan plans with get_my_schedule.",
     },
     {
       id: "watch",
@@ -116,7 +116,7 @@ ${scopeLines}
 
 ## Rules
 
-- Columbia Catalog is read-only toward Columbia — never register, drop, or waitlist anyone.
+- LionPlan is read-only toward Columbia — never register, drop, or waitlist anyone.
 - Every seat count includes a sourceAsOf timestamp — always tell me when you looked.
 - add_section and remove_section create proposals I must accept at ${proposalReviewUrl} — they do not change my saved plan.
 - watch_section writes directly (additive and reversible).

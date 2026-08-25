@@ -1,5 +1,5 @@
 /**
- * Columbia Catalog — index builder.
+ * LionPlan — index builder.
  *
  * Runs offline (see `scripts/build-index.ts`), never in the browser. Its job
  * is to move as much work as possible off the keystroke path:

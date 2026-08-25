@@ -52,7 +52,7 @@ import { getSessionUser } from "@/lib/db/auth";
 import { createServiceRoleClient } from "@/lib/db/client";
 
 export const metadata: Metadata = {
-  title: "Columbia Catalog",
+  title: "LionPlan",
   description:
     "Ask what to take next term. Answers are read out of the catalog and your own coursework, never recalled.",
 };

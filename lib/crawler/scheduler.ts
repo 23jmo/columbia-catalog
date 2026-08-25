@@ -1,5 +1,5 @@
 /**
- * Columbia Catalog — crawl scheduling.
+ * LionPlan — crawl scheduling.
  *
  * The scheduler owns exactly one question: *when should this job next be
  * fetched?* `next_fetch_at` IS the recency cache (spec §10), so this file is

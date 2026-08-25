@@ -36,7 +36,7 @@ import { partitionConflicts, type PlanAnalysisDetail } from "@/lib/schedule";
 import { cx } from "@/utils/cx";
 
 export const metadata: Metadata = {
-  title: "Schedule · Columbia Catalog",
+  title: "Schedule · LionPlan",
   description:
     "Your week, with overlaps, cross-campus walks, credit totals and requirement coverage checked as you build it.",
 };

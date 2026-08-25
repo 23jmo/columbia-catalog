@@ -188,7 +188,7 @@ async function buildEmbeddings(ordered: CourseWithSections[]): Promise<Embedding
 
 async function main(): Promise<void> {
   const startedAt = Date.now();
-  console.log(`Columbia Catalog — search index build`);
+  console.log(`LionPlan — search index build`);
   console.log(`  format version : ${INDEX_FORMAT_VERSION}`);
   console.log(`  terms          : ${terms.join(", ")}`);
 

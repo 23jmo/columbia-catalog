@@ -68,5 +68,5 @@
     return sections;
   }
 
-  root.ColumbiaCatalogCaptureSchema = Object.freeze({ normalizeSection, normalizeSections });
+  root.LionPlanCaptureSchema = Object.freeze({ normalizeSection, normalizeSections });
 })(globalThis);

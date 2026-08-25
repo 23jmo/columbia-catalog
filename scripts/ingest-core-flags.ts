@@ -1,5 +1,5 @@
 /**
- * Columbia Catalog — Core requirement flag ingest.
+ * LionPlan — Core requirement flag ingest.
  *
  *   npx tsx --env-file=.env.local scripts/ingest-core-flags.ts status
  *   npx tsx --env-file=.env.local scripts/ingest-core-flags.ts run --dry-run
@@ -44,7 +44,7 @@ import {
 import type { RequirementFlags } from "@/lib/types";
 
 const USER_AGENT =
-  "ColumbiaCatalog/1.0 (+https://github.com/columbia-catalog; course requirement ingest)";
+  "LionPlan/1.0 (+https://github.com/columbia-catalog; course requirement ingest)";
 
 interface Args {
   command: "status" | "run";

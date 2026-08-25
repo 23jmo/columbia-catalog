@@ -1,5 +1,5 @@
 /**
- * Columbia Catalog — authoritative shared domain types.
+ * LionPlan — authoritative shared domain types.
  *
  * Every module imports from here. Do not redefine these shapes locally and do
  * not edit this file without coordinating: parsers, the search index builder,

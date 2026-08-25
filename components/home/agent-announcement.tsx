@@ -12,7 +12,7 @@ export function AgentAnnouncement() {
   return (
     <Announcement
       icon={RiRobot2Line}
-      title="Use Columbia Catalog in your agent"
+      title="Use LionPlan in your agent"
       actionLabel="Set up"
       onAction={() => router.push(SETUP_PATH)}
       dismissible

@@ -1,5 +1,5 @@
 /**
- * Supabase clients for Columbia Catalog.
+ * Supabase clients for LionPlan.
  *
  * Two rules govern this file:
  *

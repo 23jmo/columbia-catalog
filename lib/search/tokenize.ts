@@ -1,5 +1,5 @@
 /**
- * Columbia Catalog — tokenization.
+ * LionPlan — tokenization.
  *
  * This module is shared verbatim by the index builder and the query engine.
  * That is not a convenience, it is a correctness requirement: any difference

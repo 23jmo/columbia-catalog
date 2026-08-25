@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0001_catalog.sql — Columbia Catalog core catalog schema
+-- 0001_catalog.sql — LionPlan core catalog schema
 --
 -- Spec reference: §11 "Data Model / Catalog".
 --

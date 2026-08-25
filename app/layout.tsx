@@ -22,7 +22,7 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Columbia Catalog",
+  title: "LionPlan",
   description:
     "Fast, honest course search and schedule planning for Columbia and Barnard.",
 };

@@ -1,5 +1,5 @@
 /**
- * Columbia Catalog — crawler lane contracts.
+ * LionPlan — crawler lane contracts.
  *
  * ---------------------------------------------------------------------------
  * WHY THIS FILE EXISTS

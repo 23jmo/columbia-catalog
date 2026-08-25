@@ -41,7 +41,7 @@ import { listPrograms } from "@/lib/requirements/programs";
  */
 
 export const metadata: Metadata = {
-  title: "Get started · Columbia Catalog",
+  title: "Get started · LionPlan",
   description:
     "Tell us your school, your major and what you've taken, and we'll work out what you should take next.",
 };

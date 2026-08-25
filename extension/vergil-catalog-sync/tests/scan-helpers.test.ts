@@ -18,8 +18,8 @@ beforeAll(async () => {
   const source = await readFile(path.resolve(testDirectory, "../scan-helpers.js"), "utf8");
   runInThisContext(source, { filename: "scan-helpers.js" });
   helpers = (
-    globalThis as typeof globalThis & { ColumbiaCatalogScanHelpers: ScanHelpers }
-  ).ColumbiaCatalogScanHelpers;
+    globalThis as typeof globalThis & { LionPlanScanHelpers: ScanHelpers }
+  ).LionPlanScanHelpers;
 });
 
 describe("full-term scan helpers", () => {

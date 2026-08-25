@@ -7,7 +7,7 @@ import { getSessionUser } from "@/lib/db/auth";
 import { VergilContributionClient } from "./vergil-contribution-client";
 
 export const metadata: Metadata = {
-  title: "Contribute Vergil schedules · Columbia Catalog",
+  title: "Contribute Vergil schedules · LionPlan",
   description: "Review and contribute sanitized class times and locations captured by Vergil.",
 };
 

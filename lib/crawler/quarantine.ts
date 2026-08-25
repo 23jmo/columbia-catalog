@@ -1,5 +1,5 @@
 /**
- * Columbia Catalog — the quarantine guard.
+ * LionPlan — the quarantine guard.
  *
  * Contract tests on golden fixtures catch *known* breakage before deploy. This
  * file catches *unknown* breakage in production: an ingest run producing fewer

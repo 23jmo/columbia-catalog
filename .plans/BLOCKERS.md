@@ -1,4 +1,4 @@
-# Columbia Catalog — blockers & decisions log
+# LionPlan — blockers & decisions log
 
 Things that need Johnathan's attention. Appended as they come up; nothing here
 blocks the build unless marked **BLOCKING**.

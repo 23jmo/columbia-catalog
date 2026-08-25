@@ -1,5 +1,5 @@
 /**
- * Columbia Catalog — Reddit review source.
+ * LionPlan — Reddit review source.
  *
  * Reddit is a SECONDARY source (CULPA is primary). Its value is coverage of
  * the long tail: courses nobody wrote a CULPA review for still get discussed
@@ -15,7 +15,7 @@
  *
  *   REDDIT_CLIENT_ID       — app id from https://www.reddit.com/prefs/apps
  *   REDDIT_CLIENT_SECRET   — app secret
- *   REDDIT_USER_AGENT      — e.g. "web:columbia-catalog:v0.1 (by /u/yourname)"
+ *   REDDIT_USER_AGENT      — e.g. "web:lionplan:v0.1 (by /u/yourname)"
  *
  * Optional, and only for a "script"-type app that must act as a user:
  *
@@ -97,7 +97,7 @@ export function readRedditCredentialsFromEnv(
   if (!clientId || !clientSecret) return null;
 
   const userAgent =
-    env.REDDIT_USER_AGENT?.trim() || "web:columbia-catalog:v0.1 (Columbia Catalog review ingest)";
+    env.REDDIT_USER_AGENT?.trim() || "web:lionplan:v0.1 (LionPlan review ingest)";
   const username = env.REDDIT_USERNAME?.trim();
   const password = env.REDDIT_PASSWORD?.trim();
 
