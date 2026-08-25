@@ -78,7 +78,21 @@ export function Conversation({
               <p
                 className={cx(
                   "max-w-[min(34rem,85%)] whitespace-pre-wrap rounded-2xl",
-                  "border border-border-table bg-background-primary-default shadow-xs",
+                  /*
+                    A tint instead of a rim. The bubble used to be page-white
+                    with a hairline and `shadow-xs`, and neither did any work:
+                    the fill was the same colour as what it sat on, and
+                    `--shadow-xs` is only overridden for dark, so in light mode
+                    the shadow fell back to Tailwind's 5% default. The border
+                    was carrying the whole shape on its own.
+
+                    One step of grey separates it in both themes without a
+                    line — `secondary-default` is neutral-100 against a white
+                    page, and neutral-900 against the neutral-925 dark page, so
+                    it reads as slightly-raised in light and slightly-lifted in
+                    dark rather than inverting.
+                  */
+                  "bg-background-secondary-default",
                   "px-4 py-3 text-headline-regular text-text-primary",
                 )}
               >

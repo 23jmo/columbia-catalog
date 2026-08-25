@@ -27,6 +27,13 @@ import { cx } from "@/utils/cx";
  * the whole width and the controls sit underneath it, so a three-line question
  * looks expected rather than like something that overflowed.
  *
+ * The one place a pill survives is a phone at rest, and it is not a reversal:
+ * it folds to a single row only while empty and unfocused, and becomes the full
+ * field the moment it is tapped. On a 700px-tall screen the 7rem box plus its
+ * status line was eating a fifth of the thread to say "you may type here" — the
+ * pill says the same thing in 44px and hands the rest back to the conversation.
+ * Everything above still holds for the state you actually write in.
+ *
  * So: 7rem tall at rest, corners at 24px instead of a full round, the textarea
  * across the top, and one control row beneath it. The box grows from there to
  * a 200px cap, at which point it scrolls.
@@ -111,6 +118,21 @@ export function Composer({
   const showPlaceholder = value.trim().length === 0;
 
   /*
+   * Phone-only collapse. See the note at the top of the file: the box is a
+   * field, not a pill, and that is still true — this only governs what it looks
+   * like while nobody is using it.
+   *
+   * `isBusy` holds it open on purpose. Collapsing mid-stream would hide the
+   * stop button and the running light, which are the two things a reader wants
+   * while the answer is arriving. Non-empty text holds it open for the same
+   * reason: a half-typed question must not fold away because a thumb landed
+   * somewhere else.
+   */
+  const [isFocused, setIsFocused] = useState(false);
+  const isExpanded = isFocused || isBusy || value.trim().length > 0;
+  const isCollapsed = !isExpanded;
+
+  /*
    * Grow to the content, capped.
    *
    * Reset to `auto` first: `scrollHeight` is the height of the content *or* the
@@ -122,8 +144,11 @@ export function Composer({
     const element = box.current;
     if (!element) return;
     element.style.height = "auto";
+    // Collapsed, the pill's own single-row height governs. Writing an explicit
+    // pixel height here would win over it and the pill would stay field-tall.
+    if (isCollapsed) return;
     element.style.height = `${Math.min(element.scrollHeight, 200)}px`;
-  }, [value]);
+  }, [value, isCollapsed]);
 
   return (
     <div className="flex flex-col gap-2.5">
@@ -146,24 +171,50 @@ export function Composer({
         <span
           aria-hidden
           className={cx(
-            "absolute inset-0 rounded-3xl border border-border-table",
+            "absolute inset-0 border border-border-table",
             "bg-background-primary-default shadow-xs",
+            "transition-[border-radius] duration-200 ease-out motion-reduce:transition-none",
+            "sm:rounded-3xl",
+            isCollapsed ? "rounded-full" : "rounded-3xl",
           )}
         />
 
         <RunningLight active={isBusy} />
 
-        <div className="relative flex min-h-[7rem] flex-col gap-2 rounded-3xl p-3">
+        {/*
+          Two shapes, and only below `sm` is there a second one. The `sm:`
+          utilities are emitted inside a media query and therefore win above
+          640px regardless of what the collapsed branch says, so the desktop box
+          is untouched by any of this.
+        */}
+        <div
+          className={cx(
+            "relative flex gap-2",
+            "transition-[border-radius,padding] duration-200 ease-out motion-reduce:transition-none",
+            "sm:min-h-[7rem] sm:flex-col sm:rounded-3xl sm:p-3",
+            isCollapsed
+              ? "min-h-0 flex-row items-center rounded-full p-2"
+              : "min-h-[7rem] flex-col rounded-3xl p-3",
+          )}
+        >
           {/*
             The writing surface first, at full width. `min-h` on the textarea
             rather than only on the box, so an empty composer still reads as
             somewhere to write a paragraph instead of a tall box with one line
             floating at the top of it.
           */}
-          <div className="relative min-h-14 w-full min-w-0 flex-1">
+          <div
+            className={cx(
+              "relative w-full min-w-0 flex-1",
+              "sm:min-h-14",
+              isCollapsed ? "min-h-0" : "min-h-14",
+            )}
+          >
             <textarea
               ref={box}
-              rows={2}
+              rows={isCollapsed ? 1 : 2}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
               value={value}
               onChange={(event) => onChange(event.target.value)}
               onKeyDown={(event) => {
@@ -175,25 +226,48 @@ export function Composer({
               placeholder=""
               aria-label="Ask the assistant a question"
               className={cx(
-                "min-h-14 w-full resize-none bg-transparent px-2 pt-1",
+                "w-full resize-none bg-transparent px-2",
+                "sm:min-h-14 sm:pt-1",
+                isCollapsed ? "min-h-0 py-0 leading-9" : "min-h-14 pt-1",
                 COMPOSER_TEXT,
                 "text-text-primary caret-accent-500 outline-none",
               )}
             />
 
             {showPlaceholder ? (
-              <ComposerPlaceholder text={placeholder} reduceMotion={reduceMotion} />
+              <ComposerPlaceholder
+                text={placeholder}
+                reduceMotion={reduceMotion}
+                compact={isCollapsed}
+              />
             ) : null}
           </div>
 
-          <div className="flex shrink-0 items-center gap-2">
+          {/*
+            `contents` when folded, so the send button becomes a flex item of
+            the pill itself and sits on the same row as the text rather than
+            under it. The two buttons that have nowhere to go in a single row
+            are dropped — the phone top bar carries new-thread while a thread is
+            open, and history is a tap away once the box is expanded.
+          */}
+          <div
+            className={cx(
+              "flex shrink-0 items-center gap-2",
+              isCollapsed && "max-sm:contents",
+            )}
+          >
             <button
               type="button"
               onClick={onNewThread}
+              // Keep focus on the textarea. Without this the mousedown blurs it,
+              // the box folds, and this button moves out from under the tap
+              // before the click resolves.
+              onMouseDown={(event) => event.preventDefault()}
               disabled={!canStartNewThread}
               aria-label="Start a new question"
               title="Start a new question"
               className={cx(
+                isCollapsed && "max-sm:hidden",
                 "flex size-9 shrink-0 items-center justify-center rounded-full",
                 "border border-border-table text-foreground-icon-secondary transition-colors",
                 "hover:bg-background-primary-hover hover:text-text-primary",
@@ -209,9 +283,11 @@ export function Composer({
               <button
                 type="button"
                 onClick={onOpenHistory}
+                onMouseDown={(event) => event.preventDefault()}
                 aria-label="Find a past chat"
                 title="Find a past chat"
                 className={cx(
+                  isCollapsed && "max-sm:hidden",
                   "flex size-9 shrink-0 items-center justify-center rounded-full xl:hidden",
                   "border border-border-table text-foreground-icon-secondary transition-colors",
                   "hover:bg-background-primary-hover hover:text-text-primary",
@@ -251,7 +327,13 @@ export function Composer({
         </div>
       </div>
 
-      <StatusBar used={promptsUsed} limit={promptsLimit} />
+      {/*
+        Hidden under the folded pill. It is a footnote about a rate limit, and a
+        footnote hanging off a floating control reads as an error message.
+      */}
+      <div className={cx(isCollapsed && "max-sm:hidden")}>
+        <StatusBar used={promptsUsed} limit={promptsLimit} />
+      </div>
     </div>
   );
 }
@@ -287,9 +369,12 @@ function useRotatingPlaceholder(
 function ComposerPlaceholder({
   text,
   reduceMotion,
+  compact = false,
 }: {
   text: string;
   reduceMotion: boolean | null;
+  /** Folded pill: one line, vertically centred on the single row. */
+  compact?: boolean;
 }) {
   const firstPrompt = useRef(true);
   const [soft, setSoft] = useState(false);
@@ -309,7 +394,10 @@ function ComposerPlaceholder({
     <div
       aria-hidden
       className={cx(
-        "pointer-events-none absolute inset-x-2 top-1 line-clamp-2 text-text-tertiary",
+        "pointer-events-none absolute inset-x-2 text-text-tertiary",
+        compact
+          ? "top-0 bottom-0 flex items-center truncate"
+          : "top-1 line-clamp-2",
         COMPOSER_TEXT,
       )}
     >
