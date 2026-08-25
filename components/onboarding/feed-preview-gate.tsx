@@ -34,8 +34,12 @@ export interface FeedPreviewGateProps {
  * The cards are the same `FeedCard` the home feed and the agent render. They
  * are cached in `localStorage`, so a round-trip through Google paints these
  * ten again instead of ranking a new set. Sign-in does not generate; it
- * unlocks. The stack is clipped until then — scrolling the extra cards is
- * the thing the gate is keeping.
+ * unlocks. There is no guest bypass: unsigned visitors stay on this screen
+ * until they have an account, which is what makes onboarding the default
+ * rather than an optional tour.
+ *
+ * The stack is clipped until then — scrolling the extra cards is the thing
+ * the gate is keeping.
  */
 export function FeedPreviewGate({
   state,
@@ -129,7 +133,6 @@ export function FeedPreviewGate({
             onSignIn={onSignIn}
             signInDisabled={signInDisabled}
             signInError={signInError}
-            onFinish={() => onFinish(displayCards)}
           />
         </div>
       ) : (
@@ -241,13 +244,11 @@ function FeedGateOverlay({
   onSignIn,
   signInDisabled,
   signInError,
-  onFinish,
 }: {
   feedError: string | null;
   onSignIn: () => void | Promise<void>;
   signInDisabled?: boolean;
   signInError?: string | null;
-  onFinish: () => void;
 }) {
   return (
     <div className="relative flex w-full max-w-md flex-col items-center gap-4">
@@ -256,18 +257,11 @@ function FeedGateOverlay({
         disabled={signInDisabled}
         error={signInError ?? feedError}
       />
-      {!signInDisabled ? null : (
+      {signInDisabled ? (
         <p className="text-center text-caption-1-regular text-text-tertiary">
           Accounts are not configured on this deployment.
         </p>
-      )}
-      <button
-        type="button"
-        onClick={onFinish}
-        className="text-caption-1-medium text-text-tertiary underline-offset-2 hover:text-text-secondary hover:underline"
-      >
-        Browse without saving
-      </button>
+      ) : null}
     </div>
   );
 }

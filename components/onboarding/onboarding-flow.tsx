@@ -26,6 +26,7 @@ import {
   type GuestOnboardingState,
 } from "@/lib/onboarding/state";
 import { canPrefetchGuessDeck, prefetchGuessDeck } from "@/lib/onboarding/guess-cache";
+import { signIn } from "@/lib/db/auth";
 import {
   canPrefetchFeedPreview,
   peekCachedFeedPreview,
@@ -106,10 +107,13 @@ import { StepLove } from "./step-love";
  *
  * `signIn()` sends the browser to Google with `redirectTo` pointing back at the
  * current path, so a student who signs in from the last step lands back HERE
- * with a session. The effect below notices the session, flushes the guest state
- * through one RPC, and only clears local storage once the server confirms —
- * clearing on failure is the single bug that would lose a student's whole
- * session.
+ * with a session. The first-screen Log in control is the other path: it sends
+ * `next=/` so someone who already has an account skips the rest of the wizard
+ * and lands on home.
+ *
+ * The effect below notices the session, flushes the guest state through one
+ * RPC, and only clears local storage once the server confirms — clearing on
+ * failure is the single bug that would lose a student's whole session.
  *
  * It runs at most once per mount (`migrationRef`), because `useSessionAccount`
  * re-fires on every token refresh and a flush per refresh would be a write
@@ -191,6 +195,7 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
   const [migration, setMigration] = useState<{ status: MigrationStatus; message?: string }>({
     status: "idle",
   });
+  const [signInError, setSignInError] = useState<string | null>(null);
 
   /*
    * Which of the four degree questions is on screen.
@@ -497,6 +502,24 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
   const isFirstScreen = state.step === "school" && degreeIndex === 0;
 
   /**
+   * Returning accounts skip the wizard from the first question.
+   *
+   * Hidden while the session is still loading so a signed-in redo does not
+   * flash "Log in" for a frame. Hidden once they have an account, because
+   * they are already in.
+   */
+  const showSignIn = isFirstScreen && !session.isLoading && session.account === null;
+
+  const startFirstPageSignIn = async () => {
+    setSignInError(null);
+    // Home, not this page: they already have an account and should not walk
+    // the five questions again. Last-step sign-in still uses the default
+    // `next` (this path) so they return to the ungated feed.
+    const { error } = await signIn({ next: "/" });
+    if (error) setSignInError(error);
+  };
+
+  /**
    * Leave onboarding for good.
    *
    * Sets the completion cookie server-side so a returning visitor is not
@@ -572,6 +595,8 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
           canAdvance={canAdvance(state)}
           nextLabel="Continue to class year"
           hue="roseBlue"
+          onSignIn={showSignIn ? startFirstPageSignIn : undefined}
+          signInError={signInError}
         >
           <SchoolQuestion
             school={state.school}
@@ -699,9 +724,9 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
   }
 
   /*
-   * The last screen advances by leaving the flow, so it has no arrow — its two
-   * ways out are the sign-in button and "take me to the catalog", both of which
-   * live inside the card.
+   * The last screen advances by leaving the flow, so it has no arrow. Guests
+   * sign in; signed-in students take the catalog button. There is no guest
+   * browse exit — unsigned visitors stay here until they have an account.
    */
   return (
     <OnboardingScreen

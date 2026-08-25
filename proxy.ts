@@ -20,17 +20,24 @@
  * `getUser()` here does two things at once: it validates the token, and on the
  * way it writes any refreshed cookies onto the response.
  *
- * ── This does NOT protect any route ────────────────────────────────────────
+ * ── Unsigned HTML goes to onboarding ───────────────────────────────────────
  *
- * Spec §15: reading is free. There is no redirect here, no allow-list, no
- * "signed in?" gate. Every page renders for everyone; the only thing that
- * needs an account is a write, and those authorize themselves at the point of
- * writing. A middleware that redirects would be the wrong shape for this
- * product no matter how conventional it looks.
+ * A signed-out visitor hitting `/`, `/search`, `/schedule`, and so on is
+ * redirected to `/onboarding` here, before the page paints. The first screen
+ * has a Log in control for people who already have an account; everyone else
+ * walks the wizard and signs in on the last step. There is no "browse as
+ * guest" exit — that path let people skip setup, which is the thing we are
+ * trying to make the default.
+ *
+ * APIs, the OAuth callback, and onboarding itself are not redirected. Writes
+ * still authorize themselves at the point of writing; this gate is a
+ * navigation default, not an authorization boundary.
  */
 
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+
+import { guestOnboardingLocation, isGuestAllowedPath } from "@/lib/onboarding/guest-gate";
 
 /**
  * Rescue an OAuth code that Supabase dropped on the wrong path.
@@ -110,7 +117,19 @@ export async function proxy(request: NextRequest) {
     },
   });
 
-  await client.auth.getUser();
+  const { data } = await client.auth.getUser();
+
+  // No session, and this is a page a guest should not browse. Send them to
+  // the wizard. Copy any cookies `getUser()` just refreshed onto the redirect
+  // so a half-valid token is not dropped on the way.
+  if (!data.user && !isGuestAllowedPath(request.nextUrl.pathname)) {
+    const redirectResponse = NextResponse.redirect(guestOnboardingLocation(request.nextUrl));
+    for (const cookie of response.cookies.getAll()) {
+      redirectResponse.cookies.set(cookie.name, cookie.value);
+    }
+    return redirectResponse;
+  }
+
   return response;
 }
 

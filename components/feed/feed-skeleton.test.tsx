@@ -36,4 +36,10 @@ describe("FeedSkeleton", () => {
     expect(html).toContain("xl:[scrollbar-width:thin]");
     expect(html).toContain("max-xl:[scrollbar-width:none]");
   });
+
+  it("lets a thumb swipe the rail on a phone", () => {
+    expect(html).toContain("touch-pan-x");
+    expect(html).toContain("overflow-x-auto");
+    expect(html).toContain("min-w-0");
+  });
 });

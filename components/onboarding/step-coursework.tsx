@@ -301,7 +301,7 @@ export function StepCoursework({
         {showSkeleton ? <CourseworkSkeleton /> : null}
 
         {!showSkeleton && state.courses.length > 0 ? (
-          <ChipWrap>
+          <ChipWrap className="gap-1.5 sm:gap-2">
             {state.courses.map((course) => (
               <RemovableChip
                 key={course.courseId}
@@ -334,7 +334,7 @@ export function StepCoursework({
             <h2 className="text-center text-caption-2-medium tracking-[0.08em] text-text-tertiary uppercase">
               Students with these usually have these too
             </h2>
-            <ChipWrap>
+            <ChipWrap className="gap-1.5 sm:gap-2">
               {suggestions.map((candidate) => (
                 <AddChip
                   key={candidate.courseId}

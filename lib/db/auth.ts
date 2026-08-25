@@ -129,10 +129,13 @@ export async function deleteSignedInAccount(userId: string): Promise<{ error: st
 /**
  * Starts the Google OAuth flow.
  *
- * `redirectTo` carries the current path so a student who signs in from a course
- * page lands back on that course page, not on the home page. The value is a
- * path from `window.location`, never anything a caller supplies, so it cannot
- * become an open redirect.
+ * `redirectTo` defaults to the current path so a student who signs in from a
+ * course page lands back there. Callers may pass `next` when the current path
+ * is the wrong landing — the onboarding first-screen Log in control sends
+ * people home, because they already have an account and should skip the
+ * wizard. The value must be a same-origin path (a single leading slash);
+ * anything else falls back to the current location so this cannot become an
+ * open redirect.
  *
  * ── Why `hd` is `*` and not a domain ──────────────────────────────────────
  *
@@ -151,11 +154,16 @@ export async function deleteSignedInAccount(userId: string): Promise<{ error: st
  * constraint in the database. `hd` was never a security boundary and treating
  * it as one is how it ended up excluding half the users instead.
  */
-export async function signIn(): Promise<{ error: string | null }> {
+export async function signIn(options?: { next?: string }): Promise<{ error: string | null }> {
   const client = getBrowserClient();
   if (!client) return { error: "Sign-in is not configured." };
 
-  const next = `${window.location.pathname}${window.location.search}`;
+  const current = `${window.location.pathname}${window.location.search}`;
+  const requested = options?.next;
+  const next =
+    requested && requested.startsWith("/") && !requested.startsWith("//")
+      ? requested
+      : current;
   const { error } = await client.auth.signInWithOAuth({
     provider: "google",
     options: {
@@ -187,7 +195,7 @@ export async function signIn(): Promise<{ error: string | null }> {
  */
 function describeSignInError(message: string): string {
   if (/provider is not enabled|unsupported provider/i.test(message)) {
-    return "Sign-in is not available on this deployment yet. Everything here is free to read without an account.";
+    return "Sign-in is not available on this deployment yet.";
   }
   return message;
 }

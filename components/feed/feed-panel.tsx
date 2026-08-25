@@ -36,7 +36,7 @@ export function FeedPanel({
   return (
     <section
       aria-label="Recommended sections"
-      className={cx("flex flex-col gap-2.5", className)}
+      className={cx("flex min-w-0 flex-col gap-2.5", className)}
     >
       {!feed.personalized ? <OnboardingNudge /> : null}
 

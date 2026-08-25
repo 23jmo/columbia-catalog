@@ -45,7 +45,8 @@ import type { GuessDeck } from "@/lib/onboarding/guess";
  *
  * `guessDeckAction`, `searchCoursesAction` and `resolveCoursesAction` are pure
  * reads. The only write is `migrateGuestStateAction`, and it needs a session.
- * That is what "guest-allowed through the first feed" means in code.
+ * The wizard itself is unsigned; the account appears on the last screen, or
+ * on the first-screen Log in control for people who already have one.
  */
 
 export interface ActionResult {

@@ -2,22 +2,23 @@ import type { Metadata } from "next";
 
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
 import { OnboardingToaster } from "@/components/onboarding/onboarding-toaster";
+import { AuthErrorNotice } from "@/components/shell/auth-error-notice";
 import { listPrograms } from "@/lib/requirements/programs";
 
 /**
  * `/onboarding` — the guess-and-confirm flow.
  *
- * ── A server shell around a client wizard, and nothing more ─────────────────
+ * ── A server shell around a client wizard ───────────────────────────────────
  *
  * The only thing this page does on the server is read the program registry,
- * which lives in code and is the same for every visitor. Everything else is a
- * guest's own state in their own browser, so there is nothing here to
- * personalise and nothing to fetch per request.
+ * which lives in code and is the same for every visitor. Guest answers live
+ * in the browser until sign-in flushes them. Failed OAuth lands here with
+ * `auth_error`, which is why this page reads search params at all.
  *
- * That is why there is no session check and no redirect. Onboarding is
- * guest-allowed by design — a visitor completes all five steps, sees the first
- * feed, and only then meets the sign-in gate. A route that required an account
- * to reach would invert the whole flow.
+ * Unsigned visitors are sent here by `proxy.ts`. This route itself never
+ * bounces anyone away: a signed-in student who wants to redo setup follows a
+ * link from their profile, and sending them home would make the wizard
+ * unreachable exactly when they have decided they want it.
  *
  * ── No shell: this route is a takeover ──────────────────────────────────────
  *
@@ -37,14 +38,6 @@ import { listPrograms } from "@/lib/requirements/programs";
  * without a surface the offer would never appear. It is `OnboardingToaster`
  * rather than the app's `Toaster` for one reason, explained there: the app's is
  * pinned top-centre, which on this route is where the question is.
- *
- * ── Why this route does not redirect a returning visitor away ───────────────
- *
- * The completion cookie (`cc_onboarded`) exists so OTHER routes can skip
- * sending someone here. This route itself always renders: a student who wants
- * to redo their setup types the URL or follows a link from their profile, and
- * bouncing them off it would make the wizard unreachable exactly when someone
- * has decided they want it.
  */
 
 export const metadata: Metadata = {
@@ -53,7 +46,12 @@ export const metadata: Metadata = {
     "Tell us your school, your major and what you've taken, and we'll work out what you should take next.",
 };
 
-export default function OnboardingPage() {
+export default async function OnboardingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const params = await searchParams;
   /*
    * `listPrograms()` reads authored + parsed programs from the registry. Cores
    * are filtered out inside the step: a Columbia College student cannot elect
@@ -71,6 +69,13 @@ export default function OnboardingPage() {
     <>
       {/* The one toast surface on this route. Same store, bottom edge. */}
       <OnboardingToaster />
+      {params.auth_error ? (
+        <div className="pointer-events-none fixed inset-x-0 top-16 z-20 flex justify-center px-5">
+          <div className="pointer-events-auto w-full max-w-md rounded-2lg border border-border-table bg-background-full shadow-sm">
+            <AuthErrorNotice reason={params.auth_error} />
+          </div>
+        </div>
+      ) : null}
       <OnboardingFlow programOptions={programOptions} />
     </>
   );

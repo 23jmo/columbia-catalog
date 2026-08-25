@@ -108,6 +108,17 @@ export interface OnboardingScreenProps {
    * of the step transition so going back visibly reverses going forward.
    */
   direction?: 1 | -1;
+  /**
+   * First-screen Log in control. Omitted once the student is signed in, and
+   * omitted after they leave the first question — later screens already have
+   * a back arrow, and the last screen has the full sign-in card.
+   *
+   * Lands on `/` rather than staying in the wizard: this button is for people
+   * who already have an account and should skip setup.
+   */
+  onSignIn?: () => void;
+  /** Shown under the Log in control when OAuth could not start. */
+  signInError?: string | null;
 }
 
 export function OnboardingScreen({
@@ -123,6 +134,8 @@ export function OnboardingScreen({
   hue,
   lockViewport = false,
   direction = 1,
+  onSignIn,
+  signInError,
 }: OnboardingScreenProps) {
   /*
    * Reduced motion keeps the crossfade and drops the horizontal travel. The
@@ -154,6 +167,7 @@ export function OnboardingScreen({
       )}
     >
       {onBack ? <BackArrow onClick={onBack} /> : null}
+      {onSignIn ? <SignInChip onClick={onSignIn} error={signInError} /> : null}
 
       {/*
         Upper-middle, not centred and not top-aligned.
@@ -364,6 +378,35 @@ export function Ornament({ hue = "roseBlue" }: { hue?: OrnamentHue }) {
         />
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Returning-account control. Same chrome as the back arrow, mirrored to the
+ * right, with a label because "log in" is not a universally understood icon.
+ *
+ * Only the first screen mounts this. Later screens have a back arrow in the
+ * other corner, and the last screen has the full Columbia sign-in card.
+ */
+function SignInChip({ onClick, error }: { onClick: () => void; error?: string | null }) {
+  return (
+    <div className="absolute top-4 right-4 z-10 flex flex-col items-end sm:top-6 sm:right-6">
+      <button
+        type="button"
+        onClick={onClick}
+        className="flex h-10 cursor-pointer items-center rounded-xl border border-border-button-default bg-background-full px-3.5 text-body-medium text-text-secondary transition-colors hover:bg-background-secondary-hover hover:text-text-primary pointer-coarse:h-11"
+      >
+        Log in
+      </button>
+      {error ? (
+        <p
+          role="alert"
+          className="mt-1 max-w-52 text-right text-caption-1-regular text-text-error-primary"
+        >
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -512,21 +512,41 @@ export function buildGuessDeck(input: GuessDeckInput): GuessDeck {
 }
 
 /**
- * Highest engine score first, then lowest course level, then id.
+ * Evidence kind first, then engine score, then lowest course level, then id.
  *
- * The level tiebreak is not cosmetic. Within one tier the engine's score says
- * little about *when* a course is taken, and a student reading a list of things
- * they have already done expects it roughly chronological — intro courses at
- * the top. The id at the end keeps the order stable across re-ranks, which is
- * the property that stops the grid twitching when two courses tie.
+ * Open-ended Core lists (every science lecture) score well on requirement-fit
+ * and used to bury the major's actual options. The level tiebreak still puts
+ * intro courses first within a kind. The id at the end keeps the order stable
+ * across re-ranks, which is the property that stops the grid twitching when
+ * two courses tie.
  */
 function order(candidates: GuessCandidate[]): GuessCandidate[] {
-  return [...candidates].sort(
-    (a, b) =>
+  return [...candidates].sort((a, b) => {
+    const reasonDelta = reasonPriority(a) - reasonPriority(b);
+    if (reasonDelta !== 0) return reasonDelta;
+    return (
       b.score - a.score ||
       (levelOf(a.courseId) ?? 9000) - (levelOf(b.courseId) ?? 9000) ||
-      a.courseId.localeCompare(b.courseId),
-  );
+      a.courseId.localeCompare(b.courseId)
+    );
+  });
+}
+
+/**
+ * Why this is on the strip, as a sort key. Lower is closer to the student's
+ * actual transcript.
+ *
+ * A confirmation's unique prereq beats a named major option, which beats an
+ * open-ended Core list (every science lecture in the catalog). Without this,
+ * requirement-fit scores the Science requirement so high that Operating
+ * Systems never pulls Data Structures into view.
+ */
+function reasonPriority(candidate: GuessCandidate): number {
+  const kinds = new Set(candidate.reasons.map((reason) => reason.kind));
+  if (kinds.has("implied_by")) return 0;
+  if (kinds.has("required_by")) return 1;
+  if (kinds.has("option_in")) return 2;
+  return 3;
 }
 
 /** Course ids a single rule names, for attributing a candidate to its group. */

@@ -39,7 +39,12 @@ function safeNext(raw: string | null): string {
 }
 
 function errorRedirect(origin: string, reason: string): NextResponse {
-  return NextResponse.redirect(`${origin}/?auth_error=${encodeURIComponent(reason)}`);
+  // Home bounces unsigned visitors to onboarding, so the message has to live
+  // there — otherwise the query is stripped on the way and the failure looks
+  // like a cancelled chooser.
+  return NextResponse.redirect(
+    `${origin}/onboarding?auth_error=${encodeURIComponent(reason)}`,
+  );
 }
 
 export async function GET(request: Request): Promise<Response> {

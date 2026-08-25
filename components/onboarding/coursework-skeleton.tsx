@@ -14,7 +14,7 @@ function ChipSkeleton({ className }: { className?: string }) {
     <li>
       <div
         className={cx(
-          "h-10 min-w-20 animate-pulse rounded-full bg-background-tertiary-default motion-reduce:animate-none pointer-coarse:h-11",
+          "h-8 min-w-16 animate-pulse rounded-full bg-background-tertiary-default motion-reduce:animate-none sm:h-10 sm:min-w-20 pointer-coarse:h-9 sm:pointer-coarse:h-11",
           className,
         )}
       />
@@ -34,7 +34,7 @@ function LabelSkeleton() {
 export function CourseworkSkeleton() {
   return (
     <div className="flex flex-col gap-4" aria-busy="true" aria-live="polite">
-      <ChipWrap aria-hidden>
+      <ChipWrap className="gap-1.5 sm:gap-2" aria-hidden>
         <ChipSkeleton className="w-28" />
         <ChipSkeleton className="w-32" />
         <ChipSkeleton className="w-24" />
@@ -45,7 +45,7 @@ export function CourseworkSkeleton() {
 
       <div className="flex flex-col gap-3">
         <LabelSkeleton />
-        <ChipWrap aria-hidden>
+        <ChipWrap className="gap-1.5 sm:gap-2" aria-hidden>
           <ChipSkeleton className="w-28" />
           <ChipSkeleton className="w-32" />
           <ChipSkeleton className="w-24" />

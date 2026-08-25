@@ -51,7 +51,11 @@ export function FeedRailScroller({
   return (
     <div
       className={cx(
-        "-m-1 overflow-x-auto overscroll-x-contain p-1 xl:pb-2",
+        // `min-w-0` keeps this a scrollport inside a flex column: without it
+        // the row's intrinsic width can blow the parent out and the page's
+        // `overflow-x-clip` just shears the rest of the cards off. `touch-pan-x`
+        // is the thumb: a sideways swipe belongs to the rail, not the page.
+        "min-w-0 -m-1 overflow-x-auto overflow-y-hidden overscroll-x-contain touch-pan-x p-1 xl:pb-2",
         "snap-x snap-mandatory scroll-p-1",
         // Touch: no bar. Pointer: a thin track that is actually visible.
         "max-xl:[scrollbar-width:none] max-xl:[&::-webkit-scrollbar]:hidden",

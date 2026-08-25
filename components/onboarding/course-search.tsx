@@ -52,6 +52,8 @@ export function CourseSearch({ confirmedIds, onAdd }: CourseSearchProps) {
   const [hits, setHits] = useState<CourseHit[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  /** Query we have actually answered. Empty-state must not flash during debounce. */
+  const [settledQuery, setSettledQuery] = useState("");
 
   /*
    * Guards an out-of-order response. The action is called per keystroke-burst,
@@ -91,10 +93,12 @@ export function CourseSearch({ confirmedIds, onAdd }: CourseSearchProps) {
         if (latestQuery.current !== next) return;
         if (!result.ok) {
           setError(result.error ?? "Search failed.");
+          setSettledQuery(next);
           return;
         }
         setError(null);
         setHits(result.hits ?? []);
+        setSettledQuery(next);
       });
     }, DEBOUNCE_MS);
 
@@ -124,7 +128,11 @@ export function CourseSearch({ confirmedIds, onAdd }: CourseSearchProps) {
         <p className="text-center text-caption-1-regular text-text-error-primary">{visibleError}</p>
       ) : null}
 
-      {isSearchable && visibleHits.length === 0 && !isPending && !visibleError ? (
+      {isSearchable &&
+      visibleHits.length === 0 &&
+      !isPending &&
+      !visibleError &&
+      settledQuery === trimmed ? (
         <p className="text-center text-caption-1-regular text-text-secondary">
           Nothing in the two active terms matches that. If it was an older course, transfer credit
           or AP, import your transcript — we keep coursework we cannot find and mark it rather than
