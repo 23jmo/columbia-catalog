@@ -15,10 +15,23 @@ import { cx } from "@/utils/cx";
 /**
  * The box.
  *
- * ── Copied from the template, including the part that is invisible ─────────
+ * ── A field, not a pill ────────────────────────────────────────────────────
  *
- * BoardUI's composer is a white pill floating on the page background, and the
- * detail that makes it is a multi-stop gradient chasing its own outline — which
+ * It was a 52px pill with everything on one row: new-thread button, input,
+ * term, send. That shape says "type a line" — it is a search box — and what
+ * this box is for is a paragraph about your degree. Gemini's is the reference
+ * the owner named, and the thing it gets right is that the writing surface owns
+ * the whole width and the controls sit underneath it, so a three-line question
+ * looks expected rather than like something that overflowed.
+ *
+ * So: 7rem tall at rest, corners at 24px instead of a full round, the textarea
+ * across the top, and one control row beneath it. The box grows from there to
+ * a 200px cap, at which point it scrolls.
+ *
+ * ── Kept from the template, including the part that is invisible ───────────
+ *
+ * The detail that makes it is a multi-stop gradient chasing its own outline —
+ * which
  * sits at zero opacity until the agent is actually working. It is not trim; it
  * is the loading state, and it is the only one the surface needs, because the
  * pill is the one element a student is already looking at when they are waiting.
@@ -82,7 +95,7 @@ export function Composer({
     const element = box.current;
     if (!element) return;
     element.style.height = "auto";
-    element.style.height = `${Math.min(element.scrollHeight, 132)}px`;
+    element.style.height = `${Math.min(element.scrollHeight, 200)}px`;
   }, [value]);
 
   return (
@@ -101,7 +114,7 @@ export function Composer({
         <span
           aria-hidden
           className={cx(
-            "absolute inset-0 rounded-[26px] border border-border-table",
+            "absolute inset-0 rounded-3xl border border-border-table",
             "bg-background-primary-default shadow-xs",
             "transition-colors duration-[450ms] motion-reduce:transition-none",
             isBusy && "border-transparent",
@@ -110,27 +123,16 @@ export function Composer({
 
         <RunningLight active={isBusy} />
 
-        <div className="relative flex min-h-[52px] items-end gap-2.5 rounded-[26px] p-2">
-          <button
-            type="button"
-            onClick={onNewThread}
-            disabled={!canStartNewThread}
-            aria-label="Start a new question"
-            title="Start a new question"
-            className={cx(
-              "flex size-9 shrink-0 items-center justify-center rounded-full",
-              "text-foreground-icon-secondary transition-colors",
-              "hover:bg-background-primary-hover hover:text-text-primary",
-              "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
-              "disabled:pointer-events-none disabled:text-foreground-icon-disabled",
-            )}
-          >
-            <RiAddLine aria-hidden className="size-5" />
-          </button>
-
+        <div className="relative flex min-h-[7rem] flex-col gap-2 rounded-3xl p-3">
+          {/*
+            The writing surface first, at full width. `min-h` on the textarea
+            rather than only on the box, so an empty composer still reads as
+            somewhere to write a paragraph instead of a tall box with one line
+            floating at the top of it.
+          */}
           <textarea
             ref={box}
-            rows={1}
+            rows={2}
             value={value}
             onChange={(event) => onChange(event.target.value)}
             onKeyDown={(event) => {
@@ -142,37 +144,57 @@ export function Composer({
             placeholder="Ask me anything"
             aria-label="Ask the assistant a question"
             className={cx(
-              "min-w-0 flex-1 resize-none self-center bg-transparent py-2",
+              "min-h-14 w-full min-w-0 flex-1 resize-none bg-transparent px-2 pt-1",
               "text-body-regular text-text-primary caret-accent-500",
               "placeholder:text-text-tertiary outline-none",
             )}
           />
 
-          <span className="hidden shrink-0 items-center gap-1.5 self-center px-1 sm:flex">
-            <RiCalendarLine aria-hidden className="size-4 text-foreground-icon-quaternary" />
-            <span className="whitespace-nowrap text-body-medium text-text-secondary">
-              {termLabel}
-            </span>
-          </span>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={onNewThread}
+              disabled={!canStartNewThread}
+              aria-label="Start a new question"
+              title="Start a new question"
+              className={cx(
+                "flex size-9 shrink-0 items-center justify-center rounded-full",
+                "border border-border-table text-foreground-icon-secondary transition-colors",
+                "hover:bg-background-primary-hover hover:text-text-primary",
+                "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
+                "disabled:pointer-events-none disabled:border-transparent",
+                "disabled:text-foreground-icon-disabled",
+              )}
+            >
+              <RiAddLine aria-hidden className="size-5" />
+            </button>
 
-          <button
-            type="button"
-            onClick={isBusy ? onStop : onSubmit}
-            disabled={!isBusy && value.trim().length === 0}
-            aria-label={isBusy ? "Stop answering" : "Send question"}
-            className={cx(
-              "flex size-9 shrink-0 items-center justify-center rounded-full",
-              "bg-accent-600 text-text-white transition-colors hover:bg-accent-700",
-              "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
-              "disabled:bg-background-tertiary-default disabled:text-foreground-icon-disabled",
-            )}
-          >
-            {isBusy ? (
-              <RiStopFill aria-hidden className="size-3.5" />
-            ) : (
-              <RiArrowUpLine aria-hidden className="size-5" />
-            )}
-          </button>
+            <span className="ml-auto hidden shrink-0 items-center gap-1.5 px-1 sm:flex">
+              <RiCalendarLine aria-hidden className="size-4 text-foreground-icon-quaternary" />
+              <span className="whitespace-nowrap text-body-medium text-text-secondary">
+                {termLabel}
+              </span>
+            </span>
+
+            <button
+              type="button"
+              onClick={isBusy ? onStop : onSubmit}
+              disabled={!isBusy && value.trim().length === 0}
+              aria-label={isBusy ? "Stop answering" : "Send question"}
+              className={cx(
+                "flex size-9 shrink-0 items-center justify-center rounded-full max-sm:ml-auto",
+                "bg-accent-600 text-text-white transition-colors hover:bg-accent-700",
+                "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
+                "disabled:bg-background-tertiary-default disabled:text-foreground-icon-disabled",
+              )}
+            >
+              {isBusy ? (
+                <RiStopFill aria-hidden className="size-3.5" />
+              ) : (
+                <RiArrowUpLine aria-hidden className="size-5" />
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -202,7 +224,7 @@ function RunningLight({ active }: { active: boolean }) {
     <span
       aria-hidden
       className={cx(
-        "pointer-events-none absolute inset-0 overflow-hidden rounded-[26px]",
+        "pointer-events-none absolute inset-0 overflow-hidden rounded-3xl",
         "transition-opacity duration-[450ms] motion-reduce:transition-none",
         active ? "opacity-100" : "opacity-0",
       )}
@@ -215,7 +237,7 @@ function RunningLight({ active }: { active: boolean }) {
       <svg
         width="100%"
         height="100%"
-        viewBox="0 0 1028 52"
+        viewBox="0 0 1028 112"
         preserveAspectRatio="none"
         style={{ opacity: 0.7 }}
       >
@@ -244,8 +266,8 @@ function RunningLight({ active }: { active: boolean }) {
             x="0"
             y="0"
             width="1028"
-            height="52"
-            rx="26"
+            height="112"
+            rx="24"
             pathLength={100}
             fill="none"
             stroke={`url(#${gradient})`}

@@ -13,6 +13,7 @@ import {
 import { describeFailure, planSubmission, type Gate } from "@/lib/agent/gate";
 import { Composer } from "@/components/assistant/composer";
 import { Conversation } from "@/components/assistant/conversation";
+import { SignInFlair } from "@/components/assistant/sign-in-flair";
 import { SignInPrompt } from "@/components/home/sign-in-prompt";
 import { cx } from "@/utils/cx";
 
@@ -326,6 +327,13 @@ export function AssistantHome({
           "bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] lg:bottom-0",
         )}
       >
+        {/*
+          The sign-in bar sits inside the sticky wrapper, above the box, so it
+          is the same width as the box and travels with it. It is a label for
+          the control underneath rather than a banner on the page.
+        */}
+        {isSignedIn ? null : <SignInFlair className="mb-2" />}
+
         <Composer
           value={input}
           onChange={setInput}
@@ -358,8 +366,8 @@ function Greeting({ name }: { name: string }) {
   return (
     <h1
       className={cx(
-        "px-1 text-title-1-semibold -tracking-[0.01em] text-text-primary",
-        "sm:text-display-4-semibold",
+        "px-1 text-balance text-display-4-semibold -tracking-[0.02em] text-text-primary",
+        "sm:text-display-3-semibold",
       )}
     >
       Welcome back, {name}

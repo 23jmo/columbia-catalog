@@ -3,6 +3,7 @@ import { RiArrowRightUpLine } from "@remixicon/react";
 
 import { BookmarkControls } from "@/components/bookmarks/bookmark-controls";
 import { EnrollmentBar } from "@/components/catalog/enrollment-bar";
+import { InstructorLinks } from "@/components/instructor/instructor-link";
 import { formatSectionMeetings } from "@/components/catalog/meetings";
 import { provenanceLabel } from "@/components/course/format";
 import { formatCourseId } from "@/lib/requirements/code";
@@ -141,10 +142,23 @@ export function FeedCardView({ card, className }: { card: FeedCardData; classNam
       </header>
 
       <div className="flex min-w-0 flex-col gap-0.5">
+        {/*
+          `InstructorLinks`, not a plain string.
+
+          Every other surface in the app — search results, section rows, the
+          course header, the compare table — routes names through it, so a
+          student who has learned that a name is clickable anywhere has learned
+          it here. It also handles the case that matters: the registrar writes
+          "Staff" and "TBA" into the same field as real people, and that
+          component renders those as plain text rather than as a link to a
+          confident 404.
+        */}
         <p className="truncate text-body-2-medium text-text-secondary">
-          {instructorLine(section) ?? (
-            <span className="text-text-tertiary">Instructor not yet announced</span>
-          )}
+          <InstructorLinks
+            names={teachers(section)}
+            max={2}
+            fallback="Instructor not yet announced"
+          />
         </p>
         <TimeLine section={section} />
       </div>
@@ -168,7 +182,24 @@ export function FeedCardView({ card, className }: { card: FeedCardData; classNam
         on one line, and "which of these has room" becomes a single glance
         across instead of five separate readings.
       */}
-      <div title={seatProvenanceTitle(section.sourceAsOf)} className="mt-auto min-w-0">
+      {/*
+        The meter is a link, because it was already the question people point
+        at. "Open, 23 / 55" invites "since when, and what about the other
+        sections", and both answers are on the course page — including the
+        directory's own timestamp in full, which is what the hover title carries
+        in short. It had no hover state at all, which made the most interesting
+        number on the card look like a decoration.
+      */}
+      <Link
+        href={sectionHref}
+        title={seatProvenanceTitle(section.sourceAsOf)}
+        aria-label={`Seats and other sections for ${card.code} section ${section.sectionCode}`}
+        className={cx(
+          "mt-auto block min-w-0 rounded-md outline-none",
+          "transition-opacity duration-100 ease hover:opacity-80",
+          "focus-visible:ring-2 focus-visible:ring-border-focus-ring",
+        )}
+      >
         <EnrollmentBar
           status={section.status}
           enrollmentCount={section.enrollmentCount}
@@ -176,7 +207,7 @@ export function FeedCardView({ card, className }: { card: FeedCardData; classNam
           waitlistCount={section.waitlistCount}
           className="min-w-0"
         />
-      </div>
+      </Link>
     </article>
   );
 }
@@ -185,12 +216,9 @@ export function FeedCardView({ card, className }: { card: FeedCardData; classNam
  * Lines
  * ========================================================================== */
 
-/** Real names only — the registrar writes "TBA" into this field. */
-function instructorLine(section: FeedSectionView): string | null {
-  const names = section.instructors.filter(
-    (name) => name.trim().length > 0 && !/^(tba|tbd)$/i.test(name.trim()),
-  );
-  return names.length > 0 ? names.join(", ") : null;
+/** Real names only — the registrar writes empty strings into this field. */
+function teachers(section: FeedSectionView): string[] {
+  return section.instructors.filter((name) => name.trim().length > 0);
 }
 
 /**
