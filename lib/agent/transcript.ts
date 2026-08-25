@@ -39,6 +39,7 @@
 
 import { getToolName, isToolUIPart, type UIMessage } from "ai";
 
+import type { FeedCard } from "@/lib/recommend/feed";
 import { formatCourseId, toCourseId, type CourseId } from "@/lib/requirements/code";
 
 /* ==========================================================================
@@ -253,7 +254,14 @@ function readCourse(row: unknown, source: string): CitedCourse | null {
  * back for an unmet prerequisite is exactly what a student asking "why not
  * that one" needs to see.
  */
-const COURSE_KEYS = ["recommendations", "courses", "results", "withheld", "sections"] as const;
+const COURSE_KEYS = [
+  "cards",
+  "recommendations",
+  "courses",
+  "results",
+  "withheld",
+  "sections",
+] as const;
 
 /**
  * Every course the tools in this message returned, deduplicated, in order.
@@ -282,6 +290,67 @@ export function citedCourses(message: UIMessage): CitedCourse[] {
   }
 
   return [...seen.values()];
+}
+
+/* ==========================================================================
+ * Section cards
+ * ========================================================================== */
+
+/**
+ * The section cards `recommend_courses` returned.
+ *
+ * ── Why the assistant emits whole cards ────────────────────────────────────
+ *
+ * A course code is not something a student can register for. The decision is
+ * the *section* — who teaches it, when it meets, whether it has seats — and the
+ * act at the end of it is opening that section in Vergil. An assistant that
+ * names COMS W4111 and stops has handed back a search result; one that puts the
+ * Tuesday/Thursday section on screen with its call number and a link has
+ * finished the job.
+ *
+ * So `recommend_courses` goes through `buildFeed` and returns the same
+ * `FeedCard` the home feed renders, and this reads them back out so the chat
+ * can render them with `FeedCardView` — the identical component, including its
+ * seat provenance stamp and its Open-in-Vergil button. Nothing about a card in
+ * a conversation is a second implementation of a card on a page.
+ *
+ * ── The guard is deliberately shallow ──────────────────────────────────────
+ *
+ * These arrive as `unknown` off a JSON round trip. Rather than re-validate
+ * every field of a type the server just serialised, this checks the handful the
+ * card cannot render without — an id, a code, and a `best` section carrying the
+ * two things that make it a section rather than a course. A row missing any of
+ * them is skipped, because a card with no call number and no link is an empty
+ * shell, and `citedCourses` will still list it as evidence.
+ */
+export function feedCards(message: UIMessage): FeedCard[] {
+  const seen = new Map<string, FeedCard>();
+
+  for (const part of message.parts) {
+    if (!isToolUIPart(part) || part.state !== "output-available") continue;
+
+    const payload = readOutput(part.output);
+    if (!payload) continue;
+
+    for (const row of asArray(payload.cards)) {
+      const card = readFeedCard(row);
+      if (card && !seen.has(card.courseId)) seen.set(card.courseId, card);
+    }
+  }
+
+  return [...seen.values()];
+}
+
+function readFeedCard(row: unknown): FeedCard | null {
+  const record = asPayload(row);
+  if (!record) return null;
+
+  if (!asString(record.courseId) || !asString(record.code)) return null;
+
+  const best = asPayload(record.best);
+  if (!best || !asString(best.sectionId) || !asString(best.vergilUrl)) return null;
+
+  return record as unknown as FeedCard;
 }
 
 /* ==========================================================================

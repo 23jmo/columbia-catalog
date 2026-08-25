@@ -13,7 +13,14 @@
 import { describe, expect, it } from "vitest";
 import type { UIMessage } from "ai";
 
-import { citedCourses, proseOf, suggestedFollowUps, toolActivity, toolLabel } from "./transcript";
+import {
+  citedCourses,
+  feedCards,
+  proseOf,
+  suggestedFollowUps,
+  toolActivity,
+  toolLabel,
+} from "./transcript";
 
 /* ==========================================================================
  * Builders
@@ -246,6 +253,123 @@ describe("cited courses", () => {
       }),
     ]);
     expect(citedCourses(message)).toEqual([]);
+  });
+});
+
+/* ==========================================================================
+ * Section cards
+ * ========================================================================== */
+
+/** A `FeedCard` with only the fields `readFeedCard` actually insists on. */
+function card(overrides: Record<string, unknown> = {}) {
+  return {
+    courseId: "COMS4111W",
+    code: "COMS W4111",
+    title: "Introduction to Databases",
+    points: 3,
+    reasons: [],
+    caveats: [],
+    best: {
+      sectionId: "sec-1",
+      sectionCode: "001",
+      callNumber: "12345",
+      vergilUrl: "https://vergil.columbia.edu/vergil/class/20263/12345",
+    },
+    others: [],
+    ...overrides,
+  };
+}
+
+describe("section cards", () => {
+  it("reads the cards the engine returned", () => {
+    const message = assistant([
+      toolPart({
+        name: "recommend_courses",
+        state: "output-available",
+        output: { cards: [card()] },
+      }),
+    ]);
+
+    const [first] = feedCards(message);
+    expect(first.courseId).toBe("COMS4111W");
+    expect(first.best.vergilUrl).toContain("vergil.columbia.edu");
+  });
+
+  it("skips a card with no section, rather than rendering an empty shell", () => {
+    /*
+     * The whole point of a card is that it is a section a student can open in
+     * Vergil. One with no `best` has no call number and no link, so it is a
+     * course row wearing a card's clothes — `citedCourses` still lists it as
+     * evidence, which is the honest place for it.
+     */
+    const message = assistant([
+      toolPart({
+        name: "recommend_courses",
+        state: "output-available",
+        output: { cards: [card({ best: undefined }), card({ best: { sectionId: "s" } })] },
+      }),
+    ]);
+    expect(feedCards(message)).toEqual([]);
+  });
+
+  it("skips a card whose section carries no Vergil link", () => {
+    const message = assistant([
+      toolPart({
+        name: "recommend_courses",
+        state: "output-available",
+        output: { cards: [card({ best: { sectionId: "sec-1", sectionCode: "001" } })] },
+      }),
+    ]);
+    expect(feedCards(message)).toEqual([]);
+  });
+
+  it("keeps one card per course when a follow-up call repeats it", () => {
+    const message = assistant([
+      toolPart({
+        name: "recommend_courses",
+        state: "output-available",
+        output: { cards: [card()] },
+      }),
+      toolPart({
+        name: "recommend_courses",
+        id: "call-2",
+        state: "output-available",
+        output: { cards: [card({ title: "A later, barer copy" }), card({ courseId: "MATH1201UN" })] },
+      }),
+    ]);
+
+    const cards = feedCards(message);
+    expect(cards.map((entry) => entry.courseId)).toEqual(["COMS4111W", "MATH1201UN"]);
+    expect(cards[0].title).toBe("Introduction to Databases");
+  });
+
+  it("ignores a call that has not returned yet", () => {
+    const message = assistant([toolPart({ name: "recommend_courses", state: "input-available" })]);
+    expect(feedCards(message)).toEqual([]);
+  });
+
+  it("survives rows that are not objects", () => {
+    const message = assistant([
+      toolPart({
+        name: "recommend_courses",
+        state: "output-available",
+        output: { cards: [null, 42, "COMS W4111", []] },
+      }),
+    ]);
+    expect(feedCards(message)).toEqual([]);
+  });
+
+  it("still lists a carded course as a cited course", () => {
+    // The two readers agree on `cards`, so the answer's evidence is complete
+    // even for a surface that renders no cards at all.
+    const message = assistant([
+      toolPart({
+        name: "recommend_courses",
+        state: "output-available",
+        output: { cards: [card()] },
+      }),
+    ]);
+    expect(citedCourses(message).map((course) => course.code)).toEqual(["COMS W4111"]);
   });
 });
 

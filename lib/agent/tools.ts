@@ -40,26 +40,14 @@
 import { z } from "zod";
 import { tool, type ToolSet } from "ai";
 
-import { getAllCourses, getCoursesByIds } from "@/lib/data/catalog";
+import { getCoursesByIds } from "@/lib/data/catalog";
 import { createSupabaseCandidateProvider } from "@/lib/db/candidate-source";
 import { loadStudentProfile } from "@/lib/db/student-profile";
 import type { McpAuthInfo } from "@/lib/mcp/auth";
 import { mcpDeps } from "@/lib/mcp/server";
 import { findTool, type ToolContext as McpToolContext } from "@/lib/mcp/tools";
 import { auditProfile } from "@/lib/profile/audit";
-import type { StudentProfile as AppStudentProfile } from "@/lib/profile/types";
-import { recommend } from "@/lib/recommend";
-import {
-  graphPrereqSource,
-  loadProgressionGraph,
-  unknownPrereqSource,
-} from "@/lib/recommend/sources";
-import { loadVectorSource } from "@/lib/recommend/pipeline";
-import type {
-  CandidateCourse,
-  PrereqSource,
-  StudentProfile as EngineStudentProfile,
-} from "@/lib/recommend/types";
+import { buildFeed } from "@/lib/recommend/feed";
 import { expandCandidatesForPrograms } from "@/lib/requirements/candidates";
 import { formatCourseId } from "@/lib/requirements/code";
 import type { CourseFacts } from "@/lib/requirements/evaluate";
@@ -256,73 +244,14 @@ async function loadCourseFacts(courseIds: string[]): Promise<Map<CourseId, Cours
   return facts;
 }
 
-/** The engine's `StudentProfile`, built from the app's. */
-function toEngineProfile(profile: AppStudentProfile): EngineStudentProfile {
-  return {
-    taken: profile.courses
-      // Planned courses are not "taken" — they belong in `planned`, where they
-      // unlock prerequisites without being recommended back to the student.
-      .filter((course) => course.source !== "plan")
-      .map((course) => ({
-        courseId: course.courseId,
-        liked: course.liked,
-        termCode: course.termCode,
-      })),
-    planned: profile.courses
-      .filter((course) => course.source === "plan")
-      .map((course) => course.courseId),
-    interestTags: profile.interestTags,
-  };
-}
-
-/**
- * Candidate courses for the active terms.
- *
- * Narrowed to what is actually offered BEFORE scoring, not after. Scoring the
- * whole 8,189-course catalog and filtering afterwards would rank a course the
- * student cannot register for above one they can — and the ranking is the
- * product.
+/*
+ * `toEngineProfile`, `loadCandidates` and `prereqSourceOrDegrade` used to live
+ * here, because `recommend_courses` drove the bare engine and had to assemble
+ * its inputs by hand. `buildFeed` assembles the same three from
+ * `lib/recommend/pipeline`, and keeping a second copy here was how the agent
+ * and the home feed came to disagree about which vector source was in use. The
+ * tool goes through the feed now; these went with it.
  */
-async function loadCandidates(): Promise<CandidateCourse[]> {
-  const byId = new Map<string, CandidateCourse>();
-
-  for (const termCode of ACTIVE_TERMS) {
-    for (const course of await getAllCourses(termCode)) {
-      if (byId.has(course.courseId)) continue;
-      byId.set(course.courseId, {
-        courseId: course.courseId,
-        code: `${course.subjectCode} ${course.number}${course.qualifier ?? ""}`,
-        title: course.title,
-        // `pointsMin`, matching the audit: counting a variable-credit course at
-        // its maximum would let a points requirement look satisfied on credit
-        // the student may not earn.
-        points: course.pointsMin ?? course.pointsMax,
-      });
-    }
-  }
-
-  return [...byId.values()];
-}
-
-/**
- * The prerequisite source, with its degradation made explicit.
- *
- * `loadProgressionGraph` throws rather than returning an empty graph, because
- * an empty graph reports every course as `met` and would silently disable the
- * hard filter — recommending COMS W4111 to a first-year on the strength of a
- * failed query. Catching that here and falling back to `unknownPrereqSource` is
- * the other half of the contract: the agent keeps working, every course carries
- * a "we could not check this" caveat, and nothing is ever presented as eligible
- * because a query failed.
- */
-async function prereqSourceOrDegrade(): Promise<PrereqSource> {
-  try {
-    return graphPrereqSource(await loadProgressionGraph());
-  } catch (cause) {
-    console.error("agent: prerequisite graph unavailable, degrading to unknown:", cause);
-    return unknownPrereqSource();
-  }
-}
 
 function engineTools(context: AgentToolContext): ToolSet {
   /** Record output for the grounding check and hand the model the same text. */
@@ -419,16 +348,21 @@ function engineTools(context: AgentToolContext): ToolSet {
 
     recommend_courses: tool({
       description:
-        "The recommendation engine. Returns courses offered in the active terms, ranked for THIS " +
-        "student, each carrying the reasons it was chosen. Prefer this over search_courses " +
-        "whenever the student is asking what they should take rather than about a course they " +
-        "already named. Courses whose prerequisites the student has not met are EXCLUDED from " +
-        "`recommendations`; set includeWithheld to see them under `withheld`, with what is " +
-        "missing and whether the registrar's own wording allows instructor permission as a way " +
-        "in. `caveats` containing `no_vector` means we have no semantic profile for that course " +
-        "and it was ranked on requirement fit alone.",
+        "The recommendation engine, and the reason this app exists. Returns SECTION CARDS — " +
+        "ranked for THIS student, each one a real section with its instructor, meeting pattern, " +
+        "seat count and Vergil link — not bare course names. Use it for any question that ends " +
+        "in the student picking something: what should I take, what fits Tuesdays, what clears " +
+        "my Core, what's left, what would I like. Prefer it over search_courses unless the " +
+        "student named a specific course they already know about.\n\n" +
+        "Each card carries `best` (the section the card is about) and `others` (its siblings). " +
+        "Courses whose prerequisites the student has not met are EXCLUDED from `cards`; set " +
+        "includeWithheld to see them under `withheld`, with what is missing and whether the " +
+        "registrar's own wording allows instructor permission as a way in. `caveats` containing " +
+        "`no_vector` means we have no semantic profile for that course and it was ranked on " +
+        "requirement fit alone. The student SEES these cards rendered beside your answer, so " +
+        "write about the ones you mean rather than restating every field.",
       inputSchema: z.object({
-        limit: z.number().int().min(1).max(25).default(10),
+        limit: z.number().int().min(1).max(25).default(8),
         subjects: z
           .array(z.string())
           .optional()
@@ -439,61 +373,40 @@ function engineTools(context: AgentToolContext): ToolSet {
           .describe("Also return courses blocked by prerequisites. Use when asked why, or why not."),
       }),
       async execute({ limit, subjects, includeWithheld }) {
-        const [{ profile, audit }, allCandidates, prereqs, vectors] = await Promise.all([
-          loadStudentAudit(),
-          loadCandidates(),
-          prereqSourceOrDegrade(),
-          loadVectorSource(),
-        ]);
-
-        const wanted = subjects?.map((subject) => subject.toUpperCase());
-        const candidates = wanted?.length
-          ? allCandidates.filter((course) => wanted.includes(course.code.split(" ")[0]))
-          : allCandidates;
-
-        const result = recommend({
-          profile: toEngineProfile(profile),
-          candidates,
-          outstanding: audit.programs.flatMap((program) =>
-            program.groups.filter((group) => group.status !== "satisfied"),
-          ),
-          prereqs,
-          /*
-           * The same semantic index the feed ranks with.
-           *
-           * This read `noVectorSource()` for as long as decoding the LSA
-           * artifact server-side was unfinished, and the comment here said so.
-           * `lib/recommend/course-vectors.ts` finished it, and leaving the stub
-           * behind would have left the agent answering "something like the
-           * courses I liked" out of requirement fit alone — the half of the
-           * engine that cannot express taste — while the feed on the same page
-           * used both halves. Two different answers to one question, from one
-           * engine, with nothing on screen to explain the difference.
-           *
-           * `loadVectorSource` degrades internally: a missing artifact returns
-           * the same empty source as before and every result keeps its
-           * `no_vector` caveat, so the failure mode is unchanged and still
-           * visible to the model rather than silently absent.
-           */
-          vectors,
-          limit,
-          withheldLimit: includeWithheld ? limit : 0,
-        });
+        /*
+         * The feed's builder, not the bare engine.
+         *
+         * `recommend()` ranks courses and deliberately knows nothing about
+         * seats, meeting times or the student's week. This tool used to return
+         * that raw output, which meant the assistant could name a course but
+         * never a section — and a course name is not something a student can
+         * register for. `buildFeed` is the half that picks the section, folds
+         * the offering signal back into the score, and produces exactly the
+         * card the home feed renders.
+         *
+         * Going through it also settles a correctness question that was open
+         * while there were two paths: the assistant and the feed now rank with
+         * one implementation, so they cannot disagree about what to recommend
+         * on the same screen.
+         */
+        const feed = await buildFeed({ limit, ...(subjects?.length ? { subjects } : {}) });
 
         return emit({
-          recommendations: result.recommendations.map((entry) => ({
-            courseId: entry.course.courseId,
-            code: entry.course.code,
-            title: entry.course.title,
-            points: entry.course.points,
-            score: Number(entry.score.toFixed(4)),
-            components: entry.components,
-            reasons: entry.reasons,
-            caveats: entry.caveats,
-          })),
+          /*
+           * The cards are emitted whole. They are larger than the course rows
+           * they replace, and that is the point twice over: the model needs the
+           * instructor and the meeting pattern to answer "what fits Tuesdays"
+           * without a second round trip, and the UI reads this same payload to
+           * render the card the student taps through to Vergil.
+           */
+          cards: feed.cards,
+          personalized: feed.personalized,
+          takenCount: feed.takenCount,
+          outstandingCount: feed.outstandingCount,
+          withheldCount: feed.withheldCount,
           ...(includeWithheld
             ? {
-                withheld: result.withheld.map((entry) => ({
+                withheld: feed.withheld.slice(0, limit).map((entry) => ({
                   courseId: entry.course.courseId,
                   code: entry.course.code,
                   title: entry.course.title,

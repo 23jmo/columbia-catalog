@@ -35,6 +35,23 @@
   }
 }
 
+/* The composer's running light.
+ *
+ * A dashed stroke chasing the pill's own outline while the assistant works.
+ * `pathLength="100"` normalises the perimeter, so one lap is always exactly
+ * -100 regardless of how wide the box has grown — no JS measurement, no
+ * recalculation on resize. Three rects share the animation at different widths
+ * and blurs, which is what reads as a glow rather than a moving line. */
+@keyframes composer-loader-dash {
+  from {
+    stroke-dashoffset: 0;
+  }
+
+  to {
+    stroke-dashoffset: -100px;
+  }
+}
+
 .agent-progress-loading-text {
   color: transparent;
   background-image: linear-gradient(

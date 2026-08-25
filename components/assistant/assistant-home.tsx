@@ -1,21 +1,37 @@
 "use client";
 
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { DefaultChatTransport } from "ai";
 import { useChat } from "@ai-sdk/react";
-import { RiErrorWarningLine, RiLockLine, RiSparkling2Line } from "@remixicon/react";
+import { RiChat1Line, RiErrorWarningLine, RiLockLine } from "@remixicon/react";
 
 import { describeFailure, planSubmission, type Gate } from "@/lib/agent/gate";
-import { citedCourses } from "@/lib/agent/transcript";
 import { Composer } from "@/components/assistant/composer";
 import { Conversation } from "@/components/assistant/conversation";
-import { SourceList } from "@/components/assistant/source-list";
-import { Starters } from "@/components/assistant/starters";
 import { SignInPrompt } from "@/components/home/sign-in-prompt";
 import { cx } from "@/utils/cx";
 
 /**
  * The assistant, which is the home page.
+ *
+ * ── The shape is BoardUI's, and the empty space is the point ───────────────
+ *
+ * The template's conversation column is mostly nothing: a breadcrumb at the
+ * top, a wide blank field, and the box sitting on the bottom edge with the
+ * thread growing upward out of it. Everything else on that screen — the
+ * repository list, the diff pane — lives in the rails, so the middle stays a
+ * single column of prose.
+ *
+ * Filling that space with cards was the mistake this rewrite undoes. A student
+ * arriving at a box with four suggested questions and a feed under it has to
+ * read the page before they can use it, which is the exact failure mode the
+ * assistant exists to fix. So the field is empty and the box is where the eye
+ * lands.
+ *
+ * Structurally: a column with a definite `min-h`, a `flex-1` message region
+ * with `justify-end` so the thread stacks upward off the composer, and the
+ * composer sticky at the bottom. No inner scroll container — the page scrolls
+ * as one, and the box stays pinned once the thread outgrows the viewport.
  *
  * ── The signed-out rule is structural, not a response code ─────────────────
  *
@@ -42,18 +58,16 @@ import { cx } from "@/utils/cx";
  *
  * That is also the only place the prompt counter can come from. The route
  * spends the budget server-side and reports it in `x-agent-prompts-used`; a
- * client-side increment would be a guess that drifts the moment the student
- * has two tabs open.
+ * client-side increment would be a guess that drifts the moment the student has
+ * two tabs open.
  */
 
 export interface AssistantHomeProps {
   isSignedIn: boolean;
-  /** `"Fall 2026"`. Printed under the box so the answer's term is never implied. */
+  /** `"Fall 2026"`. Printed in the box so the answer's term is never implied. */
   termLabel: string;
   promptsUsed: number;
   promptsLimit: number;
-  /** The standing feed, server-rendered. Shown until the thread has a message. */
-  feed: ReactNode;
 }
 
 export function AssistantHome({
@@ -61,7 +75,6 @@ export function AssistantHome({
   termLabel,
   promptsUsed: initialPromptsUsed,
   promptsLimit,
-  feed,
 }: AssistantHomeProps) {
   const [input, setInput] = useState("");
   const [gate, setGate] = useState<Gate | null>(null);
@@ -131,9 +144,9 @@ export function AssistantHome({
     transport,
     onError() {
       /*
-       * The interceptor has usually already described this precisely. Only
-       * fill in when it has not — a transport-level failure (offline, aborted
-       * DNS) never produced a response for it to read.
+       * The interceptor has usually already described this precisely. Only fill
+       * in when it has not — a transport-level failure (offline, aborted DNS)
+       * never produced a response for it to read.
        */
       setGate((current) =>
         current ?? {
@@ -183,102 +196,64 @@ export function AssistantHome({
     setInput("");
   }, [clearError, setMessages]);
 
-  /*
-   * The rail shows the newest answer's sources, not every course ever cited.
-   * A pane that accumulates across a six-turn conversation stops being the
-   * evidence for what is on screen and becomes a history nobody asked for.
-   */
-  const latestAssistant = [...messages].reverse().find((message) => message.role === "assistant");
-  const railCourses = latestAssistant ? citedCourses(latestAssistant) : [];
-
   const hasThread = messages.length > 0;
 
   return (
-    <div className="flex w-full min-w-0 gap-6">
-      <div className="flex min-w-0 flex-1 flex-col gap-5">
-        <Breadcrumb messages={messages} />
+    /*
+     * The column fills the viewport so the sticky composer lands on its bottom
+     * edge rather than floating mid-screen on an empty thread. The two figures
+     * are `<main>`'s own vertical padding at each breakpoint — 96px under `lg`,
+     * where the mobile tab bar's reserve is included, and 56px at and above it.
+     */
+    <div className="flex min-h-[calc(100dvh-6rem)] w-full min-w-0 flex-col lg:min-h-[calc(100dvh-3.5rem)]">
+      <Breadcrumb messages={messages} />
 
-        <div className="min-h-[38vh]">
-          {hasThread ? (
-            <Conversation messages={messages} status={status} onAsk={ask} />
-          ) : (
-            <div className="flex flex-col gap-6">
-              <Opening />
-              <Starters onAsk={ask} />
-              {/*
-                The feed stays. Home used to open with recommendations and it
-                still does — the assistant is the thing on top of them, not a
-                replacement for a page that already answers the question
-                "what should I take" without being asked.
-              */}
-              {feed}
-            </div>
-          )}
-        </div>
-
-        {gate ? <GateNotice gate={gate} onDismiss={() => setGate(null)} /> : null}
-        {error && !gate ? (
-          <GateNotice
-            gate={{ kind: "failed", message: error.message }}
-            onDismiss={() => clearError()}
-          />
-        ) : null}
-
-        {/*
-          Sticky, clearing the mobile tab bar. `<main>` already reserves that
-          bar's height as bottom padding, so at `lg` — where the bar is gone —
-          the offset goes with it.
-        */}
-        <div
-          className={cx(
-            "sticky z-10 -mx-1 bg-background-full px-1 pb-2 pt-3",
-            "bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] lg:bottom-0",
-          )}
-        >
-          <Composer
-            value={input}
-            onChange={setInput}
-            onSubmit={() => ask(input)}
-            onStop={stop}
-            onNewThread={startNewThread}
-            status={status}
-            canStartNewThread={hasThread || input.length > 0}
-            promptsUsed={promptsUsed}
-            promptsLimit={limit}
-            termLabel={termLabel}
-          />
-        </div>
+      <div className="flex flex-1 flex-col justify-end pt-8">
+        {hasThread ? <Conversation messages={messages} status={status} onAsk={ask} /> : null}
       </div>
 
+      {gate ? <GateNotice gate={gate} onDismiss={() => setGate(null)} /> : null}
+      {error && !gate ? (
+        <GateNotice
+          gate={{ kind: "failed", message: error.message }}
+          onDismiss={() => clearError()}
+        />
+      ) : null}
+
       {/*
-        The evidence rail. Hidden below `xl`, where the same list renders inside
-        the answer instead — see `Conversation`.
+        Sticky, clearing the mobile tab bar. `<main>` already reserves that
+        bar's height as bottom padding, so at `lg` — where the bar is gone — the
+        offset goes with it.
       */}
-      <aside className="hidden w-[288px] shrink-0 xl:block">
-        <div className="sticky top-7 flex flex-col gap-2">
-          <h2 className="px-1 text-caption-2-medium text-text-tertiary">
-            What this answer is based on
-          </h2>
-          {railCourses.length > 0 ? (
-            <SourceList courses={railCourses} />
-          ) : (
-            <p
-              className={cx(
-                "rounded-2xl border border-dashed border-border-table px-3.5 py-3",
-                "text-caption-1-regular text-text-tertiary",
-              )}
-            >
-              Every course the assistant names appears here, with the tool that
-              returned it. Nothing is written from memory.
-            </p>
-          )}
-        </div>
-      </aside>
+      <div
+        className={cx(
+          "sticky z-10 -mx-1 bg-background-full px-1 pb-1 pt-4",
+          "bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] lg:bottom-0",
+        )}
+      >
+        <Composer
+          value={input}
+          onChange={setInput}
+          onSubmit={() => ask(input)}
+          onStop={stop}
+          onNewThread={startNewThread}
+          status={status}
+          canStartNewThread={hasThread || input.length > 0}
+          promptsUsed={promptsUsed}
+          promptsLimit={limit}
+          termLabel={termLabel}
+        />
+      </div>
     </div>
   );
 }
 
-/** `Columbia Catalog › <this thread>` — the template's header line. */
+/**
+ * `Assistant › <this thread>` — the template's header line.
+ *
+ * It names the thread after the question that started it, which is the only
+ * name a conversation can honestly have before it has an answer in it.
+ */
 function Breadcrumb({ messages }: { messages: readonly { role: string; parts: unknown[] }[] }) {
   const first = messages.find((message) => message.role === "user");
   const title = first
@@ -292,11 +267,12 @@ function Breadcrumb({ messages }: { messages: readonly { role: string; parts: un
 
   return (
     <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 px-1">
-      <span className="shrink-0 text-caption-1-regular text-text-tertiary">Assistant</span>
+      <RiChat1Line aria-hidden className="size-4 shrink-0 text-foreground-icon-quaternary" />
+      <span className="shrink-0 text-body-medium text-text-secondary">Assistant</span>
       <span aria-hidden className="shrink-0 text-foreground-icon-quaternary">
         ›
       </span>
-      <span className="min-w-0 truncate text-caption-1-medium text-text-secondary">{title}</span>
+      <span className="min-w-0 flex-1 truncate text-body-medium text-text-secondary">{title}</span>
     </nav>
   );
 }
@@ -304,22 +280,6 @@ function Breadcrumb({ messages }: { messages: readonly { role: string; parts: un
 function firstLine(text: string): string {
   const trimmed = text.trim().split("\n")[0] ?? "";
   return trimmed.length > 64 ? `${trimmed.slice(0, 63)}…` : trimmed || "New question";
-}
-
-function Opening() {
-  return (
-    <div className="flex flex-col gap-1.5 px-1">
-      <span className="flex items-center gap-2 text-text-primary">
-        <RiSparkling2Line aria-hidden className="size-5 text-foreground-icon-tertiary" />
-        <span className="text-title-3-semibold">What should you take?</span>
-      </span>
-      <p className="max-w-[52ch] text-body-2-regular text-text-secondary">
-        Ask in your own words. Answers are read out of the catalog and your own
-        coursework — never recalled — and nothing here registers you for
-        anything.
-      </p>
-    </div>
-  );
 }
 
 /**
@@ -337,16 +297,19 @@ function GateNotice({ gate, onDismiss }: { gate: Gate; onDismiss: () => void }) 
     <div
       role="status"
       className={cx(
-        "flex items-start gap-3 rounded-2xl border px-4 py-3",
+        "mt-4 flex items-start gap-3 rounded-2xl border px-4 py-3",
         isWall
-          ? "border-border-table bg-background-secondary-default"
+          ? "border-border-table bg-background-primary-default shadow-xs"
           : "border-border-error-default bg-background-tertiary-error",
       )}
     >
       {isWall ? (
         <RiLockLine aria-hidden className="mt-0.5 size-4 shrink-0 text-foreground-icon-tertiary" />
       ) : (
-        <RiErrorWarningLine aria-hidden className="mt-0.5 size-4 shrink-0 text-foreground-icon-error" />
+        <RiErrorWarningLine
+          aria-hidden
+          className="mt-0.5 size-4 shrink-0 text-foreground-icon-error"
+        />
       )}
 
       <div className="flex min-w-0 flex-1 flex-col gap-2">

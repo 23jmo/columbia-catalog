@@ -56,6 +56,7 @@ import type {
   RecommendationCaveat,
   RecommendationReason,
   ScoreComponents,
+  WithheldCourse,
 } from "./types";
 
 /* ==========================================================================
@@ -136,6 +137,21 @@ export interface FeedResult {
    * 40 courses you are not ready for" is a true and reassuring sentence.
    */
   withheldCount: number;
+  /**
+   * The held-back courses themselves, with the gate that failed.
+   *
+   * Computed all along — `buildFeed` asks the engine for up to 200 of these to
+   * produce `withheldCount` — and previously discarded. It is returned because
+   * the assistant needs it to answer "why not that one", and specifically to
+   * spot `prereq_unmet_but_permission`: a student who is one prerequisite short
+   * of a course whose registrar wording allows instructor permission can still
+   * get in by emailing, and that is the single most useful thing this app knows
+   * that a catalog search does not.
+   *
+   * The feed itself renders none of it. A card for a course the student cannot
+   * register for would be a worse feed.
+   */
+  withheld: WithheldCourse[];
   generatedAt: string;
 }
 
@@ -349,6 +365,7 @@ export async function buildFeed(options: BuildFeedOptions = {}): Promise<FeedRes
     outstandingCount: student.outstanding.length,
     vectorModel: vectors.size > 0 ? vectors.model : null,
     withheldCount: ranked.withheld.length,
+    withheld: ranked.withheld,
     generatedAt: new Date().toISOString(),
   };
 }

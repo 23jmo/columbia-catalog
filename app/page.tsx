@@ -1,30 +1,31 @@
 /**
- * Home — the assistant, then the planner.
+ * Home — the assistant, and nothing else.
  *
- * ── Why the assistant is the page and not a link on it ─────────────────────
+ * ── Why the page is one box ────────────────────────────────────────────────
  *
- * The last rewrite moved the feed above the week grid, on the argument that a
- * home page opening with a planner assumes you have already decided. The same
- * argument goes one step further. The feed answers one question — "what should
- * I take" — very well, and cannot be asked anything else. A student whose
- * actual question is "which of these can I take with a Friday off" or "what's
- * the fastest way to finish my Core" has nowhere to put it, and a link to a
- * separate chat page is a wall: the surface that can answer arbitrary questions
- * has to be the surface people land on, or it is a feature nobody finds.
+ * This page has been through three shapes: a planner, then a feed above the
+ * planner, then the assistant above the feed. Each rewrite pushed the same
+ * problem down one row rather than solving it — a student landing here had to
+ * read the page before they could use it.
  *
- * So the box is the first thing on the page, and **the feed is directly under
- * it**, as the empty state — home still opens with real recommendations for a
- * student who does not want to type. Nothing was deleted: the week grid and the
- * watchlist rail are unchanged and sit below, exactly where they were.
+ * The feed answers one question, "what should I take", very well, and cannot be
+ * asked anything else. A student whose actual question is "which of these can I
+ * take with a Friday off" or "what's the fastest way to finish my Core" has
+ * nowhere to put it. So the surface that can answer arbitrary questions is the
+ * whole page, and the empty space around it is deliberate: the box is where the
+ * eye lands, and it is the only thing here to learn.
+ *
+ * Nothing was deleted. `/schedule`, `/progression`, `/saved` and the week grid
+ * are all unchanged, reachable from the nav, and the watchlist rail moved to
+ * `/saved` where the rest of a student's saved work already lives.
+ * `components/feed` is intact and currently unrouted — it is one line to mount
+ * wherever it belongs next.
  *
  * ── This page stays a server component ─────────────────────────────────────
  *
  * `AssistantHome` is the client island, and everything it needs to know that
- * only the server can answer is resolved here and passed in: whether there is
- * a session, how much of the prompt budget is already spent, and the feed —
- * which is passed as a rendered `ReactNode`, still inside its own `<Suspense>`
- * boundary, so a server subtree does not get dragged into the browser by being
- * handed to a client component.
+ * only the server can answer is resolved here and passed in: whether there is a
+ * session, and how much of the prompt budget is already spent.
  *
  * The budget is read, never spent. `checkPromptBudget` is a select; the write
  * lives in `recordPrompt`, which only `/api/agent` calls. Rendering the counter
@@ -32,18 +33,14 @@
  * the box from disagreeing with the refusal the student eventually gets.
  */
 
-import { Suspense } from "react";
 import type { Metadata } from "next";
 
 import { AppShell } from "@/components/shell/app-shell";
 import { PageContent } from "@/components/shell/page-content";
 import { AuthErrorNotice } from "@/components/shell/auth-error-notice";
-import { AgentAnnouncement } from "@/components/home/agent-announcement";
 import { AssistantHome } from "@/components/assistant";
-import { FeedPanel, FeedSkeleton } from "@/components/feed";
 import { CURRENT_TERM, buildTerm } from "@/lib/constants";
 import { PROMPT_LIMIT, checkPromptBudget } from "@/lib/agent/usage";
-import { buildFeed } from "@/lib/recommend/feed";
 import { getSessionUser } from "@/lib/db/auth";
 import { createServiceRoleClient } from "@/lib/db/client";
 
@@ -66,22 +63,19 @@ export default async function HomePage({
 
   return (
     <AppShell activeNav="home">
-      <PageContent className="max-w-[1180px] gap-5">
+      {/*
+        Narrower than the rest of the app on purpose. Everywhere else on this
+        site is dense tabular data that wants the width; a conversation is prose,
+        and prose at 1180px is a worse read than prose at 1030px.
+      */}
+      <PageContent className="max-w-[1030px] gap-0">
         <AuthErrorNotice reason={params.auth_error} />
-
         <AssistantHome
           isSignedIn={Boolean(account)}
           termLabel={term.label}
           promptsUsed={budget.used}
           promptsLimit={budget.limit}
-          feed={
-            <Suspense fallback={<FeedSkeleton />}>
-              <Feed />
-            </Suspense>
-          }
         />
-
-        <AgentAnnouncement />
       </PageContent>
     </AppShell>
   );
@@ -111,33 +105,4 @@ async function readPromptBudget(userId: string | null) {
     console.error("home: the prompt budget could not be read:", cause);
     return fallback;
   }
-}
-
-/**
- * The feed, isolated so its await sits inside the Suspense boundary.
- *
- * A failure renders nothing rather than taking the page down. Every source
- * `buildFeed` reads already degrades on its own — a missing profile becomes a
- * guest, a missing prerequisite graph becomes "unknown, with a caveat", a
- * missing vector artifact becomes requirement-only ranking — so reaching this
- * catch means something genuinely unexpected happened, and the right answer is
- * still a working planner below rather than an error page.
- */
-async function Feed() {
-  /*
-   * Only the await is guarded. A try/catch around the JSX as well would read as
-   * an error boundary and is not one — React renders the element later, so a
-   * failure inside `FeedPanel` escapes this catch and takes the page down while
-   * looking handled. The narrow version is the honest one: `buildFeed` is what
-   * can fail here, and a render failure is a bug that should be loud.
-   */
-  let feed: Awaited<ReturnType<typeof buildFeed>>;
-  try {
-    feed = await buildFeed();
-  } catch (cause) {
-    console.error("home: the feed could not be built:", cause);
-    return null;
-  }
-
-  return <FeedPanel feed={feed} />;
 }
