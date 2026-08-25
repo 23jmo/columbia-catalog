@@ -53,6 +53,45 @@ export class DatabaseNotConfiguredError extends Error {
 const PAGE_SIZE = 1000;
 
 /**
+ * Rows per page for the one read that walks the deep join.
+ *
+ * `COURSE_WITH_TERM_SECTIONS_SELECT` is four levels — courses → sections →
+ * meetings → section_instructors → instructors — and the build reads it as
+ * `anon`, whose `statement_timeout` is **3s**. Measured against the live
+ * catalog on 2026-08-25:
+ *
+ * ```
+ *   1000 rows → 2.85s, 3.10s      ← the budget is 3s
+ *    500 rows → 2.73s
+ *    400 rows → 1.74s
+ * ```
+ *
+ * A thousand rows is not a thin margin, it is a coin flip: the same range came
+ * back 200 and then 500 thirty seconds apart with nothing else touching the
+ * database. `next build` prerenders the whole catalog, so it spins that coin
+ * nine times per deploy — which is why three production deploys died inside
+ * four minutes with `canceling statement due to statement timeout`, and why it
+ * looked like whichever PR merged last had broken something.
+ *
+ * 400 sits at about 40% of the budget. It costs 21 round trips instead of 9 on
+ * a read that only runs at build time and once per cache TTL, which is a good
+ * trade for a deploy that does not fail. Deliberately NOT `PAGE_SIZE`: the
+ * other six paginated readers select flat rows well inside the limit and would
+ * pay the extra round trips for nothing.
+ */
+const DEEP_PAGE_SIZE = 400;
+
+/**
+ * Postgres `query_canceled` — how a blown `statement_timeout` reaches us
+ * through PostgREST. Worth retrying; nothing else here is.
+ */
+const STATEMENT_TIMEOUT_CODE = "57014";
+
+/** Attempts, and the base for exponential backoff between them. */
+const TIMEOUT_RETRIES = 3;
+const RETRY_BASE_MS = 250;
+
+/**
  * Ceiling on ids per `in.()` filter. PostgREST puts the whole list in the query
  * string and proxies cap URL length, so long id lists are chunked.
  */
@@ -85,6 +124,37 @@ function chunk<T>(items: T[], size: number): T[][] {
 
 function fail(context: string, error: { message: string } | null): never {
   throw new Error(`${context}: ${error?.message ?? "unknown Supabase error"}`);
+}
+
+type QueryResult<T> = { data: T | null; error: { code?: string; message: string } | null };
+
+/**
+ * Re-run a read that the database cancelled for taking too long.
+ *
+ * A statement timeout is the one error here worth retrying: it says the query
+ * was legal and the server simply ran out of patience, which is usually
+ * contention rather than anything about the query. Everything else — a bad
+ * column, a missing table, a network fault — fails the same way twice, so it
+ * is returned untouched on the first attempt.
+ *
+ * Backoff is exponential because the likeliest cause is another reader holding
+ * the server busy, and retrying immediately just joins the pile-up. With
+ * `DEEP_PAGE_SIZE` this should essentially never fire; it is the safety net for
+ * the case where several builds run at once, not the mechanism.
+ */
+async function retryOnTimeout<T>(
+  run: () => PromiseLike<QueryResult<T>>,
+  attempts: number = TIMEOUT_RETRIES,
+): Promise<QueryResult<T>> {
+  let result = await run();
+
+  for (let attempt = 1; attempt < attempts; attempt += 1) {
+    if (!result.error || result.error.code !== STATEMENT_TIMEOUT_CODE) return result;
+    await new Promise((resolve) => setTimeout(resolve, RETRY_BASE_MS * 2 ** (attempt - 1)));
+    result = await run();
+  }
+
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -154,21 +224,23 @@ async function fetchAllCourses(termCode: TermCode): Promise<CourseWithSections[]
   const courses: CourseWithSections[] = [];
 
   for (let page = 0; ; page += 1) {
-    const from = page * PAGE_SIZE;
-    const { data, error } = await client
-      .from("courses")
-      .select(COURSE_WITH_TERM_SECTIONS_SELECT)
-      .eq("sections.term_code", termCode)
-      .order("subject_code", { ascending: true })
-      .order("course_number", { ascending: true })
-      .range(from, from + PAGE_SIZE - 1)
-      .overrideTypes<CourseRowWithSections[], { merge: false }>();
+    const from = page * DEEP_PAGE_SIZE;
+    const { data, error } = await retryOnTimeout<CourseRowWithSections[]>(() =>
+      client
+        .from("courses")
+        .select(COURSE_WITH_TERM_SECTIONS_SELECT)
+        .eq("sections.term_code", termCode)
+        .order("subject_code", { ascending: true })
+        .order("course_number", { ascending: true })
+        .range(from, from + DEEP_PAGE_SIZE - 1)
+        .overrideTypes<CourseRowWithSections[], { merge: false }>(),
+    );
 
     if (error) fail(`getAllCourses(${termCode})`, error);
 
     const rows = data ?? [];
     for (const row of rows) courses.push(rowToCourseWithSections(row, termCode));
-    if (rows.length < PAGE_SIZE) break;
+    if (rows.length < DEEP_PAGE_SIZE) break;
   }
 
   return courses;
