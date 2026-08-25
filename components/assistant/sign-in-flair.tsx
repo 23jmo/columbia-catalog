@@ -84,8 +84,8 @@ export function SignInFlair({ className }: { className?: string }) {
             Reading is free. Asking needs an account.
           </p>
           <p className="text-caption-1-regular text-text-secondary">
-            Sign in to ask the assistant, save sections, and get a feed built from what
-            you have actually taken.
+            Sign in to ask Roarie, save sections, and get a feed built from what you
+            have actually taken.
           </p>
         </div>
 
