@@ -39,6 +39,7 @@
 import { z } from "zod";
 
 import type { CourseId } from "@/lib/requirements/code";
+import { declaredProgramIds } from "./program-ids";
 import type { School } from "@/lib/requirements/types";
 
 /** Bump the suffix, never the contents, when the shape changes incompatibly. */
@@ -430,6 +431,107 @@ export function setLiked(
     courses: state.courses.map((row) =>
       row.courseId === courseId ? { ...row, liked } : row,
     ),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+/* ==========================================================================
+ * Degree changes
+ * ========================================================================== */
+
+/**
+ * The answers the guess engine reads, as a comparable string.
+ *
+ * School, class year and declared programs are the entire input to
+ * `lib/onboarding/guess.ts` — everything else on the record is either an output
+ * of it or a student's own statement. So this is exactly the set whose change
+ * makes an earlier guess a claim we would no longer make, and comparing it is
+ * how `reconcileDegreeChange` tells "they fixed a typo in their major" apart
+ * from "they answered a different question".
+ *
+ * The sentinel is stripped and the ids are sorted so declining minors, or
+ * picking the same two minors in the other order, is not read as a change.
+ */
+export function degreeSignature(state: GuestOnboardingState): string {
+  return JSON.stringify({
+    school: state.school,
+    classYear: state.classYear,
+    programIds: [...declaredProgramIds(state.programIds)].sort(),
+  });
+}
+
+/**
+ * True for a course the STUDENT put on the record, rather than one we guessed.
+ *
+ * Two ways to qualify, and the second one matters as much as the first:
+ *
+ *  - `source !== "onboarding_guess"` — they searched it up, or it came off a
+ *    transcript. That is their statement about their own history and no answer
+ *    they give about their degree can make it untrue.
+ *  - `liked !== null` — we guessed it, but they then told the love screen how
+ *    they felt about it. Answering a question about a course is an implicit
+ *    confirmation that they took it, and it is a stronger signal than the guess
+ *    that put it there. Dropping it would also silently discard the opinion.
+ */
+function isStudentAsserted(course: GuestCourse): boolean {
+  return course.source !== "onboarding_guess" || course.liked !== null;
+}
+
+/**
+ * Fold a degree answer in, retiring guesses it invalidates.
+ *
+ * ── The bug this exists to close ────────────────────────────────────────────
+ *
+ * The coursework screen opens ANSWERED: tier 1 is written straight into
+ * `courses` the moment the deck lands, because a chip that looks confirmed but
+ * has saved nothing is a lie. That write is correct and it is also permanent —
+ * so a student who walked the flow as a 2028 CS major, stepped back, and
+ * switched to a 2026 Econ major arrived at "here's what we think you've taken"
+ * still holding a screenful of CS courses. The heading is a claim we make on
+ * their behalf, and it was a claim about a degree they had just told us they do
+ * not have.
+ *
+ * Worse than the display: `guessDeckCacheKey` feeds `courses` back into the
+ * next ranking pass, so the stale guesses were being treated as confirmed
+ * prerequisites and biasing the new deck toward the major they had left.
+ *
+ * ── What survives, and why ──────────────────────────────────────────────────
+ *
+ * Only OUR claims are retired — see `isStudentAsserted`. Anything the student
+ * searched for, imported from a transcript, or expressed an opinion about stays
+ * exactly where it is. The asymmetry is the whole point: we are allowed to
+ * withdraw a guess we made, and we are not allowed to erase an answer they
+ * gave.
+ *
+ * `dismissedCourseIds` also survives untouched. "I did not take Calculus II" is
+ * a fact about the student, not about their major, and it stays true across a
+ * change of major — the next deck must not re-tick it.
+ *
+ * The known cost: a guess that happened to be RIGHT, that the student left
+ * standing without ever opening the love screen, is dropped and only comes back
+ * if the new deck guesses it again. That is the correct trade. Passive
+ * acceptance of a pre-filled chip is the weakest evidence on the record, and
+ * over-stating someone's transcript is worse than under-stating it — an extra
+ * course silently satisfies a requirement they still owe.
+ *
+ * A no-op when the signature is unchanged, so re-picking the same school or
+ * toggling a minor off and back on costs nothing.
+ */
+export function reconcileDegreeChange(
+  before: GuestOnboardingState,
+  after: GuestOnboardingState,
+): GuestOnboardingState {
+  if (degreeSignature(before) === degreeSignature(after)) return after;
+
+  const courses = after.courses.filter(isStudentAsserted);
+  if (courses.length === after.courses.length) return after;
+
+  return {
+    ...after,
+    courses,
+    // The deck this counter was pacing no longer exists. Starting the new one
+    // at zero means the first confirmation on the rebuilt screen re-ranks.
+    confirmationsSinceRerank: 0,
     updatedAt: new Date().toISOString(),
   };
 }

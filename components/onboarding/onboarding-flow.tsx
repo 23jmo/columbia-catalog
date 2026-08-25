@@ -19,6 +19,7 @@ import {
   hasDeclinedMinors,
   NO_MINORS_PROGRAM_ID,
   RERANK_BATCH_SIZE,
+  reconcileDegreeChange,
   removeCourse as removeCourseFrom,
   setLiked as setLikedIn,
   upsertCourse,
@@ -380,8 +381,23 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
     });
   }, []);
 
+  /**
+   * Every write that can change school, class year, or programs.
+   *
+   * Routed through `reconcileDegreeChange` rather than straight into the store,
+   * because changing one of those three answers retires the guesses that were
+   * made from the old ones — see the long note on that function. Four call
+   * sites, one funnel: a fifth degree control added later that calls
+   * `updateOnboardingState` directly would silently reintroduce the stale
+   * "here's what we think you've taken" screen, so there is deliberately no
+   * other way to write these fields from this component.
+   */
+  const updateDegree = (
+    produce: (current: GuestOnboardingState) => GuestOnboardingState,
+  ) => updateOnboardingState((current) => reconcileDegreeChange(current, produce(current)));
+
   const toggleProgram = (programId: string) =>
-    updateOnboardingState((current) => ({
+    updateDegree((current) => ({
       ...current,
       programIds: current.programIds.includes(programId)
         ? current.programIds.filter((id) => id !== programId)
@@ -390,7 +406,7 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
     }));
 
   const toggleMinor = (programId: string) =>
-    updateOnboardingState((current) => {
+    updateDegree((current) => {
       const withoutNone = current.programIds.filter((id) => id !== NO_MINORS_PROGRAM_ID);
       if (withoutNone.includes(programId)) {
         return {
@@ -407,7 +423,7 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
     });
 
   const toggleNoMinors = () =>
-    updateOnboardingState((current) => {
+    updateDegree((current) => {
       if (hasDeclinedMinors(current.programIds)) {
         return {
           ...current,
@@ -435,7 +451,7 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
     !majorsOffered || hasSelectedMajor(state.programIds, programOptions);
 
   const patch = (fields: Partial<GuestOnboardingState>) =>
-    updateOnboardingState((current) => ({
+    updateDegree((current) => ({
       ...current,
       ...fields,
       updatedAt: new Date().toISOString(),
