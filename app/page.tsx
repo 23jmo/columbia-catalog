@@ -38,14 +38,9 @@ import type { Metadata } from "next";
 import { AppShell } from "@/components/shell/app-shell";
 import { PageContent } from "@/components/shell/page-content";
 import { AuthErrorNotice } from "@/components/shell/auth-error-notice";
-import { WeekGrid } from "@/components/schedule";
 import { AgentAnnouncement } from "@/components/home/agent-announcement";
-import { ScheduleColumn } from "@/components/home/schedule-column";
 import { AssistantHome } from "@/components/assistant";
 import { FeedPanel, FeedSkeleton } from "@/components/feed";
-import { WatchlistRail } from "@/components/watch/watchlist-rail";
-import { isEmailConfigured } from "@/lib/alerts/resend";
-import { loadPlanSnapshot } from "@/components/home/load-plan-snapshot";
 import { CURRENT_TERM, buildTerm } from "@/lib/constants";
 import { PROMPT_LIMIT, checkPromptBudget } from "@/lib/agent/usage";
 import { buildFeed } from "@/lib/recommend/feed";
@@ -66,12 +61,7 @@ export default async function HomePage({
   const params = await searchParams;
 
   const account = await getSessionUser();
-  const useSamplePlan = params.demo === "1";
-  const termCode = CURRENT_TERM;
-
-  const snapshot = await loadPlanSnapshot({ termCode, useSamplePlan });
-  const term = buildTerm(termCode);
-  const emailAlertsEnabled = isEmailConfigured();
+  const term = buildTerm(CURRENT_TERM);
   const budget = await readPromptBudget(account?.userId ?? null);
 
   return (
@@ -92,22 +82,6 @@ export default async function HomePage({
         />
 
         <AgentAnnouncement />
-
-        <ScheduleColumn
-          termCode={termCode}
-          plan={snapshot.plan}
-          analysis={snapshot.analysis}
-          blocks={snapshot.blocks}
-          sectionCount={snapshot.sections.length}
-          isSample={snapshot.isSample}
-          unscheduledCount={snapshot.unscheduledCount}
-          historicalCount={snapshot.historicalCount}
-          sampleHref="/?demo=1"
-          isSignedIn={Boolean(account)}
-          weekGrid={WeekGrid}
-        />
-
-        <WatchlistRail termCode={termCode} emailAlertsEnabled={emailAlertsEnabled} />
       </PageContent>
     </AppShell>
   );
