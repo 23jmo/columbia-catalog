@@ -435,7 +435,7 @@ function SignInChip({ onClick, error }: { onClick: () => void; error?: string | 
       <button
         type="button"
         onClick={() => {
-          haptic("impact");
+          haptic("selection");
           onClick();
         }}
         className="flex h-10 cursor-pointer items-center rounded-xl border border-border-button-default bg-background-full px-3.5 text-body-medium text-text-secondary transition-colors hover:bg-background-secondary-hover hover:text-text-primary pointer-coarse:h-11"
@@ -511,8 +511,8 @@ function AdvanceArrow({
     <button
       type="button"
       onClick={() => {
-        // Advancing is the completed beat of each screen.
-        haptic("success");
+        // Same tick as the answer chips — forward, not a saved write.
+        haptic("selection");
         onClick();
       }}
       disabled={disabled}
