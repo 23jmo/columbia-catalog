@@ -98,16 +98,35 @@ export function FeedCardView({ card, className }: { card: FeedCardData; classNam
             full prerequisite text and the reviews are all there.
           */}
           {/*
-            One line, always. A rail of mixed 1- and 2-line titles makes every
-            card a different height above the week strip, so the clocks and
-            seat meters refuse to line up. Truncate the long ones; the full
-            name is on the course page the title already links to.
+            18px, and the largest thing on the card.
+
+            It was 16px — the same size as the clock beside the week strip and
+            the seat count, which are facts you check AFTER you have decided
+            the class is worth checking. The title is the thing being chosen
+            between; nothing else on the card is read first, so nothing else
+            should be its equal.
+
+            ── Two lines now, not one ────────────────────────────────────────
+
+            This was `truncate whitespace-nowrap`, and the reason was
+            alignment: side by side, a rail of mixed 1- and 2-line titles gave
+            every card a different height above the week strip and the clocks
+            and seat meters refused to line up across the row. In one column a
+            row holds one card, so there is no longer a neighbour to line up
+            with — and the rule had started costing what it was meant to save,
+            since a bigger font truncates sooner. "Optimization Models and
+            Methods" is a course you can recognise; "Optimization Models a…"
+            is not.
+
+            Two, not unbounded: `line-clamp-2` still caps the height so a
+            60-character registrar title cannot push the seat meter off the
+            first screen. The full name is on the course page this links to.
           */}
-          <h3 className="min-w-0 overflow-hidden text-headline-semibold -tracking-[0.01em] text-text-primary">
+          <h3 className="min-w-0 text-title-3-semibold -tracking-[0.01em] text-text-primary">
             <Link
               href={sectionHref}
               className={cx(
-                "block truncate whitespace-nowrap rounded-sm outline-none",
+                "block line-clamp-2 rounded-sm outline-none",
                 "transition-colors duration-100",
                 "hover:text-accent-600 focus-visible:ring-2 focus-visible:ring-border-focus-ring",
               )}

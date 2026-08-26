@@ -38,8 +38,10 @@ const DEFAULT_CARDS = 4;
  * one card stamped down the page. The live cards vary; a column of clones
  * would not.
  *
- * One title bar: the live title is a single truncated line, so a two-line
- * skeleton would be the jump that pushes everything below it.
+ * One title bar, even though the live title may now wrap to two. Most titles
+ * are one line and the skeleton should shape the common case; reserving two
+ * would leave a 26px hole under every short title, which is the same jump in
+ * the other direction and visible on every card instead of a few.
  */
 const CARD_SHAPES = [
   { title: "w-4/5", instructor: "w-48", time: "w-40", reasons: ["w-56", "w-44"] },
@@ -99,7 +101,7 @@ function FeedCardSkeleton({
       <header className="flex min-w-0 items-start gap-2">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <Bar className="h-4 w-40" />
-          <Bar className={cx("h-5.5", shape.title)} />
+          <Bar className={cx("h-6.5", shape.title)} />
           <Bar className="h-4 w-36" />
         </div>
         {/* Bookmark + Vergil sit in the corner as two 28px icons. */}
