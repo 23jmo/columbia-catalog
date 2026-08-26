@@ -218,9 +218,11 @@ export function AddChip({
           }}
           aria-label={dismissLabel ?? "I have not taken this"}
           className={cx(
-            "absolute -top-1.5 -right-1.5 flex size-5 cursor-pointer items-center justify-center rounded-full",
-            "border border-border-button-default bg-background-primary-default text-text-tertiary",
-            "hover:bg-background-secondary-hover hover:text-text-primary",
+            // Inverted like iOS jiggle-mode delete: a dark disc, light ×,
+            // sitting on the corner. A same-family fill on the grey chip
+            // disappeared into it — the preview made that obvious.
+            "absolute -top-1.5 -right-1.5 flex size-5 cursor-pointer items-center justify-center rounded-full shadow-sm",
+            "bg-text-primary text-background-primary-default hover:opacity-80",
             "pointer-coarse:size-6",
           )}
         >
