@@ -45,6 +45,10 @@ export function isGuestAllowedPath(pathname: string): boolean {
  * sending them to `/` skips the rest of onboarding — including the first
  * feed they just signed in to see. Keep them in the flow until the
  * completion cookie is set.
+ *
+ * That cookie must not outlive the account. Deleting the account (or
+ * choosing "Redo onboarding") clears it; otherwise a re-sign-in after
+ * delete looks "already done" and this function sends them home.
  */
 export function postAuthPath(next: string, onboarded: boolean): string {
   if (next !== "/") return next;

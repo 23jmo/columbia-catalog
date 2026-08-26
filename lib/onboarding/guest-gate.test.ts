@@ -52,4 +52,10 @@ describe("postAuthPath", () => {
   it("lets a finished account land on home", () => {
     expect(postAuthPath("/", true)).toBe("/");
   });
+
+  it("does not treat a deleted-and-rebuilt account as finished", () => {
+    // After delete the completion cookie must be cleared; if it is, a
+    // stranded OAuth return (next=/) stays in the wizard for the first feed.
+    expect(postAuthPath("/", false)).toBe("/onboarding");
+  });
 });
