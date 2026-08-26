@@ -49,6 +49,12 @@ export interface FeedPreviewGateProps {
  * The panel stays in document flow, not `absolute top-44`. A fixed top on a
  * locked viewport assumed one card plus the panel always fit under the
  * ornament, and on a phone they do not.
+ *
+ * The tuck wash is a short band over the first card only. Stretching it
+ * through the panel (`bottom-0` at 80% secondary) painted a page-coloured
+ * veil the height of the Columbia card — a dead gap between card 1 and 2.
+ * Signed-in students get one even stack; the first/rest split exists only
+ * to park the gate between cards.
  */
 export function FeedPreviewGate({
   state,
@@ -109,43 +115,52 @@ export function FeedPreviewGate({
      * width and the right edge of the sign-in card shears off.
      */
     <div className="relative w-full min-w-0 max-w-full pt-2">
-      {firstCard ? <PreviewCardSlot item={firstCard} index={0} gated={gated} /> : null}
-
-      {gated ? (
-        <div className="relative z-10 -mt-6 flex min-w-0 shrink-0 flex-col items-center gap-4 px-0 sm:-mt-8 sm:px-1">
-          {/*
-            In the document flow, not `absolute top-44`. The panel keeps its
-            natural height so the Columbia button cannot be clipped. Negative
-            margin tucks it into the first card so that card dissolves into
-            the gate; cards below stay in flow and scroll with the page.
-          */}
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-x-0 -top-16 bottom-0 bg-linear-to-b from-transparent from-0% via-background-secondary-default/20 via-45% to-background-secondary-default/80 to-100%"
-          />
-
-          <FeedGateOverlay
-            feedError={previewError}
-            onSignIn={onSignIn}
-            signInDisabled={signInDisabled}
-            signInError={signInError}
-          />
-        </div>
-      ) : null}
-
-      {restCards.length > 0 ? (
-        <div
-          className={cx(
-            "mt-3.5 flex min-w-0 flex-col gap-3.5 transition-[filter,opacity] duration-300 ease-out",
-            gated && "pointer-events-none select-none",
-          )}
-          aria-hidden={gated}
-        >
-          {restCards.map((item, index) => (
-            <PreviewCardSlot key={item.key} item={item} index={index + 1} gated={gated} />
+      {/*
+        Signed-in: one even stack. The first/rest split exists only so the
+        Columbia panel can sit between cards while the feed is gated.
+      */}
+      {!gated ? (
+        <div className="flex min-w-0 flex-col gap-3.5">
+          {cardItems.map((item, index) => (
+            <PreviewCardSlot key={item.key} item={item} index={index} gated={false} />
           ))}
         </div>
-      ) : null}
+      ) : (
+        <>
+          {firstCard ? <PreviewCardSlot item={firstCard} index={0} gated /> : null}
+
+          <div className="relative z-10 -mt-6 flex min-w-0 shrink-0 flex-col items-center gap-4 px-0 sm:-mt-8 sm:px-1">
+            {/*
+              Dissolve only the tuck into the first card. A full-box wash
+              (`bottom-0` to 80% secondary) used to paint over the Columbia
+              panel itself — same height, page-coloured, faint border — which
+              read as a dead gap between card 1 and card 2.
+            */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 -top-16 z-0 h-24 bg-linear-to-b from-transparent from-0% via-background-secondary-default/25 via-55% to-background-secondary-default/70 to-100%"
+            />
+
+            <FeedGateOverlay
+              feedError={previewError}
+              onSignIn={onSignIn}
+              signInDisabled={signInDisabled}
+              signInError={signInError}
+            />
+          </div>
+
+          {restCards.length > 0 ? (
+            <div
+              className="mt-3.5 flex min-w-0 flex-col gap-3.5 pointer-events-none select-none transition-[filter,opacity] duration-300 ease-out"
+              aria-hidden
+            >
+              {restCards.map((item, index) => (
+                <PreviewCardSlot key={item.key} item={item} index={index + 1} gated />
+              ))}
+            </div>
+          ) : null}
+        </>
+      )}
 
       {gated ? null : (
         <div className="mt-8 flex flex-col items-center gap-3">
@@ -302,7 +317,9 @@ function FeedGateOverlay({
   signInError?: string | null;
 }) {
   return (
-    <div className="relative flex w-full min-w-0 max-w-md flex-col items-center gap-4">
+    // `z-10` keeps the card above the tuck wash; without it a full-height
+    // dissolve sibling could paint over this and leave a panel-sized blank.
+    <div className="relative z-10 flex w-full min-w-0 max-w-md flex-col items-center gap-4">
       <FeedSignInPanel
         onSignIn={() => void onSignIn()}
         disabled={signInDisabled}
