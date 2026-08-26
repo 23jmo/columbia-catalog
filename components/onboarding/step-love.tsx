@@ -2,7 +2,7 @@
 
 import type { GuestCourse } from "@/lib/onboarding/state";
 
-import { ChipWrap, OptionChip } from "./chip";
+import { ChipWrap, OptionChip, courseChipLines } from "./chip";
 
 /**
  * "Which of these did you like?"
@@ -52,19 +52,22 @@ export function StepLove({ courses, onSetLiked }: StepLoveProps) {
 
   return (
     <ChipWrap>
-      {courses.map((course) => (
-        <OptionChip
-          key={course.courseId}
-          isSelected={course.liked === true}
-          // Re-pressing clears back to "not asked", which is the honest value
-          // for an accidental tap on a screen of twenty pills.
-          onPress={() => onSetLiked(course.courseId, course.liked === true ? null : true)}
-          sublabel={course.title ?? undefined}
-          label={`${course.code}${course.title ? ` — ${course.title}` : ""}`}
-        >
-          {course.code}
-        </OptionChip>
-      ))}
+      {courses.map((course) => {
+        const lines = courseChipLines(course.code, course.title);
+        return (
+          <OptionChip
+            key={course.courseId}
+            isSelected={course.liked === true}
+            // Re-pressing clears back to "not asked", which is the honest value
+            // for an accidental tap on a screen of twenty pills.
+            onPress={() => onSetLiked(course.courseId, course.liked === true ? null : true)}
+            sublabel={lines.sublabel}
+            label={`${lines.label}${lines.sublabel ? ` — ${lines.sublabel}` : ""}`}
+          >
+            {lines.label}
+          </OptionChip>
+        );
+      })}
     </ChipWrap>
   );
 }

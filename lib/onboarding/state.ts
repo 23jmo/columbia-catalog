@@ -203,6 +203,11 @@ export interface GuestOnboardingState {
   classYear: string | null;
   /** Program ids from `lib/requirements/programs`. Majors, minors, concentrations. */
   programIds: string[];
+  /**
+   * Free-text major from the "Other" chip. Null when that chip is off.
+   * An empty string means they opened Other but have not typed yet.
+   */
+  customMajor: string | null;
   courses: GuestCourse[];
   interestTags: string[];
   /** Where the student is now. */
@@ -276,6 +281,11 @@ export const guestOnboardingStateSchema = z.object({
   school: z.enum(SCHOOLS).nullable(),
   classYear: z.string().nullable(),
   programIds: z.array(z.string()).max(8),
+  /*
+   * `.default(null)` so a state written before "Other" still reads. Same
+   * reason `dismissedCourseIds` defaults: the key stays at `:v1`.
+   */
+  customMajor: z.string().max(80).nullable().default(null),
   // A transcript is tens of rows. Four hundred is the same cap
   // `addCoursesAction` uses, and for the same reason.
   courses: z.array(guestCourseSchema).max(400),
@@ -302,6 +312,7 @@ export function emptyGuestState(): GuestOnboardingState {
     school: null,
     classYear: null,
     programIds: [],
+    customMajor: null,
     courses: [],
     interestTags: [],
     step: "school",
@@ -459,6 +470,7 @@ export function degreeSignature(state: GuestOnboardingState): string {
     school: state.school,
     classYear: state.classYear,
     programIds: [...declaredProgramIds(state.programIds)].sort(),
+    customMajor: state.customMajor?.trim() || null,
   });
 }
 

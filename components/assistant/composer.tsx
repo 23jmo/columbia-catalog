@@ -172,7 +172,8 @@ export function Composer({
           aria-hidden
           className={cx(
             "absolute inset-0 border border-border-table",
-            "bg-background-primary-default shadow-xs",
+            "bg-background-primary-default",
+            isFocused || isBusy ? "shadow-sm" : "shadow-md",
             "transition-[border-radius] duration-200 ease-out motion-reduce:transition-none",
             "sm:rounded-3xl",
             isCollapsed ? "rounded-full" : "rounded-3xl",

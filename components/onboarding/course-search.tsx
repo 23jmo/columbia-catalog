@@ -19,18 +19,9 @@ import { haptic } from "@/lib/haptics";
  * their first visit, which is the most expensive place in the product to hit
  * one.
  *
- * ── Deliberately subordinate ────────────────────────────────────────────────
- *
- * Most additions should come from the suggestion strip above, so this sits
- * below it, narrower, in a quieter type size, under a small label rather than a
- * heading. It is present and reachable; it is not the first thing the eye
- * lands on. When it was a peer tab in a segmented control it read as one of
- * three equal ways to do the task, which is exactly wrong — it is the way to do
- * the part of the task the guesses cannot.
- *
- * Debounced rather than submit-on-enter because the answer is usually two
- * characters into a course code, and making someone press a button to see it
- * makes the box feel like a form.
+ * Search sits above the suggestion strip so it is the first correction tool,
+ * not an afterthought under twenty chips. Debounced rather than submit-on-enter
+ * because the answer is usually two characters into a course code.
  */
 
 export interface CourseSearchProps {
@@ -107,22 +98,23 @@ export function CourseSearch({ confirmedIds, onAdd }: CourseSearchProps) {
   }, [query]);
 
   return (
-    <section className="mx-auto flex w-full max-w-[420px] flex-col gap-2">
+    <section className="mx-auto flex w-full flex-col gap-2">
       <label
         htmlFor="onboarding-course-search"
-        className="text-center text-caption-2-medium tracking-[0.08em] text-text-tertiary uppercase"
+        className="text-center text-body-medium text-text-primary"
       >
-        Or add something yourself
+        Search for a course you took
       </label>
 
       <Input
         id="onboarding-course-search"
         aria-label="Search for a course you took"
-        placeholder="COMS 3134, organic chemistry…"
+        placeholder="University Writing, COMS 3134…"
         value={query}
         onChange={setQuery}
         leadingIcon={RiSearchLine}
-        size="small"
+        size="medium"
+        fieldClassName="py-3 shadow-sm"
       />
 
       {visibleError ? (
@@ -165,9 +157,11 @@ export function CourseSearch({ confirmedIds, onAdd }: CourseSearchProps) {
                     aria-hidden
                   />
                   <span className="min-w-0 flex-1 py-1">
-                    <span className="block text-caption-1-medium text-text-primary">{hit.code}</span>
-                    <span className="block truncate text-caption-2-regular text-text-secondary">
+                    <span className="block text-caption-1-medium text-text-primary">
                       {displayCourseTitle(hit.title)}
+                    </span>
+                    <span className="block truncate text-caption-2-regular text-text-secondary">
+                      {hit.code}
                     </span>
                   </span>
                   {isAdded ? (

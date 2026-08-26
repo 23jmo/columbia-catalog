@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { FocusEvent, PointerEvent } from "react";
 
 /**
@@ -65,6 +65,12 @@ export interface HoverCard {
     onPointerEnter: (event: PointerEvent) => void;
     onPointerLeave: (event: PointerEvent) => void;
   };
+  /**
+   * Full-screen tap target on coarse pointers. Hover-to-open on a mouse must
+   * not hit a layer between the chip and the card, so this is `hidden` except
+   * on touch, where tap-outside is the only way to put the chart away.
+   */
+  dismissLayer: ReactNode;
 }
 
 export function useHoverCard({ onOpen }: HoverCardOptions = {}): HoverCard {
@@ -163,6 +169,21 @@ export function useHoverCard({ onOpen }: HoverCardOptions = {}): HoverCard {
       onBlur: closeSoon,
     },
     surfaceProps: { onPointerEnter, onPointerLeave },
+    dismissLayer: isOpen ? (
+      <div
+        aria-hidden
+        // Fine pointers hover-to-close; this layer would sit between the
+        // chip and the card. Coarse pointers have no hover, so a full-screen
+        // tap target is the only way off. Do not pair `hidden` with
+        // `pointer-coarse:block` — equal specificity, and `hidden` wins.
+        className="fixed inset-0 z-40 [@media(pointer:fine)]:hidden"
+        onPointerDown={(event) => {
+          event.preventDefault();
+          cancelClose();
+          setIsOpen(false);
+        }}
+      />
+    ) : null,
   };
 }
 

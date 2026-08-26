@@ -20,10 +20,9 @@ import {
   type GuestOnboardingState,
 } from "@/lib/onboarding/state";
 import { sameIds, stabilizeStrip } from "@/lib/onboarding/stable-strip";
-import { displayCourseTitle } from "@/lib/onboarding/course-title";
 import { dismiss, toast } from "@/lib/toast/store";
 
-import { AddChip, ChipWrap, RemovableChip } from "./chip";
+import { AddChip, ChipWrap, RemovableChip, courseChipLines } from "./chip";
 import { CourseworkSkeleton } from "./coursework-skeleton";
 import { CourseSearch } from "./course-search";
 import { TranscriptImport } from "./transcript-import";
@@ -77,13 +76,11 @@ export interface StepCourseworkProps {
 }
 
 /**
- * Maybe-taken chips under the pre-checked set. 24, not 12: a rising senior's
- * optional list is long, and a dozen looked like we ran out of ideas. Must stay
- * at or below the guess deck's own cap, or the extra slots are empty by
- * construction. 24 is the display ceiling; importing the cap from guess.ts
- * would pull the recommendation engine (and node:fs) into this client module.
+ * Maybe-taken chips under the pre-checked set. Eight, not twenty-four: the
+ * search box is the way to add anything we missed, and a long strip pushed it
+ * off the first screen. Must stay at or below the guess deck's own cap.
  */
-const STRIP_LIMIT = 24;
+const STRIP_LIMIT = 8;
 
 /** Coalesce rapid taps into one re-rank so the strip does not shuffle mid-aim. */
 const RERANK_DEBOUNCE_MS = 180;
@@ -368,30 +365,51 @@ export function StepCoursework({
 
         {!showSkeleton && state.courses.length > 0 ? (
           <ChipWrap className="gap-1.5 sm:gap-2">
-            {state.courses.map((course) => (
-              <RemovableChip
-                key={course.courseId}
-                sublabel={course.title ? displayCourseTitle(course.title) : undefined}
-                /*
-                  The one place "we do not have this course" is stated. It is a
-                  label, never a rejection: `student_courses.course_id` is
-                  deliberately not a foreign key so transfer credit, AP credit and
-                  archived terms are storable, and such rows are simply excluded
-                  from similarity and requirement matching downstream.
-                */
-                note={course.inCatalog ? undefined : "not in our catalog"}
-                onRemove={() => removeCourse(course.courseId)}
-                removeLabel={`Remove ${course.code}${
-                  course.title ? ` — ${displayCourseTitle(course.title)}` : ""
-                }`}
-              >
-                {course.code}
-              </RemovableChip>
-            ))}
+            {state.courses.map((course) => {
+              const lines = courseChipLines(course.code, course.title);
+              return (
+                <RemovableChip
+                  key={course.courseId}
+                  sublabel={lines.sublabel}
+                  /*
+                    The one place "we do not have this course" is stated. It is a
+                    label, never a rejection: `student_courses.course_id` is
+                    deliberately not a foreign key so transfer credit, AP credit and
+                    archived terms are storable, and such rows are simply excluded
+                    from similarity and requirement matching downstream.
+                  */
+                  note={course.inCatalog ? undefined : "not in our catalog"}
+                  onRemove={() => removeCourse(course.courseId)}
+                  removeLabel={`Remove ${lines.label}${
+                    lines.sublabel ? ` — ${lines.sublabel}` : ""
+                  }`}
+                >
+                  {lines.label}
+                </RemovableChip>
+              );
+            })}
           </ChipWrap>
         ) : null}
 
         {error ? <p className="text-center text-body-regular text-text-secondary">{error}</p> : null}
+
+        <CourseSearch
+          confirmedIds={confirmedIds}
+          onAdd={(hit: CourseHit) =>
+            confirm({
+              courseId: hit.courseId,
+              code: hit.code,
+              title: hit.title,
+              termLabel: null,
+              points: hit.points,
+              liked: null,
+              // Searched for by name — stronger evidence than a guess we made,
+              // and the profile screen displays the difference.
+              source: "picker",
+              inCatalog: true,
+            })
+          }
+        />
 
         {!showSkeleton && suggestions.length > 0 ? (
           <div className="flex flex-col gap-3">
@@ -399,44 +417,29 @@ export function StepCoursework({
               Students with these usually have these too
             </h2>
             <ChipWrap className="gap-1.5 overflow-visible px-2.5 pt-2 sm:gap-2">
-              {suggestions.map((candidate) => (
-                <AddChip
-                  key={candidate.courseId}
-                  onPress={() => confirm(toGuestCourse(candidate))}
-                  onDismiss={() => dismissSuggestion(candidate.courseId)}
-                  sublabel={candidate.title ? displayCourseTitle(candidate.title) : undefined}
-                  label={`Add ${candidate.code}${
-                    candidate.title ? ` — ${displayCourseTitle(candidate.title)}` : ""
-                  }`}
-                  dismissLabel={`I have not taken ${candidate.code}${
-                    candidate.title ? ` — ${displayCourseTitle(candidate.title)}` : ""
-                  }`}
-                >
-                  {candidate.code}
-                </AddChip>
-              ))}
+              {suggestions.map((candidate) => {
+                const lines = courseChipLines(candidate.code, candidate.title);
+                return (
+                  <AddChip
+                    key={candidate.courseId}
+                    onPress={() => confirm(toGuestCourse(candidate))}
+                    onDismiss={() => dismissSuggestion(candidate.courseId)}
+                    sublabel={lines.sublabel}
+                    label={`Add ${lines.label}${
+                      lines.sublabel ? ` — ${lines.sublabel}` : ""
+                    }`}
+                    dismissLabel={`I have not taken ${lines.label}${
+                      lines.sublabel ? ` — ${lines.sublabel}` : ""
+                    }`}
+                  >
+                    {lines.label}
+                  </AddChip>
+                );
+              })}
             </ChipWrap>
           </div>
         ) : null}
       </section>
-
-      <CourseSearch
-        confirmedIds={confirmedIds}
-        onAdd={(hit: CourseHit) =>
-          confirm({
-            courseId: hit.courseId,
-            code: hit.code,
-            title: hit.title,
-            termLabel: null,
-            points: hit.points,
-            liked: null,
-            // Searched for by name — stronger evidence than a guess we made,
-            // and the profile screen displays the difference.
-            source: "picker",
-            inCatalog: true,
-          })
-        }
-      />
 
       {isTranscriptOpen ? (
         <TranscriptImport

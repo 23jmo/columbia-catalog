@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { guestOnboardingLocation, isGuestAllowedPath } from "./guest-gate";
+import { guestOnboardingLocation, isGuestAllowedPath, postAuthPath } from "./guest-gate";
 
 describe("isGuestAllowedPath", () => {
   it("lets a guest stay on onboarding, auth, and APIs", () => {
@@ -36,5 +36,20 @@ describe("guestOnboardingLocation", () => {
     expect(dest.pathname).toBe("/onboarding");
     expect(dest.searchParams.get("auth_error")).toBe("ineligible_domain");
     expect(dest.searchParams.get("q")).toBeNull();
+  });
+});
+
+describe("postAuthPath", () => {
+  it("keeps an explicit destination", () => {
+    expect(postAuthPath("/search", false)).toBe("/search");
+    expect(postAuthPath("/onboarding", true)).toBe("/onboarding");
+  });
+
+  it("sends an unfinished student back to the wizard instead of home", () => {
+    expect(postAuthPath("/", false)).toBe("/onboarding");
+  });
+
+  it("lets a finished account land on home", () => {
+    expect(postAuthPath("/", true)).toBe("/");
   });
 });
