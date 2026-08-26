@@ -32,6 +32,7 @@
 import type {
   Course,
   CourseWithSections,
+  RequirementFlags,
   Section,
   TermCode,
 } from "@/lib/types";
@@ -120,6 +121,13 @@ export interface CourseListing {
   title: string;
   pointsMin: number | null;
   pointsMax: number | null;
+  /**
+   * Bulletin curriculum flags. Empty until core-flag ingest has written them.
+   * The feed uses this to answer "easy Global Cores" even when the student
+   * has no program on file — without it, `clears: "Global Core"` ranked the
+   * whole catalog and then dropped every card.
+   */
+  requirementFlags: RequirementFlags;
 }
 
 function listingFromCourse(course: CourseWithSections): CourseListing {
@@ -131,6 +139,7 @@ function listingFromCourse(course: CourseWithSections): CourseListing {
     title: course.title,
     pointsMin: course.pointsMin,
     pointsMax: course.pointsMax,
+    requirementFlags: course.requirementFlags ?? {},
   };
 }
 

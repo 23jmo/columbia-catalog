@@ -12,6 +12,7 @@ import { z } from "zod";
 import { tool, type ToolSet } from "ai";
 
 import { buildCampusMapArtifact, buildInstructorArtifact, buildScheduleArtifact } from "@/lib/agent/present";
+import { buildOnboardingArtifact } from "@/lib/agent/present-onboarding";
 import { loadInstructorProfile } from "@/lib/data/instructors";
 import { getInstructorReputation } from "@/lib/db/reputation";
 import type { McpDeps } from "@/lib/mcp/contracts";
@@ -30,6 +31,19 @@ export function presentTools(context: {
   };
 
   return {
+    show_onboarding: tool({
+      description:
+        "Put a button on screen that takes the student to degree setup. Call this when " +
+        "get_unmet_requirements or recommend_courses returns needsOnboarding / " +
+        "kind onboarding_prompt — no school or program on file, so a Core or " +
+        "'what do I still need' question cannot be answered honestly. The student " +
+        "SEES the button under your answer. Do not also dump a catalog of Global Cores.",
+      inputSchema: z.object({}),
+      async execute() {
+        return emit(buildOnboardingArtifact());
+      },
+    }),
+
     show_schedule: tool({
       description:
         "Put the student's week on screen as the same calendar the schedule tab uses. " +

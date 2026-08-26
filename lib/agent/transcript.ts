@@ -40,6 +40,10 @@
 import { getToolName, isToolUIPart, type UIMessage } from "ai";
 
 import type { CampusMapArtifact, InstructorArtifact, ScheduleArtifact } from "@/lib/agent/present";
+import {
+  ONBOARDING_HREF,
+  type OnboardingArtifact,
+} from "@/lib/agent/present-onboarding";
 import { ALL_WEEKDAYS } from "@/lib/constants";
 import type { FeedCard } from "@/lib/recommend/feed";
 import { formatCourseId, toCourseId, type CourseId } from "@/lib/requirements/code";
@@ -100,6 +104,7 @@ const TOOL_LABELS: Record<string, string> = {
   show_schedule: "Putting your week on screen",
   show_campus_map: "Putting the campus map on screen",
   show_instructor: "Putting the instructor on screen",
+  show_onboarding: "Opening degree setup",
 };
 
 export function toolLabel(name: string): string {
@@ -445,6 +450,15 @@ export function instructorArtifacts(message: UIMessage): InstructorArtifact[] {
   return found;
 }
 
+export function onboardingArtifacts(message: UIMessage): OnboardingArtifact[] {
+  const found: OnboardingArtifact[] = [];
+  for (const payload of toolPayloads(message)) {
+    const artifact = readOnboardingArtifact(payload);
+    if (artifact) found.push(artifact);
+  }
+  return found;
+}
+
 /**
  * One visual beat in a turn, in the order `message.parts` actually arrived.
  *
@@ -463,6 +477,7 @@ export type TurnBlock =
   | { kind: "schedule"; artifact: ScheduleArtifact }
   | { kind: "campus_map"; artifact: CampusMapArtifact }
   | { kind: "instructor"; artifact: InstructorArtifact }
+  | { kind: "onboarding"; artifact: OnboardingArtifact }
   | { kind: "feed"; cards: FeedCard[] };
 
 export function turnBlocks(
@@ -508,6 +523,10 @@ function visualBlock(payload: Payload, seen: Set<string>): TurnBlock | null {
   if (payload.kind === "instructor_card") {
     const artifact = readInstructorArtifact(payload);
     return artifact ? { kind: "instructor", artifact } : null;
+  }
+  if (payload.kind === "onboarding_prompt") {
+    const artifact = readOnboardingArtifact(payload);
+    return artifact ? { kind: "onboarding", artifact } : null;
   }
 
   const cards: FeedCard[] = [];
@@ -639,6 +658,13 @@ function readInstructorArtifact(record: Payload): InstructorArtifact | null {
   };
 }
 
+function readOnboardingArtifact(record: Payload): OnboardingArtifact | null {
+  if (record.kind !== "onboarding_prompt") return null;
+  if (asString(record.href) !== ONBOARDING_HREF) return null;
+  if (record.reason !== "no_degree") return null;
+  return { kind: "onboarding_prompt", href: ONBOARDING_HREF, reason: "no_degree" };
+}
+
 /* ==========================================================================
  * Prose
  * ========================================================================== */
@@ -685,7 +711,7 @@ export function suggestedFollowUps(message: UIMessage): string[] {
     suggestions.push("Why these and not others?");
     suggestions.push("Show me more like these");
   }
-  if (names.has("get_unmet_requirements")) {
+  if (names.has("get_unmet_requirements") && onboardingArtifacts(message).length === 0) {
     suggestions.push("What's the fastest way to finish?");
   }
   if (courses.length > 1) {

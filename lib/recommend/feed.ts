@@ -39,7 +39,8 @@ import { getTypicalMeetings } from "@/lib/db/typical-meetings";
 import { loadPrimaryPlanSnapshot } from "@/lib/db/primary-plan-snapshot";
 import type { CourseWithSections, Meeting, TermCode } from "@/lib/types";
 
-import { candidateIdsForClears, recommendationClears } from "./clears";
+import { recommendationClears } from "./clears";
+import { outstandingForClears, resolveClearsPool } from "./clears-pool";
 import { recommend, WEIGHTS } from "./index";
 import {
   hydrateCourses,
@@ -201,8 +202,18 @@ export interface BuildFeedOptions {
    * `"Global Core"`. Substring, case-insensitive. The unfiltered feed is
    * dominated by a CS major's outstanding CS groups; without this, asking
    * for Core reprints Computer Vision.
+   *
+   * Works without a program on file: the pool falls back to live
+   * `requirement_flags` and then to the Bulletin approved-course list.
    */
   clears?: string;
+  /** Inclusive course-number floor. `1000` keeps 1000-level and up. */
+  levelMin?: number;
+  /**
+   * Inclusive course-number ceiling. `3999` is the "easy / intro /
+   * manageable" cut: undergraduate listings, no graduate seminars.
+   */
+  levelMax?: number;
 }
 
 export async function buildFeed(options: BuildFeedOptions = {}): Promise<FeedResult> {
@@ -226,13 +237,32 @@ export async function buildFeed(options: BuildFeedOptions = {}): Promise<FeedRes
   const skip = new Set(options.excludeCourseIds ?? []);
   const listingById = new Map(catalog.listings.map((listing) => [listing.courseId, listing]));
 
-  const auditPool = candidateIdsForClears(student.outstanding, options.clears);
+  const auditPool = resolveClearsPool({
+    outstanding: student.outstanding,
+    clears: options.clears,
+    listings: catalog.listings,
+  });
+  const outstanding = outstandingForClears(
+    student.outstanding,
+    options.clears,
+    auditPool,
+  );
 
   const candidates = catalog.candidates.filter((candidate) => {
     if (skip.has(candidate.courseId)) return false;
     if (auditPool && !auditPool.has(candidate.courseId)) return false;
     if (wantedSubjects?.length && !wantedSubjects.includes(candidate.code.split(" ")[0])) {
       return false;
+    }
+    /*
+     * Level cut for "easy Global Cores" and similar. Applied here, not in
+     * the engine, so an unfiltered feed still ranks 4000-level majors.
+     */
+    if (options.levelMin != null || options.levelMax != null) {
+      const listing = listingById.get(candidate.courseId);
+      if (!listing) return false;
+      if (options.levelMin != null && listing.number < options.levelMin) return false;
+      if (options.levelMax != null && listing.number > options.levelMax) return false;
     }
     /*
      * Graduate-only listings are held back from a COLD feed, and only from a
@@ -267,7 +297,7 @@ export async function buildFeed(options: BuildFeedOptions = {}): Promise<FeedRes
   const ranked = recommend({
     profile: student.engine,
     candidates,
-    outstanding: student.outstanding,
+    outstanding,
     prereqs,
     vectors,
     limit: rankLimit,
@@ -316,6 +346,23 @@ export async function buildFeed(options: BuildFeedOptions = {}): Promise<FeedRes
     busy,
   });
 
+  /*
+   * Withheld must stay inside the same pool as the cards. Before the pool
+   * fallback existed, a Global Core ask ranked the whole catalog, returned
+   * zero cards (no required-reason), and filled withheld with the first 200
+   * gated courses alphabetically — architecture, intermediate language —
+   * which the assistant then narrated as the answer.
+   */
+  const withheld = ranked.withheld
+    .filter((entry) => !auditPool || auditPool.has(entry.course.courseId))
+    .sort((a, b) => {
+      const aActionable = a.reason === "prereq_unmet_but_permission" ? 0 : 1;
+      const bActionable = b.reason === "prereq_unmet_but_permission" ? 0 : 1;
+      const aNum = listingById.get(a.course.courseId)?.number ?? 9999;
+      const bNum = listingById.get(b.course.courseId)?.number ?? 9999;
+      return aActionable - bActionable || aNum - bNum || a.course.courseId.localeCompare(b.course.courseId);
+    });
+
   return {
     cards,
     personalized,
@@ -323,8 +370,8 @@ export async function buildFeed(options: BuildFeedOptions = {}): Promise<FeedRes
     takenCount: student.engine.taken.length,
     outstandingCount: student.outstanding.length,
     vectorModel: vectors.size > 0 ? vectors.model : null,
-    withheldCount: ranked.withheld.length,
-    withheld: ranked.withheld,
+    withheldCount: withheld.length,
+    withheld,
     generatedAt: new Date().toISOString(),
   };
 }

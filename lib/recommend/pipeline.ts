@@ -178,6 +178,10 @@ export async function loadStudent(): Promise<LoadedStudent> {
     provider: createSupabaseCandidateProvider({ terms: ACTIVE_TERMS }),
     // Never suggest what the student has already done.
     exclude: app.courses.map((course) => course.courseId),
+    // Global Core is hundreds of courses. The default 60 is one alphabetical
+    // page — architecture and intermediate language — and hides the intro
+    // colloquia the "easy" question is actually asking for.
+    limit: 250,
   });
 
   const outstanding = programs.flatMap((program) =>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { candidateIdsForClears, recommendationClears } from "./clears";
+import { candidateIdsForClears, flagKeyForClears, recommendationClears } from "./clears";
 import type { RecommendationReason } from "./types";
 
 const required = (label: string, id = "g"): RecommendationReason => ({
@@ -66,5 +66,21 @@ describe("candidateIdsForClears", () => {
 
   it("does not restrict when nothing matches the label", () => {
     expect(candidateIdsForClears([cs], "Global Core")).toBeUndefined();
+  });
+});
+
+describe("flagKeyForClears", () => {
+  it("accepts the filter label, the flag key, and the kebab group id", () => {
+    expect(flagKeyForClears("Global Core")).toBe("globalCore");
+    expect(flagKeyForClears("globalCore")).toBe("globalCore");
+    expect(flagKeyForClears("global-core")).toBe("globalCore");
+    expect(flagKeyForClears("Science Requirement")).toBe("scienceRequirement");
+  });
+
+  it("does not treat a short 'core' as Global Core", () => {
+    // "core" is in every Core Curriculum label. Mapping it to the first
+    // filter would send a CS-core follow-up into Global Core by accident.
+    expect(flagKeyForClears("core")).toBeNull();
+    expect(flagKeyForClears("CS Core")).toBeNull();
   });
 });

@@ -7,6 +7,8 @@
  * candidates — and, after ranking, to rows whose reason actually names it.
  */
 
+import { REQUIREMENT_FILTERS } from "@/lib/constants";
+
 import type { RecommendationReason } from "./types";
 
 /** The fields ranking needs from an outstanding group. Not the whole audit. */
@@ -43,10 +45,11 @@ export function recommendationClears(
 /**
  * Course ids the audit already knows would count for `clears`.
  *
- * Returns `undefined` when we must not restrict the pool: no needle, no
- * matching group, or a matching group whose candidate list is empty.
- * Empty lists are the open selectors (Global Core, Science) *before*
- * expansion ran — restricting to nothing would return an empty feed.
+ * Returns `undefined` when there is no needle or no matching group. An
+ * empty candidate list on a matching group also returns `undefined` —
+ * that is the open selector before expansion, and `resolveClearsPool`
+ * is what fills it from flags / the Bulletin list rather than ranking
+ * the whole catalog.
  */
 export function candidateIdsForClears(
   outstanding: readonly ClearsGroup[],
@@ -55,14 +58,44 @@ export function candidateIdsForClears(
   const needle = clears?.trim().toLowerCase();
   if (!needle) return undefined;
 
-  const matching = outstanding.filter(
-    (entry) =>
-      entry.group.label.toLowerCase().includes(needle) ||
-      entry.group.id.toLowerCase().includes(needle),
-  );
+  const matching = outstanding.filter((entry) => groupMatchesNeedle(entry, needle));
   if (matching.length === 0) return undefined;
 
   const ids = matching.flatMap((entry) => entry.candidates);
   if (ids.length === 0) return undefined;
   return new Set(ids);
+}
+
+/** True when this outstanding group is the one `clears` named. */
+export function groupMatchesNeedle(entry: ClearsGroup, needle: string): boolean {
+  return (
+    entry.group.label.toLowerCase().includes(needle) ||
+    entry.group.id.toLowerCase().includes(needle)
+  );
+}
+
+/**
+ * Map a `clears` string onto a `requirement_flags` key.
+ *
+ * Accepts the filter label ("Global Core"), the flag key ("globalCore"),
+ * and the kebab group id the audit uses ("global-core"). Unknown needles
+ * return null — those are named program groups, not catalog flags.
+ */
+export function flagKeyForClears(clears: string | undefined): string | null {
+  const needle = clears?.trim().toLowerCase();
+  if (!needle) return null;
+
+  const compacted = needle.replace(/[\s_-]+/g, "");
+  for (const filter of REQUIREMENT_FILTERS) {
+    const key = filter.key.toLowerCase();
+    const label = filter.label.toLowerCase();
+    if (needle === key || needle === label) return filter.key;
+    if (compacted === key) return filter.key;
+    // Substring only for a substantial needle. "core" sits inside every
+    // Core Curriculum label and must not become Global Core.
+    if (needle.length >= 6 && (label.includes(needle) || needle.includes(label))) {
+      return filter.key;
+    }
+  }
+  return null;
 }
