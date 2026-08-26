@@ -48,6 +48,12 @@ export interface CourseLevelPanelsProps {
   /** Course and first-instructor summaries, fetched apart and rendered apart. */
   reputation: ReputationBundle | null;
   variant?: CourseLevelVariant;
+  /**
+   * False when the caller has already drawn `CourseReviewsPanel` higher up the
+   * page. Defaults to true so a surface that has not thought about it still
+   * shows reviews rather than silently dropping them.
+   */
+  includeReviews?: boolean;
 }
 
 function Block({
@@ -73,10 +79,68 @@ function Block({
   );
 }
 
+/**
+ * Reviews, as a block that can be placed on its own.
+ *
+ * ── Why this is separable and the other three are not ──────────────────────
+ *
+ * Workload, neighbours and offering history are reference: true about the
+ * course, worth having, read by somebody who has already decided to take this
+ * seriously. They belong at the bottom and they can stay there.
+ *
+ * Reviews are not reference. Since `/course/` opened to signed-out visitors,
+ * this page is the app's front door for a link pasted into a reddit reply or a
+ * group chat, and the question that link was posted to answer is almost always
+ * "is this any good". Leaving the answer two thousand pixels down, under the
+ * description and the section list and the week grid, means the person who
+ * clicked never reaches it — the page answered them and they never found out.
+ *
+ * So the caller decides where this goes, and `CourseLevelPanels` keeps drawing
+ * it by default for anything that has not been taught otherwise.
+ *
+ * ── The two summaries are never merged ─────────────────────────────────────
+ *
+ * Spec §12. "Course experience" and "instructor quality" measure different
+ * populations answering different questions, they carry their own sample sizes
+ * and date ranges, and nothing here averages them. Course coverage in
+ * particular is thin — 126 rated courses against 10,582 — so the left half is
+ * empty far more often than the right, and `ReputationBlock` says so rather
+ * than borrowing the instructor's number to fill the gap.
+ */
+export function CourseReviewsPanel({
+  reputation,
+  variant = "page",
+}: {
+  reputation: ReputationBundle | null;
+  variant?: CourseLevelVariant;
+}) {
+  return (
+    <Block variant={variant} id="reviews" title="Reviews" icon={RiChat3Line}>
+      <div className="grid gap-3 lg:grid-cols-2">
+        <ReputationBlock
+          title="Course experience"
+          subtitle="Aggregated across everyone who has taught this course."
+          summary={reputation?.course ?? null}
+        />
+        <ReputationBlock
+          title="Instructor quality"
+          subtitle={
+            reputation?.instructorName
+              ? `Aggregated across every course ${reputation.instructorName} has taught.`
+              : "Aggregated per instructor."
+          }
+          summary={reputation?.instructor ?? null}
+        />
+      </div>
+    </Block>
+  );
+}
+
 export function CourseLevelPanels({
   data,
   reputation,
   variant = "page",
+  includeReviews = true,
 }: CourseLevelPanelsProps) {
   const { sections, credits } = data;
   const gradingModes = distinct(sections.map((section) => section.gradingMode));
@@ -86,30 +150,7 @@ export function CourseLevelPanels({
 
   return (
     <>
-      <Block variant={variant} id="reviews" title="Reviews" icon={RiChat3Line}>
-        <div className="grid gap-3 lg:grid-cols-2">
-          {/*
-            Both halves come from `loadReputation`, which is wired to the real
-            aggregator. They are null today because no reviews have been
-            ingested — the same null a genuinely unreviewed course returns,
-            and `ReputationBlock` renders it as "no reviews matched" either way.
-          */}
-          <ReputationBlock
-            title="Course experience"
-            subtitle="Aggregated across everyone who has taught this course."
-            summary={reputation?.course ?? null}
-          />
-          <ReputationBlock
-            title="Instructor quality"
-            subtitle={
-              reputation?.instructorName
-                ? `Aggregated across every course ${reputation.instructorName} has taught.`
-                : "Aggregated per instructor."
-            }
-            summary={reputation?.instructor ?? null}
-          />
-        </div>
-      </Block>
+      {includeReviews ? <CourseReviewsPanel reputation={reputation} variant={variant} /> : null}
 
       <Block variant={variant} id="workload" title="Workload and grading" icon={RiScales2Line}>
         <div className="flex flex-col gap-4">

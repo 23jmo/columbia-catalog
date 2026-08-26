@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { prettyTitle } from "@/components/course/format";
 import { loadCourseDetail, resolveCourse } from "@/components/course/load-course-detail";
 import { loadSectionDetail } from "@/components/course/load-section-detail";
-import { CourseLevelPanels } from "@/components/course/course-level-panels";
+import { CourseLevelPanels, CourseReviewsPanel } from "@/components/course/course-level-panels";
 import { courseDetailIntegrations } from "./integrations";
 import { AppShell } from "@/components/shell/app-shell";
 import { pageIdentityContentClass } from "@/components/shell/page-hero-layout";
@@ -161,12 +161,18 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
                 href: isOnlySection ? "/search" : `/course/${data.course.courseId}`,
                 label: isOnlySection ? "All courses" : `All sections of ${data.code}`,
               }}
+              courseReviews={
+                courseData ? (
+                  <CourseReviewsPanel reputation={reputation} variant="section" />
+                ) : null
+              }
               courseLevel={
                 courseData ? (
                   <CourseLevelPanels
                     data={courseData}
                     reputation={reputation}
                     variant="section"
+                    includeReviews={false}
                   />
                 ) : null
               }

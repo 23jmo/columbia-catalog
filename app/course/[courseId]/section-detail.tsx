@@ -128,6 +128,12 @@ export interface SectionDetailProps {
    * drawer answers a click in milliseconds.
    */
   courseLevel?: ReactNode;
+  /**
+   * The course's reviews, hoisted to sit under the description. Filled only
+   * where `courseLevel` is — a course with exactly one section, where the
+   * course and the section are the same object.
+   */
+  courseReviews?: ReactNode;
   /** Standalone page: draw the instructor-profile hero. Drawer: plain header. */
   surface?: "page" | "drawer";
   /** Back navigation, rendered inside the page hero cover. */
@@ -182,6 +188,7 @@ export function SectionDetail({
   titleId = "section-title",
   showClose = false,
   courseLevel,
+  courseReviews,
   surface = "drawer",
   backLink,
 }: SectionDetailProps) {
@@ -546,6 +553,27 @@ export function SectionDetail({
           <ExpandableText text={course.description} className="w-full" />
         </ReferenceBlock>
       ) : null}
+
+      {/* ================================================================== */}
+      {/* Is it any good — the question a shared link was posted to answer     */}
+      {/* ================================================================== */}
+      {/*
+        Directly under the description, and above everything else, for the same
+        reason the description sits above the week grid: answer "what is this"
+        first, then "is it worth it", then the mechanics.
+
+        This matters most here. 78% of the courses offered in Fall 2026 have
+        exactly one section, so this surface — not the multi-section course
+        page — is what nearly every `/course/[id]` link resolves to, and
+        `/course/` is now open to signed-out visitors. Someone answering "is
+        Cannon's 3134 brutal" with a link needs the link to answer it before
+        the reader gives up scrolling.
+
+        Empty on every other surface. The reviews are claims about the COURSE,
+        and they are only as true as this section is the whole course — which
+        is exactly the condition `page.tsx` fills this on.
+      */}
+      {courseReviews}
 
       {/* ================================================================== */}
       {/* Does it fit, and where would you be                                 */}
