@@ -29,10 +29,12 @@ export interface TypicalBand {
 /**
  * School cores, paced the way the Bulletin actually assigns them.
  *
- * Columbia College: Lit Hum + Frontiers/UW in year 1, Contemporary
- * Civilization in year 2, Art/Music Hum somewhere in the first two.
- * SEAS: the First-Year/Sophomore Program grid — Calc, Physics, The Art
- * of Engineering, University Writing, then the rest of List A.
+ * These two first years are not interchangeable. Columbia College takes
+ * Lit Hum AND Frontiers/UW AND (later) Contemporary Civilization AND
+ * Art Hum AND Music Hum. Engineering takes University Writing, ONE of
+ * Lit Hum / CC / Global Core, and Art OR Music Hum — plus Calc, Physics,
+ * chemistry, and The Art of Engineering. Putting the College block on a
+ * SEAS student is a wrong transcript.
  *
  * GS borrows the College's first-year writing and a humanities sequence
  * without pretending their Core is identical. Barnard is empty on

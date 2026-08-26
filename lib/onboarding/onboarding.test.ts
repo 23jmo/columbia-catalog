@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { interestTagsForPrograms, knownInterestTagIds } from "@/lib/profile/interest-tags";
-import { CC_CORE, CC_MAJOR_COMPUTER_SCIENCE } from "@/lib/requirements/programs";
+import { CC_CORE, CC_MAJOR_COMPUTER_SCIENCE, SEAS_CORE, SEAS_MAJOR_COMPUTER_SCIENCE } from "@/lib/requirements/programs";
 import type { PrereqSource } from "@/lib/recommend";
 import { noVectorSource } from "@/lib/recommend";
 
@@ -807,6 +807,64 @@ describe("guess deck", () => {
     const offered = [...deck.tier1, ...deck.tier2].map((candidate) => candidate.courseId);
     expect(offered).not.toContain("COMS1004W");
   });
+
+  it("does not pre-check the College Core for a SEAS student", () => {
+    // Lit Hum AND CC AND Frontiers AND both Hums is a Columbia College
+    // degree. Engineering takes University Writing, one humanities
+    // sequence (or Global Core), and Art or Music Hum — plus Calc, Physics,
+    // and The Art of Engineering. Pre-checking the College block on a SEAS
+    // transcript would be a claim we would not make.
+    const seasCatalog = new Map(
+      [
+        ["ENGL1010CC", "ENGL CC1010"],
+        ["ECON1105UN", "ECON UN1105"],
+        ["ENGI1102E", "ENGI E1102"],
+        ["ENGI1006E", "ENGI E1006"],
+        ["MATH1101UN", "MATH UN1101"],
+        ["MATH1102UN", "MATH UN1102"],
+        ["APMA2000E", "APMA E2000"],
+        ["SCNC1000CC", "SCNC CC1000"],
+        ["HUMA1001CC", "HUMA CC1001"],
+        ["HUMA1002CC", "HUMA CC1002"],
+        ["COCI1101CC", "COCI CC1101"],
+        ["COCI1102CC", "COCI CC1102"],
+        ["HUMA1121UN", "HUMA UN1121"],
+        ["HUMA1123UN", "HUMA UN1123"],
+        ["PHYS1401UN", "PHYS UN1401"],
+      ].map(([courseId, code]) => [courseId, { code, title: code, points: 3 }]),
+    );
+
+    const deck = buildGuessDeck({
+      programs: [SEAS_CORE, SEAS_MAJOR_COMPUTER_SCIENCE],
+      school: "SEAS",
+      classYear: "2027",
+      confirmed: [],
+      catalog: seasCatalog,
+      prereqs: fakePrereqs({}),
+      vectors: noVectorSource(),
+      now: new Date("2026-09-15T00:00:00Z"),
+    });
+
+    const tier1 = new Set(deck.tier1.map((candidate) => candidate.courseId));
+    const offered = new Set([...deck.tier1, ...deck.tier2].map((candidate) => candidate.courseId));
+
+    expect(tier1.has("ENGL1010CC")).toBe(true);
+    expect(tier1.has("ECON1105UN")).toBe(true);
+    expect(tier1.has("ENGI1102E")).toBe(true);
+    expect(tier1.has("MATH1101UN")).toBe(true);
+
+    expect(tier1.has("SCNC1000CC")).toBe(false);
+    expect(offered.has("SCNC1000CC")).toBe(false);
+    expect(tier1.has("HUMA1001CC")).toBe(false);
+    expect(tier1.has("HUMA1002CC")).toBe(false);
+    expect(tier1.has("COCI1101CC")).toBe(false);
+    expect(tier1.has("COCI1102CC")).toBe(false);
+    expect(tier1.has("HUMA1121UN")).toBe(false);
+    expect(tier1.has("HUMA1123UN")).toBe(false);
+
+    expect(offered.has("HUMA1001CC") || offered.has("COCI1101CC")).toBe(true);
+    expect(offered.has("PHYS1401UN")).toBe(true);
+  });
 });
 
 describe("typical schedules", () => {
@@ -840,6 +898,21 @@ describe("typical schedules", () => {
         programs: [],
       }),
     ).toEqual([]);
+  });
+
+  it("does not treat the College Core as an engineering first year", () => {
+    const seas = typicalGuesses({
+      school: "SEAS",
+      yearsCompleted: 1,
+      ceiling: 2000,
+      programs: [SEAS_CORE],
+    }).map((guess) => guess.courseId);
+
+    expect(seas).toContain("MATH1101UN");
+    expect(seas).toContain("ENGI1102E");
+    expect(seas).toContain("ENGL1010CC");
+    // Frontiers is Columbia College Science A. SEAS does not take it.
+    expect(seas).not.toContain("SCNC1000CC");
   });
 });
 
