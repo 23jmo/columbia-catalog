@@ -97,14 +97,15 @@ export interface OnboardingScreenProps {
    *  shifts colour as it advances without ever animating. */
   hue?: OrnamentHue;
   /**
-   * Last-step guest chrome: compact bottom padding and no document lock.
+   * Last-step guest chrome: compact top padding so the Columbia button
+   * still lands above the fold. This is not a document lock.
    *
-   * The ranked cards are clipped inside the gate's peek, not by pinning this
-   * shell to `h-dvh overflow-hidden`. That combination — plus `pb-24` reserved
-   * for an advance arrow this screen does not have — sheared the Columbia
-   * button off the bottom of a phone, and `overflow: hidden` on `<html>`
-   * stopped the student from scrolling to it. Signed-in students get the
-   * same stack with the lock off, so they can actually read it.
+   * `<html>` is `h-dvh`. Pairing that with `overflow-x-clip` and no
+   * `overflow-y` makes the Y axis clip too, which is why a phone could
+   * see the first feed card and nothing under the sign-in box. This
+   * shell is the scrollport (`h-dvh overflow-y-auto`) so the rest of
+   * the feed can move. Signed-in students get the same scroller with
+   * the usual air, so they can actually read the unlocked stack.
    */
   lockViewport?: boolean;
   /**
@@ -153,13 +154,15 @@ export function OnboardingScreen({
     <div
       className={cx(
         // `min-w-0`: the feed step mounts wide section cards; without a
-        // shrink floor they push this shell past 100vw and the locked
-        // viewport shears the sign-in card on the right.
+        // shrink floor they push this shell past 100vw and shear the
+        // sign-in card on the right.
         //
-        // Never `h-dvh overflow-hidden` here. That pinned the last screen
-        // to the viewport and clipped the Columbia button; the student
-        // could not scroll to it. Extra cards are clipped in the gate peek.
-        "relative flex min-h-dvh w-full min-w-0 flex-col overflow-x-clip bg-background-secondary-default",
+        // This box IS the scrollport. `html` is `h-dvh`, so a `min-h-dvh`
+        // child with only `overflow-x-clip` clips Y as well and a phone
+        // cannot reach the cards under the sign-in box. `overflow-y-auto`
+        // is the pair that keeps X clipped and lets the feed scroll.
+        // Never `overflow-hidden` on the same node as `h-dvh`.
+        "relative flex h-dvh w-full min-w-0 flex-col overflow-x-clip overflow-y-auto bg-background-secondary-default",
       )}
     >
       {onBack ? <BackArrow onClick={onBack} /> : null}
@@ -177,21 +180,22 @@ export function OnboardingScreen({
       <div
         className={cx(
           "mx-auto flex w-full min-w-0 flex-col items-center px-4 sm:px-5",
-          // The locked feed has to fit a Columbia button under the peek on a
-          // phone. 13vh of top padding plus the ornament is what pushed that
-          // button into the fold on an iPhone 14; sm keeps the original air.
+          // Compact top on the locked feed so the Columbia button still
+          // sits above the fold on a phone. 13vh plus the ornament used
+          // to push it under Safari chrome. sm keeps the original air.
           lockViewport ? "pt-14 sm:pt-[15vh]" : "pt-[13vh] sm:pt-[15vh]",
           wide ? "max-w-[760px]" : "max-w-[620px]",
           // Deep enough to clear the toast card at its two-line worst, which is
           // what a 390px viewport gives it. The locked feed has no advance
-          // arrow and no toast — `pb-24` there was empty space under a
-          // clipped Columbia button.
+          // arrow and no toast — `pb-24` there was empty space under the
+          // button. Extra cards now live below the gate, so leave room to
+          // scroll past the last one.
           hasPinnedToast
             ? "pb-44"
             : lockViewport
-              ? "pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]"
+              ? "pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]"
               : "pb-24",
-          lockViewport ? "min-h-full" : "flex-1",
+          "min-h-0 flex-none",
         )}
       >
         <OrnamentAvatar hue={hue} mood="tracking" />
