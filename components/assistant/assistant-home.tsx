@@ -5,10 +5,14 @@ import { useRouter } from "next/navigation";
 import { DefaultChatTransport } from "ai";
 import { useChat } from "@ai-sdk/react";
 import {
+  RiCalendarScheduleLine,
   RiChat1Line,
   RiErrorWarningLine,
+  RiGraduationCapLine,
   RiLockLine,
+  RiMapPin2Line,
   RiQuillPenLine,
+  RiStarLine,
 } from "@remixicon/react";
 
 import { describeFailure, planSubmission, type Gate } from "@/lib/agent/gate";
@@ -376,27 +380,35 @@ export function AssistantHome({
       ) : null}
 
       {/*
-        Two states, one column, and now one rule: content hangs off the bottom.
+        Two states, one column, and each anchors what it has to the box.
 
-        With a thread that has always been true — `justify-end` puts the newest
-        turn against the composer so the conversation grows upward out of it.
+        With a thread, `justify-end` puts the newest turn against the composer
+        so the conversation grows upward out of it.
 
-        Without one it used to be the opposite: the greeting started at the top
-        and the empty space fell below it. That was right while the feed rail
-        sat under the greeting and filled the column. The feed is its own page
-        now, and pinning a two-line greeting to the top of an otherwise empty
-        `flex-1` left most of a phone screen blank between it and the box —
-        roughly 500px of nothing on a 390×844 viewport.
+        Without one, the greeting and the starters are one block at the top.
 
-        So the greeting hangs off the bottom too, landing directly above the
-        composer. Same rule in both states, and the thing the student is meant
-        to act on is next to the thing they act with.
+        The greeting alone was at the top once, and it was moved to the bottom
+        because a two-line heading over an empty `flex-1` left roughly 500px of
+        nothing on a 390×844 phone. The starters are what that space was
+        missing, so the greeting can go back to being a heading.
+
+        They are pinned together, and that is the part worth stating. Hanging
+        the starters off the bottom (`mt-auto`) puts them within a thumb's
+        reach of the box, which is the better answer on a phone — but it opens
+        the same hole again on a desktop, this time BETWEEN two blocks of
+        content, and a gap between two things that are both visibly content
+        reads as something failing to load. A gap below all of it just reads as
+        an empty page, which is what this is. So the block stays whole and the
+        slack falls at the bottom, where a slack space is supposed to be.
       */}
-      <div className={cx("flex flex-1 flex-col justify-end", hasThread ? "pt-8" : "pt-6 sm:pt-10")}>
+      <div className={cx("flex flex-1 flex-col", hasThread ? "justify-end pt-8" : "pt-6 sm:pt-10")}>
         {hasThread ? (
           <Conversation messages={messages} status={status} onAsk={ask} />
         ) : (
-          <Hero name={greetingName ?? null} />
+          <>
+            <Hero name={greetingName ?? null} />
+            <PromptStarters onPick={ask} className="pt-8" />
+          </>
         )}
       </div>
 
@@ -565,6 +577,129 @@ function Hero({ name }: { name: string | null }) {
         {name ? "What should you take next semester?" : "Ask below, or start from what is on offer."}
       </p>
     </header>
+  );
+}
+
+/**
+ * Four questions, as boxes, sitting on top of the box.
+ *
+ * ── Why an empty chat needs these at all ───────────────────────────────────
+ *
+ * An empty field is the worst answer to "what should I take", which is why the
+ * recommendations became their own page. This page is what is left: the
+ * questions a ranked list cannot anticipate. But "ask me anything" is not a
+ * prompt, it is a blank exam paper, and a student who does not already know
+ * what this thing can do will type something small to find out — or leave.
+ *
+ * So the opening move is four things it can actually do, each written as the
+ * sentence the student would have had to compose. Clicking one sends it
+ * verbatim: what you read is what gets asked, so the first answer can never be
+ * a surprise. The composer's rotating placeholder does a version of this job
+ * already, but a placeholder is a hint you cannot act on — it vanishes when you
+ * type and it can only ever show one thing at a time.
+ *
+ * ── The order is not arbitrary ─────────────────────────────────────────────
+ *
+ * The first two are the two answers that come back as something drawn rather
+ * than written — a campus map, and a week grid with the classes laid into it.
+ * Those are the least guessable things here: nothing about a chat box suggests
+ * it will hand back a map of Morningside with your walk on it, and nobody asks
+ * a question they do not believe can be answered. The two below are the ones a
+ * student would think to ask anyway, and they earn their place by being the
+ * ones most often asked, not by being a surprise.
+ *
+ * `caption` names the shape of the answer for the same reason: "answers with a
+ * campus map" is a promise about the output, and it is the half of the pitch a
+ * question alone does not make.
+ *
+ * ── Sending goes through `ask` ─────────────────────────────────────────────
+ *
+ * Not `setInput`. `ask` carries the signed-out gate and the prompt budget with
+ * it, so a visitor clicking a starter gets the same sign-in prompt they would
+ * get from typing it — and, per `lib/agent/gate.ts`, still causes zero LLM
+ * calls. Loading the text into the box instead would have made these the one
+ * path into the agent that skipped the gate.
+ */
+const PROMPT_STARTERS = [
+  {
+    icon: RiMapPin2Line,
+    prompt: "Where on campus do my classes meet?",
+    caption: "Answers with a campus map",
+  },
+  {
+    icon: RiCalendarScheduleLine,
+    prompt: "Show me how these classes fit into one week",
+    caption: "Answers with your week, laid out",
+  },
+  {
+    icon: RiGraduationCapLine,
+    prompt: "What is the fastest way to finish my degree?",
+    caption: "Reads your record against the requirements",
+  },
+  {
+    icon: RiStarLine,
+    prompt: "Which professors teaching next term are worth taking?",
+    caption: "Reads what past students said",
+  },
+] as const;
+
+function PromptStarters({
+  onPick,
+  className,
+}: {
+  onPick: (prompt: string) => void;
+  className?: string;
+}) {
+  return (
+    <div className={cx("px-1", className)}>
+      {/*
+        A label, not a heading. The page already has one `h1` in the greeting,
+        and these are an aside to it — a screen reader that meets a second
+        heading here would be told the page changed subject when it has not.
+      */}
+      <p className="px-1 pb-2 text-caption-1-medium tracking-[0.06em] text-text-tertiary uppercase">
+        Try asking
+      </p>
+
+      {/*
+        Two columns from `sm`, one below it. Four boxes in a single phone column
+        is most of a screen and would push the composer off it; two rows of two
+        is the same content in half the height.
+      */}
+      <ul role="list" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {PROMPT_STARTERS.map((starter) => (
+          <li key={starter.prompt} className="flex">
+            <button
+              type="button"
+              onClick={() => {
+                haptic("selection");
+                onPick(starter.prompt);
+              }}
+              className={cx(
+                // `rounded-2xl` is the surface's container radius — the same one
+                // the box, the bubbles and every card in a thread use.
+                "flex w-full min-w-0 items-start gap-2.5 rounded-2xl p-3 text-left",
+                "border border-border-table bg-background-primary-default",
+                "transition-colors duration-150 motion-reduce:transition-none",
+                "hover:bg-background-primary-hover hover:border-border-button-hover",
+                "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
+              )}
+            >
+              <starter.icon
+                aria-hidden
+                className="mt-0.5 size-4 shrink-0 text-foreground-icon-tertiary"
+              />
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="text-body-medium text-text-primary">{starter.prompt}</span>
+                <span className="text-caption-1-regular text-text-tertiary">
+                  {starter.caption}
+                </span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

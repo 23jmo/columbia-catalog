@@ -34,9 +34,19 @@ import { cx } from "@/utils/cx";
  * pill says the same thing in 44px and hands the rest back to the conversation.
  * Everything above still holds for the state you actually write in.
  *
- * So: 7rem tall at rest, corners at 24px instead of a full round, the textarea
- * across the top, and one control row beneath it. The box grows from there to
- * a 200px cap, at which point it scrolls.
+ * So: 7rem tall at rest, corners rounded but not fully, the textarea across the
+ * top, and one control row beneath it. The box grows from there to a 200px cap,
+ * at which point it scrolls.
+ *
+ * The corner is `rounded-2xl`, which is not a free choice — it is the radius
+ * every other container on this surface already uses: the student's bubble,
+ * the tool activity card, the source list, the artifacts and the course cards.
+ * It was 24px, and 24 against 16 is visible on a box this size, so the thread
+ * read as four different corner treatments stacked down one column. Chips stay
+ * fully round; a chip is a different kind of object from a card, and at 30px
+ * tall `rounded-full` and `rounded-2xl` resolve to nearly the same curve
+ * anyway. The collapsed phone pill is also still fully round — at 44px tall it
+ * is a control, not a container.
  *
  * ── Kept from the template, including the part that is invisible ───────────
  *
@@ -175,8 +185,8 @@ export function Composer({
             "bg-background-primary-default",
             isFocused || isBusy ? "shadow-sm" : "shadow-md",
             "transition-[border-radius] duration-200 ease-out motion-reduce:transition-none",
-            "sm:rounded-3xl",
-            isCollapsed ? "rounded-full" : "rounded-3xl",
+            "sm:rounded-2xl",
+            isCollapsed ? "rounded-full" : "rounded-2xl",
           )}
         />
 
@@ -185,17 +195,32 @@ export function Composer({
         {/*
           Two shapes, and only below `sm` is there a second one. The `sm:`
           utilities are emitted inside a media query and therefore win above
-          640px regardless of what the collapsed branch says, so the desktop box
-          is untouched by any of this.
+          640px regardless of what the collapsed branch says — but only where
+          the collapsed branch names a property `sm:` also names.
+
+          `items-center` is the one that did not, and for a while the desktop
+          box quietly broke because of it: at rest the class list was
+          `sm:flex-col` AND a bare `items-center`, so above 640px this became a
+          COLUMN centring its children on the cross axis. The textarea is
+          `w-full` and shrugged it off, but the control row is `shrink-0`, so
+          it collapsed to the width of its own buttons and floated to the
+          middle of the box — `+`, the term and the send button clustered in
+          the centre instead of spanning the width. It fixed itself the moment
+          you clicked in, because focus ends `isCollapsed`, which is what made
+          it look like a rendering glitch rather than a layout bug.
+
+          So every class in the collapsed branch is either paired with an `sm:`
+          counterpart above or scoped `max-sm:` itself. Nothing here may name a
+          property the desktop branch leaves unsaid.
         */}
         <div
           className={cx(
             "relative flex gap-2",
             "transition-[border-radius,padding] duration-200 ease-out motion-reduce:transition-none",
-            "sm:min-h-[7rem] sm:flex-col sm:rounded-3xl sm:p-3",
+            "sm:min-h-[7rem] sm:flex-col sm:rounded-2xl sm:p-3",
             isCollapsed
-              ? "min-h-0 flex-row items-center rounded-full p-2"
-              : "min-h-[7rem] flex-col rounded-3xl p-3",
+              ? "min-h-0 flex-row max-sm:items-center rounded-full p-2"
+              : "min-h-[7rem] flex-col rounded-2xl p-3",
           )}
         >
           {/*
@@ -406,7 +431,21 @@ function ComposerPlaceholder({
         text
       ) : (
         <motion.span
-          className={cx("inline-block text-pretty", compact && "max-w-full truncate")}
+          /*
+            `text-pretty` and `truncate` cannot both be on this span, and the
+            folded row is where that bites. `text-pretty` compiles to
+            `text-wrap: pretty` — the modern longhand, which also sets
+            `text-wrap-mode: wrap`. `truncate`'s `white-space: nowrap` sets
+            that same mode to `nowrap`. Whichever Tailwind happens to emit
+            later wins, and it is `text-pretty`, so the pill wrapped the prompt
+            to two lines and the row's fixed height sheared the second one.
+            Balanced wrapping is for the two-line full-height box; the one-line
+            row wants nowhere to wrap.
+          */
+          className={cx(
+            "inline-block",
+            compact ? "max-w-full truncate" : "text-pretty",
+          )}
           animate={{
             filter: soft ? "blur(2.5px)" : "blur(0px)",
             opacity: soft ? 0.88 : 1,
@@ -468,7 +507,7 @@ function RunningLight({ active }: { active: boolean }) {
     <span
       aria-hidden
       className={cx(
-        "pointer-events-none absolute inset-0 overflow-hidden rounded-3xl [contain:paint]",
+        "pointer-events-none absolute inset-0 overflow-hidden rounded-2xl [contain:paint]",
         "transition-opacity duration-[450ms]",
         active ? "opacity-100" : "opacity-0",
       )}
@@ -519,7 +558,13 @@ function RunningLight({ active }: { active: boolean }) {
             y="0"
             width="1028"
             height="112"
-            rx="24"
+            // Tracks the box: `rounded-2xl` is 16px, and a stroke drawn at a
+            // 24px corner cuts across the rim it is supposed to be running
+            // along. The viewBox is fixed and stretched, so this is the same
+            // 16 the CSS uses only at the box's design width — close enough
+            // that the two corners sit on top of each other, which is all this
+            // has to do.
+            rx="16"
             pathLength={100}
             fill="none"
             stroke={`url(#${gradient})`}
