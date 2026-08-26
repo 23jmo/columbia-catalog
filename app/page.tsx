@@ -1,60 +1,62 @@
 /**
- * Home — a greeting, the feed, and the box.
+ * Home — the recommendations.
  *
- * ── The two halves answer different halves of the question ─────────────────
+ * ── Why this page exists ───────────────────────────────────────────────────
  *
- * This page has been through four shapes: a planner; a feed above the planner;
- * the assistant above the feed; then the assistant alone. The fourth was a
- * correction to the third and overshot. An empty box is the right thing to land
- * on only if the student already has a question — and "what should I take" is
- * precisely the state of not having one yet.
+ * The home page has been a planner, a feed above a planner, an assistant above
+ * a feed, the assistant alone, and then the assistant with a feed rail on top
+ * of it. Every one of those shapes made the same bet: that the student arrives
+ * with a question. They do not. "What should I take" is the state of not
+ * having formed a question yet, and an empty box answers it with homework.
  *
- * So the feed comes back, but as a rail rather than a column, and above the box
- * rather than below it. The feed answers the one question every student has, in
- * cards they can act on without typing anything. The box answers everything the
- * feed cannot anticipate — "which of these leaves Friday free", "what is the
- * fastest way to finish my Core". Neither is the page; the pair is.
+ * So the split is now down the middle. This page is the answer we can give
+ * without being asked — a ranked list of specific sections, each one saying in
+ * its own words why it is on the list. `/chat` is the box, one nav item over,
+ * for everything a ranked list cannot anticipate ("which of these leaves
+ * Friday free", "fastest way to finish the Core"). Two pages rather than two
+ * halves of one, because a conversation and a set of recommendations both want
+ * to be the thing on screen, and stacking them made the student choose which
+ * to read before either had said anything.
  *
- * The moment a student types, the greeting and the rail give way to the thread.
- * That is not a layout trick: a conversation and a set of recommendations are
- * both trying to be the answer on screen, and showing them at once would make
- * the student decide which one to read.
+ * The rail is gone with it. A rail was the right compromise while the box had
+ * to stay above the fold; it put eleven of twelve recommendations off the
+ * right edge and squeezed the reason for each one into a single clamped grey
+ * line. Nothing about that survives contact with "the main value add is
+ * showing recommended courses."
  *
- * Nothing was deleted. `/schedule`, `/progression` and `/saved` are unchanged
- * and reachable from the nav; the watchlist rail lives on `/saved` with the
- * rest of a student's saved work.
+ * Nothing was deleted. `/search`, `/schedule` and `/progression` still exist
+ * and still work — they are just no longer in the nav, because a student who
+ * wanted to browse a catalog would already be in Vergil.
  *
- * ── This page stays a server component ─────────────────────────────────────
+ * ── The streaming boundary is the whole reason for `HomeFeed` ──────────────
  *
- * `AssistantHome` is the client island, and everything it needs to know that
- * only the server can answer is resolved here and passed in: whether there is a
- * session, and how much of the prompt budget is already spent.
- *
- * The budget is read, never spent. `checkPromptBudget` is a select; the write
- * lives in `recordPrompt`, which only `/api/agent` calls. Rendering the counter
- * from the same source the route enforces from is what stops the number under
- * the box from disagreeing with the refusal the student eventually gets.
+ * `buildFeed` pages the active catalog and builds a prerequisite graph over
+ * 8,189 courses; cold, that is seconds, and even memoised it is a database
+ * round trip. `<Suspense>` boundaries wrap COMPONENTS, so the await has to
+ * live in a child — a promise awaited in `HomePage` itself suspends
+ * `HomePage`, and the header, the shell and the nav would wait behind the
+ * engine for no reason.
  */
 
 import { Suspense } from "react";
 import type { Metadata } from "next";
+import Link from "next/link";
+import { RiArrowRightLine, RiCompass3Line } from "@remixicon/react";
 
+import { FeedPanel } from "@/components/feed/feed-panel";
+import { FeedSkeleton } from "@/components/feed/feed-skeleton";
 import { AppShell } from "@/components/shell/app-shell";
-import { PageContent } from "@/components/shell/page-content";
 import { AuthErrorNotice } from "@/components/shell/auth-error-notice";
-import { AssistantHome } from "@/components/assistant";
-import { FeedPanel, FeedSkeleton } from "@/components/feed";
-import { buildFeed } from "@/lib/recommend/feed";
-import { CURRENT_TERM, buildTerm } from "@/lib/constants";
-import { isConversationId } from "@/lib/agent/history-format";
-import { PROMPT_LIMIT, checkPromptBudget } from "@/lib/agent/usage";
-import { getSessionUser } from "@/lib/db/auth";
-import { createServiceRoleClient } from "@/lib/db/client";
+import { PageContent } from "@/components/shell/page-content";
+import { PageHeader } from "@/components/shell/page-header";
+import { CURRENT_TERM, NEXT_TERM, termLabel } from "@/lib/constants";
+import { HOME_FEED_LIMIT, buildFeed } from "@/lib/recommend/feed";
+import { cx } from "@/utils/cx";
 
 export const metadata: Metadata = {
-  title: "LionPlan",
+  title: "Recommended courses — LionPlan",
   description:
-    "Ask what to take next term. Answers are read out of the catalog and your own coursework, never recalled.",
+    "Classes worth your next term, ranked against your own record and what past students said about them — each one saying why it is on the list.",
 };
 
 export default async function HomePage({
@@ -63,109 +65,69 @@ export default async function HomePage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const params = await searchParams;
-  const requestedId = typeof params.c === "string" ? params.c : null;
-  const initialConversationId =
-    requestedId && isConversationId(requestedId) ? requestedId : null;
-
-  const account = await getSessionUser();
-  const term = buildTerm(CURRENT_TERM);
-  const budget = await readPromptBudget(account?.userId ?? null);
 
   return (
     <AppShell activeNav="home">
-      {/*
-        Narrower than the rest of the app on purpose. Everywhere else on this
-        site is dense tabular data that wants the width; a conversation is prose,
-        and prose at 1180px is a worse read than prose at 1030px.
-      */}
-      <PageContent className="max-w-[1030px] gap-0">
+      <PageContent className="max-w-5xl gap-5">
         <AuthErrorNotice reason={params.auth_error} />
-        <AssistantHome
-          isSignedIn={Boolean(account)}
-          termLabel={term.label}
-          promptsUsed={budget.used}
-          promptsLimit={budget.limit}
-          greetingName={firstName(account?.name)}
-          initialConversationId={initialConversationId}
-          /*
-           * Passed as an element, not awaited here.
-           *
-           * `HomeFeed` is an async server component, so the `<Suspense>` around
-           * it is a real streaming boundary: the shell, the greeting and the
-           * composer paint immediately and the rail arrives when the engine is
-           * done. Awaiting `buildFeed` in this function instead would hold the
-           * whole document — including the box — behind a prerequisite graph
-           * over 8,189 courses.
-           */
-          feed={
-            <Suspense fallback={<FeedSkeleton />}>
-              <HomeFeed />
-            </Suspense>
-          }
+
+        <PageHeader
+          eyebrow={`${termLabel(CURRENT_TERM)} & ${termLabel(NEXT_TERM)}`}
+          icon={RiCompass3Line}
+          title="Worth taking"
+          description="Ranked against what you have already taken, what you still owe, and what past students said about the class and the person teaching it."
+          hideTitleOnMobile
         />
+
+        <Suspense fallback={<FeedSkeleton />}>
+          <HomeFeed />
+        </Suspense>
+
+        <AskInstead />
       </PageContent>
     </AppShell>
   );
 }
 
 /**
- * How many questions are already spent in the current window.
+ * The feed, awaited behind the boundary. See the note at the top of the file.
  *
- * A signed-out visitor has spent none, and the counter under the box reads
- * `0/20` — accurate, and the honest thing to show beside a box that will ask
- * them to sign in rather than pretending the limit is the reason they cannot
- * ask. A database that is unreachable degrades the same way: a wrong-but-low
- * counter is recoverable, and the route re-checks the real budget before it
- * spends anything, so nothing can be over-spent by trusting this.
- */
-async function readPromptBudget(userId: string | null) {
-  const fallback = { used: 0, limit: PROMPT_LIMIT };
-  if (!userId) return fallback;
-
-  const db = createServiceRoleClient();
-  if (!db) return fallback;
-
-  try {
-    const budget = await checkPromptBudget(db, userId);
-    return { used: budget.used, limit: budget.limit };
-  } catch (cause) {
-    console.error("home: the prompt budget could not be read:", cause);
-    return fallback;
-  }
-}
-
-/**
- * The feed, isolated so it can suspend on its own.
- *
- * It must be its own component rather than an inline `await`: `<Suspense>`
- * boundaries wrap components, and a promise awaited in `HomePage` suspends
- * `HomePage`. Splitting it is what moves the boundary from the whole document
- * to the rail.
- *
- * `buildFeed` reads the student's own record through the cookie-scoped Supabase
- * client, which is why this is rendered inside the request rather than at build
- * time, and why the same call from a script comes back as a guest.
+ * Asks for `HOME_FEED_LIMIT` rather than taking the default: the default is
+ * sized for the agent's tool call, where every extra card is tokens spent on
+ * something the reader may never ask about. Here the cards ARE the page and
+ * the cost of one more is a scroll.
  */
 async function HomeFeed() {
-  const feed = await buildFeed();
+  const feed = await buildFeed({ limit: HOME_FEED_LIMIT });
   return <FeedPanel feed={feed} />;
 }
 
 /**
- * A name to greet, or nothing.
+ * The way out to `/chat`, at the bottom, on purpose.
  *
- * `toSessionAccount` never returns an empty name — it falls back through
- * `full_name` → `name` → the local part of the email → the literal
- * `"Signed in"`. Only the first two of those are a name a person would answer
- * to, and greeting someone as `2023johnathanmo` or as `Signed in` is worse than
- * not greeting them, so anything that looks like a fallback returns null and
- * the page opens on the feed's own heading instead.
+ * The box is the long tail — genuinely useful, and useful precisely to the
+ * student who has already read the list and found it did not cover their case.
+ * Putting it above the cards would ask a question of someone who came here to
+ * be handed an answer; putting it below is where the reader who exhausted the
+ * list actually is. It is a line and a link rather than a panel because it is
+ * a door, not a destination.
  */
-function firstName(name: string | undefined): string | null {
-  if (!name) return null;
-  const first = name.trim().split(/\s+/)[0] ?? "";
-  if (!first || first === "Signed" || first.includes("@")) return null;
-  // An email local part that became the name: digits, dots, no capital.
-  if (/\d/.test(first) || first.includes(".")) return null;
-  return first;
+function AskInstead() {
+  return (
+    <p className="px-1 pb-2 text-body-regular text-text-secondary">
+      Something here not covered?{" "}
+      <Link
+        href="/chat"
+        className={cx(
+          "inline-flex items-center gap-1 rounded-sm text-accent-600 outline-none",
+          "transition-colors duration-150",
+          "hover:text-accent-700 hover:underline hover:underline-offset-2",
+          "focus-visible:ring-2 focus-visible:ring-border-focus-ring",
+        )}
+      >
+        Ask about your own case
+        <RiArrowRightLine className="size-4 shrink-0" aria-hidden />
+      </Link>
+    </p>
+  );
 }

@@ -12,6 +12,7 @@ import { cx } from "@/utils/cx";
 
 const PAGE_NAME: Record<ShellNavKey, string> = {
   home: "Home",
+  chat: "Chat",
   search: "Search",
   saved: "Saved",
   schedule: "Schedule",

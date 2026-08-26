@@ -29,9 +29,21 @@ export function isConversationId(value: string): boolean {
   return UUID.test(value);
 }
 
-/** Build `/?c=<id>` so a thread is a real URL, not only client state. */
+/**
+ * The page the box lives on.
+ *
+ * It was `/` for as long as the assistant WAS the home page. Home is the
+ * recommendation feed now and the box moved to `/chat`, so this had to move
+ * with it — a thread link pointing at `/` would land on a page that has no
+ * idea what `?c=` means and silently drop the conversation. Every producer of
+ * a thread URL goes through `threadHref`, which is the only reason that was a
+ * one-line fix rather than a hunt.
+ */
+export const CHAT_PATH = "/chat";
+
+/** Build `/chat?c=<id>` so a thread is a real URL, not only client state. */
 export function threadHref(conversationId: string): string {
-  return `/?${THREAD_QUERY_PARAM}=${encodeURIComponent(conversationId)}`;
+  return `${CHAT_PATH}?${THREAD_QUERY_PARAM}=${encodeURIComponent(conversationId)}`;
 }
 
 /**

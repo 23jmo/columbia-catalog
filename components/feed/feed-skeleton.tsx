@@ -1,6 +1,6 @@
 import { cx } from "@/utils/cx";
 
-import { FEED_CARD_SLOT, FeedRailScroller } from "./feed-rail";
+import { FEED_CARD_SLOT, FeedGrid } from "./feed-layout";
 
 /**
  * What the feed looks like while it is being computed.
@@ -12,11 +12,9 @@ import { FEED_CARD_SLOT, FeedRailScroller } from "./feed-rail";
  * box too, so `/` streams it behind a `<Suspense>` boundary and this is the
  * boundary's fallback.
  *
- * Deliberately a skeleton of the real rail rather than a spinner: the layout
+ * Deliberately a skeleton of the real grid rather than a spinner: the layout
  * does not jump when the content lands, and the reader can already see that
- * what is coming is a row of courses. Four cards is enough to fill the measure
- * and peek the next one — the same affordance the live rail uses to say there
- * is more.
+ * what is coming is a list of courses.
  *
  * Every block here paints a token that exists. `bg-background-secondary-default`
  * rather than `bg-background-secondary` — the latter looks like a real class,
@@ -25,21 +23,29 @@ import { FEED_CARD_SLOT, FeedRailScroller } from "./feed-rail";
  * `lib/design-tokens.test.ts` exists.
  */
 
-/** Four fills the ~1030px home column and peeks the next card. */
-const DEFAULT_CARDS = 4;
+/**
+ * Six — three grid rows at `lg`, and more than a phone shows at once.
+ *
+ * It was four when this was a rail and four was what fit the horizontal run.
+ * In a two-column grid four is two rows, which stops well above the fold and
+ * makes the page look like it is nearly done loading when twelve cards are
+ * coming. Six overflows the first screen, which is the honest signal.
+ */
+const DEFAULT_CARDS = 6;
 
 /**
- * Title and instructor widths, cycled so four identical pulses do not read as
- * one card stamped across. The live cards vary; a row of clones would.
+ * Title and instructor widths, cycled so six identical pulses do not read as
+ * one card stamped down the page. The live cards vary; a column of clones
+ * would not.
  *
  * One title bar: the live title is a single truncated line, so a two-line
  * skeleton would be the jump that pushes everything below it.
  */
 const CARD_SHAPES = [
-  { title: "w-4/5", instructor: "w-48", time: "w-40" },
-  { title: "w-3/5", instructor: "w-36", time: "w-32" },
-  { title: "w-11/12", instructor: "w-44", time: "w-48" },
-  { title: "w-[70%]", instructor: "w-40", time: "w-36" },
+  { title: "w-4/5", instructor: "w-48", time: "w-40", reasons: ["w-56", "w-44"] },
+  { title: "w-3/5", instructor: "w-36", time: "w-32", reasons: ["w-48"] },
+  { title: "w-11/12", instructor: "w-44", time: "w-48", reasons: ["w-52", "w-60", "w-40"] },
+  { title: "w-[70%]", instructor: "w-40", time: "w-36", reasons: ["w-44", "w-56"] },
 ] as const;
 
 export function FeedSkeleton({
@@ -55,13 +61,13 @@ export function FeedSkeleton({
       aria-label="Loading your recommendations"
       className={cx("flex flex-col gap-2.5", className)}
     >
-      <FeedRailScroller>
+      <FeedGrid>
         {Array.from({ length: cards }, (_, index) => (
           <li key={index} className={FEED_CARD_SLOT} aria-hidden>
             <FeedCardSkeleton shape={CARD_SHAPES[index % CARD_SHAPES.length]} />
           </li>
         ))}
-      </FeedRailScroller>
+      </FeedGrid>
     </section>
   );
 }
@@ -69,9 +75,14 @@ export function FeedSkeleton({
 /**
  * One placeholder card, in the same geometry as `FeedCardView`.
  *
- * Eyebrow, title, reason, week strip, instructor chip, then the meter pinned
- * to the bottom with `mt-auto` so a rail of stretched cards keeps the bars
- * on one line — the same trick the live card uses.
+ * Eyebrow, title, the reason rows, week strip, instructor chip, ratings, then
+ * the meter pinned to the bottom with `mt-auto` so a grid row of stretched
+ * cards keeps the bars on one line — the same trick the live card uses.
+ *
+ * The reason rows are the block worth keeping honest. They are the tallest
+ * variable part of the live card and the whole point of the page; a skeleton
+ * that omitted them would understate the card by ~60px and every row would
+ * lurch downward when the feed landed.
  */
 function FeedCardSkeleton({
   shape,
@@ -97,6 +108,16 @@ function FeedCardSkeleton({
           <Bar className="size-7 rounded-lg" />
         </div>
       </header>
+
+      {/* One icon + one line of text per reason, matching `Why`. */}
+      <div className="flex flex-col gap-1.5">
+        {shape.reasons.map((width, index) => (
+          <div key={index} className="flex items-center gap-1.5">
+            <Bar className="size-4 shrink-0 rounded-sm" />
+            <Bar className={cx("h-4", width)} />
+          </div>
+        ))}
+      </div>
 
       <div className="flex items-center gap-2.5">
         {Array.from({ length: 5 }, (_, index) => (

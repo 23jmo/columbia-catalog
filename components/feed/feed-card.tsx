@@ -1,5 +1,11 @@
 import Link from "next/link";
-import { RiArrowRightUpLine, RiStarFill } from "@remixicon/react";
+import {
+  RiArrowRightUpLine,
+  RiCheckboxCircleLine,
+  RiRouteLine,
+  RiSparkling2Line,
+  RiStarFill,
+} from "@remixicon/react";
 
 import { BookmarkControls } from "@/components/bookmarks/bookmark-controls";
 import { EnrollmentChip } from "@/components/course/enrollment-chip";
@@ -56,7 +62,6 @@ export function FeedCardView({ card, className }: { card: FeedCardData; classNam
    * as "Calculus Iii" and "INTRODUCTION TO AI" as "Introduction to Ai".
    */
   const title = displayCourseTitle(card.title);
-  const reason = card.reasons.map(reasonLine).find(Boolean) ?? null;
   const sectionHref = `/course/${card.courseId}?section=${encodeURIComponent(section.sectionCode)}`;
 
   return (
@@ -111,11 +116,7 @@ export function FeedCardView({ card, className }: { card: FeedCardData; classNam
             </Link>
           </h3>
 
-          {reason ? (
-            <p className="line-clamp-1 text-caption-1-medium text-accent-700" title={reason}>
-              {reason}
-            </p>
-          ) : null}
+          {/* The why moved out of the header — see `Why` below. */}
         </div>
 
         {/*
@@ -156,6 +157,8 @@ export function FeedCardView({ card, className }: { card: FeedCardData; classNam
           </a>
         </div>
       </header>
+
+      <FeedCardWhy reasons={card.reasons} />
 
       <TimeLine section={section} />
       <Teachers section={section} />
@@ -441,58 +444,175 @@ const WORKLOAD_WORD = ["Very light", "Light", "Moderate", "Heavy", "Very heavy"]
 const DIFFICULTY_WORD = ["Very easy", "Easy", "Moderate", "Hard", "Very hard"];
 
 /* ==========================================================================
- * The reason
+ * Why this is here
  * ========================================================================== */
 
 /**
- * Why this card is here, in one clause.
+ * The reasons, stated — plural, and no longer a footnote.
  *
- * ── One reason, not all of them ────────────────────────────────────────────
+ * ── What changed and why ───────────────────────────────────────────────────
  *
- * The engine can return several, and the card shows the first — they arrive
- * ranked, so the first is the strongest. Printing three chips made the reasons
- * the loudest thing on a card whose subject is a class, and a student who reads
- * "clears the Global Core" has already got what they came for.
+ * This used to be one clause, `line-clamp-1`, in caption grey under the title.
+ * That was the right size for a rail: twelve cards glanced across, one line of
+ * vertical budget each, and anything longer pushed the assistant's box off the
+ * screen it shared.
  *
- * ── The kinds stay apart, and the verb is what keeps them apart ────────────
+ * The rail is gone. Recommendations are the page now, and a page of
+ * recommendations that does not say why is a page asking to be trusted rather
+ * than read. A student who cannot see the reason cannot disagree with it, and
+ * being able to disagree with it — "no, I already took that", "no, I don't
+ * need the Science requirement" — is the whole difference between a recommender
+ * and a slot machine.
  *
- * "It clears the Global Core" and "you might like it" are different claims with
- * different consequences, and `RecommendationReason` keeps them distinct on
- * purpose. Collapsing them into one relevance score — a number, a star rating,
- * one undifferentiated chip — is the exact move that turns a recommender into
- * decoration: the student cannot tell whether the app is talking about their
- * degree or their taste, so they stop trusting it about both. The distinction
- * survives here as the verb, which costs no ink at all.
+ * ── The kinds stay apart ───────────────────────────────────────────────────
  *
- * Codes are named rather than counted wherever one will fit, because "because
- * the model says so" is not a reason anyone can argue with — and being able to
- * argue with it is what makes it useful. If the named course is wrong, the
- * student knows to go fix their record.
+ * `RecommendationReason` keeps its variants distinct on purpose, and this is
+ * the surface where that pays. "It clears the Global Core" and "you might like
+ * it" are different claims with different consequences. Each gets its own row
+ * and its own icon; nothing here blends them into a relevance score, because a
+ * student who cannot tell whether the app is talking about their degree or
+ * their taste stops trusting it about both.
+ *
+ * ── `unlocks` prints again, and both objections turned out to be bugs ──────
+ *
+ * It was suppressed on 2026-08-25 (owner decision) for two stated reasons: it
+ * asked the reader to hold three unfamiliar course codes, and on a cold feed it
+ * appeared on nearly every card, so it read as boilerplate.
+ *
+ * The first is answered by counting rather than naming — the codes were the
+ * expensive part and the number is the part a student can act on. That change
+ * immediately exposed why the second complaint was right: the count came off a
+ * three-item sample, so EVERY card said "opens up 3 more courses" whether the
+ * real figure was 2 or 40. Identical text on every card is exactly what
+ * boilerplate looks like. `unlockedCount` now carries the real total.
+ *
+ * The deeper half of the same complaint was that the reason is a claim about
+ * the student — these become reachable because YOU finished this — and on a
+ * cold feed there is no student to make it true. `reasonsFor` no longer emits
+ * it for a record with nothing in it, so it cannot be the only line on a card
+ * that has nothing personal to say.
  */
-function reasonLine(reason: RecommendationReason): string | null {
+export function FeedCardWhy({ reasons }: { reasons: readonly RecommendationReason[] }) {
+  const rows = reasons.flatMap(reasonRows);
+  if (rows.length === 0) return null;
+
+  /*
+   * Three, and they arrive ranked. A fourth row costs a card-height across the
+   * whole page to add a reason nobody read the first three to reach.
+   */
+  const shown = rows.slice(0, 3);
+
+  return (
+    <ul className="flex min-w-0 flex-col gap-1">
+      {shown.map((row) => (
+        <li key={row.key} className="flex min-w-0 items-start gap-1.5">
+          <row.icon
+            aria-hidden
+            className={cx("mt-px size-3.5 shrink-0", row.tone)}
+          />
+          {/*
+            The claim in primary, the framing in grey. Same rule the rest of
+            this card follows: the reader skips grey, so the noun they are
+            meant to act on must not be grey.
+          */}
+          <p className="min-w-0 text-caption-1-medium text-text-secondary">
+            {row.lead}
+            {row.subject ? (
+              <span className="text-text-primary">{row.subject}</span>
+            ) : null}
+            {row.tail}
+          </p>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+interface WhyRow {
+  key: string;
+  icon: typeof RiCheckboxCircleLine;
+  tone: string;
+  /** Grey framing before the claim. */
+  lead: string;
+  /** The claim itself, in primary. */
+  subject: string | null;
+  /** Grey framing after it. */
+  tail: string;
+}
+
+/**
+ * One reason, as one or two rows.
+ *
+ * `interesting_and_counts` is the only kind that splits. It is genuinely two
+ * claims — this clears something AND it looks like your taste — and the whole
+ * point of keeping it a distinct variant rather than a flag on `required` is
+ * that a student should be able to weigh them separately. Collapsing it back
+ * into one line ("Satisfies X · your kind of thing") was a concession to the
+ * rail's single line, and the rail is gone.
+ */
+function reasonRows(reason: RecommendationReason): WhyRow[] {
   switch (reason.kind) {
     case "required":
-      return `Satisfies ${reason.groupLabel}`;
+      return [
+        {
+          key: `required:${reason.groupId}`,
+          icon: RiCheckboxCircleLine,
+          tone: "text-status-lime-text",
+          lead: "Satisfies ",
+          subject: reason.groupLabel,
+          tail: "",
+        },
+      ];
+
     case "interesting_and_counts":
-      /*
-       * The requirement leads, and the taste half trails, because the line
-       * truncates at the card's width and the half that survives should be the
-       * one with a consequence in it. "Satisfies the Science requirement …" is
-       * still an answer; "Your kind of thing · satisfies the Sci…" is not.
-       */
-      return `Satisfies ${reason.groupLabel} · your kind of thing`;
+      return [
+        {
+          key: `counts:${reason.groupId}`,
+          icon: RiCheckboxCircleLine,
+          tone: "text-status-lime-text",
+          lead: "Satisfies ",
+          subject: reason.groupLabel,
+          tail: "",
+        },
+        {
+          key: `taste:${reason.groupId}`,
+          icon: RiSparkling2Line,
+          tone: "text-accent-600",
+          lead: "Like ",
+          subject: andMore(reason.similarTo),
+          tail: ", which you took",
+        },
+      ];
+
     case "because_you_took":
-      return `Because you took ${andMore(reason.similarTo)}`;
-    /*
-     * `unlocks` is computed and deliberately not printed (owner decision,
-     * 2026-08-25). "Opens up PSYC UN1450 +2" asks the reader to hold three
-     * course codes they have never seen in order to evaluate a fourth, which is
-     * work, and on a cold feed it was the reason on almost every card — so it
-     * read as boilerplate rather than as a reason. It still earns the course its
-     * place in the ranking; it just does not spend a line saying so.
-     */
-    case "unlocks":
-      return null;
+      return [
+        {
+          key: `took:${reason.similarTo.join(",")}`,
+          icon: RiSparkling2Line,
+          tone: "text-accent-600",
+          lead: "Like ",
+          subject: andMore(reason.similarTo),
+          tail: ", which you took",
+        },
+      ];
+
+    case "unlocks": {
+      // The true total, not `courseIds.length` — that is a three-item sample,
+      // and reading a count off it printed "3 more courses" on every card in
+      // the feed regardless of whether the real number was 2 or 40.
+      const count = reason.unlockedCount;
+      if (count === 0) return [];
+      return [
+        {
+          key: `unlocks:${reason.courseIds.join(",")}`,
+          icon: RiRouteLine,
+          tone: "text-foreground-icon-tertiary",
+          lead: "Opens up ",
+          subject: count === 1 ? "1 more course" : `${count} more courses`,
+          tail: "",
+        },
+      ];
+    }
   }
 }
 

@@ -15,6 +15,7 @@ import { describeFailure, planSubmission, type Gate } from "@/lib/agent/gate";
 import {
   announceHistoryChanged,
   fetchConversation,
+  CHAT_PATH,
   threadHref,
 } from "@/lib/agent/history";
 import { Composer } from "@/components/assistant/composer";
@@ -97,7 +98,7 @@ export interface AssistantHomeProps {
    */
   greetingName?: string | null;
   /**
-   * Thread to reopen, from `/?c=`. Null on a fresh home visit. Changing this
+   * Thread to reopen, from `/chat?c=`. Null on a fresh visit. Changing this
    * (sidebar click) loads that thread; minting a new id writes the same param
    * back so the rail can highlight it.
    */
@@ -246,7 +247,7 @@ export function AssistantHome({
       if (cancelled) return;
       if (!loaded) {
         skipFetchId.current = null;
-        router.replace("/", { scroll: false });
+        router.replace(CHAT_PATH, { scroll: false });
         return;
       }
       skipFetchId.current = loaded.conversationId;
@@ -294,29 +295,33 @@ export function AssistantHome({
     setGate(null);
     clearError();
     setInput("");
-    router.replace("/", { scroll: false });
+    router.replace(CHAT_PATH, { scroll: false });
   }, [clearError, router, setMessages]);
 
   const hasThread = messages.length > 0;
 
   /*
-   * Going Home puts the feed back.
+   * Clicking Chat while already reading a thread starts a new one.
    *
-   * `/` is already the current route, so every nav link to it — the sidebar
-   * item, the hamburger Home row, the wordmark — is a soft navigation onto the page it
-   * is already on. React reconciles the same tree, this component never
-   * unmounts, and the thread would sit there unchanged while the student's
-   * click did visibly nothing. That is the worst kind of dead control: it looks
-   * like the app ignored them.
+   * `/chat` is already the current route, so the nav item and the hamburger
+   * Chat row are soft navigations onto the page they are already on. React
+   * reconciles the same tree, this component never unmounts, and the thread
+   * would sit there unchanged while the student's click did visibly nothing.
+   * That is the worst kind of dead control: it looks like the app ignored them.
+   *
+   * This used to watch for `/` for the same reason, back when the assistant
+   * WAS the home page. It follows the box: Home is now a different route, so
+   * clicking it is a real navigation that unmounts this component and no
+   * listener is needed to clear anything.
    *
    * A delegated listener rather than a signal threaded through the shell. The
    * alternative is making `ShellNav`, `CatalogSidebar` and `MobileShell` — all
-   * three of which render the Home link, and two of which are server components
+   * three of which render the Chat link, and two of which are server components
    * today — aware that one page has state worth clearing. That is a lot of
    * shared surface bent around one screen. This asks a narrower and more honest
    * question instead: did the student just click something that means "take me
-   * home"? Anything that answers yes gets the feed back, including links this
-   * component has never heard of.
+   * back to an empty box"? Anything that answers yes gets one, including links
+   * this component has never heard of.
    */
   useEffect(() => {
     if (!hasThread) return;
@@ -333,11 +338,11 @@ export function AssistantHome({
       if (!href) return;
 
       const destination = new URL(href, window.location.href);
-      const isHome =
+      const isBareChat =
         destination.origin === window.location.origin &&
-        destination.pathname === "/" &&
+        destination.pathname === CHAT_PATH &&
         destination.search === "";
-      if (isHome) startNewThread();
+      if (isBareChat) startNewThread();
     }
 
     document.addEventListener("click", onDocumentClick);

@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ComponentType } from "react";
 import {
   RiBookmarkLine,
+  RiChat3Line,
   RiCalendarScheduleLine,
   RiGraduationCapLine,
   RiHome5Line,
@@ -20,10 +21,16 @@ import { cx } from "@/utils/cx";
  * and the answer — "find classes worth taking, keep the ones you want, hand
  * them to Vergil" — was the one reading the nav did not give.
  *
- * So the rail names the two steps of that sentence and nothing else. Home is
- * where classes are recommended and asked about; Saved is where the ones that
- * survived wait to be registered. A nav a student never has to think about is
- * a nav that is doing its job.
+ * So the rail names the steps of that sentence and nothing else. Home is the
+ * recommendations — the answer to "what should I take", given without being
+ * asked. Chat is the same question in the student's own words, for everything
+ * a ranked list cannot anticipate. Saved is where the survivors wait.
+ *
+ * Chat sits second, and second is the point. It used to BE the home page, with
+ * the recommendations reduced to a rail above the box. That had the burden
+ * backwards: "what should I take" is the state of not yet having a question,
+ * and an empty box is the worst possible answer to it. The box is now the
+ * thing you go to when the list did not cover your case.
  *
  * ── Nothing was deleted ────────────────────────────────────────────────────
  *
@@ -44,6 +51,7 @@ import { cx } from "@/utils/cx";
 
 export type ShellNavKey =
   | "home"
+  | "chat"
   | "search"
   | "saved"
   | "schedule"
@@ -68,6 +76,12 @@ export const SHELL_NAV_ITEMS: ShellNavItem[] = [
     label: "Home",
     href: "/",
     icon: RiHome5Line,
+  },
+  {
+    key: "chat",
+    label: "Chat",
+    href: "/chat",
+    icon: RiChat3Line,
   },
   {
     key: "saved",

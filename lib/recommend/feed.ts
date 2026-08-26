@@ -183,6 +183,24 @@ export interface FeedResult {
 export const DEFAULT_FEED_LIMIT = 12;
 
 /**
+ * How many the home page asks for.
+ *
+ * Separate from `DEFAULT_FEED_LIMIT` because the two callers pay different
+ * prices for a card. The default is what the agent's `recommend` tool gets,
+ * and there every extra card is tokens spent describing a course the student
+ * may never ask about — twelve is already generous for something being read
+ * aloud. On `/` the cards are the entire page, they are read by eye, and the
+ * cost of one more is a scroll; a list that runs out after twelve invites
+ * "is that all there is" on a catalog of 8,189 courses.
+ *
+ * Not unbounded, and not 50. `buildFeed` hydrates full sections for every card
+ * it returns, and the honest ceiling is where the ranking stops being able to
+ * defend itself — past a couple of dozen the tail is "this also exists", which
+ * is what `/search` is for.
+ */
+export const HOME_FEED_LIMIT = 24;
+
+/**
  * How many courses to ask the engine for, per card shown.
  *
  * Four, because the offering re-rank can only demote — a course with no open
