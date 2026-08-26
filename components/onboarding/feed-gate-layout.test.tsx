@@ -62,5 +62,28 @@ describe("onboarding feed gate layout", () => {
     expect(lastArticle).toBeGreaterThan(firstArticle);
     expect(signInAt).toBeGreaterThan(firstArticle);
     expect(signInAt).toBeLessThan(lastArticle);
+
+    // Tuck wash must not cover the Columbia panel — a full-box
+    // `bottom-0` dissolve painted a panel-sized blank between cards.
+    expect(html).toContain("h-24");
+    expect(html).not.toContain("inset-x-0 -top-16 bottom-0");
+    expect(html).toContain("relative z-10 flex w-full min-w-0 max-w-md");
+  });
+
+  it("stacks cards evenly once the gate is unlocked", () => {
+    const html = renderToStaticMarkup(
+      <FeedPreviewGate
+        state={emptyGuestState()}
+        signedIn
+        migration={{ status: "idle" }}
+        onSignIn={() => undefined}
+        onFinish={() => undefined}
+      />,
+    );
+    expect(html).not.toContain("Sign in with Columbia");
+    expect(html).toContain("Take me to the catalog");
+    // One list, not first-card + rest with a missing gate between them.
+    expect(html).not.toContain("-mt-6");
+    expect(html).toContain("flex min-w-0 flex-col gap-3.5");
   });
 });
