@@ -10,32 +10,36 @@ import {
 import { cx } from "@/utils/cx";
 
 /**
- * The app's top-level destinations (spec §4). `/course/[id]` is deliberately
- * absent: it is a drawer over search, not a nav destination.
+ * The app's top-level destinations.
  *
- * Saved sits between Search and Schedule because that is the order the work
- * happens in: you find classes, you shortlist them, you schedule the ones that
- * survive. A nav that reads in the order of the task is one fewer thing to
- * learn.
+ * ── Two, because the product is one sentence ───────────────────────────────
  *
- * `/profile` is last because it is the only one that needs an account. It still
- * sits in the primary nav rather than behind the account menu: a degree audit
- * is a destination a student comes back to, and burying it in a dropdown would
- * make it feel like a settings page. Signed out it renders an explanation
- * rather than an auth wall, so linking at it unconditionally is safe.
+ * This list was five: Home, Search, Saved, Schedule, Profile. Each was a
+ * defensible page and together they described nothing. A student arriving at a
+ * five-item rail has to work out what this app is FOR before it can help them,
+ * and the answer — "find classes worth taking, keep the ones you want, hand
+ * them to Vergil" — was the one reading the nav did not give.
  *
- * Saved sits between Search and Schedule because that is the order the work
- * happens in: you find classes, you shortlist them, you schedule the ones that
- * survive. A nav that reads in the order of the task is one fewer thing to
- * learn.
+ * So the rail names the two steps of that sentence and nothing else. Home is
+ * where classes are recommended and asked about; Saved is where the ones that
+ * survived wait to be registered. A nav a student never has to think about is
+ * a nav that is doing its job.
  *
- * Route ownership note: `/search` and `/schedule` are built by other lanes.
- * This module only ever links at them, so it stays correct whether or not
- * those routes exist yet.
+ * ── Nothing was deleted ────────────────────────────────────────────────────
  *
- * Progression is off this list on purpose. The `/progression` route still
- * exists — the page, the graph, the plan — but it is not a destination the
- * rail or the mobile sheet offers. Putting it back is adding one object here.
+ * `/search`, `/schedule` and `/profile` are untouched routes that still render,
+ * still work, and are still linked to from inside the app — search from the
+ * assistant and from empty states, profile from the account menu, schedule
+ * from a plan. `ShellNavKey` deliberately keeps their keys so those pages can
+ * go on declaring `activeNav` without a cast: they are pages you arrive at
+ * with a purpose, not places you browse to because the rail suggested it.
+ *
+ * Putting one back is adding one object here. That is the whole cost, and it
+ * should stay that cheap — but the bar is a page a student would go looking
+ * for on their own, not a page we are proud of.
+ *
+ * Route ownership note: this module only ever LINKS at routes, so it stays
+ * correct whether or not any of them exist.
  */
 
 export type ShellNavKey =
@@ -66,28 +70,10 @@ export const SHELL_NAV_ITEMS: ShellNavItem[] = [
     icon: RiHome5Line,
   },
   {
-    key: "search",
-    label: "Search",
-    href: "/search",
-    icon: RiSearchLine,
-  },
-  {
     key: "saved",
     label: "Saved",
     href: "/saved",
     icon: RiBookmarkLine,
-  },
-  {
-    key: "schedule",
-    label: "Schedule",
-    href: "/schedule",
-    icon: RiCalendarScheduleLine,
-  },
-  {
-    key: "profile",
-    label: "Profile",
-    href: "/profile",
-    icon: RiGraduationCapLine,
   },
 ];
 
