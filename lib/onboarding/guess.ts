@@ -325,15 +325,15 @@ export interface GuessDeckInput {
    * requirement, electives — reach the deck only through this.
    */
   outstanding?: readonly GroupResult[];
-  /** Per tier, not in total. */
+  /** Cap on tier-2 suggestions only. Tier 1 is never truncated. */
   limit?: number;
   now?: Date;
 }
 
 /**
- * Per-tier cap. Typical first-year options plus a major's named alternatives
- * already run past two dozen for a rising senior; 48 leaves reserve chips
- * the strip can append after a dismiss without a round trip.
+ * Cap on the tier-2 maybe-strip only. Tier 1 — the pre-checked "we think
+ * you've taken" set — is returned in full so a rising senior sees every
+ * required course the engine would pre-fill, not the first 48.
  */
 export const DEFAULT_TIER_LIMIT = 48;
 
@@ -546,7 +546,7 @@ export function buildGuessDeck(input: GuessDeckInput): GuessDeck {
   }
 
   return {
-    tier1: order(tier1, ceiling).slice(0, limit),
+    tier1: order(tier1, ceiling),
     tier2: order(tier2, ceiling).slice(0, limit),
     impliesTaken,
   };
