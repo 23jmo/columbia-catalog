@@ -67,11 +67,18 @@ export default async function HomePage({
 
   return (
     <AppShell activeNav="home">
-      <PageContent className="max-w-5xl gap-5">
+      {/*
+        720px, which is the width these same cards already render at on the
+        last onboarding screen — the first feed a student sees and every feed
+        after it are the same object, so they should not be two different
+        shapes. `max-w-5xl` was sized for two columns; left alone under a
+        single column it would stretch one card, and its seat meter, to 1024px.
+      */}
+      <PageContent className="max-w-[720px] gap-5">
         <AuthErrorNotice reason={params.auth_error} />
 
         {/*
-          A title and nothing else (owner, 2026-08-26).
+          A title and nothing else.
 
           The eyebrow said "Fall 2026 & Spring 2027" and the description
           explained how the ranking works. Both were cut, and the cut is right:

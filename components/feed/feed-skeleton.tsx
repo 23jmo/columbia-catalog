@@ -24,17 +24,17 @@ import { FEED_CARD_SLOT, FeedGrid } from "./feed-layout";
  */
 
 /**
- * Six — three grid rows at `lg`, and more than a phone shows at once.
+ * Four — enough to overflow the first screen in one column.
  *
- * It was four when this was a rail and four was what fit the horizontal run.
- * In a two-column grid four is two rows, which stops well above the fold and
- * makes the page look like it is nearly done loading when twelve cards are
- * coming. Six overflows the first screen, which is the honest signal.
+ * It was four for the rail, six for the two-column grid, and four again now
+ * that a card is a full row. The number is not the point; overflowing the fold
+ * is. A skeleton that stops above it makes the page look nearly loaded when
+ * twenty-four cards are coming, and the reader stops waiting.
  */
-const DEFAULT_CARDS = 6;
+const DEFAULT_CARDS = 4;
 
 /**
- * Title and instructor widths, cycled so six identical pulses do not read as
+ * Title and instructor widths, cycled so four identical pulses do not read as
  * one card stamped down the page. The live cards vary; a column of clones
  * would not.
  *

@@ -25,13 +25,22 @@ import { cx } from "@/utils/cx";
  */
 
 /**
- * One column on a phone, two from `lg`.
+ * One column, at every width.
  *
- * Not three. The card now carries up to three reason rows, a rating line and a
- * seat meter, and at a third of 1180px the reason text wraps to two lines each
- * — which is how a card that explains itself turns back into a card nobody
- * reads. Two columns keeps every row on one line at the widths this app
- * actually renders at.
+ * It was two from `lg`, and two columns are how you show more at once — which
+ * is the right goal for a gallery and the wrong one here. These cards are
+ * ranked: `assembleFeedCards` sorts by score and caps one per subject, so the
+ * card above is a stronger claim than the card below it. Side by side, that
+ * ordering becomes a guess about whether you read in Z or in columns, and the
+ * top-left and top-right cards look like a tie they are not.
+ *
+ * One column also gives every card the same measure, so the reason rows, the
+ * rating line and the seat meters all start on the same x — a list you scan
+ * down a single edge rather than four.
+ *
+ * The page narrows to match (`app/page.tsx`). A single column inside a 1024px
+ * container would be a 1024px-wide seat meter, which is the other way to make
+ * a card unreadable.
  */
 export function FeedGrid({
   children,
@@ -44,7 +53,7 @@ export function FeedGrid({
     <ul
       role="list"
       className={cx(
-        "grid grid-cols-1 items-stretch gap-3 lg:grid-cols-2",
+        "grid grid-cols-1 items-stretch gap-3",
         className,
       )}
     >
@@ -56,9 +65,10 @@ export function FeedGrid({
 /**
  * One card's slot.
  *
- * `h-full` is what lets `FeedCardView`'s own `mt-auto` work: cards in a grid
- * row stretch to the tallest, and without the `li` filling that height the
- * seat meters sit wherever each card's text happened to end instead of landing
- * on one line across the row.
+ * `h-full` is what lets `FeedCardView`'s own `mt-auto` work. It matters less
+ * now that a row holds one card — a row of one is always its own tallest — but
+ * it is what the card is written against, and removing it here would put the
+ * seat meter back wherever each card's text happened to end the moment anyone
+ * tries a second column again.
  */
 export const FEED_CARD_SLOT = "flex h-full min-w-0";

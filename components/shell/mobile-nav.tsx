@@ -6,18 +6,41 @@ import { RiMenuLine } from "@remixicon/react";
 import { CatalogSidebar } from "@/components/shell/catalog-sidebar";
 import { MobileHeaderSlotProvider } from "@/components/shell/mobile-header-slot";
 import { ProgressiveBlur } from "@/components/shell/progressive-blur";
-import type { ShellNavKey } from "@/components/shell/nav";
+import { SHELL_NAV_ITEMS, type ShellNavKey } from "@/components/shell/nav";
 import { haptic } from "@/lib/haptics";
 import { cx } from "@/utils/cx";
 
-const PAGE_NAME: Record<ShellNavKey, string> = {
-  home: "Home",
+/*
+ * What the bar calls each page.
+ *
+ * This used to be seven hand-written strings, and it drifted the first time
+ * one of them was renamed: the rail and the page heading both became
+ * "Recommendations" while the phone's bar went on saying "Home" — on the very
+ * screen where `hideTitleOnMobile` suppresses the heading BECAUSE the bar is
+ * supposed to be printing it. The phone was the only surface still showing the
+ * old name, so nothing on desktop could catch it.
+ *
+ * The spread is what stops that happening again: for anything in the rail,
+ * `SHELL_NAV_ITEMS` is the only source of the word. Those three keys are still
+ * written out below — TypeScript cannot see that `Object.fromEntries` covers
+ * them, so without a literal the object does not satisfy the `Record` — but
+ * the spread comes last and wins, and editing one of those three values here
+ * does nothing. Rename in `SHELL_NAV_ITEMS`.
+ *
+ * The other four are real. They are deliberately NOT in the rail (see the note
+ * there), so they have no label to borrow and this is where they live.
+ */
+export const PAGE_NAME: Record<ShellNavKey, string> = {
+  // Overridden by the spread — see above.
+  home: "Recommendations",
   chat: "Chat",
-  search: "Search",
   saved: "Saved",
+  // Not in the rail; these are the live values.
+  search: "Search",
   schedule: "Schedule",
   progression: "Progression",
   profile: "Profile",
+  ...Object.fromEntries(SHELL_NAV_ITEMS.map((item) => [item.key, item.label])),
 };
 
 /** Matches the parked rail. Keep this in lockstep with the width class below. */

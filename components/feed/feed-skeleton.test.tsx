@@ -35,9 +35,11 @@ describe("FeedSkeleton", () => {
     expect(html).toContain(`class="${slotClass}"`);
   });
 
-  it("reads down the page in one column, and two from lg", () => {
+  it("reads down the page in one column at every width", () => {
+    // Ranked cards, so side-by-side would turn the ordering into a guess about
+    // whether the reader goes in Z or in columns.
     expect(html).toContain("grid-cols-1");
-    expect(html).toContain("lg:grid-cols-2");
+    expect(html).not.toContain("grid-cols-2");
   });
 
   it("is no longer a rail", () => {
@@ -49,9 +51,9 @@ describe("FeedSkeleton", () => {
     expect(html).not.toContain("w-[min(85vw,22rem)]");
   });
 
-  it("renders six card slots, so the first screen is not the whole list", () => {
+  it("renders enough card slots to overflow the first screen", () => {
     const slots = html.match(/<li /g) ?? [];
-    expect(slots).toHaveLength(6);
+    expect(slots).toHaveLength(4);
   });
 
   it("stretches cards so the seat meters land on one line per row", () => {
@@ -68,7 +70,7 @@ describe("FeedSkeleton", () => {
     // card by ~60px and lurch every row down when the feed arrived — the same
     // failure mode as the column-under-a-rail bug, one level in.
     const icons = html.match(/size-4 shrink-0 rounded-sm/g) ?? [];
-    expect(icons.length).toBeGreaterThanOrEqual(6);
+    expect(icons.length).toBeGreaterThanOrEqual(4);
   });
 
   it("announces that recommendations are loading", () => {

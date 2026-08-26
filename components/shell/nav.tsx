@@ -73,7 +73,17 @@ export interface ShellNavItem {
 export const SHELL_NAV_ITEMS: ShellNavItem[] = [
   {
     key: "home",
-    label: "Home",
+    /*
+     * "Home" was the only label in this list that named a position instead of
+     * a page — and it was doing it above the one screen this whole product is
+     * for. A student reading the rail learned that `/` was the first item,
+     * which they could already see, and nothing about what was on it.
+     *
+     * The key stays `home` and the route stays `/`: every page in the app
+     * declares `activeNav="home"`, and this is a rename of the word on the
+     * button, not of the destination behind it.
+     */
+    label: "Recommendations",
     href: "/",
     icon: RiHome5Line,
   },

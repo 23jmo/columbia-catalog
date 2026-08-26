@@ -350,7 +350,7 @@ export function AssistantHome({
         On a phone it goes into the shell's top bar, beside the hamburger,
         because that bar is already the place a reader looks to find out where
         they are — and while a thread is open the answer is the thread, not
-        "Home". Above `xl` that bar is display:none and the desktop rail takes
+        "Chat". Above `xl` that bar is display:none and the desktop rail takes
         over, so the header renders inline instead and sticks to the top of the
         scroller on its own.
       */}
