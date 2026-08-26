@@ -45,6 +45,7 @@ function card(courseId: string): FeedCard {
     components: { requirementFit: 1, taste: 0, unlock: 0, offering: 0 },
     reasons: [],
     caveats: [],
+    instructorReputation: null,
     best: {
       sectionId: "sec-1",
       sectionCode: "001",

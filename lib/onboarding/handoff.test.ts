@@ -44,6 +44,7 @@ function card(): FeedCard {
     components: { requirementFit: 1, taste: 0, unlock: 0, offering: 0 },
     reasons: [{ kind: "required", groupId: "cs-major", groupLabel: "the CS major" }],
     caveats: [],
+    instructorReputation: null,
     best: {
       sectionId: "sec-1",
       sectionCode: "001",

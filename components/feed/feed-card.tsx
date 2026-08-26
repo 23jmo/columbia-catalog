@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { RiArrowRightUpLine } from "@remixicon/react";
+import { RiArrowRightUpLine, RiStarFill } from "@remixicon/react";
 
 import { BookmarkControls } from "@/components/bookmarks/bookmark-controls";
 import { EnrollmentChip } from "@/components/course/enrollment-chip";
@@ -11,6 +11,7 @@ import { formatCourseId } from "@/lib/requirements/code";
 import { displayCourseTitle } from "@/lib/onboarding/course-title";
 import type { FeedCard as FeedCardData, FeedSectionView } from "@/lib/recommend/feed";
 import type { RecommendationCaveat, RecommendationReason } from "@/lib/recommend/types";
+import type { ReputationSummary } from "@/lib/types";
 import { cx } from "@/utils/cx";
 
 /**
@@ -158,6 +159,7 @@ export function FeedCardView({ card, className }: { card: FeedCardData; classNam
 
       <TimeLine section={section} />
       <Teachers section={section} />
+      <Ratings reputation={card.instructorReputation} />
       <Footnote section={section} caveats={card.caveats} />
 
       {/*
@@ -326,6 +328,117 @@ function Footnote({
     </p>
   );
 }
+
+/**
+ * What students said about the person teaching it.
+ *
+ * ── Why this earns a row on a card this small ──────────────────────────────
+ *
+ * Two questions decide most registrations: does it count, and is it any good.
+ * The first has had a line on this card since it existed — the reason clause
+ * under the title. The second was behind a hover, which means it did not exist
+ * for anyone on a phone and did not exist for anyone who never learned that
+ * the instructor chip was hoverable. The hover card stays; this is the part of
+ * it worth spending a line on without being asked.
+ *
+ * ── It sits under the instructor because that is who it is about ───────────
+ *
+ * Tempting to float it up next to the title, where it would be read first. It
+ * would also be read as a rating OF THE COURSE, and we do not have those: 126
+ * courses out of 10,582 carry a review. Sitting under the name, in a row that
+ * begins with a star and ends with a review count, it can only be read as a
+ * claim about the instructor — which is the only claim we can support.
+ *
+ * ── Absent is silent, and that is a deliberate choice ──────────────────────
+ *
+ * Roughly two thirds of cards land here with nothing to say, and this returns
+ * `null` for all of them rather than printing "no reviews yet" (owner
+ * decision). The layout absorbs it: cards stretch to the tallest in the run
+ * and `EnrollmentChip` is pinned with `mt-auto`, so a missing row shortens the
+ * middle without unaligning the seat meters across the rail.
+ *
+ * The row is never a verdict. Spec §12 — dimensions are reported separately
+ * and nothing here averages teaching quality against workload, because "3.5
+ * overall" is a number a student cannot act on and cannot argue with.
+ */
+function Ratings({ reputation }: { reputation: ReputationSummary | null }) {
+  if (!reputation) return null;
+
+  const { teachingQuality, workload, difficulty } = reputation.dimensions;
+
+  /*
+   * Workload before difficulty, and only ever one of them. They are strongly
+   * correlated and phrased almost identically ("Heavy" / "Hard"), so printing
+   * both spends half the row restating one fact. Workload wins because it is
+   * the one a student is actually budgeting against a five-class term.
+   */
+  const effort =
+    typeof workload === "number"
+      ? `${WORKLOAD_WORD[bucket(workload)]} workload`
+      : typeof difficulty === "number"
+        ? DIFFICULTY_WORD[bucket(difficulty)]
+        : null;
+
+  const score = typeof teachingQuality === "number" ? teachingQuality : null;
+
+  // Every dimension can be null independently — a review that said nothing
+  // about workload must not become a 3. With neither, the sample size alone is
+  // not worth a row.
+  if (score == null && effort == null) return null;
+
+  return (
+    <div className="flex min-w-0 items-center gap-1.5 text-caption-1-medium">
+      {score != null ? (
+        <>
+          <RiStarFill aria-hidden className="size-3.5 shrink-0 text-status-yellow-text" />
+          {/*
+            Primary, tabular, and the same weight as the title. This card's own
+            rule: grey is for the eyebrow, and the facts you act on are the
+            colour of the thing you came to read.
+          */}
+          <span className="shrink-0 tabular-nums text-text-primary">
+            {score.toFixed(1)}
+            <span className="text-text-secondary">/5</span>
+          </span>
+          <span className="shrink-0 text-text-secondary">teaching</span>
+        </>
+      ) : null}
+
+      {score != null && effort ? <Dot /> : null}
+      {effort ? <span className="min-w-0 truncate text-text-primary">{effort}</span> : null}
+
+      {/*
+        The sample size is not decoration. "4.8 teaching" off two reviews and
+        off ninety are different statements, and this app refuses to collapse
+        that into a confidence badge — it shows the number and lets the reader
+        judge. Last to truncate, first to be believed.
+      */}
+      <Dot />
+      <span className="shrink-0 text-text-secondary tabular-nums">
+        {reputation.sampleSize === 1 ? "1 review" : `${reputation.sampleSize} reviews`}
+      </span>
+    </div>
+  );
+}
+
+function Dot() {
+  return <span aria-hidden className="shrink-0 text-text-tertiary">·</span>;
+}
+
+/**
+ * 1–5 into an index, clamped.
+ *
+ * Deliberately not imported from `components/course/reputation.tsx`: that
+ * module formats "3.4 / 5 · Moderate" for a panel with room to spell things
+ * out, and this card wants the word alone. Sharing the formatter would mean
+ * changing the panel's phrasing every time the card needed to be shorter.
+ */
+function bucket(value: number): number {
+  return Math.min(4, Math.max(0, Math.round(value) - 1));
+}
+
+const WORKLOAD_WORD = ["Very light", "Light", "Moderate", "Heavy", "Very heavy"];
+const DIFFICULTY_WORD = ["Very easy", "Easy", "Moderate", "Hard", "Very hard"];
 
 /* ==========================================================================
  * The reason
