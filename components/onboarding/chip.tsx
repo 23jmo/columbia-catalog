@@ -167,20 +167,31 @@ export function RemovableChip({
   );
 }
 
-/** An offer, not an answer: the leading + says a tap adds rather than selects. */
+/**
+ * An offer, not an answer: the leading + says a tap adds rather than selects.
+ *
+ * The × in the top-right is a separate control — "I have not taken this" —
+ * modelled on iOS's app-delete badge so it reads as dismiss, not as the
+ * same tap that would add. It must not sit inside the add button: a nested
+ * button is invalid HTML and would fire both handlers.
+ */
 export function AddChip({
   children,
   sublabel,
   onPress,
   label,
+  onDismiss,
+  dismissLabel,
 }: {
   children: ReactNode;
   sublabel?: string;
   onPress: () => void;
   label: string;
+  onDismiss?: () => void;
+  dismissLabel?: string;
 }) {
   return (
-    <li>
+    <li className="relative">
       <button
         type="button"
         onClick={() => {
@@ -197,6 +208,27 @@ export function AddChip({
           {sublabel ? <span className={cx(COURSE_SUBLABEL, "text-text-secondary")}>{sublabel}</span> : null}
         </span>
       </button>
+      {onDismiss ? (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.preventDefault();
+            haptic("selection");
+            onDismiss();
+          }}
+          aria-label={dismissLabel ?? "I have not taken this"}
+          className={cx(
+            // Inverted like iOS jiggle-mode delete: a dark disc, light ×,
+            // sitting on the corner. A same-family fill on the grey chip
+            // disappeared into it — the preview made that obvious.
+            "absolute -top-1.5 -right-1.5 flex size-5 cursor-pointer items-center justify-center rounded-full shadow-sm",
+            "bg-text-primary text-background-primary-default hover:opacity-80",
+            "pointer-coarse:size-6",
+          )}
+        >
+          <RiCloseLine className="size-3" aria-hidden />
+        </button>
+      ) : null}
     </li>
   );
 }

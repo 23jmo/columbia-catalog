@@ -73,11 +73,14 @@ import { FEED_PREVIEW_LIMIT } from "./feed-preview";
 import {
   buildGuessDeck,
   DEFAULT_TIER_LIMIT,
+  expectedLevelCeiling,
   unambiguousPrereqChain,
+  yearsCompleted,
   type GuessDeck,
 } from "./guess";
 import { declaredProgramIds } from "./program-ids";
 import type { GuestOnboardingState } from "./state";
+import { typicalGuesses } from "./typical";
 
 /* ==========================================================================
  * Catalog facts
@@ -295,6 +298,18 @@ export async function loadGuessDeck(state: GuestOnboardingState): Promise<GuessD
   for (const group of audit.outstanding) {
     for (const courseId of group.candidates) wanted.add(courseId);
   }
+  // School-year cores and named alternatives the guess deck will offer even
+  // when they are not in `outstanding` — Calc I is a prereq of a CC CS calc
+  // option, not a named requirement, and still needs a title on the chip.
+  const years = yearsCompleted(state.classYear);
+  for (const guess of typicalGuesses({
+    school: state.school,
+    yearsCompleted: years,
+    ceiling: expectedLevelCeiling(years),
+    programs: audit.programs,
+  })) {
+    wanted.add(guess.courseId);
+  }
   // Titles for every hop of "and therefore you took Intro", not just the
   // course sitting immediately under the confirmation.
   for (const courseId of [...wanted]) {
@@ -313,8 +328,10 @@ export async function loadGuessDeck(state: GuestOnboardingState): Promise<GuessD
 
   return buildGuessDeck({
     programs: audit.programs,
+    school: state.school,
     classYear: state.classYear,
     confirmed: state.courses,
+    dismissed: state.dismissedCourseIds,
     catalog,
     prereqs,
     vectors,

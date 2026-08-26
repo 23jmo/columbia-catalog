@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { interestTagsForPrograms, knownInterestTagIds } from "@/lib/profile/interest-tags";
-import { CC_MAJOR_COMPUTER_SCIENCE } from "@/lib/requirements/programs";
+import { CC_CORE, CC_MAJOR_COMPUTER_SCIENCE, SEAS_CORE, SEAS_MAJOR_COMPUTER_SCIENCE } from "@/lib/requirements/programs";
 import type { PrereqSource } from "@/lib/recommend";
 import { noVectorSource } from "@/lib/recommend";
 
@@ -14,6 +14,8 @@ import {
   unambiguousPrereqsOf,
   yearsCompleted,
 } from "./guess";
+import { sameIds, stabilizeStrip } from "./stable-strip";
+import { typicalGuesses } from "./typical";
 import { displayCourseTitle } from "./course-title";
 import { hasAnythingToMigrate, toMigrationPayload } from "./migrate";
 import { defaultCandidateSelection, parseTranscript } from "./transcript";
@@ -584,10 +586,11 @@ describe("guess deck", () => {
     ].map(([courseId, code]) => [courseId, { code, title: code, points: 3 }]),
   );
 
-  it("re-ranks after every confirmation", () => {
-    expect(RERANK_BATCH_SIZE).toBe(1);
+  it("re-ranks after a few confirmations, not each one", () => {
+    expect(RERANK_BATCH_SIZE).toBe(3);
     expect(shouldRerank(0)).toBe(false);
-    expect(shouldRerank(1)).toBe(true);
+    expect(shouldRerank(2)).toBe(false);
+    expect(shouldRerank(3)).toBe(true);
   });
 
   it("reads the courses a program names, and marks the required ones", () => {
@@ -746,6 +749,195 @@ describe("guess deck", () => {
       "COMS3134W",
       "COMS1004W",
     ]);
+  });
+
+  it("offers first-year cores and intro options before future required 3000-level", () => {
+    const sophomoreCatalog = new Map(
+      [
+        ["COMS1004W", "COMS W1004"],
+        ["COMS1007W", "COMS W1007"],
+        ["COMS3134W", "COMS W3134"],
+        ["COMS3157W", "COMS W3157"],
+        ["HUMA1001CC", "HUMA CC1001"],
+        ["ENGL1010CC", "ENGL CC1010"],
+        ["MATH1101UN", "MATH UN1101"],
+        ["MATH1201UN", "MATH UN1201"],
+      ].map(([courseId, code]) => [courseId, { code, title: code, points: 3 }]),
+    );
+
+    const deck = buildGuessDeck({
+      programs: [CC_CORE, CC_MAJOR_COMPUTER_SCIENCE],
+      school: "CC",
+      classYear: "2029",
+      confirmed: [],
+      catalog: sophomoreCatalog,
+      prereqs: fakePrereqs({ MATH1201UN: [["MATH1101UN"]] }),
+      vectors: noVectorSource(),
+      now: new Date("2026-09-15T00:00:00Z"),
+    });
+
+    const strip = deck.tier2.map((candidate) => candidate.courseId);
+    const introAt = strip.indexOf("COMS1004W");
+    const futureCoreAt = strip.indexOf("COMS3157W");
+    expect(introAt).toBeGreaterThanOrEqual(0);
+    expect(futureCoreAt).toBeGreaterThanOrEqual(0);
+    expect(introAt).toBeLessThan(futureCoreAt);
+
+    const offered = new Set([...deck.tier1, ...deck.tier2].map((candidate) => candidate.courseId));
+    expect(offered.has("HUMA1001CC")).toBe(true);
+    expect(offered.has("ENGL1010CC")).toBe(true);
+    // Calc III is a named option; its unique prereq is the first-year course
+    // a CS major has almost always taken and the strip used to skip.
+    expect(offered.has("MATH1101UN")).toBe(true);
+  });
+
+  it("keeps a dismissed guess off the next deck", () => {
+    const deck = buildGuessDeck({
+      programs: [CC_MAJOR_COMPUTER_SCIENCE],
+      school: "CC",
+      classYear: "2027",
+      confirmed: [],
+      dismissed: ["COMS1004W"],
+      catalog,
+      prereqs: fakePrereqs({}),
+      vectors: noVectorSource(),
+      now: new Date("2026-09-15T00:00:00Z"),
+    });
+
+    const offered = [...deck.tier1, ...deck.tier2].map((candidate) => candidate.courseId);
+    expect(offered).not.toContain("COMS1004W");
+  });
+
+  it("does not pre-check the College Core for a SEAS student", () => {
+    // Lit Hum AND CC AND Frontiers AND both Hums is a Columbia College
+    // degree. Engineering takes University Writing, one humanities
+    // sequence (or Global Core), and Art or Music Hum — plus Calc, Physics,
+    // and The Art of Engineering. Pre-checking the College block on a SEAS
+    // transcript would be a claim we would not make.
+    const seasCatalog = new Map(
+      [
+        ["ENGL1010CC", "ENGL CC1010"],
+        ["ECON1105UN", "ECON UN1105"],
+        ["ENGI1102E", "ENGI E1102"],
+        ["ENGI1006E", "ENGI E1006"],
+        ["MATH1101UN", "MATH UN1101"],
+        ["MATH1102UN", "MATH UN1102"],
+        ["APMA2000E", "APMA E2000"],
+        ["SCNC1000CC", "SCNC CC1000"],
+        ["HUMA1001CC", "HUMA CC1001"],
+        ["HUMA1002CC", "HUMA CC1002"],
+        ["COCI1101CC", "COCI CC1101"],
+        ["COCI1102CC", "COCI CC1102"],
+        ["HUMA1121UN", "HUMA UN1121"],
+        ["HUMA1123UN", "HUMA UN1123"],
+        ["PHYS1401UN", "PHYS UN1401"],
+      ].map(([courseId, code]) => [courseId, { code, title: code, points: 3 }]),
+    );
+
+    const deck = buildGuessDeck({
+      programs: [SEAS_CORE, SEAS_MAJOR_COMPUTER_SCIENCE],
+      school: "SEAS",
+      classYear: "2027",
+      confirmed: [],
+      catalog: seasCatalog,
+      prereqs: fakePrereqs({}),
+      vectors: noVectorSource(),
+      now: new Date("2026-09-15T00:00:00Z"),
+    });
+
+    const tier1 = new Set(deck.tier1.map((candidate) => candidate.courseId));
+    const offered = new Set([...deck.tier1, ...deck.tier2].map((candidate) => candidate.courseId));
+
+    expect(tier1.has("ENGL1010CC")).toBe(true);
+    expect(tier1.has("ECON1105UN")).toBe(true);
+    expect(tier1.has("ENGI1102E")).toBe(true);
+    expect(tier1.has("MATH1101UN")).toBe(true);
+
+    expect(tier1.has("SCNC1000CC")).toBe(false);
+    expect(offered.has("SCNC1000CC")).toBe(false);
+    expect(tier1.has("HUMA1001CC")).toBe(false);
+    expect(tier1.has("HUMA1002CC")).toBe(false);
+    expect(tier1.has("COCI1101CC")).toBe(false);
+    expect(tier1.has("COCI1102CC")).toBe(false);
+    expect(tier1.has("HUMA1121UN")).toBe(false);
+    expect(tier1.has("HUMA1123UN")).toBe(false);
+
+    expect(offered.has("HUMA1001CC") || offered.has("COCI1101CC")).toBe(true);
+    expect(offered.has("PHYS1401UN")).toBe(true);
+  });
+});
+
+describe("typical schedules", () => {
+  it("paces College Core by year, and does not invent a Barnard Core", () => {
+    const firstYear = typicalGuesses({
+      school: "CC",
+      yearsCompleted: 0,
+      ceiling: 1000,
+      programs: [],
+    }).map((guess) => guess.courseId);
+    expect(firstYear).toContain("HUMA1001CC");
+    expect(firstYear).toContain("ENGL1010CC");
+    expect(firstYear).not.toContain("HUMA1002CC");
+    expect(firstYear).not.toContain("COCI1101CC");
+
+    const afterOneYear = typicalGuesses({
+      school: "CC",
+      yearsCompleted: 1,
+      ceiling: 2000,
+      programs: [],
+    }).map((guess) => guess.courseId);
+    expect(afterOneYear).toContain("HUMA1002CC");
+    expect(afterOneYear).toContain("COCI1101CC");
+    expect(afterOneYear).not.toContain("COCI1102CC");
+
+    expect(
+      typicalGuesses({
+        school: "BC",
+        yearsCompleted: 2,
+        ceiling: 3000,
+        programs: [],
+      }),
+    ).toEqual([]);
+  });
+
+  it("does not treat the College Core as an engineering first year", () => {
+    const seas = typicalGuesses({
+      school: "SEAS",
+      yearsCompleted: 1,
+      ceiling: 2000,
+      programs: [SEAS_CORE],
+    }).map((guess) => guess.courseId);
+
+    expect(seas).toContain("MATH1101UN");
+    expect(seas).toContain("ENGI1102E");
+    expect(seas).toContain("ENGL1010CC");
+    // Frontiers is Columbia College Science A. SEAS does not take it.
+    expect(seas).not.toContain("SCNC1000CC");
+  });
+});
+
+describe("stable maybe-strip", () => {
+  const pool = ["a", "b", "c", "d", "e"].map((courseId) => ({ courseId }));
+
+  it("keeps pinned chips in place and appends new ones at the end", () => {
+    expect(stabilizeStrip(["b", "a"], pool, 4).map((item) => item.courseId)).toEqual([
+      "b",
+      "a",
+      "c",
+      "d",
+    ]);
+  });
+
+  it("fills a hole from the remaining pool without reordering what is left", () => {
+    // Student dismissed `b`. The others stay; `c` was already next in line.
+    expect(stabilizeStrip(["a", "b", "c"], pool.filter((item) => item.courseId !== "b"), 3).map(
+      (item) => item.courseId,
+    )).toEqual(["a", "c", "d"]);
+  });
+
+  it("sameIds is order-sensitive", () => {
+    expect(sameIds(["a", "b"], ["a", "b"])).toBe(true);
+    expect(sameIds(["a", "b"], ["b", "a"])).toBe(false);
   });
 });
 

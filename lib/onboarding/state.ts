@@ -66,9 +66,11 @@ export const ONBOARDING_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 /**
  * Confirmations between guess-grid re-ranks.
  *
- * 1: every confirmation is a meaningful update. Implications of a tap apply
- * instantly on the client; the server re-rank is debounced there so rapid taps
- * coalesce instead of shuffling the strip under a finger.
+ * Confirming a chip applies its implications instantly on the client. The
+ * server re-rank waits until a few taps have landed, so two courses a student
+ * can see at once are not replaced when they hit the first. The strip itself
+ * also keeps pinned chips in place (`stabilizeStrip`) — this cadence is the
+ * other half of that: even the appended tail should not reshuffle mid-aim.
  *
  * It lives in THIS module rather than in `./guess.ts` for a bundling reason
  * that is easy to undo by accident: `guess.ts` imports the recommendation
@@ -76,7 +78,7 @@ export const ONBOARDING_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
  * loader. A client component that imported the constant from there would drag
  * all of it into the browser. This module imports nothing but `zod` and types.
  */
-export const RERANK_BATCH_SIZE = 1;
+export const RERANK_BATCH_SIZE = 3;
 
 export function shouldRerank(confirmationsSinceRerank: number): boolean {
   return confirmationsSinceRerank >= RERANK_BATCH_SIZE;
