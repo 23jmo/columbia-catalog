@@ -3,6 +3,7 @@
 import type { HTMLAttributes, ReactNode } from "react";
 import { RiAddLine, RiCloseLine } from "@remixicon/react";
 
+import { displayCourseTitle } from "@/lib/onboarding/course-title";
 import { haptic } from "@/lib/haptics";
 import { cx } from "@/utils/cx";
 
@@ -32,6 +33,23 @@ import { cx } from "@/utils/cx";
  * the desktop layout into something loose and clumsy.
  */
 
+/**
+ * Title on top, call number underneath.
+ *
+ * The coursework chips used to lead with `ENGL CC1010` and hide the name as
+ * optional subtext, so a course our catalog has no title for looked like a
+ * different kind of chip. Leading with the name (and always putting the code
+ * on the second line when we have a name) makes every pill the same shape.
+ */
+export function courseChipLines(
+  code: string,
+  title: string | null | undefined,
+): { label: string; sublabel?: string } {
+  const pretty = title?.trim() ? displayCourseTitle(title.trim()) : "";
+  if (pretty) return { label: pretty, sublabel: code };
+  return { label: code };
+}
+
 export function ChipWrap({ children, className, ...rest }: HTMLAttributes<HTMLUListElement>) {
   return (
     <ul className={cx("flex flex-wrap justify-center gap-2", className)} {...rest}>
@@ -52,7 +70,7 @@ const COURSE_CHIP =
   "flex min-h-8 items-center gap-1 rounded-full border py-1 text-caption-1-regular sm:min-h-10 sm:gap-2 sm:py-2 sm:text-body-regular";
 
 /** Title line: short on phones so two pills share a row; full length from `sm`. */
-const COURSE_SUBLABEL = "max-w-[7.5rem] truncate text-caption-2-regular sm:max-w-[22rem]";
+const COURSE_TITLE = "max-w-[7.5rem] truncate sm:max-w-[22rem]";
 
 /** Unselected pills are a muted fill with dark text; selected is the accent, quietly. */
 const CHIP_IDLE =
@@ -63,7 +81,7 @@ export interface OptionChipProps {
   isSelected: boolean;
   onPress: () => void;
   children: ReactNode;
-  /** A second line inside the pill — a course title under its code. */
+  /** A second line inside the pill — a call number under a course title. */
   sublabel?: string;
   /** Accessible name, when the visible label is an abbreviation. */
   label?: string;
@@ -131,7 +149,7 @@ export function RemovableChip({
   removeLabel,
 }: {
   children: ReactNode;
-  /** Course title under the code, matching `AddChip`. */
+  /** Call number under the title, matching `AddChip`. */
   sublabel?: string;
   note?: string;
   onRemove: () => void;
@@ -146,9 +164,9 @@ export function RemovableChip({
       )}
     >
       <span className="flex min-w-0 flex-col items-start text-left">
-        <span>{children}</span>
+        <span className={COURSE_TITLE}>{children}</span>
         {sublabel ? (
-          <span className={cx(COURSE_SUBLABEL, "text-accent-500/80")}>{sublabel}</span>
+          <span className={cx("text-caption-2-regular", "text-accent-500/80")}>{sublabel}</span>
         ) : null}
         {note ? <span className="text-caption-2-regular text-text-secondary">{note}</span> : null}
       </span>
@@ -203,9 +221,9 @@ export function AddChip({
         className={cx(COURSE_CHIP, "cursor-pointer px-2.5 pl-2 transition-colors sm:px-4 sm:pl-3", CHIP_IDLE)}
       >
         <RiAddLine className="size-3.5 shrink-0 text-text-tertiary sm:size-4" aria-hidden />
-        <span className="flex flex-col items-start text-left">
-          <span>{children}</span>
-          {sublabel ? <span className={cx(COURSE_SUBLABEL, "text-text-secondary")}>{sublabel}</span> : null}
+        <span className="flex min-w-0 flex-col items-start text-left">
+          <span className={COURSE_TITLE}>{children}</span>
+          {sublabel ? <span className="text-caption-2-regular text-text-secondary">{sublabel}</span> : null}
         </span>
       </button>
       {onDismiss ? (

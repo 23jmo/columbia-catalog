@@ -71,6 +71,7 @@ function fullyAnsweredState(): GuestOnboardingState {
     school: "CC",
     classYear: "2028",
     programIds: ["cc-major-computer-science", "cc-minor-computer-science"],
+    customMajor: null,
     courses: [
       course({
         courseId: "COMS1004W",
@@ -165,7 +166,18 @@ describe("guest state survives the trip to an account", () => {
     const restored = deserialize(JSON.stringify(stored));
     expect(restored).not.toBeNull();
     expect(restored?.dismissedCourseIds).toEqual([]);
+    expect(restored?.customMajor).toBeNull();
     expect(restored?.courses.length).toBe(fullyAnsweredState().courses.length);
+  });
+
+  it("reads a state stored before `customMajor` existed, without a key bump", () => {
+    const stored = fullyAnsweredState() as Partial<GuestOnboardingState>;
+    delete stored.customMajor;
+
+    const restored = deserialize(JSON.stringify(stored));
+    expect(restored).not.toBeNull();
+    expect(restored?.customMajor).toBeNull();
+    expect(restored?.programIds).toEqual(fullyAnsweredState().programIds);
   });
 
   it("rejects a stored value it does not recognise rather than half-reading it", () => {

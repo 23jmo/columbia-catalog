@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
+import { Input } from "@/components/base/input/input";
 import { SCHOOL_LABEL, type School } from "@/lib/requirements/types";
 
 import { ChipWrap, OptionChip } from "./chip";
@@ -68,10 +69,12 @@ export function schoolsWithPrograms(options: readonly ProgramOption[]): Set<stri
  * The programs a student can actually pick, given their school.
  *
  * Cores are excluded because they are resolved from the school, not elected.
- * Programs already picked are always kept, whatever school they belong to, so
- * that changing school does not silently drop a major that is still on the
- * record — it stays visible, labelled with its own school, to be removed
- * deliberately.
+ * Programs already picked are kept only when they belong to the current
+ * school. Changing school used to leave the old major selected and labelled
+ * with its original school — so a CC CS student who backed up and switched
+ * to SEAS arrived at "what's your major?" still holding Computer Science.
+ * Dropping the foreign id is the honest move: that answer was about a
+ * school they just said they are not in.
  *
  * `MajorsQuestion` and `MinorsQuestion` render from these lists; the flow
  * skips a screen when its list is empty.
@@ -85,12 +88,14 @@ export function electableProgramsFor(
   return options
     .filter((option) => option.kind !== "core")
     .filter((option) =>
-      school ? option.school === school || picked.has(option.id) : picked.has(option.id),
+      school ? option.school === school : picked.has(option.id),
     );
 }
 
-const MAJOR_KINDS = ["major", "concentration"] as const;
+const MAJOR_KINDS = ["major"] as const;
 const MINOR_KINDS = ["minor"] as const;
+/** Majors plus leftover concentrations from an older picker. */
+const DECLARED_STUDY_KINDS = ["major", "concentration"] as const;
 
 /** Majors and concentrations a student can elect for their school. */
 export function electableMajorsFor(
@@ -116,16 +121,19 @@ export function electableMinorsFor(
   );
 }
 
-/** True when at least one picked program is a major or concentration. */
+/** True when at least one picked program is a major for this school. */
 export function hasSelectedMajor(
   programIds: readonly string[],
   options: readonly ProgramOption[],
+  school?: School | null,
 ): boolean {
   const byId = new Map(options.map((option) => [option.id, option]));
-  const majorKinds = new Set<string>(MAJOR_KINDS);
+  const majorKinds = new Set<string>(DECLARED_STUDY_KINDS);
   return programIds.some((id) => {
     const option = byId.get(id);
-    return option !== undefined && majorKinds.has(option.kind);
+    if (option === undefined || !majorKinds.has(option.kind)) return false;
+    if (school && option.school !== school) return false;
+    return true;
   });
 }
 
@@ -199,7 +207,7 @@ export function SchoolQuestion({
           role="status"
           className="mx-auto max-w-[34rem] text-center text-caption-1-regular text-text-tertiary"
         >
-          {`We haven't mapped ${SCHOOL_LABEL[school]} requirements yet, so we can't check your degree progress. Everything else works — keep going and we'll still learn what you like and recommend from it.`}
+          {`This program is unavailable right now. We're working on it.`}
         </p>
       ) : null}
     </div>
@@ -258,73 +266,69 @@ export function ClassYearQuestion({
  * 4 · Minors
  * ========================================================================== */
 
-function programChipLabel(option: ProgramOption): string {
-  // CC publishes "Economics" for both the major and the concentration — same
-  // name, different requirements. The screen is already "What's your major?",
-  // so only concentrations need a qualifier in the chip itself.
-  if (option.kind === "concentration") return `${option.name} (concentration)`;
-  return option.name;
-}
-
-function ProgramPickerQuestion({
-  school,
-  programIds,
-  visible,
-  onToggleProgram,
-}: {
-  school: School | null;
-  programIds: readonly string[];
-  visible: readonly ProgramOption[];
-  /** One id, not the new list — two taps in a frame must not lose one. */
-  onToggleProgram: (programId: string) => void;
-}) {
-  const picked = new Set(programIds);
-
-  return (
-    <ChipWrap>
-      {visible.map((option) => {
-        const isForeign = option.school !== school;
-        return (
-          <OptionChip
-            key={option.id}
-            isSelected={picked.has(option.id)}
-            onPress={() => onToggleProgram(option.id)}
-            sublabel={
-              isForeign ? SCHOOL_LABEL[option.school as School] ?? option.school : undefined
-            }
-          >
-            {programChipLabel(option)}
-          </OptionChip>
-        );
-      })}
-    </ChipWrap>
-  );
-}
-
-/** Majors and concentrations — at least one required when any are offered. */
+/** Majors — at least one required when any are offered. "Other" is a typed major. */
 export function MajorsQuestion({
   school,
   programIds,
   programOptions,
+  customMajor,
   onToggleProgram,
+  onCustomMajorChange,
 }: {
   school: School | null;
   programIds: readonly string[];
   programOptions: readonly ProgramOption[];
+  customMajor: string | null;
   onToggleProgram: (programId: string) => void;
+  onCustomMajorChange: (value: string | null) => void;
 }) {
   const visible = useMemo(
     () => electableMajorsFor(school, programOptions, programIds),
     [programOptions, programIds, school],
   );
+  const otherOpen = customMajor !== null;
+  const otherInput = useRef<HTMLInputElement>(null);
+  const wasOther = useRef(otherOpen);
+
+  useEffect(() => {
+    if (otherOpen && !wasOther.current) otherInput.current?.focus();
+    wasOther.current = otherOpen;
+  }, [otherOpen]);
 
   return (
-    <ProgramPickerQuestion
-      school={school}
-      programIds={programIds}
-      visible={visible}
-      onToggleProgram={onToggleProgram}
-    />
+    <div className="flex flex-col items-center gap-4">
+      <ChipWrap>
+        {visible.map((option) => (
+          <OptionChip
+            key={option.id}
+            isSelected={programIds.includes(option.id)}
+            onPress={() => onToggleProgram(option.id)}
+          >
+            {option.name}
+          </OptionChip>
+        ))}
+        <OptionChip
+          isSelected={otherOpen}
+          onPress={() => onCustomMajorChange(otherOpen ? null : "")}
+        >
+          Other
+        </OptionChip>
+      </ChipWrap>
+
+      {otherOpen ? (
+        <div className="w-full max-w-[320px]">
+          <Input
+            ref={otherInput}
+            aria-label="Your major"
+            placeholder="Type your major"
+            maxLength={80}
+            value={customMajor ?? ""}
+            onChange={(value) => onCustomMajorChange(value)}
+            size="medium"
+          />
+        </div>
+      ) : null}
+    </div>
   );
 }
 

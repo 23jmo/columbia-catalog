@@ -38,6 +38,20 @@ export function isGuestAllowedPath(pathname: string): boolean {
 }
 
 /**
+ * Where OAuth should land after a successful sign-in.
+ *
+ * A missing or home `next` is what happens when Supabase substitutes the
+ * Site URL and drops our redirect. If they have not finished the wizard,
+ * sending them to `/` skips the rest of onboarding — including the first
+ * feed they just signed in to see. Keep them in the flow until the
+ * completion cookie is set.
+ */
+export function postAuthPath(next: string, onboarded: boolean): string {
+  if (next !== "/") return next;
+  return onboarded ? "/" : "/onboarding";
+}
+
+/**
  * `/onboarding`, carrying only the query the wizard can actually show.
  *
  * A bounce from `/search?q=...` must not dump that query onto the first

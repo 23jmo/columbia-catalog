@@ -20,10 +20,13 @@
  * `hd` hint deliberately names no domain so both reach this check.
  */
 
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { createServerSupabaseClient } from "@/lib/db/client";
 import { isColumbiaEmail } from "@/lib/db/auth";
+import { postAuthPath } from "@/lib/onboarding/guest-gate";
+import { ONBOARDING_COOKIE, ONBOARDING_COOKIE_VALUE } from "@/lib/onboarding/state";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -75,5 +78,7 @@ export async function GET(request: Request): Promise<Response> {
     return errorRedirect(origin, "ineligible_domain");
   }
 
-  return NextResponse.redirect(`${origin}${next}`);
+  const store = await cookies();
+  const onboarded = store.get(ONBOARDING_COOKIE)?.value === ONBOARDING_COOKIE_VALUE;
+  return NextResponse.redirect(`${origin}${postAuthPath(next, onboarded)}`);
 }

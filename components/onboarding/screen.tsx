@@ -1,9 +1,11 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { RiArrowLeftLine, RiArrowRightLine } from "@remixicon/react";
 
+import { Avatar } from "@/components/base/avatar/avatar";
 import { OrnamentAvatar } from "@/components/ornament/ornament-avatar";
 import { haptic } from "@/lib/haptics";
 import { cx } from "@/utils/cx";
@@ -124,6 +126,8 @@ export interface OnboardingScreenProps {
   onSignIn?: () => void;
   /** Shown under the Log in control when OAuth could not start. */
   signInError?: string | null;
+  /** Signed-in student. Replaces Log in on the first screen with their photo. */
+  account?: { name: string; avatarUrl?: string } | null;
 }
 
 export function OnboardingScreen({
@@ -141,6 +145,7 @@ export function OnboardingScreen({
   direction = 1,
   onSignIn,
   signInError,
+  account,
 }: OnboardingScreenProps) {
   /*
    * Reduced motion keeps the crossfade and drops the horizontal travel. The
@@ -149,9 +154,21 @@ export function OnboardingScreen({
    */
   const shouldReduceMotion = useReducedMotion();
   const offset = shouldReduceMotion ? 0 : STEP_OFFSET_PX;
+  const scrollerRef = useRef<HTMLDivElement>(null);
+
+  /*
+   * React reuses this shell across steps, so scroll position from a long
+   * coursework list would otherwise carry onto the first feed. Cards loading
+   * in also trigger scroll anchoring that walks the page down. Reset on every
+   * question, and disable anchoring so a late layout cannot shove it again.
+   */
+  useLayoutEffect(() => {
+    scrollerRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [question]);
 
   return (
     <div
+      ref={scrollerRef}
       className={cx(
         // `min-w-0`: the feed step mounts wide section cards; without a
         // shrink floor they push this shell past 100vw and shear the
@@ -162,11 +179,15 @@ export function OnboardingScreen({
         // cannot reach the cards under the sign-in box. `overflow-y-auto`
         // is the pair that keeps X clipped and lets the feed scroll.
         // Never `overflow-hidden` on the same node as `h-dvh`.
-        "relative flex h-dvh w-full min-w-0 flex-col overflow-x-clip overflow-y-auto bg-background-secondary-default",
+        "relative flex h-dvh w-full min-w-0 flex-col overflow-x-clip overflow-y-auto overflow-anchor-none bg-background-secondary-default",
       )}
     >
       {onBack ? <BackArrow onClick={onBack} /> : null}
-      {onSignIn ? <SignInChip onClick={onSignIn} error={signInError} /> : null}
+      {onSignIn ? (
+        <SignInChip onClick={onSignIn} error={signInError} />
+      ) : account ? (
+        <AccountChip account={account} />
+      ) : null}
 
       {/*
         Upper-middle, not centred and not top-aligned.
@@ -415,6 +436,20 @@ function SignInChip({ onClick, error }: { onClick: () => void; error?: string | 
           {error}
         </p>
       ) : null}
+    </div>
+  );
+}
+
+function AccountChip({ account }: { account: { name: string; avatarUrl?: string } }) {
+  const initials = account.name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+
+  return (
+    <div className="absolute top-4 right-4 z-10 sm:top-6 sm:right-6">
+      <Avatar size="md" src={account.avatarUrl} initials={initials} alt={account.name} />
     </div>
   );
 }

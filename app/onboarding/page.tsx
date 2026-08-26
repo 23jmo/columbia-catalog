@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
 import { OnboardingToaster } from "@/components/onboarding/onboarding-toaster";
-import { AuthErrorNotice } from "@/components/shell/auth-error-notice";
+import { AuthErrorToast } from "@/components/onboarding/auth-error-toast";
 import { listPrograms } from "@/lib/requirements/programs";
 
 /**
@@ -69,13 +69,7 @@ export default async function OnboardingPage({
     <>
       {/* The one toast surface on this route. Same store, bottom edge. */}
       <OnboardingToaster />
-      {params.auth_error ? (
-        <div className="pointer-events-none fixed inset-x-0 top-16 z-20 flex justify-center px-5">
-          <div className="pointer-events-auto w-full max-w-md rounded-2lg border border-border-table bg-background-full shadow-sm">
-            <AuthErrorNotice reason={params.auth_error} />
-          </div>
-        </div>
-      ) : null}
+      {params.auth_error ? <AuthErrorToast reason={params.auth_error} /> : null}
       <OnboardingFlow programOptions={programOptions} />
     </>
   );

@@ -14,23 +14,44 @@ import { RiErrorWarningLine } from "@remixicon/react";
  * nothing, which is right: changing your mind is not a failure.
  */
 
-const REASONS: Record<string, string> = {
-  ineligible_domain:
-    "That Google account is not a Columbia or Barnard one. Sign-in needs a columbia.edu or barnard.edu address.",
-  exchange_failed:
-    "Google signed you in but the hand-off back to this site failed. Trying again usually works; if it does not, the link may have already been used.",
-  missing_code: "That sign-in link is incomplete. Start again from the sign-in button.",
-  not_configured: "Sign-in is not available on this deployment.",
+const REASONS: Record<string, { title: string; description: string }> = {
+  ineligible_domain: {
+    title: "You have to sign in with a Columbia email",
+    description: "Use a columbia.edu or barnard.edu Google account.",
+  },
+  exchange_failed: {
+    title: "Sign-in did not complete",
+    description:
+      "Google signed you in but the hand-off back to this site failed. Trying again usually works; if it does not, the link may have already been used.",
+  },
+  missing_code: {
+    title: "Sign-in did not complete",
+    description: "That sign-in link is incomplete. Start again from the sign-in button.",
+  },
+  not_configured: {
+    title: "Sign-in is not available",
+    description: "Sign-in is not available on this deployment.",
+  },
 };
+
+export function authErrorCopy(reason?: string | string[]): { title: string; description: string } {
+  const key = Array.isArray(reason) ? reason[0] : reason;
+  if (!key) {
+    return { title: "Sign-in did not complete", description: "Please try again." };
+  }
+  return (
+    REASONS[key] ?? {
+      title: "Sign-in did not complete",
+      description: "Please try again.",
+    }
+  );
+}
 
 export function AuthErrorNotice({ reason }: { reason?: string | string[] }) {
   const key = Array.isArray(reason) ? reason[0] : reason;
   if (!key) return null;
 
-  // An unrecognised reason still gets a message. Silence is the failure mode
-  // this component exists to remove, so falling back to nothing would reinstate
-  // it for exactly the cases nobody anticipated.
-  const message = REASONS[key] ?? "Sign-in did not complete. Please try again.";
+  const message = authErrorCopy(reason);
 
   return (
     <div
@@ -41,7 +62,9 @@ export function AuthErrorNotice({ reason }: { reason?: string | string[] }) {
         className="mt-px size-4 shrink-0 text-foreground-icon-tertiary"
         aria-hidden
       />
-      <p className="text-caption-1-regular text-text-secondary">{message}</p>
+      <p className="text-caption-1-regular text-text-secondary">
+        {message.title}. {message.description}
+      </p>
     </div>
   );
 }

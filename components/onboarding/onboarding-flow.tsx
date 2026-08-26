@@ -108,9 +108,8 @@ import { StepLove } from "./step-love";
  *
  * `signIn()` sends the browser to Google with `redirectTo` pointing back at the
  * current path, so a student who signs in from the last step lands back HERE
- * with a session. The first-screen Log in control is the other path: it sends
- * `next=/` so someone who already has an account skips the rest of the wizard
- * and lands on home.
+ * with a session. The first-screen Log in control does the same — they stay in
+ * the wizard, now showing their photo instead of "Log in".
  *
  * The effect below notices the session, flushes the guest state through one
  * RPC, and only clears local storage once the server confirms — clearing on
@@ -149,7 +148,11 @@ function resumeQuestion(
   const pastClassYear = state.classYear !== null || state.programIds.length > 0;
   if (!pastClassYear) return "classYear";
 
-  if (degreeQuestions.includes("major") && !hasSelectedMajor(state.programIds, programOptions)) {
+  if (
+    degreeQuestions.includes("major") &&
+    !hasSelectedMajor(state.programIds, programOptions, state.school) &&
+    !state.customMajor?.trim()
+  ) {
     return "major";
   }
   if (
@@ -273,7 +276,9 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
     const current = getOnboardingSnapshot().state;
     const majorsOffered =
       electableMajorsFor(current.school, programOptions, current.programIds).length > 0;
-    const hasMajor = hasSelectedMajor(current.programIds, programOptions);
+    const hasMajor =
+      hasSelectedMajor(current.programIds, programOptions, current.school) ||
+      Boolean(current.customMajor?.trim());
     if (
       !canPrefetchGuessDeck(
         current,
@@ -448,7 +453,9 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
   const majorsOffered =
     electableMajorsFor(state.school, programOptions, state.programIds).length > 0;
   const canAdvanceMajor =
-    !majorsOffered || hasSelectedMajor(state.programIds, programOptions);
+    !majorsOffered ||
+    hasSelectedMajor(state.programIds, programOptions, state.school) ||
+    Boolean(state.customMajor?.trim());
 
   const patch = (fields: Partial<GuestOnboardingState>) =>
     updateDegree((current) => ({
@@ -528,10 +535,9 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
 
   const startFirstPageSignIn = async () => {
     setSignInError(null);
-    // Home, not this page: they already have an account and should not walk
-    // the five questions again. Last-step sign-in still uses the default
-    // `next` (this path) so they return to the ungated feed.
-    const { error } = await signIn({ next: "/" });
+    // Stay on this path so a returning student who is not done with setup
+    // keeps walking the wizard, now with their photo in the corner.
+    const { error } = await signIn({ next: "/onboarding" });
     if (error) setSignInError(error);
   };
 
@@ -585,6 +591,7 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
     onBack: isFirstScreen ? undefined : back,
     onNext: forward,
     direction,
+    account: session.account,
   };
 
   /*
@@ -617,7 +624,17 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
           <SchoolQuestion
             school={state.school}
             coveredSchools={coveredSchools}
-            onChange={(school: School | null) => answerDegree("school", { school })}
+            onChange={(school: School | null) =>
+              answerDegree("school", {
+                school,
+                // A major picked for Columbia College is not an answer for
+                // SEAS. Clearing here, not "keep it labelled foreign", is
+                // what makes backing up and switching school start the
+                // major question over.
+                programIds: [],
+                customMajor: null,
+              })
+            }
           />
         </OnboardingScreen>
       );
@@ -655,7 +672,9 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
             school={state.school}
             programIds={state.programIds}
             programOptions={programOptions}
+            customMajor={state.customMajor}
             onToggleProgram={toggleProgram}
+            onCustomMajorChange={(customMajor) => answerDegree("major", { customMajor })}
           />
         </OnboardingScreen>
       );
@@ -752,6 +771,7 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
       wide
       hue="cyanViolet"
       lockViewport={session.account === null}
+      account={session.account}
     >
       <StepFeed
         state={state}

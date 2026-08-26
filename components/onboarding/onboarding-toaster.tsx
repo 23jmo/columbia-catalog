@@ -10,6 +10,7 @@ import {
   getToastSnapshot,
   subscribeToasts,
 } from "@/lib/toast/store";
+import { cx } from "@/utils/cx";
 
 /**
  * The toast surface for the onboarding route, anchored bottom-centre.
@@ -48,10 +49,22 @@ export function OnboardingToaster() {
           key={toast.id}
           role="status"
           aria-live="polite"
-          className="relative flex w-full items-start gap-3 rounded-2xl border border-border-button-default bg-background-full p-4 pr-11 shadow-dropdown"
+          className={cx(
+            "relative flex w-full items-start gap-3 rounded-2xl border bg-background-full p-4 pr-11 shadow-dropdown",
+            toast.status === "error"
+              ? "border-text-error-primary/40"
+              : "border-border-button-default",
+          )}
         >
           <div className="min-w-0 flex-1">
-            <p className="text-body-medium text-text-primary">{toast.title}</p>
+            <p
+              className={cx(
+                "text-body-medium",
+                toast.status === "error" ? "text-text-error-primary" : "text-text-primary",
+              )}
+            >
+              {toast.title}
+            </p>
             {toast.description ? (
               <p className="mt-0.5 text-caption-1-regular text-text-secondary">
                 {toast.description}

@@ -26,7 +26,7 @@ export function StepFeed({ state, signedIn, migration, onFinish }: StepFeedProps
 
   const startSignIn = async () => {
     setSignInError(null);
-    const { error } = await signIn();
+    const { error } = await signIn({ next: "/onboarding" });
     if (error) setSignInError(error);
   };
 

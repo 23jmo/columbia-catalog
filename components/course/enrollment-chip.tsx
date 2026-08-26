@@ -317,6 +317,8 @@ export function EnrollmentChip({
         <ProvenanceStamp sourceAsOf={section.sourceAsOf} className="truncate px-0.5" />
       )}
 
+      {card.dismissLayer}
+
       {/*
         `isNonModal` so the rest of the panel stays live behind the card — this
         is something you glance at on the way to a decision, not a dialog that
