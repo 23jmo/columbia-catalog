@@ -163,7 +163,21 @@ export function OnboardingScreen({
    * question, and disable anchoring so a late layout cannot shove it again.
    */
   useLayoutEffect(() => {
-    scrollerRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    const node = scrollerRef.current;
+    if (!node) return;
+    // Returning from Google restores the previous /onboarding scroll, which
+    // on this screen is halfway down the first feed. Manual restoration plus
+    // a second frame after the cards paint keeps the question at the top.
+    const previous = window.history.scrollRestoration;
+    window.history.scrollRestoration = "manual";
+    node.scrollTop = 0;
+    const frame = requestAnimationFrame(() => {
+      node.scrollTop = 0;
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      window.history.scrollRestoration = previous;
+    };
   }, [question]);
 
   return (
@@ -179,7 +193,7 @@ export function OnboardingScreen({
         // cannot reach the cards under the sign-in box. `overflow-y-auto`
         // is the pair that keeps X clipped and lets the feed scroll.
         // Never `overflow-hidden` on the same node as `h-dvh`.
-        "relative flex h-dvh w-full min-w-0 flex-col overflow-x-clip overflow-y-auto overflow-anchor-none bg-background-secondary-default",
+        "relative flex h-dvh w-full min-w-0 flex-col overflow-x-clip overflow-y-auto [overflow-anchor:none] bg-background-secondary-default",
       )}
     >
       {onBack ? <BackArrow onClick={onBack} /> : null}

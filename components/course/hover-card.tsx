@@ -172,7 +172,11 @@ export function useHoverCard({ onOpen }: HoverCardOptions = {}): HoverCard {
     dismissLayer: isOpen ? (
       <div
         aria-hidden
-        className="pointer-coarse:block fixed inset-0 z-40 hidden"
+        // Fine pointers hover-to-close; this layer would sit between the
+        // chip and the card. Coarse pointers have no hover, so a full-screen
+        // tap target is the only way off. Do not pair `hidden` with
+        // `pointer-coarse:block` — equal specificity, and `hidden` wins.
+        className="fixed inset-0 z-40 [@media(pointer:fine)]:hidden"
         onPointerDown={(event) => {
           event.preventDefault();
           cancelClose();

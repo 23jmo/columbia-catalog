@@ -4,6 +4,7 @@ import type { HTMLAttributes, ReactNode } from "react";
 import { RiAddLine, RiCloseLine } from "@remixicon/react";
 
 import { displayCourseTitle } from "@/lib/onboarding/course-title";
+import { titleForCourseId } from "@/lib/onboarding/known-titles";
 import { haptic } from "@/lib/haptics";
 import { cx } from "@/utils/cx";
 
@@ -47,6 +48,11 @@ export function courseChipLines(
 ): { label: string; sublabel?: string } {
   const pretty = title?.trim() ? displayCourseTitle(title.trim()) : "";
   if (pretty) return { label: pretty, sublabel: code };
+  // Cores the guess deck names are often missing from a live-term catalog
+  // extract. Fall back to the known name so the chip is still two lines —
+  // "University Writing" over "ENGL CC1010" — not a bare call number.
+  const known = titleForCourseId(code);
+  if (known) return { label: known, sublabel: code };
   return { label: code };
 }
 

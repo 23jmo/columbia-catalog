@@ -98,10 +98,10 @@ export function CourseSearch({ confirmedIds, onAdd }: CourseSearchProps) {
   }, [query]);
 
   return (
-    <section className="mx-auto flex w-full max-w-[560px] flex-col gap-2">
+    <section className="mx-auto flex w-full flex-col gap-2">
       <label
         htmlFor="onboarding-course-search"
-        className="text-center text-caption-1-medium tracking-[0.06em] text-text-secondary uppercase"
+        className="text-center text-body-medium text-text-primary"
       >
         Search for a course you took
       </label>
@@ -114,6 +114,7 @@ export function CourseSearch({ confirmedIds, onAdd }: CourseSearchProps) {
         onChange={setQuery}
         leadingIcon={RiSearchLine}
         size="medium"
+        fieldClassName="py-3 shadow-sm"
       />
 
       {visibleError ? (

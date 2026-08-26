@@ -81,6 +81,7 @@ import {
 import { declaredProgramIds } from "./program-ids";
 import type { GuestOnboardingState } from "./state";
 import { typicalGuesses } from "./typical";
+import { knownCatalogFact } from "./known-titles";
 
 /* ==========================================================================
  * Catalog facts
@@ -117,6 +118,21 @@ export async function loadCatalogFacts(
       if (facts.has(course.courseId)) continue;
       facts.set(course.courseId, toCatalogFact(course));
     }
+  }
+
+  // Cores the deck names that have no live-term row still need a title on the
+  // chip, or the strip mixes "University Writing / ENGL CC1010" with bare
+  // codes and looks broken.
+  for (const courseId of wanted) {
+    const current = facts.get(courseId);
+    if (current?.title) continue;
+    const known = knownCatalogFact(courseId);
+    if (!known) continue;
+    facts.set(courseId, {
+      code: current?.code ?? known.code,
+      title: known.title,
+      points: current?.points ?? null,
+    });
   }
 
   return facts;

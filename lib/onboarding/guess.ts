@@ -55,6 +55,7 @@ import type { GroupResult, Program, RequirementRule, School } from "@/lib/requir
 
 import type { GuestCourse } from "./state";
 import { typicalGuesses } from "./typical";
+import { titleForCourseId } from "./known-titles";
 
 /*
  * The re-rank cadence lives in `./state.ts`, not here, and is re-exported for
@@ -466,7 +467,7 @@ export function buildGuessDeck(input: GuessDeckInput): GuessDeck {
        * on a transcript or a Bulletin page and cannot search for.
        */
       code: facts?.code ?? formatCourseId(courseId),
-      title: facts?.title ?? "",
+      title: facts?.title || titleForCourseId(courseId) || "",
       points: facts?.points ?? null,
     };
   });
@@ -515,7 +516,7 @@ export function buildGuessDeck(input: GuessDeckInput): GuessDeck {
       courseId,
       // Printed spelling even without a catalog row; see the note above.
       code: facts?.code ?? formatCourseId(courseId),
-      title: facts?.title ?? null,
+      title: facts?.title || titleForCourseId(courseId),
       points: facts?.points ?? null,
       tier,
       reasons,
@@ -539,7 +540,7 @@ export function buildGuessDeck(input: GuessDeckInput): GuessDeck {
       return {
         courseId: id,
         code: facts?.code ?? formatCourseId(id),
-        title: facts?.title ?? null,
+        title: facts?.title || titleForCourseId(id),
         points: facts?.points ?? null,
       };
     });

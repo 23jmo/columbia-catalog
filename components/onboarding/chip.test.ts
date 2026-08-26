@@ -14,4 +14,15 @@ describe("courseChipLines", () => {
     expect(courseChipLines("COMS W1004", null)).toEqual({ label: "COMS W1004" });
     expect(courseChipLines("COMS W1004", "   ")).toEqual({ label: "COMS W1004" });
   });
+
+  it("fills a known core title when the catalog row is missing", () => {
+    expect(courseChipLines("ENGL CC1010", null)).toEqual({
+      label: "University Writing",
+      sublabel: "ENGL CC1010",
+    });
+    expect(courseChipLines("ECON UN1105", "")).toEqual({
+      label: "Principles of Economics",
+      sublabel: "ECON UN1105",
+    });
+  });
 });
