@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DefaultChatTransport } from "ai";
 import { useChat } from "@ai-sdk/react";
@@ -103,18 +103,6 @@ export interface AssistantHomeProps {
    * back so the rail can highlight it.
    */
   initialConversationId?: string | null;
-  /**
-   * The recommendation feed, rendered on the server and handed down as an
-   * element.
-   *
-   * It has to arrive this way. `buildFeed` reads the student's record through
-   * the cookie-scoped Supabase client and pages the active catalog, none of
-   * which can happen in a `"use client"` module — but a server component passed
-   * as a prop is rendered by the server and slotted in here, so the feed stays
-   * server-rendered inside a client shell. That is also what lets `/` stream
-   * it: the `<Suspense>` boundary lives around the element, not around this.
-   */
-  feed?: ReactNode;
 }
 
 export function AssistantHome({
@@ -123,7 +111,6 @@ export function AssistantHome({
   promptsUsed: initialPromptsUsed,
   promptsLimit,
   greetingName,
-  feed,
   initialConversationId = null,
 }: AssistantHomeProps) {
   const router = useRouter();
@@ -389,27 +376,27 @@ export function AssistantHome({
       ) : null}
 
       {/*
-        Two states, one column.
+        Two states, one column, and now one rule: content hangs off the bottom.
 
-        With a thread, the messages hang off the bottom of the region
-        (`justify-end`) so the newest turn sits against the composer and the
-        conversation grows upward out of it. With no thread, the greeting and
-        the feed start at the top and the empty space falls below them, which
-        is what keeps the box on the bottom edge in both states.
+        With a thread that has always been true — `justify-end` puts the newest
+        turn against the composer so the conversation grows upward out of it.
+
+        Without one it used to be the opposite: the greeting started at the top
+        and the empty space fell below it. That was right while the feed rail
+        sat under the greeting and filled the column. The feed is its own page
+        now, and pinning a two-line greeting to the top of an otherwise empty
+        `flex-1` left most of a phone screen blank between it and the box —
+        roughly 500px of nothing on a 390×844 viewport.
+
+        So the greeting hangs off the bottom too, landing directly above the
+        composer. Same rule in both states, and the thing the student is meant
+        to act on is next to the thing they act with.
       */}
-      <div
-        className={cx(
-          "flex flex-1 flex-col",
-          hasThread ? "justify-end pt-8" : "gap-7 pt-6 sm:pt-10",
-        )}
-      >
+      <div className={cx("flex flex-1 flex-col justify-end", hasThread ? "pt-8" : "pt-6 sm:pt-10")}>
         {hasThread ? (
           <Conversation messages={messages} status={status} onAsk={ask} />
         ) : (
-          <>
-            <Hero name={greetingName ?? null} />
-            {feed}
-          </>
+          <Hero name={greetingName ?? null} />
         )}
       </div>
 

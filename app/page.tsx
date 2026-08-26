@@ -41,7 +41,7 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { RiArrowRightLine, RiCompass3Line } from "@remixicon/react";
+import { RiArrowRightLine } from "@remixicon/react";
 
 import { FeedPanel } from "@/components/feed/feed-panel";
 import { FeedSkeleton } from "@/components/feed/feed-skeleton";
@@ -49,7 +49,6 @@ import { AppShell } from "@/components/shell/app-shell";
 import { AuthErrorNotice } from "@/components/shell/auth-error-notice";
 import { PageContent } from "@/components/shell/page-content";
 import { PageHeader } from "@/components/shell/page-header";
-import { CURRENT_TERM, NEXT_TERM, termLabel } from "@/lib/constants";
 import { HOME_FEED_LIMIT, buildFeed } from "@/lib/recommend/feed";
 import { cx } from "@/utils/cx";
 
@@ -71,13 +70,18 @@ export default async function HomePage({
       <PageContent className="max-w-5xl gap-5">
         <AuthErrorNotice reason={params.auth_error} />
 
-        <PageHeader
-          eyebrow={`${termLabel(CURRENT_TERM)} & ${termLabel(NEXT_TERM)}`}
-          icon={RiCompass3Line}
-          title="Worth taking"
-          description="Ranked against what you have already taken, what you still owe, and what past students said about the class and the person teaching it."
-          hideTitleOnMobile
-        />
+        {/*
+          A title and nothing else (owner, 2026-08-26).
+
+          The eyebrow said "Fall 2026 & Spring 2027" and the description
+          explained how the ranking works. Both were cut, and the cut is right:
+          the terms are printed on every card already, and a paragraph about
+          the ranking is the page arguing for itself before the reader has seen
+          a single recommendation. The cards make that argument better — each
+          one now says why it is there, in its own words, which is what the
+          description was standing in for.
+        */}
+        <PageHeader title="Recommendations" hideTitleOnMobile />
 
         <Suspense fallback={<FeedSkeleton />}>
           <HomeFeed />

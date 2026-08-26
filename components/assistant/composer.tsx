@@ -406,21 +406,41 @@ function ComposerPlaceholder({
         text
       ) : (
         <motion.span
-          className="inline-block text-pretty"
+          className={cx("inline-block text-pretty", compact && "max-w-full truncate")}
           animate={{
             filter: soft ? "blur(2.5px)" : "blur(0px)",
             opacity: soft ? 0.88 : 1,
           }}
           transition={{ duration: 0.36, ease: [0.19, 1, 0.22, 1] }}
         >
-          <Calligraph
-            animation="default"
-            autoSize={false}
-            drift={{ x: 0, y: 0 }}
-            stagger={0}
-          >
-            {text}
-          </Calligraph>
+          {/*
+            No per-letter animation on the folded row, and that is what makes
+            it truncate.
+
+            `truncate` puts `text-overflow: ellipsis` on this span, and ellipsis
+            is computed from a box's own INLINE content. `Calligraph` gives each
+            character its own box, so there was no inline content to ellipsize:
+            the wrapper's `overflow-hidden` sheared the prompt mid-letter at the
+            right edge of a phone with nothing to say it continued. Plain text
+            here is direct inline content, so the ellipsis lands.
+
+            The folded row is where the prompts do not fit anyway — 390px holds
+            about half of "What major related classes would I find interesting?"
+            — and a letter-by-letter reveal of a sentence the reader can only
+            see half of was buying nothing. The full-height composer keeps it.
+          */}
+          {compact ? (
+            text
+          ) : (
+            <Calligraph
+              animation="default"
+              autoSize={false}
+              drift={{ x: 0, y: 0 }}
+              stagger={0}
+            >
+              {text}
+            </Calligraph>
+          )}
         </motion.span>
       )}
     </div>

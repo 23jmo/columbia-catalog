@@ -59,11 +59,19 @@ export function FeedSignInPanel({ onSignIn, disabled, error, className }: FeedSi
           </div>
         </div>
 
+        {/*
+          Edge to edge on a phone, and inside the art gutter from `sm`.
+          `62%` is `100% - 38%`, the same reservation the copy above uses, so
+          the button ends on the same line the paragraph does. Without the cap
+          it kept `w-full` all the way up, and once the panel grew to the width
+          of the cards it sits between, the blue ran underneath the dithered
+          flag — a 712px button with an ornament printed on its right end.
+        */}
         <Button
           variant="primary"
           size="medium"
           leadingIcon={GoogleMarkIcon}
-          className="w-full shrink-0"
+          className="w-full shrink-0 sm:max-w-[62%]"
           disabled={disabled}
           onClick={() => {
             if (disabled) return;
