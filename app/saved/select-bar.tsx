@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { RiCalendarLine, RiCloseLine, RiDeleteBinLine, RiFolderLine } from "@remixicon/react";
+import { RiCloseLine, RiDeleteBinLine, RiFolderLine } from "@remixicon/react";
 
 import { Button } from "@/components/base/buttons/button";
 import {
@@ -16,7 +16,6 @@ import { folderGradientStyle } from "@/lib/bookmarks/folder-art";
 import { fileMany, removeMany, unfileMany, undoRemoval } from "@/lib/bookmarks/store";
 import { toast } from "@/lib/toast/store";
 import type { FolderRecord } from "@/lib/db/bookmarks";
-import type { TermCode } from "@/lib/types";
 import { cx } from "@/utils/cx";
 
 /**
@@ -43,14 +42,6 @@ export interface SelectBarProps {
   folders: readonly FolderRecord[];
   /** Non-null on a real folder's page, enabling "Remove from this folder". */
   currentFolder?: { folderId: string; name: string } | null;
-  /**
-   * Which term's plan "Add to schedule" targets.
-   *
-   * Required rather than defaulted, because the page above already has a term
-   * filter and quietly adding Spring sections to the Fall plan is the kind of
-   * wrong that is invisible until someone reads their week.
-   */
-  termCode: TermCode;
   onDone: () => void;
   className?: string;
 }
@@ -59,7 +50,6 @@ export function SelectBar({
   selected,
   folders,
   currentFolder,
-  termCode,
   onDone,
   className,
 }: SelectBarProps) {

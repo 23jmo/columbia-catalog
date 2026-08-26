@@ -219,7 +219,6 @@ export function SavedGallery() {
           selected={[...selected]}
           folders={snapshot.folders}
           currentFolder={null}
-          termCode={term ?? CURRENT_TERM}
           onDone={leaveSelectMode}
         />
       ) : null}

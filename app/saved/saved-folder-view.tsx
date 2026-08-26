@@ -225,10 +225,6 @@ export function SavedFolderView({ folderId }: SavedFolderViewProps) {
           selected={[...selected]}
           folders={snapshot.folders}
           currentFolder={folder}
-          // Bulk "add to schedule" needs one term. With "All terms" showing,
-          // the current term is the only defensible target — and the toast
-          // says what happened either way.
-          termCode={term ?? CURRENT_TERM}
           onDone={leaveSelectMode}
         />
       ) : null}

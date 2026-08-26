@@ -11,6 +11,7 @@ import { meetingLines } from "@/components/course/format";
 import { InstructorChip } from "@/components/course/instructor-chip";
 import { WeekStrip } from "@/components/course/meeting-schedule";
 import { InstructorLinks, isLinkableInstructor } from "@/components/instructor/instructor-link";
+import { ProvenanceStamp, SeatPill } from "@/components/course/seat-state";
 import { useBookmark } from "@/hooks/use-bookmark";
 import { termLabel, vergilSectionUrl } from "@/lib/constants";
 import { displayCourseTitle } from "@/lib/onboarding/course-title";
@@ -134,7 +135,7 @@ export function SavedCard({ section, course, selection, className }: SavedCardPr
       </header>
 
       <MeetingRow section={section} />
-      <Teacher section={section} />
+      <Teacher section={section} isStatic={Boolean(selection)} />
 
       {folders.length > 0 ? (
         <div className="flex flex-wrap items-center gap-1">
@@ -152,15 +153,31 @@ export function SavedCard({ section, course, selection, className }: SavedCardPr
         </div>
       ) : null}
 
-      <EnrollmentChip
-        section={section}
-        termLabel={termLabel(section.termCode)}
-        hideProvenance
-        fill
-        compact
-        placement="top"
-        className="mt-auto"
-      />
+      {/*
+        Nothing interactive inside Select mode.
+
+        `Checkbox` renders a <label> around a hidden input, so a <button> in
+        here is invalid HTML AND toggles the checkbox on every click — hovering
+        the seat meter to read its chart would tick the row instead. The static
+        pill says the same number with the same stamp, which is the part that
+        cannot be dropped either way.
+      */}
+      {selection ? (
+        <span className="mt-auto flex items-center gap-2">
+          <SeatPill section={section} />
+          <ProvenanceStamp sourceAsOf={section.sourceAsOf} />
+        </span>
+      ) : (
+        <EnrollmentChip
+          section={section}
+          termLabel={termLabel(section.termCode)}
+          hideProvenance
+          fill
+          compact
+          placement="top"
+          className="mt-auto"
+        />
+      )}
     </>
   );
 
@@ -234,8 +251,11 @@ function MeetingRow({ section }: { section: Section }) {
   );
 }
 
-/** Who teaches it — the same chip the feed card and the drawer use. */
-function Teacher({ section }: { section: Section }) {
+/**
+ * Who teaches it — the same chip the feed card and the drawer use, except in
+ * Select mode, where it is plain text for the reason given above the seat pill.
+ */
+function Teacher({ section, isStatic }: { section: Section; isStatic: boolean }) {
   const names = section.instructors.filter((name) => name.trim().length > 0);
   const primary = names[0];
 
@@ -247,6 +267,17 @@ function Teacher({ section }: { section: Section }) {
     );
   }
 
+  const rest = names.slice(1);
+
+  if (isStatic) {
+    return (
+      <p className="truncate text-body-medium text-text-secondary sm:text-headline-medium">
+        {primary}
+        {rest.length > 0 ? ` · +${rest.length}` : ""}
+      </p>
+    );
+  }
+
   if (!isLinkableInstructor(primary)) {
     return (
       <p className="truncate text-body-medium text-text-secondary sm:text-headline-medium">
@@ -254,8 +285,6 @@ function Teacher({ section }: { section: Section }) {
       </p>
     );
   }
-
-  const rest = names.slice(1);
 
   return (
     <div className="flex min-w-0 items-center gap-2">
