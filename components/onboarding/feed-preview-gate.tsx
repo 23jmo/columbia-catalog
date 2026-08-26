@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { onboardingFeedPreviewAction } from "@/app/onboarding/actions";
 import { Button } from "@/components/base/buttons/button";
@@ -39,10 +39,16 @@ export interface FeedPreviewGateProps {
  * until they have an account, which is what makes onboarding the default
  * rather than an optional tour.
  *
- * The stack is clipped until then — scrolling the extra cards is the thing
- * the gate is keeping. The sign-in card itself is in the document flow, not
- * `absolute top-44`: a fixed top on a locked viewport assumed one feed card
- * plus the panel always fit under the ornament, and on a phone they do not.
+ * ── Layout ────────────────────────────────────────────────────────────────
+ *
+ * First card, then the Columbia panel, then the rest of the feed. Guests can
+ * scroll the blurred stack; they cannot open a card. A `max-h` peek used to
+ * keep those extra rows in the tree and clip them, which on a phone looked
+ * like a one-card feed with a wall under the sign-in box.
+ *
+ * The panel stays in document flow, not `absolute top-44`. A fixed top on a
+ * locked viewport assumed one card plus the panel always fit under the
+ * ornament, and on a phone they do not.
  */
 export function FeedPreviewGate({
   state,
@@ -84,7 +90,7 @@ export function FeedPreviewGate({
   const cardItems =
     loadingPreview || (displayCards.length === 0 && !previewError)
       ? Array.from({ length: 4 }, (_, index) => ({
-          // Four placeholders is enough — the gated viewport clips the rest.
+          // Four placeholders fill the first screen and peek the next card.
           key: `skeleton-${index}`,
           node: <FeedPreviewCardSkeleton />,
         }))
@@ -92,6 +98,8 @@ export function FeedPreviewGate({
           key: card.courseId,
           node: <FeedCardView card={card} className="w-full" />,
         }));
+
+  const [firstCard, ...restCards] = cardItems;
 
   return (
     /*
@@ -101,47 +109,15 @@ export function FeedPreviewGate({
      * width and the right edge of the sign-in card shears off.
      */
     <div className="relative w-full min-w-0 max-w-full pt-2">
-      <div
-        className={cx(
-          "flex min-w-0 flex-col gap-3.5 transition-[filter,opacity] duration-300 ease-out",
-          // One-card peek. Extra rows stay in the tree so the blur stack
-          // still reads as a feed, but `max-h` + `overflow-hidden` is what
-          // stops a guest from scrolling them. Do not `flex-1` this: an
-          // unbounded peek would grow to the full card list and the lock
-          // would have nothing left to lock.
-          gated && "pointer-events-none max-h-[min(8.5rem,22svh)] select-none overflow-hidden sm:max-h-48",
-        )}
-        aria-hidden={gated}
-      >
-        {cardItems.map((item, index) => (
-          <div
-            key={item.key}
-            className={cx(
-              "relative min-w-0 transition-opacity duration-300 ease-out",
-              // Contain the card's own stacking (instructor links are
-              // `relative z-[1]` so they beat a stretched-link overlay).
-              // Without isolation those names paint above this blur.
-              gated && "isolate",
-            )}
-          >
-            {item.node}
-            {gated && index < 4 ? (
-              // Only the cards that can peek above the gate need the blur
-              // stack. Ten cards × 16 backdrop layers would be a jank tax
-              // on pixels the guest cannot scroll to.
-              <ProgressiveCardBlur index={index} total={4} />
-            ) : null}
-          </div>
-        ))}
-      </div>
+      {firstCard ? <PreviewCardSlot item={firstCard} index={0} gated={gated} /> : null}
 
       {gated ? (
         <div className="relative z-10 -mt-6 flex min-w-0 shrink-0 flex-col items-center gap-4 px-0 sm:-mt-8 sm:px-1">
           {/*
             In the document flow, not `absolute top-44`. The panel keeps its
-            natural height so the Columbia button cannot be clipped by a
-            locked viewport. Negative margin tucks it into the peek so the
-            first card still dissolves into the gate.
+            natural height so the Columbia button cannot be clipped. Negative
+            margin tucks it into the first card so that card dissolves into
+            the gate; cards below stay in flow and scroll with the page.
           */}
           <div
             aria-hidden
@@ -155,7 +131,23 @@ export function FeedPreviewGate({
             signInError={signInError}
           />
         </div>
-      ) : (
+      ) : null}
+
+      {restCards.length > 0 ? (
+        <div
+          className={cx(
+            "mt-3.5 flex min-w-0 flex-col gap-3.5 transition-[filter,opacity] duration-300 ease-out",
+            gated && "pointer-events-none select-none",
+          )}
+          aria-hidden={gated}
+        >
+          {restCards.map((item, index) => (
+            <PreviewCardSlot key={item.key} item={item} index={index + 1} gated={gated} />
+          ))}
+        </div>
+      ) : null}
+
+      {gated ? null : (
         <div className="mt-8 flex flex-col items-center gap-3">
           {migration.status === "running" ? (
             <p className="text-center text-caption-1-regular text-text-secondary">
@@ -186,6 +178,39 @@ export function FeedPreviewGate({
           </Button>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Progressive blur on the first few cards; a cheaper wash on the rest. */
+function PreviewCardSlot({
+  item,
+  index,
+  gated,
+}: {
+  item: { key: string; node: ReactNode };
+  index: number;
+  gated: boolean;
+}) {
+  return (
+    <div
+      className={cx(
+        "relative min-w-0 transition-opacity duration-300 ease-out",
+        // Contain the card's own stacking (instructor links are
+        // `relative z-[1]` so they beat a stretched-link overlay).
+        // Without isolation those names paint above this blur.
+        gated && "isolate pointer-events-none select-none",
+      )}
+      aria-hidden={gated}
+    >
+      {item.node}
+      {gated && index < 4 ? <ProgressiveCardBlur index={index} total={4} /> : null}
+      {gated && index >= 4 ? (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-[2] rounded-2xl bg-background-secondary-default/35 backdrop-blur-sm"
+        />
+      ) : null}
     </div>
   );
 }
