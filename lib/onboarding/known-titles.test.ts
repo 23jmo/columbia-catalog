@@ -9,7 +9,14 @@ describe("titleForCourseId", () => {
   });
 
   it("returns null for a course we have not named", () => {
-    expect(titleForCourseId("COMS1004W")).toBeNull();
+    expect(titleForCourseId("HIST1002UN")).toBeNull();
+  });
+
+  it("names the SEAS computing intro that the seed catalog omits", () => {
+    expect(titleForCourseId("ENGI E1006")).toBe(
+      "Introduction to Computing for Engineers and Applied Scientists",
+    );
+    expect(titleForCourseId("COMS W1007")).toBe("Honors Introduction to Computer Science");
   });
 });
 

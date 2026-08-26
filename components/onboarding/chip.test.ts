@@ -10,9 +10,9 @@ describe("courseChipLines", () => {
     });
   });
 
-  it("falls back to the code alone when there is no title", () => {
-    expect(courseChipLines("COMS W1004", null)).toEqual({ label: "COMS W1004" });
-    expect(courseChipLines("COMS W1004", "   ")).toEqual({ label: "COMS W1004" });
+  it("falls back to the code alone when there is no title and no known name", () => {
+    expect(courseChipLines("HIST UN1002", null)).toEqual({ label: "HIST UN1002" });
+    expect(courseChipLines("HIST UN1002", "   ")).toEqual({ label: "HIST UN1002" });
   });
 
   it("fills a known core title when the catalog row is missing", () => {
