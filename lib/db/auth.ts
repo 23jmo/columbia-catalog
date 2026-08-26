@@ -25,6 +25,7 @@
 
 import type { User } from "@supabase/supabase-js";
 
+import { rememberAuthNext } from "./auth-return";
 import { createServerSupabaseClient, createServiceRoleClient, getBrowserClient } from "./client";
 
 /**
@@ -131,11 +132,14 @@ export async function deleteSignedInAccount(userId: string): Promise<{ error: st
  *
  * `redirectTo` defaults to the current path so a student who signs in from a
  * course page lands back there. Callers may pass `next` when the current path
- * is the wrong landing — the onboarding first-screen Log in control sends
- * people home, because they already have an account and should skip the
- * wizard. The value must be a same-origin path (a single leading slash);
- * anything else falls back to the current location so this cannot become an
- * open redirect.
+ * is the wrong landing — onboarding always passes `/onboarding` so the first
+ * feed is not skipped. The value must be a same-origin path (a single leading
+ * slash); anything else falls back to the current location so this cannot
+ * become an open redirect.
+ *
+ * A short-lived `cc_auth_next` cookie mirrors `next`. When Supabase's allow
+ * list rejects `redirectTo` it substitutes the Site URL and drops the query;
+ * the cookie is what lets the callback still return them to the wizard.
  *
  * ── Why `hd` is `*` and not a domain ──────────────────────────────────────
  *
@@ -164,6 +168,8 @@ export async function signIn(options?: { next?: string }): Promise<{ error: stri
     requested && requested.startsWith("/") && !requested.startsWith("//")
       ? requested
       : current;
+  // Backup for when Supabase strands the code on the Site URL without `next`.
+  rememberAuthNext(next);
   const { error } = await client.auth.signInWithOAuth({
     provider: "google",
     options: {

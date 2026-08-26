@@ -23,6 +23,11 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
+import {
+  AUTH_NEXT_COOKIE,
+  clearAuthNextCookie,
+  resolveAuthNext,
+} from "@/lib/db/auth-return";
 import { createServerSupabaseClient } from "@/lib/db/client";
 import { isColumbiaEmail } from "@/lib/db/auth";
 import { postAuthPath } from "@/lib/onboarding/guest-gate";
@@ -30,16 +35,6 @@ import { ONBOARDING_COOKIE, ONBOARDING_COOKIE_VALUE } from "@/lib/onboarding/sta
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-/**
- * Only same-origin paths are honoured. `next` reaches us through a query
- * string, so treating it as a URL would be an open redirect; anything that is
- * not a single leading slash falls back to the home page.
- */
-function safeNext(raw: string | null): string {
-  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/";
-  return raw;
-}
 
 function errorRedirect(origin: string, reason: string): NextResponse {
   // Home bounces unsigned visitors to onboarding, so the message has to live
@@ -50,16 +45,34 @@ function errorRedirect(origin: string, reason: string): NextResponse {
   );
 }
 
+/**
+ * Build the post-auth redirect and drop the short-lived `next` backup cookie.
+ *
+ * Query `next` wins when present; the cookie covers the Site URL substitution
+ * case where Supabase dropped it. `postAuthPath` then refuses to send an
+ * unfinished student (no completion cookie) to home.
+ */
+async function finishRedirect(origin: string, queryNext: string | null): Promise<NextResponse> {
+  const store = await cookies();
+  const next = resolveAuthNext(queryNext, store.get(AUTH_NEXT_COOKIE)?.value, "/");
+  const onboarded = store.get(ONBOARDING_COOKIE)?.value === ONBOARDING_COOKIE_VALUE;
+  const response = NextResponse.redirect(`${origin}${postAuthPath(next, onboarded)}`);
+  clearAuthNextCookie((name, value, options) => {
+    response.cookies.set(name, value, options);
+  });
+  return response;
+}
+
 export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const origin = url.origin;
-  const next = safeNext(url.searchParams.get("next"));
+  const queryNext = url.searchParams.get("next");
 
   // Google reports a declined consent screen this way. It is not an error
   // worth a stack trace — the student simply changed their mind.
   const oauthError = url.searchParams.get("error");
   if (oauthError) {
-    return NextResponse.redirect(`${origin}${next}`);
+    return finishRedirect(origin, queryNext);
   }
 
   const code = url.searchParams.get("code");
@@ -78,7 +91,5 @@ export async function GET(request: Request): Promise<Response> {
     return errorRedirect(origin, "ineligible_domain");
   }
 
-  const store = await cookies();
-  const onboarded = store.get(ONBOARDING_COOKIE)?.value === ONBOARDING_COOKIE_VALUE;
-  return NextResponse.redirect(`${origin}${postAuthPath(next, onboarded)}`);
+  return finishRedirect(origin, queryNext);
 }

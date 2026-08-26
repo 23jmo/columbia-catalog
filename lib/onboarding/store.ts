@@ -32,6 +32,7 @@
 
 import {
   clearGuestState,
+  clearOnboardingCompleteCookie,
   emptyGuestState,
   readGuestState,
   writeGuestState,
@@ -155,6 +156,9 @@ export function markOnboardingMigrated(): void {
  */
 export function restartOnboarding(): void {
   hasMigrated = false;
+  // A prior completion left `cc_onboarded=1`. Clear it or the next Google
+  // round-trip treats them as finished and skips the first feed.
+  clearOnboardingCompleteCookie();
   clearFeedPreviewCache();
   clearOnboardingHandoff();
   emit({ state: emptyGuestState(), isHydrated: true });
