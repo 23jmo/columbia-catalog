@@ -118,7 +118,7 @@ function readManifest(value: unknown): IndexManifestShape | null {
  * ========================================================================== */
 
 /**
- * Candidate roots for `public/`.
+ * Candidate roots for `public/index`.
  *
  * More than one because `process.cwd()` is not the same directory in every
  * runtime this code runs in: `next dev` and `next build` run from the repo
@@ -126,27 +126,38 @@ function readManifest(value: unknown): IndexManifestShape | null {
  * wherever the suite was invoked. Trying a short list is cheaper and far more
  * legible than threading a path through every caller.
  *
+ * The FIRST root is written as `path.join(process.cwd(), "public", "index",
+ * name)` on purpose. Turbopack traces dynamic `readFile` calls; a fully
+ * dynamic `path.join(root, name)` made it include the whole repo in every
+ * serverless function (AGENTS.md, tests, SQL, the extension). Scoping the
+ * primary path to `public/index` keeps the index bytes in the function and
+ * leaves the rest of the tree out. Fallbacks use `turbopackIgnore` so they
+ * do not re-expand the trace.
+ *
  * NOTE for deployment: on a serverless host, files under `public/` are served
  * by the CDN and are not guaranteed to be present in the function's filesystem.
  * If they are absent every lookup below fails, `loadCourseVectorSource` logs
  * once and degrades to `noVectorSource()` — the exact behaviour that shipped
  * before this file existed, not a crash. See `VECTOR_SOURCE_UNAVAILABLE`.
  */
-function publicRoots(): string[] {
-  const cwd = process.cwd();
-  return [
-    path.join(cwd, "public", "index"),
-    path.join(cwd, "..", "public", "index"),
-    path.join(cwd, ".next", "standalone", "public", "index"),
-  ];
-}
-
 async function readFirst(relativeName: string): Promise<Buffer | null> {
-  for (const root of publicRoots()) {
+  // Primary path: statically scoped so Turbopack traces only public/index.
+  try {
+    return await readFile(path.join(process.cwd(), "public", "index", relativeName));
+  } catch {
+    // cwd is not the repo root. Try the two other known layouts.
+  }
+
+  const fallbacks = [
+    path.join(process.cwd(), "..", "public", "index", relativeName),
+    path.join(process.cwd(), ".next", "standalone", "public", "index", relativeName),
+  ];
+  for (const candidate of fallbacks) {
     try {
-      return await readFile(path.join(root, relativeName));
+      // turbopackIgnore: do not treat these as another unbounded fs root.
+      return await readFile(/* turbopackIgnore: true */ candidate);
     } catch {
-      // Next root. A missing file here is the expected case for two of three.
+      // Next fallback. A miss here is the expected case for two of three.
     }
   }
   return null;
