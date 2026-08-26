@@ -45,14 +45,34 @@ const LAYERS = [
   { blur: 10, cover: 24 },
 ] as const;
 
+/**
+ * How hard the ramp bites, as a multiplier on every layer's radius.
+ *
+ * Two settings rather than a free number, because the whole point of this
+ * component is that four radii are tuned to compose — handing callers an
+ * arbitrary scale invites one screen to be blurred twice as hard as the next
+ * for no reason anybody wrote down.
+ *
+ * `default` is the shell chrome: the phone's top bar, where the thing passing
+ * underneath is a dense list and the bar only has to stop being a hard edge.
+ * `strong` is the chat surface, where what passes underneath is prose and the
+ * band is doing more work — a line of text half-hidden behind a weak blur is
+ * still legible enough to try to read, which is worse than one that is plainly
+ * out of focus.
+ */
+const STRENGTH_SCALE = { default: 1, strong: 1.8 } as const;
+
 export function ProgressiveBlur({
   side,
+  strength = "default",
   className,
 }: {
   /** The edge the blur is heaviest at, and ramps away from. */
   side: "top" | "bottom";
+  strength?: keyof typeof STRENGTH_SCALE;
   className?: string;
 }) {
+  const scale = STRENGTH_SCALE[strength];
   // 0% of the gradient must be the anchored edge, so the axis flips with `side`.
   const axis = side === "top" ? "to bottom" : "to top";
 
@@ -61,7 +81,8 @@ export function ProgressiveBlur({
       aria-hidden
       className={cx("pointer-events-none absolute inset-0 overflow-hidden", className)}
     >
-      {LAYERS.map(({ blur, cover }) => {
+      {LAYERS.map(({ blur: base, cover }) => {
+        const blur = base * scale;
         // Hold the layer solid for most of its reach, then fade. Fading across
         // the whole band instead of the last sliver is what keeps the ramp from
         // showing four seams.

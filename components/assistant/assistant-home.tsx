@@ -366,14 +366,14 @@ export function AssistantHome({
 
           <div
             className={cx(
-              "sticky top-0 z-20 -mx-1 hidden px-1 pt-1 pb-3 xl:block",
+              "sticky top-0 z-20 -mx-1 hidden px-1 pt-1 pb-5 xl:block",
             )}
           >
             <span
               aria-hidden
               className="absolute inset-0 -z-10 bg-linear-to-b from-background-full via-background-full/75 to-transparent"
             />
-            <ProgressiveBlur side="top" className="-z-10" />
+            <ProgressiveBlur side="top" strength="strong" className="-z-10" />
             <ThreadHeader variant="inline" messages={messages} onNewThread={startNewThread} />
           </div>
         </>
@@ -440,7 +440,11 @@ export function AssistantHome({
       <div
         data-assistant-dock
         className={cx(
-          "sticky bottom-0 z-10 -mx-1 px-1 pt-6",
+          // `pt-8`, not `pt-6`: the padding IS the visible ramp, since the
+          // blur covers this box and the composer fills everything below it.
+          // A taller band is the half of "softer" that a bigger radius cannot
+          // buy — a hard blur over 24px still ends 24px up.
+          "sticky bottom-0 z-10 -mx-1 px-1 pt-8",
           "pb-[max(0.25rem,env(safe-area-inset-bottom,0px))]",
         )}
       >
@@ -448,7 +452,7 @@ export function AssistantHome({
           aria-hidden
           className="absolute inset-0 -z-10 bg-linear-to-t from-background-full via-background-full/70 to-transparent"
         />
-        <ProgressiveBlur side="bottom" className="-z-10" />
+        <ProgressiveBlur side="bottom" strength="strong" className="-z-10" />
 
         {/*
           The sign-in bar sits inside the sticky wrapper, above the box, so it

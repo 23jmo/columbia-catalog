@@ -129,9 +129,14 @@ export interface SectionDetailProps {
    */
   courseLevel?: ReactNode;
   /**
-   * The course's reviews, hoisted to sit under the description. Filled only
-   * where `courseLevel` is — a course with exactly one section, where the
-   * course and the section are the same object.
+   * The course's reviews, hoisted to sit under the description.
+   *
+   * Filled on every standalone section page — including a multi-section
+   * course, which is where a student is actually choosing between sections and
+   * therefore where this is worth the most. Left empty by the DRAWER, which is
+   * a different trade: reviews cost two reads, and the drawer's whole promise
+   * is answering a click in milliseconds. The "Full page" link is one tap away
+   * for the reader who wants them.
    */
   courseReviews?: ReactNode;
   /** Standalone page: draw the instructor-profile hero. Drawer: plain header. */
@@ -569,9 +574,13 @@ export function SectionDetail({
         Cannon's 3134 brutal" with a link needs the link to answer it before
         the reader gives up scrolling.
 
-        Empty on every other surface. The reviews are claims about the COURSE,
-        and they are only as true as this section is the whole course — which
-        is exactly the condition `page.tsx` fills this on.
+        Every standalone section page fills this, not only the single-section
+        ones. See the prop's own note and `page.tsx`: the left half is a claim
+        about the course and says so, and the right half is scoped to THIS
+        section's instructor, which is the half a student picking between six
+        sections of one course is actually reading for.
+
+        Empty in the drawer, which trades these two reads for its latency.
       */}
       {courseReviews}
 
