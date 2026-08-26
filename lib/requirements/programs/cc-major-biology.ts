@@ -65,23 +65,25 @@
  * comment on `upper-level-electives`; the rule is now `n_matching` over the
  * same enumeration with `excludeGroups: ["core-courses"]`.
  *
- * ── Coverage: eleven named courses have no row in our catalog ──────────────
+ * ── Coverage: five named courses have no row in our catalog ────────────────
  *
- * Checked against the live catalog on 2026-08-24 with `npm run dump:program
- * cc-major-biology`. All eleven are on the elective list and all eleven are
- * printed by the Bulletin exactly as they are written here, so none is a
- * transcription error — they are courses that were not offered in any of the
- * four terms our catalog covers (20243, 20251, 20263, 20271; note the hole at
- * Fall 2025 / Spring 2026). Each was probed for an alternate school qualifier
- * and none has one:
+ * Re-checked 2026-08-26. **This count shrinks as the catalog backfills, so it
+ * is a measurement with a date on it, not a fact about the Bulletin.** It read
+ * eleven on 2026-08-24 and reads five today; six of the original eleven now
+ * resolve. Anyone editing this file should re-measure rather than trust the
+ * number, and `dump-program` will NOT do it for you — these codes live in the
+ * selector's `include`, which its not-in-catalog pass does not walk.
  *
- *   BIOL UN3019, BIOL UN3560, BIOL UN3799, BIOL GU4002, BIOL GU4035,
- *   BIOL GU4075, BIOL GU4193, BIOL GU4402, BIOL GU4600, BIOL GU4777,
- *   CHEM GU4324
+ * All five are on the elective list and all five are printed by the Bulletin
+ * exactly as they are written here, so none is a transcription error — they are
+ * courses that were not offered in any term our catalog covers. Each was probed
+ * for an alternate school qualifier and none has one:
  *
- * BIOL UN3560 and BIOL UN3799 are the undergraduate numbers of BIOL GU4560 and
- * BIOL GU4799, both of which DO resolve; the Bulletin prints the pair joined by
- * "or" and only the GU half has appeared in a covered term.
+ *   BIOL UN3560, BIOL GU4002, BIOL GU4035, BIOL GU4193, BIOL GU4600
+ *
+ * BIOL UN3560 is the undergraduate number of BIOL GU4560, which DOES resolve;
+ * the Bulletin prints the pair joined by "or" and only the GU half has appeared
+ * in a covered term.
  *
  * They are kept rather than dropped. A named course that never matches costs a
  * student nothing; silently removing an option the Bulletin offers tells a
@@ -190,7 +192,7 @@ export const CC_MAJOR_BIOLOGY: Program = {
        * with "Any course not listed below must be approved by a biology
        * adviser to count toward the major", so the set genuinely moves.
        */
-      note: "Two additional 3000- or 4000-level lecture courses of at least 3 points each, on top of the two core courses. BIOL UN3500 cannot be used. Anything not on this list needs a biology adviser's approval. SCNC, HPSC and BIOT courses never count, and neither do Barnard courses. Eleven of the courses named below are not in our catalog, so they will not match automatically — see the note at the top of this file.",
+      note: "Two additional 3000- or 4000-level lecture courses of at least 3 points each, on top of the two core courses. BIOL UN3500 cannot be used. Anything not on this list needs a biology adviser's approval. SCNC, HPSC and BIOT courses never count, and neither do Barnard courses. Five of the courses named below are not in our catalog, so they will not match automatically — see the note at the top of this file.",
       rule: {
         kind: "n_matching",
         n: 2,
