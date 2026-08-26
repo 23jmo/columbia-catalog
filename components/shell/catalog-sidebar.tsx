@@ -249,11 +249,20 @@ export function CatalogSidebar({
                 onNavigate={onNavigate}
               />
               {/*
-                Threads hang off Home the way files hang off a folder. Hidden
-                when the rail is collapsed — five truncated titles at 60px
-                wide are not a list, they are noise.
+                Threads hang off Chat the way files hang off a folder.
+
+                They hung off Home until now, and that was correct exactly as
+                long as Home WAS the chat — the box lived at `/` and the
+                threads were that page's history. Home is the recommendations
+                now, so the list was filed under a page it has nothing to do
+                with: clicking a thread from under "Recommendations" navigated
+                to `/chat`, and the rail was the only thing still claiming
+                otherwise.
+
+                Hidden when the rail is collapsed — five truncated titles at
+                60px wide are not a list, they are noise.
               */}
-              {item.key === "home" && !collapsed ? (
+              {item.key === "chat" && !collapsed ? (
                 <Suspense fallback={null}>
                   <ChatThreadList onNavigate={onNavigate} />
                 </Suspense>

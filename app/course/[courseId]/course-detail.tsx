@@ -17,7 +17,7 @@ import { CourseHeroCard } from "@/components/course/course-hero-card";
 import { guessCampusZone, meetingLines, prettyTitle } from "@/components/course/format";
 import { CourseSubjectIcon } from "@/components/course/subject-icon";
 import type { CourseDetailData } from "@/components/course/load-course-detail";
-import { CourseLevelPanels } from "@/components/course/course-level-panels";
+import { CourseLevelPanels, CourseReviewsPanel } from "@/components/course/course-level-panels";
 import { ExpandableText } from "@/components/course/expandable-text";
 import { EmptyNote, LanePlaceholder } from "@/components/course/panel";
 import { ReferenceBlock } from "@/components/course/reference-block";
@@ -393,6 +393,24 @@ export async function CourseDetail({
       </ReferenceBlock>
 
       {/*
+        Reviews, before the section list rather than after the week grid.
+
+        The section list is still the centrepiece for a reader who has decided
+        to take this course and is choosing between four of them. But this page
+        is now also the app's front door — `/course/` is open to signed-out
+        visitors, and a link to it gets pasted into a group chat or a reddit
+        reply to answer one question: is this any good. That answer used to sit
+        two thousand pixels down, under the description, the sections and the
+        week grid, which is another way of saying nobody who came for it ever
+        found it.
+
+        Above the description was the other candidate and it goes too far: a
+        reader who does not already know what the course IS cannot use a rating
+        of it. Description, then verdict, then the sections.
+      */}
+      <CourseReviewsPanel reputation={reputation} variant="section" />
+
+      {/*
         The centrepiece. A course page exists to answer "which of these do I
         take", so the section list gets the count badge and everything below it
         is genuinely reference.
@@ -426,10 +444,16 @@ export async function CourseDetail({
         </ReferenceBlock>
       ) : null}
 
-      {/* Reviews, workload, neighbours, offering history. */}
+      {/* Workload, neighbours, offering history — reviews were hoisted above
+          the section list, so this bundle must not draw them twice. */}
       {/* `variant="section"` so they wear the same hairline heading as the
           blocks above — the whole point of sharing the component. */}
-      <CourseLevelPanels data={data} reputation={reputation} variant="section" />
+      <CourseLevelPanels
+        data={data}
+        reputation={reputation}
+        variant="section"
+        includeReviews={false}
+      />
     </article>
   );
 }

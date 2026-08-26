@@ -429,43 +429,79 @@ export const TOOLS: ToolDefinition[] = [
   // --- Authenticated: the student's own data -------------------------------
   {
     name: "get_my_schedule",
-    title: "Get the student's saved plans",
+    title: "Get the student's classes for a term",
     description:
-      "The signed-in student's schedule plans with their sections resolved. Read-only.",
-    scopes: ["schedule:read"],
+      "The signed-in student's classes for a term — their saved list, with every section " +
+      "resolved and any time overlaps between them already computed. This is what to read " +
+      "for \"what am I taking\", \"when do my classes meet\", \"where do I have to be on " +
+      "Tuesday\" and anything else about their week. Read-only.",
+    /*
+     * ── This reads the saved list, and used to read a separate plan store ───
+     *
+     * There were two answers to "what am I taking": a shortlist you built by
+     * saving, and a plan you built by adding saved classes to a schedule. The
+     * second was a copy of the first with an extra step in front of it, and
+     * the step was the problem — a student who saved six classes and never
+     * pressed "Add to schedule" had an empty schedule, so the agent answering
+     * "when do my classes meet" told them, truthfully and uselessly, that they
+     * had no classes.
+     *
+     * One list. Saving IS planning; the seam between them was ours, not the
+     * student's, and it only ever produced disagreement between two screens
+     * about the same six courses.
+     *
+     * The scope moved with the data. It was `schedule:read`, and an
+     * authorization statement has to name what is actually read — a token
+     * granted only schedule access must not come back with the shortlist.
+     */
+    scopes: ["bookmarks:rw"],
     inputSchema: {
-      planId: z.string().optional().describe("Omit to list every plan for the term."),
-      termCode: z.string().optional(),
+      termCode: z.string().optional().describe("e.g. 20263. Omit for every term."),
     },
     async handler(args, { deps, auth }) {
-      const userId = auth!.extra.userId;
-      const planId = args.planId as string | undefined;
+      const entries = await deps.bookmarks.listBookmarks(auth!.extra.userId, {
+        termCode: args.termCode as TermCode | undefined,
+      });
+      if (entries.length === 0) {
+        return ok({
+          count: 0,
+          sections: [],
+          conflicts: [],
+          note: "This student has not saved any classes yet.",
+        });
+      }
 
-      const plans = planId
-        ? [await deps.plans.getPlan(userId, planId)].filter((plan) => plan !== null)
-        : await deps.plans.listPlans(userId, args.termCode as SearchFilters["termCode"]);
-
-      if (planId && plans.length === 0) return fail(`No plan ${planId} for this account.`);
-
-      const allSectionIds = [...new Set(plans.flatMap((plan) => plan.sectionIds))];
-      const sections = await deps.catalog.getSections(allSectionIds);
+      const sections = await deps.catalog.getSections(entries.map((entry) => entry.sectionId));
       const byId = new Map(sections.map((section) => [section.sectionId, section]));
 
+      /*
+       * Conflicts come back with the list rather than waiting to be asked for.
+       * A shortlist is allowed to overlap — that is what makes it a shortlist —
+       * so the overlaps are reported as facts about the set, never as errors,
+       * and the model is told below which of them it can actually stand on.
+       */
+      const placeable = sections.filter((section) => (section.meetings?.length ?? 0) > 0);
+      const conflicts = deps.schedule.checkConflicts(placeable, []);
+
       return ok({
-        plans: plans.map((plan) => ({
-          planId: plan.planId,
-          name: plan.name,
-          termCode: plan.termCode,
-          isPrimary: plan.isPrimary,
-          customBlocks: plan.customBlocks,
-          sections: plan.sectionIds
-            .map((id) => byId.get(id))
-            .filter((section): section is Section => Boolean(section))
-            .map(serializeSection),
-          // A section id in the plan that we cannot resolve is surfaced, not
-          // dropped: it usually means the section was withdrawn.
-          unresolvedSectionIds: plan.sectionIds.filter((id) => !byId.has(id)),
-        })),
+        count: entries.length,
+        sections: entries.flatMap((entry) => {
+          const section = byId.get(entry.sectionId);
+          // A saved row we cannot resolve is surfaced below, not returned
+          // hollow — it usually means the section was withdrawn.
+          if (!section) return [];
+          return [{ savedAt: entry.savedAt, folderIds: entry.folderIds, ...serializeSection(section) }];
+        }),
+        conflicts,
+        hardConflictCount: conflicts.filter((conflict) => conflict.severity === "hard").length,
+        // Named explicitly: "no conflicts" across sections we cannot place is
+        // not the same claim as "no conflicts".
+        sectionsWithUnknownMeetingTimes: sections
+          .filter((section) => (section.meetings?.length ?? 0) === 0)
+          .map((section) => section.sectionId),
+        unresolvedSectionIds: entries
+          .map((entry) => entry.sectionId)
+          .filter((id) => !byId.has(id)),
       });
     },
   },

@@ -19,6 +19,33 @@ const CARRIED_PARAMS = ["auth_error"] as const;
  * `/api/` authorizes itself per route; a HTML-only gate must not sit in front
  * of the crawler or the agent.
  *
+ * ── `/course/` and `/instructor/` are open, and the rest is not ────────────
+ *
+ * These two are the app's shareable unit. `app/course/[courseId]/page.tsx`
+ * says so in its own words — this URL "gets pasted into group chats during
+ * registration week" — and it builds OpenGraph tags for exactly that. Sending
+ * the person who clicks it into a five-screen wizard about their degree
+ * wastes the link and, worse, teaches the person who posted it not to post
+ * another one. Somebody answering "is Cannon's 3134 brutal" with a link needs
+ * that link to answer the question, not to ask for an account.
+ *
+ * Nothing personal rides on either page. The bookmark store already treats a
+ * missing session as `signed_out` rather than an error, on the stated grounds
+ * that "not signed in is the ordinary case", and the save button already
+ * offers `showSignInToast()` instead of failing. Conflict checks come from
+ * `loadPrimaryPlanSnapshot`, which returns null with no plan and therefore
+ * claims no clashes. So a guest gets the catalog, the seats and the reviews —
+ * every fact that is true about the course regardless of who is reading.
+ *
+ * The feed stays behind the wall on purpose, and so do `/saved`, `/profile`
+ * and `/schedule`. Those are answers about a specific student, they are what
+ * the wizard is FOR, and giving them away would leave nothing to sign in for.
+ * Search stays gated too — it is the catalog, and the nav no longer offers it.
+ *
+ * The trade is deliberate: reach over conversion rate. It is the right trade
+ * for cold links arriving from Reddit at 1am during registration week, and it
+ * would be the wrong one if traffic arrived pre-sold from an advisor.
+ *
  * `/.well-known/` is here because the gate cannot see the rewrite. `vercel.ts`
  * maps those paths onto `/api/mcp/oauth/...`, but rewrites resolve after this
  * runs, so the path we match is still `/.well-known/...` and the `/api/` clause
@@ -32,6 +59,8 @@ export function isGuestAllowedPath(pathname: string): boolean {
     pathname === "/onboarding" ||
     pathname.startsWith("/onboarding/") ||
     pathname.startsWith("/auth/") ||
+    pathname.startsWith("/course/") ||
+    pathname.startsWith("/instructor/") ||
     pathname.startsWith("/api/") ||
     pathname.startsWith("/.well-known/")
   );

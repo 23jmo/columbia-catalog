@@ -302,7 +302,25 @@ function FeedGateOverlay({
   signInError?: string | null;
 }) {
   return (
-    <div className="relative flex w-full min-w-0 max-w-md flex-col items-center gap-4">
+    /*
+     * As wide as the cards it sits between, and `max-w-md` is why it was not.
+     *
+     * The panel is in document flow (see the note above `-mt-6`), so it pushes
+     * the rest of the feed down by its own height — about 220px. Capped at
+     * 448px inside a 720px column, it only covered the middle of the band it
+     * created, and the 136px of empty background down each flank read as a
+     * hole punched between two cards.
+     *
+     * A phone never showed it: below 448px the cap is not reached and the
+     * panel already spanned the column. The bug lived entirely at the widths
+     * `max-w-[760px]` on the feed step was added for.
+     *
+     * The panel's own internals scale — the text column is held off the
+     * ornament with `pr-[38%]` rather than a fixed inset — so matching the
+     * cards costs nothing and makes the gate read as one more full-width card
+     * in the stack, which is what it is.
+     */
+    <div className="relative flex w-full min-w-0 flex-col items-center gap-4">
       <FeedSignInPanel
         onSignIn={() => void onSignIn()}
         disabled={signInDisabled}
