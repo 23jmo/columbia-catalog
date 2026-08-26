@@ -69,8 +69,13 @@ export function FeedCardView({ card, className }: { card: FeedCardData; classNam
       className={cx(
         // `min-w-0` keeps a phone column from expanding to the card's
         // intrinsic min-content (week strip + seat chip + corner icons).
+        // The step up at `sm` is the whole "make it bigger" pass in one place:
+        // a phone card is padding-starved and stays at 16px, and a 720px
+        // column on a laptop has room the card was not spending. Everything
+        // else that grows below grows at the same breakpoint, so the card
+        // never lands in a half-scaled state.
         "flex min-w-0 w-full flex-col gap-3 rounded-2xl border border-border-table",
-        "bg-background-primary-default p-4",
+        "bg-background-primary-default p-4 sm:gap-3.5 sm:p-5",
         "transition-colors duration-150 ease-out motion-reduce:transition-none",
         "hover:border-border-button-hover",
         className,
@@ -88,7 +93,7 @@ export function FeedCardView({ card, className }: { card: FeedCardData; classNam
             classes on 3 versus 2.5 points. The term stays because the feed
             spans two of them.
           */}
-          <p className="truncate text-caption-1-medium tabular-nums text-text-secondary">
+          <p className="truncate text-caption-1-medium tabular-nums text-text-secondary sm:text-body-2-medium">
             {card.code} · Sec {section.sectionCode} · {section.termLabel}
           </p>
 
@@ -122,7 +127,7 @@ export function FeedCardView({ card, className }: { card: FeedCardData; classNam
             60-character registrar title cannot push the seat meter off the
             first screen. The full name is on the course page this links to.
           */}
-          <h3 className="min-w-0 text-title-3-semibold -tracking-[0.01em] text-text-primary">
+          <h3 className="min-w-0 text-title-3-semibold -tracking-[0.01em] text-text-primary sm:text-title-2-semibold">
             <Link
               href={sectionHref}
               className={cx(
@@ -166,13 +171,13 @@ export function FeedCardView({ card, className }: { card: FeedCardData; classNam
             title="Open in Vergil"
             aria-label={`Open ${card.code} section ${section.sectionCode}, call number ${section.callNumber}, in Vergil`}
             className={cx(
-              "flex size-7 shrink-0 items-center justify-center rounded-lg",
+              "flex size-7 shrink-0 items-center justify-center rounded-lg sm:size-8",
               "text-foreground-icon-tertiary transition-colors duration-150",
               "hover:bg-background-primary-hover hover:text-text-primary",
               "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
             )}
           >
-            <RiArrowRightUpLine aria-hidden className="size-4" />
+            <RiArrowRightUpLine aria-hidden className="size-4 sm:size-[1.125rem]" />
           </a>
         </div>
       </header>
@@ -236,7 +241,9 @@ function teachers(section: FeedSectionView): string[] {
 function TimeLine({ section }: { section: FeedSectionView }) {
   if (section.timeKind === "tba") {
     return (
-      <p className="text-body-medium text-text-secondary">Meeting time not published</p>
+      <p className="text-body-medium text-text-secondary sm:text-headline-medium">
+        Meeting time not published
+      </p>
     );
   }
 
@@ -244,7 +251,9 @@ function TimeLine({ section }: { section: FeedSectionView }) {
   const primary = lines[0];
   if (!primary) {
     return (
-      <p className="text-body-medium text-text-secondary">Meeting time not published</p>
+      <p className="text-body-medium text-text-secondary sm:text-headline-medium">
+        Meeting time not published
+      </p>
     );
   }
 
@@ -256,7 +265,7 @@ function TimeLine({ section }: { section: FeedSectionView }) {
       <WeekStrip days={primary.days} />
       <p
         className={cx(
-          "min-w-0 truncate text-headline-medium tabular-nums",
+          "min-w-0 truncate text-headline-medium tabular-nums sm:text-title-3-medium",
           estimated ? "text-status-yellow-text" : "text-text-primary",
         )}
       >
@@ -283,13 +292,15 @@ function Teachers({ section }: { section: FeedSectionView }) {
 
   if (!primary) {
     return (
-      <p className="text-body-medium text-text-secondary">Instructor not yet announced</p>
+      <p className="text-body-medium text-text-secondary sm:text-headline-medium">
+        Instructor not yet announced
+      </p>
     );
   }
 
   if (!isLinkableInstructor(primary)) {
     return (
-      <p className="truncate text-body-medium text-text-secondary">
+      <p className="truncate text-body-medium text-text-secondary sm:text-headline-medium">
         <InstructorLinks names={names} max={2} fallback="Instructor not yet announced" />
       </p>
     );
@@ -304,7 +315,7 @@ function Teachers({ section }: { section: FeedSectionView }) {
         className="-ml-0.5 min-w-0"
       />
       {rest.length > 0 ? (
-        <span className="min-w-0 truncate text-caption-1-medium text-text-secondary">
+        <span className="min-w-0 truncate text-caption-1-medium text-text-secondary sm:text-body-2-medium">
           {rest.length === 1 ? (
             <>
               · <InstructorLink name={rest[0]!} />
@@ -343,7 +354,7 @@ function Footnote({
   if (!clashes && !unverified) return null;
 
   return (
-    <p className="truncate text-caption-1-medium">
+    <p className="truncate text-caption-1-medium sm:text-body-2-medium">
       {clashes ? <span className="text-status-rose-text">Clashes with your plan</span> : null}
       {clashes && unverified ? " · " : null}
       {unverified ? <span className="text-text-secondary">Prerequisites unverified</span> : null}
@@ -409,10 +420,10 @@ function Ratings({ reputation }: { reputation: ReputationSummary | null }) {
   if (score == null && effort == null) return null;
 
   return (
-    <div className="flex min-w-0 items-center gap-1.5 text-caption-1-medium">
+    <div className="flex min-w-0 items-center gap-1.5 text-caption-1-medium sm:gap-2 sm:text-body-2-medium">
       {score != null ? (
         <>
-          <RiStarFill aria-hidden className="size-3.5 shrink-0 text-status-yellow-text" />
+          <RiStarFill aria-hidden className="size-3.5 shrink-0 text-status-yellow-text sm:size-4" />
           {/*
             Primary, tabular, and the same weight as the title. This card's own
             rule: grey is for the eyebrow, and the facts you act on are the
@@ -522,19 +533,19 @@ export function FeedCardWhy({ reasons }: { reasons: readonly RecommendationReaso
   const shown = rows.slice(0, 3);
 
   return (
-    <ul className="flex min-w-0 flex-col gap-1">
+    <ul className="flex min-w-0 flex-col gap-1 sm:gap-1.5">
       {shown.map((row) => (
         <li key={row.key} className="flex min-w-0 items-start gap-1.5">
           <row.icon
             aria-hidden
-            className={cx("mt-px size-3.5 shrink-0", row.tone)}
+            className={cx("mt-px size-3.5 shrink-0 sm:size-4", row.tone)}
           />
           {/*
             The claim in primary, the framing in grey. Same rule the rest of
             this card follows: the reader skips grey, so the noun they are
             meant to act on must not be grey.
           */}
-          <p className="min-w-0 text-caption-1-medium text-text-secondary">
+          <p className="min-w-0 text-caption-1-medium text-text-secondary sm:text-body-2-medium">
             {row.lead}
             {row.subject ? (
               <span className="text-text-primary">{row.subject}</span>

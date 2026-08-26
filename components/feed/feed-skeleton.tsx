@@ -94,29 +94,32 @@ function FeedCardSkeleton({
   return (
     <article
       className={cx(
+        // Every `sm:` step here mirrors one in `FeedCardView`. The live card
+        // grows at 640px; if this did not, the page would visibly shrink at
+        // the moment the feed landed on every laptop that loads it.
         "flex h-full w-full flex-col gap-3 rounded-2xl border border-border-table",
-        "bg-background-primary-default p-4",
+        "bg-background-primary-default p-4 sm:gap-3.5 sm:p-5",
       )}
     >
       <header className="flex min-w-0 items-start gap-2">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <Bar className="h-4 w-40" />
+          <Bar className="h-4 w-40 sm:h-4.5" />
           <Bar className={cx("h-6.5", shape.title)} />
-          <Bar className="h-4 w-36" />
+          <Bar className="h-4 w-36 sm:h-4.5" />
         </div>
-        {/* Bookmark + Vergil sit in the corner as two 28px icons. */}
+        {/* Bookmark + Vergil sit in the corner: 28px, 32px from `sm`. */}
         <div className="flex shrink-0 items-center gap-0.5">
-          <Bar className="size-7 rounded-lg" />
-          <Bar className="size-7 rounded-lg" />
+          <Bar className="size-7 rounded-lg sm:size-8" />
+          <Bar className="size-7 rounded-lg sm:size-8" />
         </div>
       </header>
 
       {/* One icon + one line of text per reason, matching `Why`. */}
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-1.5 sm:gap-2">
         {shape.reasons.map((width, index) => (
           <div key={index} className="flex items-center gap-1.5">
             <Bar className="size-4 shrink-0 rounded-sm" />
-            <Bar className={cx("h-4", width)} />
+            <Bar className={cx("h-4 sm:h-4.5", width)} />
           </div>
         ))}
       </div>
@@ -125,12 +128,12 @@ function FeedCardSkeleton({
         {Array.from({ length: 5 }, (_, index) => (
           <Bar key={index} className="size-7 rounded-md" />
         ))}
-        <Bar className={cx("h-5", shape.time)} />
+        <Bar className={cx("h-5 sm:h-6", shape.time)} />
       </div>
 
       <div className="flex items-center gap-2">
         <Bar className="size-8 shrink-0 rounded-full" />
-        <Bar className={cx("h-4", shape.instructor)} />
+        <Bar className={cx("h-4 sm:h-4.5", shape.instructor)} />
       </div>
 
       {/* EnrollmentChip fill is `h-7`. `mt-auto` matches the live card. */}

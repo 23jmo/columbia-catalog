@@ -19,11 +19,10 @@ import {
 import { CURRENT_TERM } from "@/lib/constants";
 import { SYNTHETIC_FOLDER_IDS } from "@/lib/bookmarks/folder-art";
 import type { TermCode } from "@/lib/types";
-import { cx } from "@/utils/cx";
 
 import { DeleteFolderDialog } from "./delete-folder-dialog";
 import { SavedEmpty, SavedSignedOut } from "./saved-states";
-import { SavedSectionRow } from "./saved-section-row";
+import { SavedCard } from "./saved-card";
 import { SelectBar } from "./select-bar";
 import { TermFilter } from "./term-filter";
 
@@ -174,37 +173,46 @@ export function SavedFolderView({ folderId }: SavedFolderViewProps) {
       ) : isResolving && groups.length === 0 ? (
         <p className="text-body-regular text-text-tertiary">Loading your saved classes…</p>
       ) : (
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-4">
           {groups.map((group) => (
-            <section key={group.course.courseId} className="flex flex-col gap-1">
-              <div className="flex flex-wrap items-baseline gap-x-2 px-3">
-                <Link
-                  href={`/course/${group.course.courseId}`}
-                  className="text-body-semibold tabular-nums text-text-primary outline-none hover:text-accent-600 focus-visible:ring-2 focus-visible:ring-border-focus-ring"
-                >
-                  {group.course.subjectCode}
-                  {group.course.number}
-                </Link>
-                <span className="min-w-0 truncate text-caption-1-regular text-text-secondary">
-                  {group.course.title}
-                </span>
-              </div>
+            <section key={group.course.courseId} className="flex flex-col gap-2">
+              {/*
+                Only when a course has more than one section saved. On the
+                common case it was a line printing the code and title directly
+                above a card whose first two lines are the code and the title.
+              */}
+              {group.sections.length > 1 ? (
+                <div className="flex flex-wrap items-baseline gap-x-2 px-1">
+                  <Link
+                    href={`/course/${group.course.courseId}`}
+                    className="text-body-semibold tabular-nums text-text-primary outline-none hover:text-accent-600 focus-visible:ring-2 focus-visible:ring-border-focus-ring"
+                  >
+                    {group.course.subjectCode}
+                    {group.course.number}
+                  </Link>
+                  <span className="min-w-0 truncate text-caption-1-medium text-text-secondary">
+                    {group.sections.length} sections saved
+                  </span>
+                </div>
+              ) : null}
 
-              <ul className={cx("flex flex-col", isSelecting ? "gap-1" : "gap-0")}>
+              <ul role="list" className="flex flex-col gap-4">
                 {group.sections.map((section) => (
-                  <SavedSectionRow
-                    key={section.sectionId}
-                    section={section}
-                    courseLabel={`${group.course.subjectCode}${group.course.number}`}
-                    selection={
-                      isSelecting
-                        ? {
-                            isSelected: selected.has(section.sectionId),
-                            onChange: (next) => toggleSelected(section.sectionId, next),
-                          }
-                        : undefined
-                    }
-                  />
+                  <li key={section.sectionId} className="flex min-w-0">
+                    <SavedCard
+                      section={section}
+                      course={group.course}
+                      className="w-full"
+                      selection={
+                        isSelecting
+                          ? {
+                              isSelected: selected.has(section.sectionId),
+                              onChange: (next) => toggleSelected(section.sectionId, next),
+                            }
+                          : undefined
+                      }
+                    />
+                  </li>
                 ))}
               </ul>
             </section>

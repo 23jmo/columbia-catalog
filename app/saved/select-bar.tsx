@@ -12,10 +12,8 @@ import {
   DropdownPopover,
   DropdownTrigger,
 } from "@/components/base/dropdown/dropdown";
-import { usePlans } from "@/hooks/use-plans";
 import { folderGradientStyle } from "@/lib/bookmarks/folder-art";
 import { fileMany, removeMany, unfileMany, undoRemoval } from "@/lib/bookmarks/store";
-import { PlanWriteDeniedError, planStore } from "@/lib/schedule/plans";
 import { toast } from "@/lib/toast/store";
 import type { FolderRecord } from "@/lib/db/bookmarks";
 import type { TermCode } from "@/lib/types";
@@ -66,7 +64,6 @@ export function SelectBar({
   className,
 }: SelectBarProps) {
   const [isFiling, setIsFiling] = useState(false);
-  const plans = usePlans(termCode);
   const count = selected.length;
 
   if (count === 0) return null;
@@ -125,47 +122,19 @@ export function SelectBar({
     }
   };
 
-  /**
-   * Everything selected onto the term's primary plan.
+  /*
+   * ── "Add to schedule" was here, and it is gone ─────────────────────────
    *
-   * Additive and idempotent: `addSection` on a section already in the plan is
-   * a no-op, so "add 6" on a list where 2 are already scheduled adds 4 and
-   * says so, rather than refusing or duplicating.
+   * It copied the selected sections onto the term's primary plan, creating one
+   * if there wasn't one. The copy was the problem: it meant a class could be
+   * saved and not scheduled, so there were two answers to "what am I taking"
+   * and the app kept picking the one the student had not filled in. A student
+   * who saved six classes and never pressed this button had an empty schedule.
+   *
+   * The saved list IS the schedule now — `get_my_schedule` reads it, and
+   * `saved-gallery.tsx` renders it — so this button's only remaining job was
+   * to move six rows from a list into a copy of itself.
    */
-  const addToPlan = () => {
-    try {
-      const primary = plans.find((plan) => plan.isPrimary) ?? plans[0] ?? null;
-      // First use in a term has no plan yet — same "no dialog before the
-      // click" rule the single-section button follows.
-      const plan = primary ?? planStore.createPlan({ name: "My schedule", termCode });
-
-      const before = new Set(plan.sectionIds);
-      const fresh = selected.filter((sectionId) => !before.has(sectionId));
-      for (const sectionId of fresh) planStore.addSection(plan.planId, sectionId);
-
-      onDone();
-      toast.success({
-        title:
-          fresh.length === 0
-            ? "Already on your schedule"
-            : `Added ${fresh.length} ${fresh.length === 1 ? "class" : "classes"} to your schedule`,
-        // Conflicts are marked on the canvas, not blocked here (spec §11) —
-        // deciding somebody may not consider two overlapping classes is not a
-        // call this product makes.
-        description:
-          fresh.length > 0 ? "Any overlaps are flagged on the schedule." : undefined,
-        dedupeKey: "bookmark-bulk-plan",
-      });
-    } catch (cause) {
-      if (cause instanceof PlanWriteDeniedError) {
-        toast.error({
-          title: "Couldn't update your schedule",
-          description: cause.message,
-          dedupeKey: "plan-denied:bulk",
-        });
-      } else throw cause;
-    }
-  };
 
   return (
     <div
@@ -229,10 +198,6 @@ export function SelectBar({
           ) : null}
         </DropdownPopover>
       </Dropdown>
-
-      <Button size="small" variant="secondary" leadingIcon={RiCalendarLine} onClick={addToPlan}>
-        Add to schedule
-      </Button>
 
       <Button
         size="small"

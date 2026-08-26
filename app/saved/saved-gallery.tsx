@@ -2,94 +2,138 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { RiCheckboxMultipleLine } from "@remixicon/react";
 
+import { Button } from "@/components/base/buttons/button";
 import { useBookmarks } from "@/hooks/use-bookmarks";
-import { SYNTHETIC_FOLDER_IDS } from "@/lib/bookmarks/folder-art";
+import { useSavedCatalog } from "@/hooks/use-saved-catalog";
+import { folderGradientStyle } from "@/lib/bookmarks/folder-art";
 import {
   ALL_FOLDER,
   UNCATEGORIZED_FOLDER,
   folderCounts,
+  groupSavedByCourse,
+  savedSectionIds,
   savedTermCodes,
 } from "@/lib/bookmarks/grouping";
 import { CURRENT_TERM } from "@/lib/constants";
 import type { TermCode } from "@/lib/types";
 import { cx } from "@/utils/cx";
 
-import { FolderCover } from "./folder-cover";
+import { SavedCard } from "./saved-card";
 import { SavedEmpty, SavedSignedOut } from "./saved-states";
+import { SelectBar } from "./select-bar";
 import { TermFilter } from "./term-filter";
 
 /**
- * `/saved` — the gallery of folders.
+ * `/saved` — the classes, with the folders demoted to a strip.
  *
- * ── Gallery first, list second ────────────────────────────────────────────
+ * ── This page used to open on folders, and that was the wrong door ────────
  *
- * The landing screen is folders, not classes. Folders are the thing a student
- * made deliberately, and the covers make them recognisable at a glance in a
- * way a list of names never is — you find "the one with the green cover"
- * faster than you read six names. "All saved" leads it, so somebody with no
- * folders at all is one click from their list rather than staring at an
- * organising scheme they never asked for.
+ * The landing screen was a gallery of folder covers, on the reasoning that a
+ * folder is something the student made deliberately and a cover is faster to
+ * recognise than a name. Both halves of that are true and neither is the
+ * point: almost nobody has folders. A student who has saved six classes and
+ * made no folders arrived at a screen containing exactly one tile — "All
+ * saved" — and had to click it to see the six classes they came for. The
+ * gallery was an organising scheme standing in front of the thing it
+ * organises.
  *
- * ── Counts are term-scoped; the delete warning is not ─────────────────────
+ * So the classes lead now, in the same card the recommendations use, and the
+ * folders are a strip above them. Somebody who files things still has one
+ * click to any folder; somebody who does not never sees an empty filing
+ * cabinet. `/saved/[folderId]` is unchanged and still renders one folder in
+ * full.
  *
- * The number on a card answers "what's in here for the term I'm registering
- * for", which is the question this screen exists to answer. The count in the
- * delete dialog deliberately is not term-scoped — see `DeleteFolderDialog`.
+ * ── Same card as `/`, deliberately ────────────────────────────────────────
  *
- * ── Empty folders still show ──────────────────────────────────────────────
+ * See `saved-card.tsx`. A course you saw on the feed and saved is the same
+ * object here, and it should not have to be re-learned when it moves.
  *
- * Unlike the schedule dropdown, which omits them. A folder you made and have
- * not filled is still a thing you made, and the place you go to fill it is
- * this page. Hiding it would make creating a folder look like it failed.
+ * ── Counts are term-scoped ────────────────────────────────────────────────
+ *
+ * The number on a folder chip answers "what's in here for the term I'm
+ * registering for", which is the question this screen exists to answer. The
+ * count in the delete dialog deliberately is not — see `DeleteFolderDialog`.
  */
 
 export function SavedGallery() {
   const snapshot = useBookmarks();
   const [termFilter, setTermFilter] = useState<TermCode | null>(CURRENT_TERM);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [isSelecting, setIsSelecting] = useState(false);
 
   const terms = useMemo(() => savedTermCodes(snapshot), [snapshot]);
+  // A term filter pointing at a term with nothing in it strands the reader on
+  // an empty page with no obvious way back, so it falls back to everything.
   const term = termFilter && terms.includes(termFilter) ? termFilter : null;
   const counts = useMemo(() => folderCounts(snapshot, term ?? undefined), [snapshot, term]);
+
+  const sectionIds = useMemo(
+    () => savedSectionIds(snapshot, { termCode: term ?? undefined, folder: ALL_FOLDER }),
+    [snapshot, term],
+  );
+  const { sections, courses, isResolving } = useSavedCatalog(sectionIds);
+  const groups = useMemo(
+    () =>
+      groupSavedByCourse(sectionIds, sections, [...courses.values()], snapshot.savedAtBySection),
+    [sectionIds, sections, courses, snapshot.savedAtBySection],
+  );
 
   if (snapshot.status === "signed_out") return <SavedSignedOut />;
 
   const hasNothing = snapshot.saved.size === 0 && snapshot.folders.length === 0;
 
+  const toggleSelected = (sectionId: string, isSelected: boolean) => {
+    const next = new Set(selected);
+    if (isSelected) next.add(sectionId);
+    else next.delete(sectionId);
+    setSelected(next);
+  };
+
+  const leaveSelectMode = () => {
+    setSelected(new Set());
+    setIsSelecting(false);
+  };
+
   return (
     <div className="flex flex-col gap-5">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-title-2-semibold text-text-primary">Saved classes</h1>
-          <p className="text-caption-1-regular text-text-tertiary">
+          <h1 className="text-title-2-semibold text-text-primary sm:text-title-1-semibold">
+            Saved classes
+          </h1>
+          <p className="text-caption-1-regular text-text-tertiary sm:text-body-regular">
             A shortlist, not a schedule. Star anything you might take.
           </p>
         </div>
-        <TermFilter terms={terms} value={term} onChange={setTermFilter} />
+        <div className="flex shrink-0 items-center gap-1.5">
+          {sectionIds.length > 0 ? (
+            <Button
+              size="small"
+              variant={isSelecting ? "primary" : "ghost"}
+              leadingIcon={RiCheckboxMultipleLine}
+              onClick={() => (isSelecting ? leaveSelectMode() : setIsSelecting(true))}
+            >
+              {isSelecting ? "Cancel" : "Select"}
+            </Button>
+          ) : null}
+          <TermFilter terms={terms} value={term} onChange={setTermFilter} />
+        </div>
       </header>
 
-      {hasNothing ? (
-        <SavedEmpty scope={ALL_FOLDER} />
-      ) : (
-        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          <FolderCard
-            href={`/saved/${ALL_FOLDER}`}
-            artId={SYNTHETIC_FOLDER_IDS.all}
-            name="All saved"
-            count={counts.all}
-          />
-          {/* Only when there is something in it. Uncategorized is a leftovers
-              pile, and an empty one is not a place anybody needs a door to. */}
-          {counts.uncategorized > 0 ? (
-            <FolderCard
-              href={`/saved/${UNCATEGORIZED_FOLDER}`}
-              artId={SYNTHETIC_FOLDER_IDS.uncategorized}
-              name="Uncategorized"
-              count={counts.uncategorized}
-            />
-          ) : null}
+      {/*
+        Folders, only when there are folders.
+
+        A strip rather than a gallery, and absent entirely for the majority who
+        have never made one — see the header comment. "All saved" is not in it:
+        this page IS all saved, so a chip leading back to itself would be a
+        dead click at the front of the row.
+      */}
+      {snapshot.folders.length > 0 || counts.uncategorized > 0 ? (
+        <ul className="-mx-1 flex flex-nowrap items-center gap-2 overflow-x-auto px-1 pb-1">
           {snapshot.folders.map((folder) => (
-            <FolderCard
+            <FolderPill
               key={folder.folderId}
               href={`/saved/${folder.folderId}`}
               artId={folder.folderId}
@@ -97,13 +141,100 @@ export function SavedGallery() {
               count={counts.byFolderId.get(folder.folderId) ?? 0}
             />
           ))}
+          {/* Uncategorized is a leftovers pile; an empty one is not a place
+              anybody needs a door to. */}
+          {counts.uncategorized > 0 ? (
+            <FolderPill
+              href={`/saved/${UNCATEGORIZED_FOLDER}`}
+              artId={UNCATEGORIZED_FOLDER}
+              name="Uncategorized"
+              count={counts.uncategorized}
+            />
+          ) : null}
         </ul>
+      ) : null}
+
+      {hasNothing || sectionIds.length === 0 ? (
+        <SavedEmpty scope={ALL_FOLDER} />
+      ) : isResolving && groups.length === 0 ? (
+        <p className="text-body-regular text-text-tertiary">Loading your saved classes…</p>
+      ) : (
+        /*
+         * One column, and the same 16px gutter the feed uses.
+         *
+         * Grouped by course, because saving is per-section but deciding is
+         * per-course: the question a shortlist answers is "which of these
+         * three sections of 4118 do I take", and a flat list sorted by code
+         * puts those three cards nowhere near each other.
+         *
+         * The course heading only appears when a course has more than one
+         * section saved. On the common case — one section, one course — it was
+         * a line printing the code and title immediately above a card whose
+         * first two lines are the code and the title.
+         */
+        <div className="flex flex-col gap-4">
+          {groups.map((group) => (
+            <section key={group.course.courseId} className="flex flex-col gap-2">
+              {group.sections.length > 1 ? (
+                <div className="flex flex-wrap items-baseline gap-x-2 px-1">
+                  <Link
+                    href={`/course/${group.course.courseId}`}
+                    className="text-body-semibold tabular-nums text-text-primary outline-none hover:text-accent-600 focus-visible:ring-2 focus-visible:ring-border-focus-ring"
+                  >
+                    {group.course.subjectCode}
+                    {group.course.number}
+                  </Link>
+                  <span className="min-w-0 truncate text-caption-1-medium text-text-secondary">
+                    {group.sections.length} sections saved
+                  </span>
+                </div>
+              ) : null}
+
+              <ul role="list" className="flex flex-col gap-4">
+                {group.sections.map((section) => (
+                  <li key={section.sectionId} className="flex min-w-0">
+                    <SavedCard
+                      section={section}
+                      course={group.course}
+                      className="w-full"
+                      selection={
+                        isSelecting
+                          ? {
+                              isSelected: selected.has(section.sectionId),
+                              onChange: (next) => toggleSelected(section.sectionId, next),
+                            }
+                          : undefined
+                      }
+                    />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
       )}
+
+      {isSelecting ? (
+        <SelectBar
+          selected={[...selected]}
+          folders={snapshot.folders}
+          currentFolder={null}
+          termCode={term ?? CURRENT_TERM}
+          onDone={leaveSelectMode}
+        />
+      ) : null}
     </div>
   );
 }
 
-function FolderCard({
+/**
+ * One folder, as a pill.
+ *
+ * The gradient square is the folder cover shrunk to 20px — the whole value of
+ * a cover is that you recognise it before you read the name, and that survives
+ * the shrink better than a 16/10 tile survives being one of twelve.
+ */
+function FolderPill({
   href,
   artId,
   name,
@@ -115,23 +246,24 @@ function FolderCard({
   count: number;
 }) {
   return (
-    <li>
+    <li className="shrink-0">
       <Link
         href={href}
         className={cx(
-          "group/card flex flex-col overflow-hidden rounded-2xl",
-          "border border-border-table bg-background-primary-default",
-          "transition-shadow duration-150 hover:shadow-dropdown",
+          "flex items-center gap-2 rounded-full border border-border-table px-2.5 py-1.5",
+          "bg-background-primary-default text-body-2-medium text-text-secondary",
+          "transition-colors duration-150",
+          "hover:bg-background-primary-hover hover:text-text-primary",
           "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
         )}
       >
-        <FolderCover folderId={artId} className="aspect-[16/10] w-full" />
-        <span className="flex min-w-0 flex-col gap-0.5 px-3 py-2.5">
-          <span className="truncate text-body-medium text-text-primary">{name}</span>
-          <span className="text-caption-2-regular tabular-nums text-text-tertiary">
-            {count} {count === 1 ? "class" : "classes"}
-          </span>
-        </span>
+        <span
+          aria-hidden
+          className="size-5 shrink-0 rounded-md ring-1 ring-inset ring-border-table"
+          style={folderGradientStyle(artId)}
+        />
+        <span className="max-w-40 truncate">{name}</span>
+        <span className="tabular-nums text-text-tertiary">{count}</span>
       </Link>
     </li>
   );

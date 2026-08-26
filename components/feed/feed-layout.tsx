@@ -53,7 +53,10 @@ export function FeedGrid({
     <ul
       role="list"
       className={cx(
-        "grid grid-cols-1 items-stretch gap-3",
+        // The gap grows with the cards. At 12px against 20px of padding the
+        // cards read as one striped block; at 16px each is its own object,
+        // which is what a list you are choosing FROM has to look like.
+        "grid grid-cols-1 items-stretch gap-3 sm:gap-4",
         className,
       )}
     >

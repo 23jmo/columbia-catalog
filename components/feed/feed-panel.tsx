@@ -3,8 +3,7 @@ import Link from "next/link";
 import type { FeedResult } from "@/lib/recommend/feed";
 import { cx } from "@/utils/cx";
 
-import { FeedCardView } from "./feed-card";
-import { FEED_CARD_SLOT, FeedGrid } from "./feed-layout";
+import { FeedDeck } from "./feed-deck";
 
 /**
  * The feed — a grid of sections, and nothing around it.
@@ -103,17 +102,17 @@ function OnboardingNudge() {
  *
  * The grid lives in `feed-layout.tsx` so the skeleton sits in identical
  * chrome. Changing it there changes both, which is the point of extracting it.
+ *
+ * ── Why the body is one line now ───────────────────────────────────────────
+ *
+ * The list became swipeable, and a swipe needs a pointer, so the rows moved
+ * into `FeedDeck`, a client island. This panel stays a server component and
+ * hands it the cards: everything above — the heading, the nudge, the empty
+ * state — is still rendered on the server and shipped as HTML, and the only
+ * JavaScript the feed costs is the part that has to react to a thumb.
  */
 function FeedGridBody({ feed }: { feed: FeedResult }) {
-  return (
-    <FeedGrid>
-      {feed.cards.map((card) => (
-        <li key={card.courseId} className={FEED_CARD_SLOT}>
-          <FeedCardView card={card} className="w-full" />
-        </li>
-      ))}
-    </FeedGrid>
-  );
+  return <FeedDeck cards={feed.cards} />;
 }
 
 /* ==========================================================================
