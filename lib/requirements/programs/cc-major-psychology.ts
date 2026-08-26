@@ -115,8 +115,9 @@
  * the "each course may fulfill only one of these requirements" constraint
  * (which is a statement about the assignment, not about any course), the
  * three-course transfer cap, the "a course must be taken for 3 or more points"
- * floor (`CourseSelector` has no points field, so it is stated in the notes
- * instead), and the overlapping-course table. The Neuroscience and Behavior
+ * floor (`CourseSelector` has no points field, so the four rows that currently
+ * fail it are excluded by name on `eleven-courses` instead — see the comment
+ * there), and the overlapping-course table. The Neuroscience and Behavior
  * major is a separate program and is not encoded here.
  *
  * ALSO NOT ENCODED, because it does not exist: a Psychology minor. The
@@ -251,7 +252,7 @@ export const CC_MAJOR_PSYCHOLOGY: Program = {
        * courses that satisfied the distribution.
        */
       label: "Eleven courses total",
-      note: "Eleven courses of 3+ points each, including everything above; once the named requirements are met, the rest are electives. Approved cognate courses outside the PSYC subject also count toward the eleven and are not matched here, so a statistics course taken as STAT will read one short. The 3-point floor is not checked.",
+      note: "Eleven courses of 3+ points each, including everything above; once the named requirements are met, the rest are electives. Approved cognate courses outside the PSYC subject also count toward the eleven and are not matched here, so a statistics course taken as STAT will read one short. The 3-point floor is not checked as a rule: the four 0-point companion lab sections that exist today are excluded by name, so if the department adds another one it will count here until we notice.",
       rule: {
         kind: "n_matching",
         n: 11,
@@ -262,8 +263,35 @@ export const CC_MAJOR_PSYCHOLOGY: Program = {
          * PSYC 104 toward an undergraduate major that takes none of them.
          * Barnard's PSYC BC numbering falls inside 1000–4999, as does the whole
          * GU 4000 band, so nothing a student can legitimately count is lost.
+         *
+         * ── The 0-point sections, excluded 2026-08-26 ───────────────────────
+         *
+         * The band is necessary and was not sufficient. Psychology attaches a
+         * 0-point companion section to its statistics and research-methods
+         * lectures, and the registrar gives each one its own PSYC course record
+         * inside 1000–4999 — so they matched, and every student auto-registered
+         * for one or two was silently credited that many phantom courses toward
+         * an eleven-course total. The Bulletin's floor for this block is "3 or
+         * more points", which is exactly what these fail.
+         *
+         * That is the OVER-counting direction, and it is the unrecoverable one:
+         * a student can be told an eleven-course major is finished when two of
+         * the eleven are lab sections they were enrolled in automatically.
+         *
+         * The header calls the 3-point floor unencodable because
+         * `CourseSelector` has no points field. True in general, and it was too
+         * quick here: the floor cannot be expressed, but the four rows in this
+         * subject that currently fail it CAN be named, and naming them fixes
+         * every real case today. Verified against the catalog on 2026-08-26 —
+         * these are the only PSYC rows in 1000–4999 with points_max = 0. A new
+         * 0-point section would slip through until it is added here, which is
+         * the cost of an enumeration and is stated in the note.
          */
-        select: { subjects: ["PSYC"], numberRange: [1000, 4999] },
+        select: {
+          subjects: ["PSYC"],
+          numberRange: [1000, 4999],
+          exclude: ["PSYC UN1421", "PSYC UN1451", "PSYC UN1456", "PSYC UN1611"],
+        },
       },
       sourceUrl: SOURCE,
     },
