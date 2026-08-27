@@ -124,20 +124,20 @@ export function StepChoices({
     };
   }, []);
 
-  /**
-   * The questions still worth asking.
-   *
-   * The deck already dropped groups that were answered when it was built;
-   * this is the same filter against state that has changed since, so a group
-   * leaves the screen on tap rather than waiting for a refetch that this
-   * screen deliberately never makes.
-   */
   /*
    * Every group the deck asked about, annotated with what has been said.
    *
    * Nothing is filtered out. An answered question stays on the screen showing
    * its answer, so the student can see what they told us and change it — see
    * `CourseChoices` for why that is worth the extra height.
+   *
+   * This is why the deck is fetched once and never refreshed. `buildGuessDeck`
+   * drops a group as soon as any of its courses is on the record, which is
+   * right at BUILD time — a question already answered before the student got
+   * here should not be asked — but re-running it after a tap would delete the
+   * group the moment it was answered, taking the answer and the ability to
+   * switch routes with it. The deck is the set of questions; this memo is the
+   * set of answers.
    *
    * A route counts as chosen when ANY of its courses is on the record, not all
    * of them. Tapping adds every course in the route together, so the two agree
