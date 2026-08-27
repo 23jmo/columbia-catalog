@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type Ref } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { RiCheckboxCircleFill, RiErrorWarningLine } from "@remixicon/react";
 
 import type { ToolActivity } from "@/lib/agent/transcript";
 import { Collapse, CollapseMark } from "@/components/assistant/collapse";
+import { useTurnMotion } from "@/components/assistant/turn-motion";
 import { OrnamentAvatar } from "@/components/ornament/ornament-avatar";
 import { cx } from "@/utils/cx";
 
@@ -20,13 +22,17 @@ import { cx } from "@/utils/cx";
 
 const GLYPH = "size-4 shrink-0";
 
-/** Enter: opacity + 8px, 200ms ease-out. Never scale(0). */
-const ENTER = cx(
-  "translate-y-0 opacity-100",
-  "transition-[opacity,transform] duration-200 ease-out",
-  "starting:translate-y-2 starting:opacity-0",
-  "motion-reduce:translate-y-0 motion-reduce:transition-opacity motion-reduce:starting:translate-y-0",
-);
+/*
+ * `ThinkingLine`'s entrance used to be a `@starting-style` class right here.
+ * It moved to `useTurnMotion` because the line now has to leave as well as
+ * arrive, and `@starting-style` has nothing to say about unmounting — React
+ * removes the node and the browser has no frame in which to transition it.
+ * One mechanism for both directions beats a CSS entrance racing a JS exit.
+ *
+ * The step rows below keep their `starting:` classes. They only ever arrive,
+ * their values are the same 8px/200ms/ease-out, and rewriting working motion
+ * to match a neighbour is churn, not consistency.
+ */
 
 export function ToolActivityCard({
   activity,
@@ -37,6 +43,7 @@ export function ToolActivityCard({
   isRunning: boolean;
   className?: string;
 }) {
+  const { enter } = useTurnMotion();
   const [open, setOpen] = useState(isRunning);
 
   useEffect(() => {
@@ -52,7 +59,16 @@ export function ToolActivityCard({
 
   return (
     <div className={cx("flex flex-col gap-2.5", className)}>
-      <div
+      {/*
+        The panel itself arrives, not just the rows inside it.
+
+        Its steps already animated in on `@starting-style` while the card they
+        sit in appeared instantly — so the first thing the reader saw was an
+        empty bordered box that then filled. Entering as one object states the
+        truth: the assistant started working, and this is the report of it.
+      */}
+      <motion.div
+        {...enter}
         className={cx(
           "w-full max-w-90 rounded-2xl border border-border-table",
           "bg-background-primary-default p-4",
@@ -121,9 +137,17 @@ export function ToolActivityCard({
             })}
           </ul>
         </Collapse>
-      </div>
+      </motion.div>
 
-      {isRunning ? <Elapsed /> : null}
+      {/*
+        The elapsed counter is REPLACED by the answer, so it dissolves in
+        place rather than sliding out — see `turn-motion.ts`. `popLayout`
+        is what frees its row the instant the run ends, so the prose below
+        does not wait 140ms and then jump upward into the gap.
+      */}
+      <AnimatePresence mode="popLayout" initial={false}>
+        {isRunning ? <Elapsed key="elapsed" /> : null}
+      </AnimatePresence>
     </div>
   );
 }
@@ -183,10 +207,27 @@ function ProgressCircle() {
 export function ThinkingLine({
   label,
   className,
+  ref,
 }: {
   label: string;
   className?: string;
+  /*
+   * Forwarded, and load-bearing.
+   *
+   * `AnimatePresence mode="popLayout"` measures the leaving child and pins it
+   * out of flow so its siblings can close the gap immediately. To do that it
+   * has to get a ref onto the real element — and a plain function component
+   * swallows one, which silently degrades popLayout to ordinary `sync`: the
+   * indicator fades for 140ms holding its row, and everything below jumps 54px
+   * the instant it unmounts. Measured, not assumed; see the note in
+   * `turn-motion.ts`.
+   *
+   * React 19 passes `ref` as an ordinary prop, which is how `Button` in
+   * `components/base/buttons/button.tsx` takes one too.
+   */
+  ref?: Ref<HTMLParagraphElement>;
 }) {
+  const { swap } = useTurnMotion();
   /*
    * The disc paints a 116px canvas inside a 92px layout box — feather and
    * bevel live in that bleed. At 18px the leftover is two pixels, and anything
@@ -195,9 +236,10 @@ export function ThinkingLine({
    * breath, and the label matches the thread rather than caption.
    */
   return (
-    <p
+    <motion.p
+      ref={ref}
+      {...swap}
       className={cx(
-        ENTER,
         "flex items-center gap-2.5 overflow-visible",
         "text-headline-regular",
         className,
@@ -207,11 +249,12 @@ export function ThinkingLine({
         <OrnamentAvatar size={28} mood="thinking" className="shrink-0" />
       </span>
       <span className="agent-progress-loading-text">{label}</span>
-    </p>
+    </motion.p>
   );
 }
 
-function Elapsed() {
+/** Forwards its ref for the reason `ThinkingLine` does — it is popped too. */
+function Elapsed({ ref }: { ref?: Ref<HTMLParagraphElement> }) {
   const [seconds, setSeconds] = useState(0);
 
   useEffect(() => {
@@ -222,5 +265,5 @@ function Elapsed() {
     return () => window.clearInterval(timer);
   }, []);
 
-  return <ThinkingLine label={`Thinking ${seconds.toFixed(1)}s`} />;
+  return <ThinkingLine ref={ref} label={`Thinking ${seconds.toFixed(1)}s`} />;
 }
