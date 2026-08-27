@@ -73,7 +73,8 @@ import { FEED_PREVIEW_LIMIT } from "./feed-preview";
 import {
   buildGuessDeck,
   DEFAULT_TIER_LIMIT,
-  expectedLevelCeiling,
+  levelCeilingFor,
+  satisfiedOnlyCourseIds,
   unambiguousPrereqChain,
   yearsCompleted,
   type GuessDeck,
@@ -187,6 +188,12 @@ export interface GuestAudit {
   programs: Program[];
   /** Every group still outstanding, with open-ended ones expanded. */
   outstanding: GroupResult[];
+  /**
+   * Courses named ONLY by groups this student has finished. The complement of
+   * `outstanding` at course granularity, and the guess deck's suppression list
+   * — see `satisfiedOnlyCourseIds`.
+   */
+  satisfiedOnly: string[];
   /** Courses on the record our catalog could not resolve. */
   unmatchedCourseIds: string[];
 }
@@ -236,11 +243,19 @@ export async function auditGuest(state: GuestOnboardingState): Promise<GuestAudi
     exclude: recordIds,
   });
 
+  /*
+   * Computed over EVERY group, satisfied ones included — which is the whole
+   * reason it cannot be derived from `outstanding` downstream. `outstanding`
+   * is the finished groups already thrown away, and "this course belongs to a
+   * group that no longer needs it" is exactly the fact that throwing them away
+   * destroys.
+   */
+  const allGroups = expanded.flatMap((result) => result.groups);
+
   return {
     programs,
-    outstanding: expanded
-      .flatMap((result) => result.groups)
-      .filter((group) => group.status !== "satisfied"),
+    outstanding: allGroups.filter((group) => group.status !== "satisfied"),
+    satisfiedOnly: [...satisfiedOnlyCourseIds(allGroups)],
     unmatchedCourseIds: recordIds.filter((courseId) => !factsForRecord.has(courseId)),
   };
 }
@@ -254,6 +269,9 @@ async function auditGuestOrFallback(state: GuestOnboardingState): Promise<GuestA
     return {
       programs: programsFor(profile),
       outstanding: [],
+      // No audit ran, so nothing is known to be finished. Suppressing on a
+      // guess here would silently shrink the deck on every database hiccup.
+      satisfiedOnly: [],
       unmatchedCourseIds: profile.courses
         .map((course) => course.courseId)
         .filter((courseId) => courseId.length > 0),
@@ -321,7 +339,10 @@ export async function loadGuessDeck(state: GuestOnboardingState): Promise<GuessD
   for (const guess of typicalGuesses({
     school: state.school,
     yearsCompleted: years,
-    ceiling: expectedLevelCeiling(years),
+    ceiling: levelCeilingFor(
+      years,
+      state.courses.map((course) => course.courseId),
+    ),
     programs: audit.programs,
   })) {
     wanted.add(guess.courseId);
@@ -352,6 +373,7 @@ export async function loadGuessDeck(state: GuestOnboardingState): Promise<GuessD
     prereqs,
     vectors,
     outstanding: audit.outstanding,
+    satisfiedOnly: new Set(audit.satisfiedOnly),
     limit: DEFAULT_TIER_LIMIT,
   });
 }
