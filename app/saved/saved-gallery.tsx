@@ -20,7 +20,8 @@ import { CURRENT_TERM } from "@/lib/constants";
 import type { TermCode } from "@/lib/types";
 import { cx } from "@/utils/cx";
 
-import { SavedCard } from "./saved-card";
+import { SavedList } from "./saved-list";
+import { SavedSkeleton } from "./saved-skeleton";
 import { SavedEmpty, SavedSignedOut } from "./saved-states";
 import { SelectBar } from "./select-bar";
 import { TermFilter } from "./term-filter";
@@ -81,6 +82,24 @@ export function SavedGallery() {
   );
 
   if (snapshot.status === "signed_out") return <SavedSignedOut />;
+
+  /*
+   * Two waits, and neither of them is "empty".
+   *
+   * `useBookmarks` starts at `status: "idle"` with an empty set, so until the
+   * store answers, `snapshot.saved.size === 0` is indistinguishable from
+   * having saved nothing — and this page used to resolve that ambiguity the
+   * wrong way, showing "Nothing saved yet" and a Find classes button to people
+   * whose shortlist was still in flight. Then `useSavedCatalog` goes and
+   * fetches the records behind the ids, which is a second wait the empty check
+   * also cannot see.
+   *
+   * So the empty state is gated on the store having actually reported, and
+   * both waits render the skeleton instead.
+   */
+  const isLoadingBookmarks = snapshot.status !== "ready";
+  const isLoadingCatalog = isResolving && groups.length === 0;
+  const isLoading = isLoadingBookmarks || isLoadingCatalog;
 
   const hasNothing = snapshot.saved.size === 0 && snapshot.folders.length === 0;
 
@@ -154,64 +173,34 @@ export function SavedGallery() {
         </ul>
       ) : null}
 
-      {hasNothing || sectionIds.length === 0 ? (
+      {isLoading ? (
+        /*
+         * Once the ids are in, the count is known — so the placeholder is
+         * exactly as tall as the list replacing it and nothing below moves
+         * when the catalog lands. Capped at six: past that the skeleton is
+         * just a long grey page, and the reader is scrolling it rather than
+         * waiting through it.
+         */
+        <SavedSkeleton cards={isLoadingBookmarks ? undefined : Math.min(sectionIds.length, 6)} />
+      ) : hasNothing || sectionIds.length === 0 ? (
         <SavedEmpty scope={ALL_FOLDER} />
-      ) : isResolving && groups.length === 0 ? (
-        <p className="text-body-regular text-text-tertiary">Loading your saved classes…</p>
       ) : (
         /*
-         * One column, and the same 16px gutter the feed uses.
-         *
          * Grouped by course, because saving is per-section but deciding is
          * per-course: the question a shortlist answers is "which of these
          * three sections of 4118 do I take", and a flat list sorted by code
          * puts those three cards nowhere near each other.
          *
-         * The course heading only appears when a course has more than one
-         * section saved. On the common case — one section, one course — it was
-         * a line printing the code and title immediately above a card whose
-         * first two lines are the code and the title.
+         * The list, its one-column layout and its entrance animation all live
+         * in `SavedList`, which `/saved/[folderId]` renders too — see the
+         * header comment there for why that is one component and not two.
          */
-        <div className="flex flex-col gap-4">
-          {groups.map((group) => (
-            <section key={group.course.courseId} className="flex flex-col gap-2">
-              {group.sections.length > 1 ? (
-                <div className="flex flex-wrap items-baseline gap-x-2 px-1">
-                  <Link
-                    href={`/course/${group.course.courseId}`}
-                    className="text-body-semibold tabular-nums text-text-primary outline-none hover:text-accent-600 focus-visible:ring-2 focus-visible:ring-border-focus-ring"
-                  >
-                    {group.course.subjectCode}
-                    {group.course.number}
-                  </Link>
-                  <span className="min-w-0 truncate text-caption-1-medium text-text-secondary">
-                    {group.sections.length} sections saved
-                  </span>
-                </div>
-              ) : null}
-
-              <ul role="list" className="flex flex-col gap-4">
-                {group.sections.map((section) => (
-                  <li key={section.sectionId} className="flex min-w-0">
-                    <SavedCard
-                      section={section}
-                      course={group.course}
-                      className="w-full"
-                      selection={
-                        isSelecting
-                          ? {
-                              isSelected: selected.has(section.sectionId),
-                              onChange: (next) => toggleSelected(section.sectionId, next),
-                            }
-                          : undefined
-                      }
-                    />
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))}
-        </div>
+        <SavedList
+          groups={groups}
+          selection={
+            isSelecting ? { selectedIds: selected, onToggle: toggleSelected } : undefined
+          }
+        />
       )}
 
       {isSelecting ? (

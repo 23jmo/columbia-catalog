@@ -22,7 +22,8 @@ import type { TermCode } from "@/lib/types";
 
 import { DeleteFolderDialog } from "./delete-folder-dialog";
 import { SavedEmpty, SavedSignedOut } from "./saved-states";
-import { SavedCard } from "./saved-card";
+import { SavedList } from "./saved-list";
+import { SavedSkeleton } from "./saved-skeleton";
 import { SelectBar } from "./select-bar";
 import { TermFilter } from "./term-filter";
 
@@ -81,6 +82,16 @@ export function SavedFolderView({ folderId }: SavedFolderViewProps) {
   );
 
   if (snapshot.status === "signed_out") return <SavedSignedOut />;
+
+  /*
+   * Same two waits as `/saved`, and the same reason the empty state cannot be
+   * trusted to speak for either — see `SavedGallery`. A folder page is if
+   * anything worse to get wrong: "This folder is empty" about a folder the
+   * reader filled themselves reads as data loss, not as a slow request.
+   */
+  const isLoadingBookmarks = snapshot.status !== "ready";
+  const isLoadingCatalog = isResolving && groups.length === 0;
+  const isLoading = isLoadingBookmarks || isLoadingCatalog;
 
   // A folder id that is neither synthetic nor one of yours: either it was just
   // deleted in another tab, or somebody pasted a link to somebody else's. Both
@@ -168,56 +179,22 @@ export function SavedFolderView({ folderId }: SavedFolderViewProps) {
 
       <TermFilter terms={terms} value={term} onChange={setTermFilter} />
 
-      {sectionIds.length === 0 ? (
+      {isLoading ? (
+        <SavedSkeleton cards={isLoadingBookmarks ? undefined : Math.min(sectionIds.length, 6)} />
+      ) : sectionIds.length === 0 ? (
         <SavedEmpty scope={folderId} />
-      ) : isResolving && groups.length === 0 ? (
-        <p className="text-body-regular text-text-tertiary">Loading your saved classes…</p>
       ) : (
-        <div className="flex flex-col gap-4">
-          {groups.map((group) => (
-            <section key={group.course.courseId} className="flex flex-col gap-2">
-              {/*
-                Only when a course has more than one section saved. On the
-                common case it was a line printing the code and title directly
-                above a card whose first two lines are the code and the title.
-              */}
-              {group.sections.length > 1 ? (
-                <div className="flex flex-wrap items-baseline gap-x-2 px-1">
-                  <Link
-                    href={`/course/${group.course.courseId}`}
-                    className="text-body-semibold tabular-nums text-text-primary outline-none hover:text-accent-600 focus-visible:ring-2 focus-visible:ring-border-focus-ring"
-                  >
-                    {group.course.subjectCode}
-                    {group.course.number}
-                  </Link>
-                  <span className="min-w-0 truncate text-caption-1-medium text-text-secondary">
-                    {group.sections.length} sections saved
-                  </span>
-                </div>
-              ) : null}
-
-              <ul role="list" className="flex flex-col gap-4">
-                {group.sections.map((section) => (
-                  <li key={section.sectionId} className="flex min-w-0">
-                    <SavedCard
-                      section={section}
-                      course={group.course}
-                      className="w-full"
-                      selection={
-                        isSelecting
-                          ? {
-                              isSelected: selected.has(section.sectionId),
-                              onChange: (next) => toggleSelected(section.sectionId, next),
-                            }
-                          : undefined
-                      }
-                    />
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))}
-        </div>
+        /*
+         * Grouped by course, and staged in — both live in `SavedList`, which
+         * `/saved` renders too. See its header comment for why the group
+         * markup is one component rather than a copy on each page.
+         */
+        <SavedList
+          groups={groups}
+          selection={
+            isSelecting ? { selectedIds: selected, onToggle: toggleSelected } : undefined
+          }
+        />
       )}
 
       {isSelecting ? (

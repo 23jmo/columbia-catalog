@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { RiArrowRightUpLine } from "@remixicon/react";
 
+import { ButtonLink } from "@/components/base/buttons/button";
 import { BookmarkControls } from "@/components/bookmarks/bookmark-controls";
 import { FolderChip, FolderChipOverflow } from "@/components/bookmarks/folder-chip";
 import { Checkbox } from "@/components/base/checkbox/checkbox";
@@ -108,28 +109,36 @@ export function SavedCard({ section, course, selection, className }: SavedCardPr
         </div>
 
         {selection ? null : (
-          <div className="relative z-10 flex shrink-0 items-center gap-0.5">
+          <div className="relative z-10 flex shrink-0 items-center gap-1.5">
             <BookmarkControls
               sectionId={section.sectionId}
               sectionCode={section.sectionCode}
               courseLabel={code}
               size="xs"
             />
-            <a
+            {/*
+              Named, not drawn.
+
+              This was a bare ↗ icon, which is the right weight for "there is
+              more of this elsewhere" and the wrong weight for the one action
+              this page exists to lead to. A shortlist is read the week before
+              registration, and the next move after reading it is putting the
+              class into Vergil — so the control that does that says what it
+              does. `size="xs" variant="secondary"` is the same shape
+              `RegistrationHandoff` gives the Vergil hand-off on the course
+              page, so it is the same button in both places.
+            */}
+            <ButtonLink
+              size="xs"
+              variant="secondary"
               href={vergilSectionUrl(section.termCode, section.callNumber)}
               target="_blank"
               rel="noopener noreferrer"
-              title="Open in Vergil"
-              aria-label={`Open ${code} section ${section.sectionCode}, call number ${section.callNumber}, in Vergil`}
-              className={cx(
-                "flex size-7 shrink-0 items-center justify-center rounded-lg sm:size-8",
-                "text-foreground-icon-tertiary transition-colors duration-150",
-                "hover:bg-background-primary-hover hover:text-text-primary",
-                "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
-              )}
+              aria-label={`Add ${code} section ${section.sectionCode}, call number ${section.callNumber}, to Vergil`}
+              trailingIcon={RiArrowRightUpLine}
             >
-              <RiArrowRightUpLine aria-hidden className="size-4 sm:size-[1.125rem]" />
-            </a>
+              Add to Vergil
+            </ButtonLink>
           </div>
         )}
       </header>
