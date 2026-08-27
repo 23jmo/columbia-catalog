@@ -162,6 +162,7 @@ function group(
   label: string,
   candidates: CourseId[],
   status: GroupResult["status"] = "unmet",
+  exclusionKey?: string,
 ): GroupResult {
   // Only the fields the engine reads. Cast because GroupResult carries a full
   // RequirementGroup the engine never touches, and building one here would
@@ -175,6 +176,7 @@ function group(
     required: 2,
     unit: "courses",
     candidates,
+    exclusionKey,
   } as GroupResult;
 }
 
@@ -653,5 +655,132 @@ describe("satisfied requirement groups", () => {
 
     expect(results[0].components.requirementFit).toBe(0);
     expect(results[0].reasons.filter((r) => r.kind === "required")).toEqual([]);
+  });
+});
+
+/* ==========================================================================
+ * Mutually exclusive requirement groups
+ * ========================================================================== */
+
+describe("requirement fit across mutually exclusive groups", () => {
+  const student = { taken: [] as TakenCourse[] };
+
+  /*
+   * `requirementFit` is `WEIGHTS.requirement * (number of outstanding groups
+   * this course advances)`, and it is the dominant term in the blend — so a
+   * course credited with two groups outranks every course that honestly
+   * advances one, whatever the student's taste says.
+   *
+   * The Core's Science Requirement is where that bit. Category B selects on
+   * `scienceB`, Category C selects on `scienceC` and names Category B in
+   * `excludeGroups`, and a chemistry course carries both flags. The audit
+   * expands it as a candidate for both categories — correctly, it could
+   * satisfy either — but taking it closes exactly one.
+   */
+  const CLUSTER = "cc-core:science-b";
+
+  it("counts a course in two exclusive groups once", () => {
+    const results = recommended({
+      profile: student,
+      candidates: [course(EAST_ASIAN_CIV, "INTRO TO EAST ASIAN CIV: CHINA")],
+      vectors,
+      prereqs,
+      outstanding: [
+        group("science-b", "Science (Category B)", [EAST_ASIAN_CIV], "unmet", CLUSTER),
+        group("science", "Science (Category C)", [EAST_ASIAN_CIV], "unmet", CLUSTER),
+      ],
+    });
+
+    expect(results[0]!.components.requirementFit).toBe(WEIGHTS.requirement);
+  });
+
+  it("still counts a course in two INDEPENDENT groups twice", () => {
+    /*
+     * The other half, and the reason this is not just "dedupe by course".
+     * Cross-counting one course toward the Core and toward a major is
+     * legitimate — the audit reports it rather than preventing it — so a
+     * course that genuinely advances two unrelated requirements must keep
+     * scoring like it.
+     */
+    const results = recommended({
+      profile: student,
+      candidates: [course(EAST_ASIAN_CIV, "INTRO TO EAST ASIAN CIV: CHINA")],
+      vectors,
+      prereqs,
+      outstanding: [
+        group("global-core", "Global Core", [EAST_ASIAN_CIV]),
+        group("major-elective", "Major Elective", [EAST_ASIAN_CIV]),
+      ],
+    });
+
+    expect(results[0]!.components.requirementFit).toBe(2 * WEIGHTS.requirement);
+  });
+
+  it("lets an honest two-requirement course outrank the double-flagged one", () => {
+    /*
+     * The behaviour a student actually sees, with the double-flagged course
+     * made maximally attractive on every OTHER axis — the same shape as the
+     * COMS W4111 assertions above. The student has taken and liked two
+     * computing courses, so Data Structures scores near the top on taste and
+     * picks up an unlock bonus for opening Databases, while African-American
+     * Studies sits in the far corner of the vector space and unlocks nothing.
+     *
+     * Requirement fit is therefore the ONLY term that can flip the order:
+     *   before  2.0 + 0.49 + 0.21 = 2.70  beats  2.0 + 0.00 = 2.00
+     *   after   1.0 + 0.49 + 0.21 = 1.70  loses to 2.0
+     */
+    const results = recommended({
+      profile: {
+        taken: taken([INTRO_PROGRAMMING, true], [DISCRETE_MATH, true]),
+      },
+      candidates: [
+        course(DATA_STRUCTURES, "DATA STRUCTURES"),
+        course(AFRICAN_AMERICAN_STUDIES, "INTRO TO AFRICAN-AMER STUDIES"),
+      ],
+      vectors,
+      prereqs,
+      outstanding: [
+        // Double-flagged: one course, two categories of ONE requirement.
+        group("science-b", "Science (Category B)", [DATA_STRUCTURES], "unmet", CLUSTER),
+        group("science", "Science (Category C)", [DATA_STRUCTURES], "unmet", CLUSTER),
+        // Genuinely two independent requirements.
+        group("global-core", "Global Core", [AFRICAN_AMERICAN_STUDIES]),
+        group("major-elective", "Major Elective", [AFRICAN_AMERICAN_STUDIES]),
+      ],
+    });
+
+    const top = results[0]!;
+    expect(top.course.courseId).toBe(AFRICAN_AMERICAN_STUDIES);
+
+    // And the loser really was ahead on everything else, so the assertion
+    // above cannot pass by accident on a tie.
+    const structures = results.find((r) => r.course.courseId === DATA_STRUCTURES)!;
+    expect(structures.components.taste).toBeGreaterThan(top.components.taste);
+    expect(structures.components.unlock).toBeGreaterThan(top.components.unlock);
+    expect(structures.components.requirementFit).toBeLessThan(top.components.requirementFit);
+  });
+
+  it("credits the same cluster to two DIFFERENT courses", () => {
+    /*
+     * The cluster is spent per course, not globally. Two 3000-level COMS
+     * courses each advance the CS elective block and the student needs both;
+     * a cluster credited once across the whole feed would zero the second.
+     */
+    const results = recommended({
+      profile: student,
+      candidates: [
+        course(EAST_ASIAN_CIV, "INTRO TO EAST ASIAN CIV: CHINA"),
+        course(AFRICAN_AMERICAN_STUDIES, "INTRO TO AFRICAN-AMER STUDIES"),
+      ],
+      vectors,
+      prereqs,
+      outstanding: [
+        group("electives", "Electives", [EAST_ASIAN_CIV, AFRICAN_AMERICAN_STUDIES], "unmet", CLUSTER),
+      ],
+    });
+
+    for (const result of results) {
+      expect(result.components.requirementFit).toBe(WEIGHTS.requirement);
+    }
   });
 });

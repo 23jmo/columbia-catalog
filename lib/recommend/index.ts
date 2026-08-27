@@ -422,9 +422,35 @@ function indexOutstanding(
 ): Map<string, { id: string; label: string }[]> {
   const index = new Map<string, { id: string; label: string }[]>();
 
+  /*
+   * Course id → exclusion clusters already credited to it.
+   *
+   * `requirementFit` is `WEIGHTS.requirement * groups.length`, so this list's
+   * length is the score, and a course listed under two groups that cannot both
+   * count it scores as though it advanced two requirements. Chemistry carries
+   * both `scienceB` and `scienceC` and so lands in the Science Requirement's
+   * Category B and Category C lists at once — 2.0 on the dominant term, more
+   * than any single-requirement course can reach, which is why the feed opened
+   * with chemistry for students who had shown no interest in it. Taking it
+   * closes exactly one of the two.
+   *
+   * Held per course rather than as one global set: the same cluster legitimately
+   * credits DIFFERENT courses. Two 3000-level COMS courses each advance the CS
+   * elective block, and the student needs both.
+   */
+  const creditedClusters = new Map<string, Set<string>>();
+
   for (const result of groups) {
     if (result.status === "satisfied") continue;
     for (const courseId of result.candidates) {
+      const cluster = result.exclusionKey;
+      if (cluster !== undefined) {
+        const credited = creditedClusters.get(courseId) ?? new Set<string>();
+        // First group in the cluster wins, which is program-declaration order.
+        if (credited.has(cluster)) continue;
+        credited.add(cluster);
+        creditedClusters.set(courseId, credited);
+      }
       const list = index.get(courseId) ?? [];
       list.push({ id: result.group.id, label: result.group.label });
       index.set(courseId, list);

@@ -280,10 +280,81 @@ function statusOf(completed: number, required: number): GroupResult["status"] {
  * one. An `all_of` that overlapped another group would be a transcription
  * error rather than a rule to model.
  */
-function excludedGroupIds(group: RequirementGroup): string[] {
+export function excludedGroupIds(group: RequirementGroup): string[] {
   const rule = group.rule;
   if (rule.kind !== "n_matching" && rule.kind !== "points_matching") return [];
   return rule.select.excludeGroups ?? [];
+}
+
+/**
+ * Group id → the key of the mutual-exclusion cluster it belongs to.
+ *
+ * `excludeGroups` is directional as written — an elective block names the core
+ * groups it will not re-count — but the constraint it expresses is not. If a
+ * course cannot count in both places then it cannot, whichever end you read it
+ * from, so the relation is symmetrised here and closed transitively: the CS
+ * major's `electives` names five groups, and all six end up in one cluster
+ * because a single course closes at most one of them.
+ *
+ * Groups in no cluster are simply absent from the map. That is the common case
+ * — seven groups across fifteen programs carry `excludeGroups` — and callers
+ * must read a missing entry as "counts on its own", never as "excluded".
+ *
+ * The key is `<programId>:<lowest group id in the cluster>`. Sorting rather
+ * than taking the first-declared member keeps it stable when a program's groups
+ * are reordered, which matters because this string is compared across a list
+ * that has been flattened out of program order.
+ *
+ * A dangling `excludeGroups` target — a typo, or a group deleted from the
+ * program — is ignored rather than throwing. `cc-social-science-coverage.test`
+ * already asserts that every target resolves; failing loudly a second time here
+ * would take down a student's audit over an authoring slip that a test catches
+ * at build time.
+ */
+export function exclusionKeysForProgram(program: Program): Map<string, string> {
+  const present = new Set(program.groups.map((group) => group.id));
+
+  /* Union-find over group ids. Small enough that path compression is enough. */
+  const parent = new Map<string, string>();
+  const find = (id: string): string => {
+    const seen = parent.get(id);
+    if (seen === undefined || seen === id) return id;
+    const root = find(seen);
+    parent.set(id, root);
+    return root;
+  };
+  const union = (a: string, b: string) => {
+    const rootA = find(a);
+    const rootB = find(b);
+    if (rootA === rootB) return;
+    /* Lower id wins, so the root is already the cluster's naming member. */
+    if (rootA < rootB) parent.set(rootB, rootA);
+    else parent.set(rootA, rootB);
+  };
+
+  /*
+   * Membership is tracked separately rather than inferred from `parent`. A
+   * cluster's root has no parent entry of its own, so "is this id in `parent`"
+   * answers "is this a non-root member", which silently drops exactly one group
+   * per cluster — the one every other member points at.
+   */
+  const clustered = new Set<string>();
+  for (const group of program.groups) {
+    for (const target of excludedGroupIds(group)) {
+      if (!present.has(target) || target === group.id) continue;
+      union(group.id, target);
+      clustered.add(group.id);
+      clustered.add(target);
+    }
+  }
+  if (clustered.size === 0) return new Map();
+
+  const keys = new Map<string, string>();
+  for (const group of program.groups) {
+    if (!clustered.has(group.id)) continue;
+    keys.set(group.id, `${program.id}:${find(group.id)}`);
+  }
+  return keys;
 }
 
 export function evaluateProgram(

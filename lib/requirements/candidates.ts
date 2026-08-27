@@ -35,6 +35,7 @@
  */
 
 import { formatCourseId, type CourseId } from "./code";
+import { exclusionKeysForProgram } from "./evaluate";
 import {
   compileSelector,
   matchesCompiledSelector,
@@ -127,13 +128,32 @@ export async function expandCandidates(
   const exclude = new Set(options.exclude ?? []);
   const limit = options.limit ?? DEFAULT_CANDIDATE_LIMIT;
 
+  /*
+   * Stamped here because this is the last place the program is in hand. The
+   * callers of `expandCandidatesForPrograms` all flatten straight to
+   * `GroupResult[]`, and `excludeGroups` is resolved against the SAME program —
+   * so after the flatten there is no way to tell this program's
+   * `data-structures` from another program's. See `GroupResult.exclusionKey`.
+   */
+  const exclusionKeys = exclusionKeysForProgram(result.program);
+  const keyed = (group: GroupResult): GroupResult => {
+    const exclusionKey = exclusionKeys.get(group.group.id);
+    return exclusionKey === undefined ? group : { ...group, exclusionKey };
+  };
+
   const groups = await Promise.all(
     result.groups.map(async (group) => {
-      if (group.status === "satisfied") return group;
-      if (!needsCandidateQuery(group)) return group;
+      /*
+       * Stamped on satisfied and finite-list groups too, not only the ones
+       * that get a query. The clusters that matter join an open-ended elective
+       * block to the `all_of` core groups it refuses to re-count, and leaving
+       * the core half unkeyed would leave the pair looking unrelated.
+       */
+      if (group.status === "satisfied") return keyed(group);
+      if (!needsCandidateQuery(group)) return keyed(group);
 
       const rule = group.group.rule;
-      if (rule.kind !== "n_matching" && rule.kind !== "points_matching") return group;
+      if (rule.kind !== "n_matching" && rule.kind !== "points_matching") return keyed(group);
 
       // Courses already counted toward THIS group are not candidates for it,
       // on top of the caller's global exclusions.
@@ -163,7 +183,7 @@ export async function expandCandidates(
           ),
       );
 
-      return { ...group, candidates: verified.map((row) => row.courseId) };
+      return keyed({ ...group, candidates: verified.map((row) => row.courseId) });
     }),
   );
 
