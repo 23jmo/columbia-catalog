@@ -54,6 +54,7 @@ import { formatCourseId, levelOf, toCourseId, type CourseId } from "@/lib/requir
 import type { GroupResult, Program, RequirementRule, School } from "@/lib/requirements/types";
 
 import type { GuestCourse } from "./state";
+import { likelyChoiceFor } from "./likely-choice";
 import { typicalGuesses } from "./typical";
 import { titleForCourseId } from "./known-titles";
 
@@ -114,7 +115,52 @@ export function yearsCompleted(
  */
 export function expectedLevelCeiling(years: number | null): number {
   if (years === null) return 1000;
-  return Math.min(4000, 1000 * (years + 1));
+  return Math.min(MAX_EXPECTED_LEVEL, 1000 * (years + 1));
+}
+
+/**
+ * Where the year-based prior tops out. A student four years in is assumed to
+ * have reached the 4000 band and no further; anything past that has to be
+ * EVIDENCED, which is what `levelCeilingFor` is for.
+ */
+const MAX_EXPECTED_LEVEL = 4000;
+
+/**
+ * The level ceiling, with the student's own record allowed to raise it.
+ *
+ * `expectedLevelCeiling` is a prior — one year, one level band — and as a prior
+ * it is fine. As the last word it is wrong, and wrong in a direction that
+ * matters: engineering students front-load. A CS sophomore who has already
+ * taken COMS W4111 is not rare, and against a 3000 ceiling every 4000-level
+ * course in their own major reads as implausible — pushed out of the plausible
+ * bands in `reasonPriority`, barred from tier 1 by the `level <= ceiling` test,
+ * and dropped from the choose-one questions by the seniority floor. The strip
+ * then offers them a first-year's transcript. A humanities student on the same
+ * formula may never exceed 3000 and is served correctly by it, which is the
+ * tell that the pace is program-dependent and the formula is not.
+ *
+ * Rather than a per-major table of expected paces — which would need writing,
+ * maintaining, and defending for every program in the registry — the ceiling
+ * takes the strongest evidence available: what the student has already told us
+ * they took. Confirming one 4000-level course establishes that they work at
+ * that level, and the deck is rebuilt on every re-rank, so the ceiling lifts
+ * the moment the record justifies it rather than on a schedule.
+ *
+ * The prior still floors it. A first-year who has confirmed nothing gets 1000,
+ * because with no record there is nothing to argue with.
+ *
+ * Deliberately uncapped above `MAX_EXPECTED_LEVEL`: a student who has confirmed
+ * a 6000-level course has evidenced a 6000-level ceiling, and clamping it back
+ * to 4000 would discard the very thing that makes this more trustworthy than
+ * the prior.
+ */
+export function levelCeilingFor(years: number | null, confirmed: readonly string[]): number {
+  let observed = 0;
+  for (const courseId of confirmed) {
+    const level = levelOf(courseId);
+    if (level != null && level > observed) observed = level;
+  }
+  return Math.max(expectedLevelCeiling(years), observed);
 }
 
 /* ==========================================================================
@@ -172,6 +218,49 @@ export function namedCoursesOf(program: Program): Map<CourseId, { required: bool
   }
 
   return named;
+}
+
+/**
+ * Courses that appear ONLY in requirement groups the student has already
+ * finished.
+ *
+ * The deck's membership passes walk requirement tables, and a requirement
+ * table has no idea what the student has done. So a SEAS CS junior who
+ * finished the physics requirement with PHYS UN1401+UN1402 was still offered
+ * PHYS UN2801 and UN2802 — the *third* rail of the same `sequence_choice` —
+ * because the rule names them and nothing downstream asked whether the rule
+ * was still open. Same for the other option of every satisfied `n_of`:
+ * EEEB UN2005 against a finished CHEM UN1403, APMA E3101 against a finished
+ * MATH UN2010. On one real profile that was every non-major suggestion on the
+ * strip, and the student read it as the app not listening.
+ *
+ * ONLY is the whole point of the name. A course is suppressed when every group
+ * that names it is done — never merely because *a* group that names it is
+ * done. MATH UN2015 satisfies both Linear Algebra and Probability/Statistics;
+ * finishing one of those must not hide it while the other is open. Candidates
+ * expanded onto still-open groups count as naming it too, so an elective that
+ * an open `n_matching` reaches keeps its place.
+ *
+ * Not a substitute for the engine's `requirementFit`, which already scores
+ * these at zero. This is the membership half: scoring a course zero does not
+ * take it off a strip that was never filtered.
+ */
+export function satisfiedOnlyCourseIds(groups: readonly GroupResult[]): Set<CourseId> {
+  const finished = new Set<CourseId>();
+  const live = new Set<CourseId>();
+
+  for (const group of groups) {
+    const target = group.status === "satisfied" ? finished : live;
+    for (const courseId of groupNames(group.group.rule)) target.add(courseId);
+    // Expanded candidates only ever hang off open-ended groups, which is
+    // exactly the case `groupNames` returns nothing for.
+    if (group.status !== "satisfied") {
+      for (const courseId of group.candidates) live.add(courseId as CourseId);
+    }
+  }
+
+  for (const courseId of live) finished.delete(courseId);
+  return finished;
 }
 
 /* ==========================================================================
@@ -269,6 +358,13 @@ export type GuessReason =
   | { kind: "typical"; label: string }
   /** One of several options a program's rule offers. */
   | { kind: "option_in"; programName: string; groupLabel: string }
+  /**
+   * The option we defaulted to when a rule offered a choice and one of them is
+   * what almost everybody takes. See `./likely-choice.ts` — this is the one
+   * reason kind that names a course the student never told us about and that no
+   * rule strictly requires, so it is deliberately the narrowest.
+   */
+  | { kind: "likely_choice"; groupLabel: string; alternatives: CourseId[] }
   /** Expanded from an open-ended requirement group. */
   | { kind: "counts_toward"; groupLabel: string };
 
@@ -292,9 +388,59 @@ export interface GuessFacts {
   points: number | null;
 }
 
+/**
+ * One way to satisfy a choose-one requirement.
+ *
+ * A route is a LIST of courses, not one course, because `sequence_choice`
+ * branches are two-term sequences: picking "Literature Humanities" says you
+ * took both halves of it, and modelling a route as a single course would make
+ * that unrepresentable.
+ */
+export interface GuessChoiceRoute {
+  routeId: string;
+  /** The sequence's name, or the course code for a single-course route. */
+  label: string;
+  courses: GuessFacts[];
+}
+
+/**
+ * A requirement we are confident the student finished exactly one way.
+ *
+ * ── Why this is separate from both tiers ────────────────────────────────────
+ *
+ * Tier 1 is a claim and tier 2 is a suggestion; this is a QUESTION, and it is
+ * the honest shape for what we actually know. "This senior completed the
+ * Physics requirement" is near-certain. "It was Sequence 2" is a coin flip. The
+ * two tiers can only express those together — assert a specific course, or say
+ * nothing — so the certainty about the requirement was being thrown away with
+ * the uncertainty about the route. Asking costs the student one tap and carries
+ * no risk of putting a course they never took on their record.
+ *
+ * A group with a default in `./likely-choice.ts` never reaches here: its pick
+ * is already in tier 1, and asking a question we would answer the same way 95%
+ * of the time is worse than answering it.
+ */
+export interface GuessChoice {
+  choiceId: string;
+  /** The requirement's name — "Physics", "Chemistry or Biology". */
+  label: string;
+  programName: string;
+  routes: GuessChoiceRoute[];
+}
+
 export interface GuessDeck {
   tier1: GuessCandidate[];
   tier2: GuessCandidate[];
+  /**
+   * Choose-one requirements, asked rather than guessed. Rendered above the
+   * suggestion strip and NOT counted against its cap — these are questions we
+   * know the student can answer, and burning the strip's eight slots on four
+   * spellings of one requirement is what made them worth separating.
+   *
+   * Their courses are removed from `tier2` so the same question is not put
+   * twice on one screen.
+   */
+  choices: GuessChoice[];
   /**
    * Confirming the key means we think they also took these — unambiguous
    * single-option prerequisites. Applied on the client immediately, so the
@@ -326,6 +472,13 @@ export interface GuessDeckInput {
    * requirement, electives — reach the deck only through this.
    */
   outstanding?: readonly GroupResult[];
+  /**
+   * Courses named only by groups the student has already finished — see
+   * `satisfiedOnlyCourseIds`. Optional, and absent means "no audit ran", not
+   * "nothing is finished": a caller that cannot audit suppresses nothing
+   * rather than guessing.
+   */
+  satisfiedOnly?: ReadonlySet<string>;
   /** Per tier, not in total. */
   limit?: number;
   now?: Date;
@@ -338,6 +491,9 @@ export interface GuessDeckInput {
  */
 export const DEFAULT_TIER_LIMIT = 48;
 
+/** Shared empty set, so the no-audit path allocates nothing per deck. */
+const EMPTY_ID_SET: ReadonlySet<string> = new Set<string>();
+
 export function buildGuessDeck(input: GuessDeckInput): GuessDeck {
   const limit = input.limit ?? DEFAULT_TIER_LIMIT;
   const confirmedIds = input.confirmed.map((course) => course.courseId);
@@ -345,7 +501,7 @@ export function buildGuessDeck(input: GuessDeckInput): GuessDeck {
   const dismissedSet = new Set(input.dismissed ?? []);
 
   const years = yearsCompleted(input.classYear, input.now);
-  const ceiling = expectedLevelCeiling(years);
+  const ceiling = levelCeilingFor(years, confirmedIds);
   const implied = impliedPrerequisites(confirmedIds, input.prereqs);
 
   /*
@@ -357,8 +513,27 @@ export function buildGuessDeck(input: GuessDeckInput): GuessDeck {
    */
   const evidence = new Map<CourseId, { required: boolean; reasons: GuessReason[] }>();
 
+  const satisfiedOnly = input.satisfiedOnly ?? EMPTY_ID_SET;
+
   const note = (courseId: CourseId, reason: GuessReason, required: boolean) => {
     if (confirmedSet.has(courseId) || dismissedSet.has(courseId)) return;
+    /*
+     * Suppressed on the two passes that walk requirement tables blind. Both
+     * say "your degree mentions this", which stops being evidence the moment
+     * the mention is spent — the requirement it belonged to is finished, and
+     * a course whose only claim on the strip was a finished requirement has
+     * no claim left.
+     *
+     * The other kinds are deliberately exempt. `counts_toward` is built from
+     * the outstanding list and is already satisfaction-aware; `implied_by` is
+     * a prerequisite of something the student CONFIRMED, which is a fact
+     * about their transcript rather than a claim from a table; `required_by`
+     * comes from an `all_of`, and an `all_of` is only satisfied when every
+     * one of its courses is confirmed, which the line above already caught.
+     */
+    if ((reason.kind === "option_in" || reason.kind === "typical") && satisfiedOnly.has(courseId)) {
+      return;
+    }
     const existing = evidence.get(courseId) ?? { required: false, reasons: [] };
     existing.required = existing.required || required;
     existing.reasons.push(reason);
@@ -404,6 +579,54 @@ export function buildGuessDeck(input: GuessDeckInput): GuessDeck {
             },
         required,
       );
+    }
+  }
+
+  /*
+   * Choose-one groups, defaulted to the option almost everybody takes.
+   *
+   * See `./likely-choice.ts` for what is on the allowlist and why it is so
+   * short. Two guards sit here rather than in the table:
+   *
+   * FIRST YEARS ARE EXEMPT. Defaulting compounds two guesses — that the student
+   * finished the requirement at all, and which way they finished it. The level
+   * ceiling already handles the first for 3000-level choices, but it would let
+   * a 1000-level default through for somebody five weeks into their first
+   * semester, who is more likely to be sitting in Intro to CS right now than to
+   * have finished it. One completed year is the floor for compounding.
+   *
+   * A GROUP THE STUDENT HAS ALREADY ANSWERED IS LEFT ALONE. If they ticked the
+   * honors course themselves, defaulting the standard one would put both on
+   * their record — two courses for a requirement that takes one, and the
+   * likelier of the two is the one we made up.
+   *
+   * A default the student then removes does not come back and does not swap to
+   * the alternative: `note` skips dismissed ids, and the table names one pick
+   * with no fallback. Being corrected once is a correction; being corrected
+   * twice on the same requirement is an argument.
+   */
+  const likelyPicks = new Set<CourseId>();
+  if ((years ?? 0) >= 1) {
+    for (const program of input.programs) {
+      for (const group of program.groups) {
+        const options = choiceOptionsOf(group.rule);
+        if (options.length === 0) continue;
+        if (options.some((option) => confirmedSet.has(option))) continue;
+
+        const choice = likelyChoiceFor(options);
+        if (!choice) continue;
+
+        likelyPicks.add(choice.courseId);
+        note(
+          choice.courseId,
+          {
+            kind: "likely_choice",
+            groupLabel: group.label,
+            alternatives: choice.alternatives,
+          },
+          true,
+        );
+      }
     }
   }
 
@@ -472,6 +695,38 @@ export function buildGuessDeck(input: GuessDeckInput): GuessDeck {
     };
   });
 
+  /*
+   * The engine evaluates prerequisites against the defaults too.
+   *
+   * This is what makes the fix reach past the ambiguous course itself. Marking
+   * Data Structures required puts it in tier 1, but COMS W3157 and COMS W3261
+   * are gated ON Data Structures, and the hard filter reads the confirmed set —
+   * which does not contain it, because the student has not ticked anything yet.
+   * Without this wrapper the two courses that the whole problem was about stay
+   * withheld and stay in tier 2.
+   *
+   * Deliberately a wrapped `PrereqSource` rather than extra entries in
+   * `profile.taken`. The defaults are an assumption about ordering, not
+   * testimony, and they have no business reaching the taste model, the
+   * already-taken filter, or the scores — only the question "could this student
+   * have taken that yet".
+   *
+   * `input.prereqs` stays raw everywhere else. `impliedPrerequisites` and
+   * `unambiguousPrereqChain` are how the deck states things as fact, and
+   * inferring a fact from an assumption is how a guess launders itself into a
+   * transcript.
+   */
+  const assumedComplete = new Set<string>([...confirmedIds, ...likelyPicks]);
+  const prereqsAssumingDefaults: PrereqSource =
+    likelyPicks.size === 0
+      ? input.prereqs
+      : {
+          statusFor: (courseId, completed) =>
+            input.prereqs.statusFor(courseId, new Set([...completed, ...assumedComplete])),
+          newlyUnlockedBy: (courseId, completed) =>
+            input.prereqs.newlyUnlockedBy(courseId, new Set([...completed, ...assumedComplete])),
+        };
+
   const result = recommend({
     profile: {
       taken: input.confirmed.map((course) => ({
@@ -482,7 +737,7 @@ export function buildGuessDeck(input: GuessDeckInput): GuessDeck {
     },
     candidates,
     vectors: input.vectors,
-    prereqs: input.prereqs,
+    prereqs: prereqsAssumingDefaults,
     outstanding: input.outstanding,
     limit: candidates.length,
     withheldLimit: candidates.length,
@@ -546,29 +801,117 @@ export function buildGuessDeck(input: GuessDeckInput): GuessDeck {
     });
   }
 
+  /*
+   * Choose-one requirements, turned into a question instead of a guess.
+   *
+   * Built after the tier split rather than alongside the evidence, because
+   * whether a group still needs asking depends on where its options LANDED. A
+   * group is dropped when any of its courses reached tier 1 — the student
+   * confirmed it, `./likely-choice.ts` defaulted it, or a prerequisite implied
+   * it — and in all three cases the question is already answered.
+   *
+   * The seniority floor matches the defaults'. Asking is cheaper than
+   * asserting, but asking a first-year in week five which physics sequence
+   * they finished is still a question with no true answer.
+   */
+  const tier1Ids = new Set(tier1.map((candidate) => candidate.courseId));
+  const choices: GuessChoice[] = [];
+  const seenRouteSets = new Set<string>();
+
+  if ((years ?? 0) >= 1) {
+    for (const program of input.programs) {
+      for (const group of program.groups) {
+        const routes = choiceRoutesOf(group.rule);
+        if (routes.length < 2 || routes.length > MAX_CHOICE_ROUTES) continue;
+
+        const everyCourse = routes.flatMap((route) => route.courses);
+        if (everyCourse.some((id) => confirmedSet.has(id) || tier1Ids.has(id))) continue;
+
+        // Declined: every route contains something they told us they did not
+        // take, so there is no route left to offer.
+        if (routes.every((route) => route.courses.some((id) => dismissedSet.has(id)))) continue;
+
+        // Not senior enough to have reached even the earliest route.
+        const earliest = Math.min(...everyCourse.map((id) => levelOf(id) ?? 9000));
+        if (earliest > ceiling) continue;
+
+        /*
+         * Two declared programs often spell the same requirement identically —
+         * the CS major and the CS minor both offer Intro as W1004-or-W1007.
+         * Keyed on the routes themselves so it is asked once, whichever
+         * programs happen to name it.
+         */
+        const key = routes
+          .map((route) => [...route.courses].sort().join("+"))
+          .sort()
+          .join("|");
+        if (seenRouteSets.has(key)) continue;
+        seenRouteSets.add(key);
+
+        choices.push({
+          choiceId: `${program.name}:${group.label}`,
+          label: group.label,
+          programName: program.name,
+          routes: routes.map((route) => ({
+            routeId: route.courses.join("+"),
+            label: route.label,
+            courses: route.courses.map((id) => factsFor(id, input.catalog)),
+          })),
+        });
+      }
+    }
+  }
+
+  /*
+   * The strip loses what the picker took. Otherwise the eight slots fill with
+   * the same options the question above already lists — which is the state
+   * this whole mechanism exists to get out of.
+   */
+  const asked = new Set(
+    choices.flatMap((choice) =>
+      choice.routes.flatMap((route) => route.courses.map((facts) => facts.courseId)),
+    ),
+  );
+  const strip = tier2.filter((candidate) => !asked.has(candidate.courseId));
+
   return {
     tier1: order(tier1, ceiling).slice(0, limit),
-    tier2: order(tier2, ceiling).slice(0, limit),
+    tier2: order(strip, ceiling).slice(0, limit),
+    choices,
     impliesTaken,
   };
 }
 
 /**
- * Plausible-already first, then evidence kind, then lowest level, then score.
+ * Plausible-already first, then evidence kind, then engine score, then level.
  *
- * The maybe-strip is "what have you taken", not "what should you take next".
- * Engine score ranks the latter, so a 3000-level required course the student
- * will take as a junior used to outrank Intro to CS (an `n_of`, so not
- * required) on a sophomore's strip. Level before score is what puts first-year
- * cores in front of the major's future core.
+ * The maybe-strip is "what have you taken", not "what should you take next",
+ * and that is why `reasonPriority` leads: it sorts by how close the evidence
+ * sits to an actual transcript, which engine score knows nothing about.
+ *
+ * Level used to come BEFORE score, to stop a 3000-level course the student
+ * will take as a junior outranking Intro to CS on a sophomore's strip. That
+ * job has since moved: `reasonPriority` splits on `plausible`, so the junior's
+ * course is already three bands down and never reaches the level comparison.
+ * Inside a band every candidate is on the same side of the ceiling, so level
+ * had stopped standing in for seniority and become a bare preference for
+ * smaller numbers — which for a senior, whose ceiling saturates and makes
+ * everything plausible, buried the courses that advance their degree under
+ * ones that do not. A CS junior saw the spare rail of a finished physics
+ * sequence (2000-level, requirement fit 0) above an Area Foundation course
+ * they genuinely still need (4000-level, requirement fit 1). The engine had
+ * scored that difference correctly and the sort never read it.
+ *
+ * Level stays as the tiebreak under score, where "prefer the earlier course"
+ * is a fair way to break a genuine tie rather than a claim about seniority.
  */
 function order(candidates: GuessCandidate[], ceiling: number): GuessCandidate[] {
   return [...candidates].sort((a, b) => {
     const reasonDelta = reasonPriority(a, ceiling) - reasonPriority(b, ceiling);
     if (reasonDelta !== 0) return reasonDelta;
     return (
-      (levelOf(a.courseId) ?? 9000) - (levelOf(b.courseId) ?? 9000) ||
       b.score - a.score ||
+      (levelOf(a.courseId) ?? 9000) - (levelOf(b.courseId) ?? 9000) ||
       a.courseId.localeCompare(b.courseId)
     );
   });
@@ -588,11 +931,87 @@ function reasonPriority(candidate: GuessCandidate, ceiling: number): number {
   if (kinds.has("implied_by")) return 0;
   if (plausible && kinds.has("typical")) return 1;
   if (plausible && kinds.has("required_by")) return 2;
-  if (plausible && kinds.has("option_in")) return 3;
-  if (kinds.has("required_by")) return 4;
-  if (kinds.has("typical")) return 5;
-  if (kinds.has("option_in")) return 6;
-  return 7;
+  if (plausible && kinds.has("likely_choice")) return 3;
+  if (plausible && kinds.has("option_in")) return 4;
+  if (kinds.has("required_by")) return 5;
+  if (kinds.has("likely_choice")) return 6;
+  if (kinds.has("typical")) return 7;
+  if (kinds.has("option_in")) return 8;
+  return 9;
+}
+
+/**
+ * The distinct routes through a rule the student picked exactly ONE of.
+ *
+ * `n === 1` is the whole test, and it is doing more work than it looks like.
+ * An `n_of` with n=4 over 21 options — CS Area Foundation courses — is a menu
+ * a student worked through, not a fork they took one branch of, and we could
+ * not guess which four anyway. Requiring n=1 excludes it, along with the CC
+ * Biology core (n=2) and the Political Science introductory pair (n=2),
+ * without any of them needing to be named.
+ */
+function choiceRoutesOf(rule: RequirementRule): { label: string; courses: CourseId[] }[] {
+  if (rule.kind === "n_of") {
+    if (rule.n !== 1 || rule.courses.length <= 1) return [];
+    return rule.courses.flatMap((code) => {
+      const courseId = toCourseId(code);
+      return courseId ? [{ label: code, courses: [courseId] }] : [];
+    });
+  }
+
+  if (rule.kind === "sequence_choice") {
+    if (rule.sequences.length <= 1) return [];
+    return rule.sequences.flatMap((sequence) => {
+      const courses = sequence.courses
+        .map(toCourseId)
+        .filter((id): id is CourseId => id !== null);
+      return courses.length > 0 ? [{ label: sequence.label, courses }] : [];
+    });
+  }
+
+  return [];
+}
+
+/**
+ * Above this many routes, a picker is worse than the search box.
+ *
+ * CC Political Science offers seventeen ways to satisfy Research Methods. That
+ * is a catalogue, and rendering it as seventeen buttons above the suggestions
+ * would bury the screen to ask one question. Groups over the cap keep today's
+ * behaviour and stay in the strip.
+ */
+const MAX_CHOICE_ROUTES = 6;
+
+/** Chip-ready facts, with the same catalog-miss fallbacks used everywhere else. */
+function factsFor(
+  courseId: CourseId,
+  catalog: GuessDeckInput["catalog"],
+): GuessFacts {
+  const facts = catalog.get(courseId);
+  return {
+    courseId,
+    code: facts?.code ?? formatCourseId(courseId),
+    title: facts?.title || titleForCourseId(courseId),
+    points: facts?.points ?? null,
+  };
+}
+
+/**
+ * The options of a rule that is genuinely a choice, or nothing.
+ *
+ * Only `n_of` with more than one course qualifies. `all_of` is not a choice;
+ * a one-course `n_of` is an `all_of` wearing a hat and `namedCoursesOf`
+ * already marks it required. `sequence_choice` is left out because picking a
+ * default there means asserting two or three courses off one guess, which is a
+ * bigger claim than this mechanism is built to make.
+ *
+ * Note this does NOT filter on `n`: an `n_of` with n=4 and 21 options reaches
+ * `likelyChoiceFor`, which declines it because no such option set is on the
+ * allowlist. Breadth is checked by the table, not by a rule of thumb here.
+ */
+function choiceOptionsOf(rule: RequirementRule): CourseId[] {
+  if (rule.kind !== "n_of" || rule.courses.length <= 1) return [];
+  return rule.courses.map(toCourseId).filter((id): id is CourseId => id !== null);
 }
 
 /** Course ids a single rule names, for attributing a candidate to its group. */

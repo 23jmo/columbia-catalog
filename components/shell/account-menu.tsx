@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { RiInformationLine, RiLoginBoxLine, RiShieldCheckLine } from "@remixicon/react";
+import { RiArrowRightSLine, RiInformationLine, RiLoginBoxLine, RiShieldCheckLine } from "@remixicon/react";
 import {
   Dialog as AriaDialog,
   Modal as AriaModal,
@@ -189,15 +189,36 @@ export function AccountMenu({
         >
           {account ? (
             <>
+              {/*
+                The identity row is the door to `/profile`.
+
+                It was a static block, and `components/shell/nav.tsx` has said
+                all along that profile is reached "from the account menu" — the
+                link was simply never there, which left the page unreachable
+                from the shell once it came off the rail. Putting it here rather
+                than back on the rail is the point: a profile is somewhere you
+                go on purpose, under your own name, not a fourth tab competing
+                with the three things this product is for.
+
+                Your name and face are already the most profile-shaped thing on
+                the screen, so they are the target rather than a "Profile" row
+                underneath them. The chevron is what says so before the click.
+              */}
               <DropdownGroup>
-                <div className="flex items-center gap-2 px-2 py-1.5">
+                <DropdownItem
+                  href="/profile"
+                  // Controlled menu: navigating does not unmount the popover on
+                  // a client-side transition, so it has to be told to close.
+                  onSelect={() => setIsMenuOpen(false)}
+                  className="px-2 py-1.5"
+                >
                   <Avatar
                     size="md"
                     src={account.avatarUrl}
                     initials={initials ?? undefined}
                     alt={account.name}
                   />
-                  <span className="flex min-w-0 flex-col">
+                  <span className="flex min-w-0 flex-1 flex-col">
                     <span className="text-body-medium truncate text-text-primary">
                       {account.name}
                     </span>
@@ -205,7 +226,14 @@ export function AccountMenu({
                       {account.email}
                     </span>
                   </span>
-                </div>
+                  {/* The row's accessible name is otherwise "<name> <email>",
+                      which says who but not where. */}
+                  <span className="sr-only">Open your profile</span>
+                  <RiArrowRightSLine
+                    className="size-4 shrink-0 text-foreground-icon-tertiary"
+                    aria-hidden
+                  />
+                </DropdownItem>
               </DropdownGroup>
               <DropdownDivider />
               <DropdownItem onSelect={() => void endSession()}>

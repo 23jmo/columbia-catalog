@@ -11,8 +11,17 @@ import {
 } from "react";
 
 import { guessDeckAction } from "@/app/onboarding/actions";
-import type { GuessCandidate, GuessDeck, GuessFacts } from "@/lib/onboarding/guess";
-import { loadGuessDeckCached, peekCachedGuessDeck } from "@/lib/onboarding/guess-cache";
+import type {
+  GuessCandidate,
+  GuessChoice,
+  GuessChoiceRoute,
+  GuessDeck,
+  GuessFacts,
+} from "@/lib/onboarding/guess";
+import {
+  loadGuessDeckCached,
+  peekCachedGuessDeck,
+} from "@/lib/onboarding/guess-cache";
 import type { CourseHit, ResolvedCourse } from "@/lib/onboarding/server";
 import {
   RERANK_BATCH_SIZE,
@@ -24,6 +33,7 @@ import { dismiss, toast } from "@/lib/toast/store";
 
 import { AddChip, ChipWrap, RemovableChip, courseChipLines } from "./chip";
 import { CourseworkSkeleton } from "./coursework-skeleton";
+import { CourseChoices } from "./course-choices";
 import { CourseSearch } from "./course-search";
 import { TranscriptImport } from "./transcript-import";
 
@@ -82,6 +92,15 @@ export interface StepCourseworkProps {
  */
 const STRIP_LIMIT = 8;
 
+/**
+ * Fades the top and bottom edge of the confirmed-course list when it is taller
+ * than its box, so the cut reads as "scroll me" rather than as a chip that
+ * failed to render. Written out as a full class string, never assembled, so
+ * Tailwind's source scan can see it.
+ */
+const CLIPPED_LIST_MASK =
+  "[mask-image:linear-gradient(to_bottom,transparent,black_0.5rem,black_calc(100%-0.5rem),transparent)]";
+
 /** Coalesce rapid taps into one re-rank so the strip does not shuffle mid-aim. */
 const RERANK_DEBOUNCE_MS = 180;
 
@@ -92,7 +111,9 @@ export function StepCoursework({
   removeCourse,
   onConfirmationBatch,
 }: StepCourseworkProps) {
-  const [deck, setDeck] = useState<GuessDeck | null>(() => peekCachedGuessDeck(state));
+  const [deck, setDeck] = useState<GuessDeck | null>(() =>
+    peekCachedGuessDeck(state),
+  );
   const [error, setError] = useState<string | null>(null);
   const [isTranscriptOpen, setIsTranscriptOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -120,6 +141,13 @@ export function StepCoursework({
 
   /** Candidates already offered once, so auto-confirmation cannot loop. */
   const seenRef = useRef<Set<string>>(new Set());
+
+  /**
+   * How many candidates are left in the local reserve. Read by
+   * `dismissSuggestion` to decide whether a dismissal needs the server at
+   * all; written in an effect below, alongside the other render-lagging refs.
+   */
+  const poolSizeRef = useRef(0);
 
   /**
    * True once the warm deck has been painted on this mount. The token-0 fetch
@@ -169,10 +197,14 @@ export function StepCoursework({
   useEffect(() => {
     const id = toast.info({
       title: "Took something we missed?",
-      description: "Import your transcript and we'll read the course list off it.",
+      description:
+        "Import your transcript and we'll read the course list off it.",
       duration: null,
       dedupeKey: "onboarding-transcript",
-      action: { label: "Import transcript", onPress: () => setIsTranscriptOpen(true) },
+      action: {
+        label: "Import transcript",
+        onPress: () => setIsTranscriptOpen(true),
+      },
     });
     transcriptToastRef.current = id;
     return () => {
@@ -211,7 +243,9 @@ export function StepCoursework({
     setError(null);
     setDeck(next);
 
-    const alreadyConfirmed = new Set(stateRef.current.courses.map((course) => course.courseId));
+    const alreadyConfirmed = new Set(
+      stateRef.current.courses.map((course) => course.courseId),
+    );
     const dismissed = new Set(stateRef.current.dismissedCourseIds);
     const fresh = next.tier1.filter(
       (candidate) =>
@@ -242,11 +276,16 @@ export function StepCoursework({
     if (rerankToken === 0 && paintedWarmDeckRef.current) return;
 
     startTransition(async () => {
-      const result = await loadGuessDeckCached(stateRef.current, guessDeckAction);
+      const result = await loadGuessDeckCached(
+        stateRef.current,
+        guessDeckAction,
+      );
       if (!active) return;
 
       if (!result.ok || !result.deck) {
-        setError(result.error ?? "We could not work out what you have probably taken.");
+        setError(
+          result.error ?? "We could not work out what you have probably taken.",
+        );
         return;
       }
 
@@ -294,9 +333,14 @@ export function StepCoursework({
        * often sits in the strip; confirming Data Structures should still
        * promote it onto the record immediately.
        */
-      const implied = collectImplied(course.courseId, skip, deckRef.current?.impliesTaken);
+      const implied = collectImplied(
+        course.courseId,
+        skip,
+        deckRef.current?.impliesTaken,
+      );
       for (const facts of implied) seenRef.current.add(facts.courseId);
-      if (implied.length > 0) addCoursesRef.current(implied.map(toGuestCourseFromFacts));
+      if (implied.length > 0)
+        addCoursesRef.current(implied.map(toGuestCourseFromFacts));
 
       onConfirmationBatch();
       confirmsRef.current += 1;
@@ -309,18 +353,85 @@ export function StepCoursework({
   );
 
   /**
-   * "I have not taken this." The chip leaves immediately, the id is
-   * remembered so the next deck cannot resurrect it, and a replacement
-   * is requested so the strip does not shrink.
+   * "I have not taken this." The chip leaves immediately and the id is
+   * remembered so the next deck cannot resurrect it.
+   *
+   * No re-rank, in the ordinary case. `DEFAULT_TIER_LIMIT` is 48 against a
+   * strip of 8 precisely so a dismissal refills from the reserve already in
+   * memory — `stabilizeStrip` drops the dismissed id and appends the next
+   * candidate in the same render. Asking the server as well bought nothing
+   * and cost the student a SECOND layout shift a fifth of a second after the
+   * first, which reads as the screen twitching rather than as an answer to
+   * the tap. The round trip is worth making only once the reserve is nearly
+   * spent, which is what the test below is.
+   *
+   * `+ 1` because `poolSizeRef` is a render behind: it holds the pool as it
+   * was before this dismissal removed one from it.
    */
   const dismissSuggestion = useCallback(
     (courseId: string) => {
       seenRef.current.add(courseId);
       removeCourse(courseId);
-      scheduleRerank();
+      if (poolSizeRef.current <= STRIP_LIMIT + 1) scheduleRerank();
     },
     [removeCourse, scheduleRerank],
   );
+
+  /**
+   * Answer one choose-one requirement.
+   *
+   * Every course in the route lands, which for a sequence is both terms — the
+   * student said "Literature Humanities", and Lit Hum is two semesters. Routed
+   * through `confirm` per course rather than a bulk add so each one still picks
+   * up its own implied prerequisites and re-rank bookkeeping.
+   */
+  const chooseRoute = useCallback(
+    (route: GuessChoiceRoute) => {
+      for (const facts of route.courses) {
+        // `picker`, not `onboarding_guess`: they chose this one themselves, and
+        // the profile screen shows the difference between our guess and their
+        // answer.
+        confirm({ ...toGuestCourseFromFacts(facts), source: "picker" });
+      }
+    },
+    [confirm],
+  );
+
+  /**
+   * "None yet" — dismiss every route, not just the first.
+   *
+   * A student saying they have not done the Physics requirement has ruled out
+   * all three sequences, and recording only one would leave the other two to
+   * come back as suggestion chips a moment later.
+   */
+  const declineChoice = useCallback(
+    (choice: GuessChoice) => {
+      for (const route of choice.routes) {
+        for (const facts of route.courses) dismissSuggestion(facts.courseId);
+      }
+    },
+    [dismissSuggestion],
+  );
+
+  /**
+   * The questions still worth asking.
+   *
+   * The deck already dropped groups that were answered when it was built; this
+   * is the same filter against state that has changed since, so a group leaves
+   * the screen on tap instead of waiting for the next re-rank.
+   */
+  const choices = useMemo(() => {
+    const confirmed = new Set(state.courses.map((course) => course.courseId));
+    const dismissed = new Set(state.dismissedCourseIds);
+    return (deck?.choices ?? []).filter((choice) => {
+      const everyCourse = choice.routes.flatMap((route) => route.courses);
+      if (everyCourse.some((facts) => confirmed.has(facts.courseId)))
+        return false;
+      return !choice.routes.every((route) =>
+        route.courses.some((facts) => dismissed.has(facts.courseId)),
+      );
+    });
+  }, [deck, state.courses, state.dismissedCourseIds]);
 
   /**
    * The strip: tier 2, minus anything already on the record or dismissed,
@@ -333,7 +444,9 @@ export function StepCoursework({
     const confirmed = new Set(state.courses.map((course) => course.courseId));
     const dismissed = new Set(state.dismissedCourseIds);
     return (deck?.tier2 ?? []).filter(
-      (candidate) => !confirmed.has(candidate.courseId) && !dismissed.has(candidate.courseId),
+      (candidate) =>
+        !confirmed.has(candidate.courseId) &&
+        !dismissed.has(candidate.courseId),
     );
   }, [deck, state.courses, state.dismissedCourseIds]);
 
@@ -343,55 +456,131 @@ export function StepCoursework({
   );
 
   useEffect(() => {
+    poolSizeRef.current = pool.length;
+  }, [pool]);
+
+  useEffect(() => {
     const next = suggestions.map((candidate) => candidate.courseId);
     setPinnedIds((current) => (sameIds(current, next) ? current : next));
   }, [suggestions]);
+
+  /*
+   * The capped record below, kept legible.
+   *
+   * Two things have to be true of a list that is taller than its box. The
+   * newest chip has to be visible, or confirming a course loses the only
+   * feedback that the tap landed — so the box scrolls to the bottom whenever
+   * the record GROWS. And the clip has to read as "there is more", or a chip
+   * sliced through the middle by a hard edge reads as a rendering bug; the
+   * mask fades the cut instead.
+   *
+   * Not on mount, which is why the previous count is tracked rather than the
+   * effect just firing on every commit. A student returning to this step
+   * should land at the top of their own record, not scrolled to the end of it.
+   *
+   * The class is toggled on the node rather than held in state: it is derived
+   * from a measurement that only exists after layout, and routing it through
+   * `useState` would mean a second render on every confirmation to apply a
+   * decoration. Updating the DOM directly is what an effect is for.
+   */
+  const confirmedListRef = useRef<HTMLDivElement | null>(null);
+  const confirmedCount = state.courses.length;
+  const lastConfirmedCount = useRef(confirmedCount);
+  useEffect(() => {
+    const node = confirmedListRef.current;
+    if (!node) return;
+
+    const grew = confirmedCount > lastConfirmedCount.current;
+    lastConfirmedCount.current = confirmedCount;
+
+    node.classList.toggle(
+      CLIPPED_LIST_MASK,
+      node.scrollHeight > node.clientHeight + 1,
+    );
+    if (grew) node.scrollTop = node.scrollHeight;
+  }, [confirmedCount]);
 
   const showSkeleton =
     !error &&
     (!deck ||
       (state.courses.length === 0 &&
-        (deck.tier1.some((candidate) => !state.dismissedCourseIds.includes(candidate.courseId)) ??
+        (deck.tier1.some(
+          (candidate) => !state.dismissedCourseIds.includes(candidate.courseId),
+        ) ??
           false)));
 
   return (
     <div className="flex flex-col gap-5">
       <p aria-live="polite" className="sr-only">
-        {isPending ? "Updating our suggestions" : showSkeleton ? "Loading course suggestions" : "Suggestions up to date"}
+        {isPending
+          ? "Updating our suggestions"
+          : showSkeleton
+            ? "Loading course suggestions"
+            : "Suggestions up to date"}
       </p>
 
       <section className="flex flex-col gap-4">
         {showSkeleton ? <CourseworkSkeleton /> : null}
 
+        {/*
+          ── Why this list is capped ──────────────────────────────────────
+
+          It sits above the search box, the choose-one questions and the
+          maybe-strip, so every row it gains pushes all three down the page.
+          A student confirming their way through a junior year adds twenty-odd
+          chips, and roughly every third one starts a new row — which moves the
+          strip out from under the finger that was aiming at it. Capping the
+          block turns an unbounded pusher into a fixed-size one.
+
+          Scrolled rather than truncated with a "show all": this is the
+          student's own record on a screen whose entire job is letting them
+          correct it, and a chip they cannot reach is a chip they cannot
+          remove. `overscroll-contain` keeps a flick inside the list from
+          chaining into the page behind it.
+
+          The alternative was moving the block below the strip, which fixes the
+          push by construction. It was not taken because "what you have told us
+          so far" belongs above the things that ask for more, and on a phone a
+          long record would put it off the bottom of the screen entirely.
+        */}
         {!showSkeleton && state.courses.length > 0 ? (
-          <ChipWrap className="gap-1.5 sm:gap-2">
-            {state.courses.map((course) => {
-              const lines = courseChipLines(course.code, course.title);
-              return (
-                <RemovableChip
-                  key={course.courseId}
-                  sublabel={lines.sublabel}
-                  /*
+          <div
+            ref={confirmedListRef}
+            className="max-h-40 overflow-y-auto overscroll-contain sm:max-h-56"
+          >
+            <ChipWrap className="gap-1.5 sm:gap-2">
+              {state.courses.map((course) => {
+                const lines = courseChipLines(course.code, course.title);
+                return (
+                  <RemovableChip
+                    key={course.courseId}
+                    sublabel={lines.sublabel}
+                    /*
                     The one place "we do not have this course" is stated. It is a
                     label, never a rejection: `student_courses.course_id` is
                     deliberately not a foreign key so transfer credit, AP credit and
                     archived terms are storable, and such rows are simply excluded
                     from similarity and requirement matching downstream.
                   */
-                  note={course.inCatalog ? undefined : "not in our catalog"}
-                  onRemove={() => removeCourse(course.courseId)}
-                  removeLabel={`Remove ${lines.label}${
-                    lines.sublabel ? ` — ${lines.sublabel}` : ""
-                  }`}
-                >
-                  {lines.label}
-                </RemovableChip>
-              );
-            })}
-          </ChipWrap>
+                    note={course.inCatalog ? undefined : "not in our catalog"}
+                    onRemove={() => removeCourse(course.courseId)}
+                    removeLabel={`Remove ${lines.label}${
+                      lines.sublabel ? ` — ${lines.sublabel}` : ""
+                    }`}
+                  >
+                    {lines.label}
+                  </RemovableChip>
+                );
+              })}
+            </ChipWrap>
+          </div>
         ) : null}
 
-        {error ? <p className="text-center text-body-regular text-text-secondary">{error}</p> : null}
+        {error ? (
+          <p className="text-center text-body-regular text-text-secondary">
+            {error}
+          </p>
+        ) : null}
 
         <CourseSearch
           confirmedIds={confirmedIds}
@@ -410,6 +599,20 @@ export function StepCoursework({
             })
           }
         />
+
+        {/*
+          Above the strip, and deliberately not part of it. These are questions
+          we know the student can answer; the strip below is guesses they can
+          wave away. Mixing them cost the strip half its slots — see
+          `course-choices.tsx`.
+        */}
+        {!showSkeleton ? (
+          <CourseChoices
+            choices={choices}
+            onChoose={chooseRoute}
+            onDecline={declineChoice}
+          />
+        ) : null}
 
         {!showSkeleton && suggestions.length > 0 ? (
           <div className="flex flex-col gap-3">
@@ -446,7 +649,10 @@ export function StepCoursework({
           onClose={() => setIsTranscriptOpen(false)}
           onImport={(courses: ResolvedCourse[], candidates) => {
             const termByCourse = new Map(
-              candidates.map((candidate) => [candidate.courseId, candidate.termLabel]),
+              candidates.map((candidate) => [
+                candidate.courseId,
+                candidate.termLabel,
+              ]),
             );
             addCourses(
               courses.map((course) => ({
