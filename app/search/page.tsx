@@ -7,7 +7,11 @@ import { CURRENT_TERM } from "@/lib/constants";
 import { SearchScreen } from "./search-screen";
 
 /**
- * The search surface — server shell only.
+ * The catalog surface — server shell only.
+ *
+ * The route stays `/search` while the rail and the heading say "Catalog": see
+ * `components/shell/nav.tsx` for why the label and the URL are allowed to
+ * disagree, and why renaming the URL is the expensive half.
  *
  * Search data lives in the client index artifact (`public/index/*.bin`), not in
  * the RSC payload. The server reads URL filters and mounts the client screen;
@@ -16,7 +20,7 @@ import { SearchScreen } from "./search-screen";
  */
 
 export const metadata: Metadata = {
-  title: "Search — LionPlan",
+  title: "Catalog — LionPlan",
   description:
     "Search every Columbia and Barnard course instantly. Filters apply locally, so results update within a frame of every keystroke.",
 };

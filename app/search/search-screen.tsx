@@ -197,7 +197,7 @@ export function SearchScreen({ initialFilters, termCode }: SearchScreenProps) {
         beside the field.
       */}
       <div className="sticky top-0 z-20 bg-background-full pb-3 pt-1 sm:-mx-3 sm:w-[calc(100%+1.5rem)] sm:px-3">
-        <PageHeader title="Search" hideTitleOnMobile>
+        <PageHeader title="Catalog" hideTitleOnMobile>
           <div className="flex items-start gap-2">
             <SearchBar
               query={filters.q ?? ""}

@@ -24,7 +24,9 @@ import { cx } from "@/utils/cx";
  * So the rail names the steps of that sentence and nothing else. Home is the
  * recommendations — the answer to "what should I take", given without being
  * asked. Chat is the same question in the student's own words, for everything
- * a ranked list cannot anticipate. Saved is where the survivors wait.
+ * a ranked list cannot anticipate. Catalog is the whole course list, for a
+ * student who already knows what they are looking for. Saved is where the
+ * survivors wait.
  *
  * Chat sits second, and second is the point. It used to BE the home page, with
  * the recommendations reduced to a rail above the box. That had the burden
@@ -32,18 +34,45 @@ import { cx } from "@/utils/cx";
  * and an empty box is the worst possible answer to it. The box is now the
  * thing you go to when the list did not cover your case.
  *
+ * ── Catalog is the one that came back ──────────────────────────────────────
+ *
+ * The three finding surfaces are ordered by how much of the question we
+ * answer: Recommendations answers it outright, Chat answers it in the
+ * student's words, Catalog answers nothing and hands over the whole list. That
+ * is the right last resort and the wrong default, which is why it sits third
+ * and not first — but it clears the bar below, because a student who arrives
+ * knowing they want ECON UN3211 should not have to ask us for it.
+ *
+ * It is labelled "Catalog" rather than "Search" because the rail names places,
+ * not actions: every other item is a noun. The route stays `/search` — links,
+ * bookmarks and the assistant's deep links all point at it, and renaming a URL
+ * to match a label is a cost paid by everyone who ever saved one.
+ *
+ * Adding it lit up eight pages that were already declaring `activeNav="search"`
+ * and getting nothing for it: every course and instructor page says it too, so
+ * the rail now highlights Catalog on a course detail page and the phone's bar
+ * titles it "Catalog" instead of "Search". That is the intended reading — a
+ * course page is a page of the catalog — and it is worth knowing that this
+ * item owns four routes, not one.
+ *
  * ── Nothing was deleted ────────────────────────────────────────────────────
  *
- * `/search`, `/schedule` and `/profile` are untouched routes that still render,
- * still work, and are still linked to from inside the app — search from the
- * assistant and from empty states, profile from the account menu, schedule
- * from a plan. `ShellNavKey` deliberately keeps their keys so those pages can
- * go on declaring `activeNav` without a cast: they are pages you arrive at
- * with a purpose, not places you browse to because the rail suggested it.
+ * `/schedule` and `/profile` are untouched routes that still render, still
+ * work, and are still linked to from inside the app — profile from the account
+ * menu, schedule from a plan. `ShellNavKey` deliberately keeps their keys so
+ * those pages can go on declaring `activeNav` without a cast: they are pages
+ * you arrive at with a purpose, not places you browse to because the rail
+ * suggested it.
  *
  * Putting one back is adding one object here. That is the whole cost, and it
  * should stay that cheap — but the bar is a page a student would go looking
  * for on their own, not a page we are proud of.
+ *
+ * Renaming one is NOT just this file: on a phone the top bar prints the label
+ * for the active page and the page hides its own heading, so a label changed
+ * here has to be changed on the page too. `page-name.test.ts` guards the pages
+ * that spell both out in `page.tsx`; the catalog spells its heading inside
+ * `search-screen.tsx`, which that scan does not reach.
  *
  * Route ownership note: this module only ever LINKS at routes, so it stays
  * correct whether or not any of them exist.
@@ -92,6 +121,16 @@ export const SHELL_NAV_ITEMS: ShellNavItem[] = [
     label: "Chat",
     href: "/chat",
     icon: RiChat3Line,
+  },
+  {
+    key: "search",
+    /*
+     * "Catalog" — the noun — while the route stays `/search`. See the note
+     * above on why the label and the URL are allowed to disagree.
+     */
+    label: "Catalog",
+    href: "/search",
+    icon: RiSearchLine,
   },
   {
     key: "saved",
