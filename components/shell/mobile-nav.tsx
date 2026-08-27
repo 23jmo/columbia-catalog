@@ -4,6 +4,7 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { RiMenuLine } from "@remixicon/react";
 
 import { CatalogSidebar } from "@/components/shell/catalog-sidebar";
+import { ChatFab } from "@/components/shell/chat-fab";
 import { MobileHeaderSlotProvider } from "@/components/shell/mobile-header-slot";
 import { ProgressiveBlur } from "@/components/shell/progressive-blur";
 import { SHELL_NAV_ITEMS, type ShellNavKey } from "@/components/shell/nav";
@@ -273,6 +274,11 @@ export function MobileShell({
             // unchanged and only the scrolled-under state differs. Zeroed at
             // `xl`, where the bar is hidden and the desktop rail takes over.
             "pt-[calc(3.5rem+env(safe-area-inset-top,0px))] xl:pt-0",
+            // Room to scroll the last card out from under the FAB. Only below
+            // `xl`: at desktop the button sits in the empty margin beside a
+            // centred column, and padding here would be a hole under it.
+            activeNav !== "chat" &&
+              "max-xl:pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))]",
             className,
           )}
           style={style}
@@ -280,6 +286,15 @@ export function MobileShell({
           <MobileHeaderSlotProvider node={headerSlot}>{children}</MobileHeaderSlotProvider>
         </div>
       </div>
+
+      {/*
+        Sibling of the transformed card, not a child of it. `position: fixed`
+        inside that card would ride the rail's `translate3d` and leave the
+        viewport. Hidden on `/chat` (the page already is the box) and while
+        the rail is open (the Chat row is on screen, covering this would be
+        a second copy of the same door).
+      */}
+      <ChatFab hidden={isOpen || activeNav === "chat"} />
     </div>
   );
 }
