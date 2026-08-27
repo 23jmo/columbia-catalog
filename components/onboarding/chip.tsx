@@ -110,8 +110,8 @@ export function OptionChip({
         aria-label={label}
         disabled={disabled}
         onClick={() => {
-          // Select is the affirmative tap; re-press to clear stays a quiet tick.
-          haptic(isSelected ? "selection" : "impact");
+          // Same short tick as nav and back — a selection, not a save.
+          haptic("selection");
           onPress();
         }}
         className={cx(
