@@ -47,6 +47,29 @@ thorough outside it.
    >   `node_modules/@ai-sdk/openai/docs/03-openai.mdx`, which is also where to
    >   check that a tier still supports tool calling before switching to it.
 
+   > **Amendment — 2026-08-27, owner decision.** Rules 1 and 2 were lifted a
+   > second time, for one purpose: reading a transcript nobody can select text
+   > from. `package.json` gained `tesseract.js` (WASM OCR, browser-only), and
+   > `npm install` was run.
+   >
+   > Same standing as the amendment above: recorded so the next agent does not
+   > find a dependency that "shouldn't" exist and delete it. **The rules are not
+   > advisory.** This exception covers that one package and nothing else.
+   >
+   > It is `tesseract.js` specifically, and not a vision model, because of the
+   > property it protects. `components/onboarding/transcript-import.tsx` says
+   > the file never leaves the browser, and a transcript image carries a name, a
+   > student id, grades and a GPA — not the course codes that are all we
+   > actually want. OCR in WASM keeps that true. Sending the page to a model
+   > provider would have needed no new dependency at all and was the cheaper
+   > build; it was declined for this reason. **Do not "simplify" this to a
+   > server-side vision call.**
+   >
+   > One thing worth knowing before touching it: it must stay lazily imported.
+   > A static import pulls the worker and ~2-4 MB of WASM into the bundle for
+   > every visitor, when the only people who need it are the few who upload a
+   > scan. See `lib/onboarding/transcript-ocr.ts`.
+
 3. **Only create or edit files inside the directories you own.** They are listed
    in your task prompt. If you need something from another lane, define a
    narrow local interface and code against it — do not reach into their files.
