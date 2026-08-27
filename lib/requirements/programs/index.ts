@@ -25,12 +25,22 @@ import { CC_MAJOR_COMPUTER_SCIENCE } from "./cc-major-computer-science";
 import { CC_MAJOR_ECONOMICS } from "./cc-major-economics";
 import { CC_MAJOR_ENGLISH } from "./cc-major-english";
 import { CC_MAJOR_HISTORY } from "./cc-major-history";
+import { CC_MAJOR_MATHEMATICS } from "./cc-major-mathematics";
+import { CC_MAJOR_NEUROSCIENCE_AND_BEHAVIOR } from "./cc-major-neuroscience-and-behavior";
+import { CC_MAJOR_PHILOSOPHY } from "./cc-major-philosophy";
+import { CC_MAJOR_PHYSICS } from "./cc-major-physics";
 import { CC_MAJOR_POLITICAL_SCIENCE } from "./cc-major-political-science";
 import { CC_MAJOR_PSYCHOLOGY } from "./cc-major-psychology";
+import { CC_MAJOR_SOCIOLOGY } from "./cc-major-sociology";
+import { CC_MAJOR_STATISTICS } from "./cc-major-statistics";
 import { CC_MINOR_COMPUTER_SCIENCE } from "./cc-minor-computer-science";
 import { SEAS_CORE } from "./seas-core";
+import { SEAS_MAJOR_APPLIED_MATHEMATICS } from "./seas-major-applied-mathematics";
 import { SEAS_MAJOR_BIOMEDICAL_ENGINEERING } from "./seas-major-biomedical-engineering";
+import { SEAS_MAJOR_CHEMICAL_ENGINEERING } from "./seas-major-chemical-engineering";
+import { SEAS_MAJOR_COMPUTER_ENGINEERING } from "./seas-major-computer-engineering";
 import { SEAS_MAJOR_COMPUTER_SCIENCE } from "./seas-major-computer-science";
+import { SEAS_MAJOR_ELECTRICAL_ENGINEERING } from "./seas-major-electrical-engineering";
 import { SEAS_MAJOR_MECHANICAL_ENGINEERING } from "./seas-major-mechanical-engineering";
 import { SEAS_MAJOR_OPERATIONS_RESEARCH } from "./seas-major-operations-research";
 
@@ -45,16 +55,40 @@ export const AUTHORED_PROGRAMS: Program[] = [
   CC_MAJOR_ECONOMICS,
   CC_MAJOR_ENGLISH,
   CC_MAJOR_HISTORY,
+  CC_MAJOR_MATHEMATICS,
+  /*
+   * One file for a program two departments run jointly. Biological Sciences and
+   * Psychology each publish their own half of it and the halves disagree — the
+   * Psychology page says "seven" biology courses in the same sentence that says
+   * "eleven courses" — so it is transcribed from both pages at once rather than
+   * assembled from either.
+   */
+  CC_MAJOR_NEUROSCIENCE_AND_BEHAVIOR,
+  CC_MAJOR_PHILOSOPHY,
+  CC_MAJOR_PHYSICS,
   CC_MAJOR_POLITICAL_SCIENCE,
   CC_MAJOR_PSYCHOLOGY,
+  CC_MAJOR_SOCIOLOGY,
+  CC_MAJOR_STATISTICS,
 
   // SEAS majors. Note these are genuinely different programs from their College
   // namesakes rather than aliases of them: SEAS Computer Science requires all
   // three of MATH UN1101 / UN1102 / APMA E2000 where the College's
   // identically-named requirement is a choice of one, and SEAS additionally
   // requires ENGI E1006 that the College only recommends.
+  SEAS_MAJOR_APPLIED_MATHEMATICS,
   SEAS_MAJOR_BIOMEDICAL_ENGINEERING,
+  SEAS_MAJOR_CHEMICAL_ENGINEERING,
+  /*
+   * Computer Engineering is its own program, not a track of Electrical
+   * Engineering or of Computer Science. The Bulletin gives it a department-level
+   * node of its own and both parent departments defer to it — and the degrees
+   * genuinely differ, in physics, probability, computing, the laboratory set and
+   * the elective total.
+   */
+  SEAS_MAJOR_COMPUTER_ENGINEERING,
   SEAS_MAJOR_COMPUTER_SCIENCE,
+  SEAS_MAJOR_ELECTRICAL_ENGINEERING,
   SEAS_MAJOR_MECHANICAL_ENGINEERING,
   SEAS_MAJOR_OPERATIONS_RESEARCH,
 
@@ -161,12 +195,22 @@ export {
   CC_MAJOR_ECONOMICS,
   CC_MAJOR_ENGLISH,
   CC_MAJOR_HISTORY,
+  CC_MAJOR_MATHEMATICS,
+  CC_MAJOR_NEUROSCIENCE_AND_BEHAVIOR,
+  CC_MAJOR_PHILOSOPHY,
+  CC_MAJOR_PHYSICS,
   CC_MAJOR_POLITICAL_SCIENCE,
   CC_MAJOR_PSYCHOLOGY,
+  CC_MAJOR_SOCIOLOGY,
+  CC_MAJOR_STATISTICS,
   CC_MINOR_COMPUTER_SCIENCE,
   SEAS_CORE,
+  SEAS_MAJOR_APPLIED_MATHEMATICS,
   SEAS_MAJOR_BIOMEDICAL_ENGINEERING,
+  SEAS_MAJOR_CHEMICAL_ENGINEERING,
+  SEAS_MAJOR_COMPUTER_ENGINEERING,
   SEAS_MAJOR_COMPUTER_SCIENCE,
+  SEAS_MAJOR_ELECTRICAL_ENGINEERING,
   SEAS_MAJOR_MECHANICAL_ENGINEERING,
   SEAS_MAJOR_OPERATIONS_RESEARCH,
 };

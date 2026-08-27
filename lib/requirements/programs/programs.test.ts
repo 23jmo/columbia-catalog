@@ -22,11 +22,21 @@ import { CC_CONCENTRATION_ECONOMICS } from "./cc-concentration-economics";
 import { CC_MAJOR_BIOLOGY } from "./cc-major-biology";
 import { CC_MAJOR_ENGLISH } from "./cc-major-english";
 import { CC_MAJOR_HISTORY } from "./cc-major-history";
+import { CC_MAJOR_MATHEMATICS } from "./cc-major-mathematics";
+import { CC_MAJOR_NEUROSCIENCE_AND_BEHAVIOR } from "./cc-major-neuroscience-and-behavior";
+import { CC_MAJOR_PHILOSOPHY } from "./cc-major-philosophy";
+import { CC_MAJOR_PHYSICS } from "./cc-major-physics";
 import { CC_MAJOR_POLITICAL_SCIENCE } from "./cc-major-political-science";
 import { CC_MAJOR_PSYCHOLOGY } from "./cc-major-psychology";
+import { CC_MAJOR_SOCIOLOGY } from "./cc-major-sociology";
+import { CC_MAJOR_STATISTICS } from "./cc-major-statistics";
 import { CC_MINOR_COMPUTER_SCIENCE } from "./cc-minor-computer-science";
+import { SEAS_MAJOR_APPLIED_MATHEMATICS } from "./seas-major-applied-mathematics";
 import { SEAS_MAJOR_BIOMEDICAL_ENGINEERING } from "./seas-major-biomedical-engineering";
+import { SEAS_MAJOR_CHEMICAL_ENGINEERING } from "./seas-major-chemical-engineering";
+import { SEAS_MAJOR_COMPUTER_ENGINEERING } from "./seas-major-computer-engineering";
 import { SEAS_MAJOR_COMPUTER_SCIENCE } from "./seas-major-computer-science";
+import { SEAS_MAJOR_ELECTRICAL_ENGINEERING } from "./seas-major-electrical-engineering";
 import { SEAS_MAJOR_MECHANICAL_ENGINEERING } from "./seas-major-mechanical-engineering";
 import { SEAS_MAJOR_OPERATIONS_RESEARCH } from "./seas-major-operations-research";
 
@@ -43,6 +53,16 @@ const TRANSCRIBED_PROGRAMS: Program[] = [
   SEAS_MAJOR_BIOMEDICAL_ENGINEERING,
   CC_MINOR_COMPUTER_SCIENCE,
   CC_CONCENTRATION_ECONOMICS,
+  CC_MAJOR_SOCIOLOGY,
+  CC_MAJOR_MATHEMATICS,
+  CC_MAJOR_PHYSICS,
+  CC_MAJOR_STATISTICS,
+  CC_MAJOR_PHILOSOPHY,
+  CC_MAJOR_NEUROSCIENCE_AND_BEHAVIOR,
+  SEAS_MAJOR_ELECTRICAL_ENGINEERING,
+  SEAS_MAJOR_COMPUTER_ENGINEERING,
+  SEAS_MAJOR_CHEMICAL_ENGINEERING,
+  SEAS_MAJOR_APPLIED_MATHEMATICS,
 ];
 
 /**

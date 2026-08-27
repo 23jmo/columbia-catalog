@@ -103,6 +103,59 @@ import type { Program } from "../types";
 const SOURCE =
   "https://bulletin.columbia.edu/columbia-college/departments-instruction/biological-sciences/#requirementstextcontainer";
 
+/**
+ * The Bulletin's Upper-Level Elective enumeration, all 37, in its own order.
+ *
+ * Exported because `cc-major-neuroscience-and-behavior` incorporates this exact
+ * list by reference — the Biological Sciences page tells an N&B student to draw
+ * their two biology electives "from the list of Upper Level Electives under the
+ * Biology Major". Two literal copies of one Bulletin table is the drift this
+ * directory's seventh trap warns about: the copies rot apart, and only one of
+ * them gets fixed when the department revises the list.
+ *
+ * Thirty-four printed rows; `BIOL UN3073`/`GU4073`, `UN3560`/`GU4560` and
+ * `UN3799`/`GU4799` are printed as "or" pairs, which is why the count is 37.
+ */
+export const BIOLOGY_UPPER_LEVEL_ELECTIVES = [
+  "BIOL UN3004",
+  "BIOL UN3005",
+  "BIOL UN3006",
+  "BIOL UN3019",
+  "BIOL UN3022",
+  "BIOL UN3025",
+  "BIOL UN3031",
+  "BIOL UN3041",
+  "BIOL UN3073",
+  "BIOL GU4073",
+  "BIOL UN3300",
+  "BIOL UN3320",
+  "BIOL UN3404",
+  "BIOL UN3560",
+  "BIOL GU4560",
+  "BIOL UN3799",
+  "BIOL GU4799",
+  "BIOL GU4001",
+  "BIOL GU4002",
+  "BIOL GU4034",
+  "BIOL GU4035",
+  "BIOL GU4036",
+  "BIOL GU4075",
+  "BIOL GU4080",
+  "BIOL GU4193",
+  "BIOL GU4290",
+  "BIOL GU4300",
+  "BIOL GU4310",
+  "BIOL GU4323",
+  "CHEM GU4324",
+  "BIOL GU4402",
+  "BIOL GU4501",
+  "BIOL GU4510",
+  "BIOL GU4512",
+  "BIOL GU4551",
+  "BIOL GU4600",
+  "BIOL GU4777",
+];
+
 export const CC_MAJOR_BIOLOGY: Program = {
   id: "cc-major-biology",
   kind: "major",
@@ -203,45 +256,7 @@ export const CC_MAJOR_BIOLOGY: Program = {
            * UN2501, UN3040) are on this list; neither are BIOL UN2005/UN2006.
            */
           excludeGroups: ["core-courses"],
-          include: [
-            "BIOL UN3004",
-            "BIOL UN3005",
-            "BIOL UN3006",
-            "BIOL UN3019",
-            "BIOL UN3022",
-            "BIOL UN3025",
-            "BIOL UN3031",
-            "BIOL UN3041",
-            "BIOL UN3073",
-            "BIOL GU4073",
-            "BIOL UN3300",
-            "BIOL UN3320",
-            "BIOL UN3404",
-            "BIOL UN3560",
-            "BIOL GU4560",
-            "BIOL UN3799",
-            "BIOL GU4799",
-            "BIOL GU4001",
-            "BIOL GU4002",
-            "BIOL GU4034",
-            "BIOL GU4035",
-            "BIOL GU4036",
-            "BIOL GU4075",
-            "BIOL GU4080",
-            "BIOL GU4193",
-            "BIOL GU4290",
-            "BIOL GU4300",
-            "BIOL GU4310",
-            "BIOL GU4323",
-            "CHEM GU4324",
-            "BIOL GU4402",
-            "BIOL GU4501",
-            "BIOL GU4510",
-            "BIOL GU4512",
-            "BIOL GU4551",
-            "BIOL GU4600",
-            "BIOL GU4777",
-          ],
+          include: BIOLOGY_UPPER_LEVEL_ELECTIVES,
         },
       },
       sourceUrl: SOURCE,

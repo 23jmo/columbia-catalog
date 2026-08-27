@@ -35,8 +35,12 @@ import type { BulletinCode } from "../code";
 import type { Program, RequirementGroup } from "../types";
 
 import { SEAS_CORE } from "./seas-core";
+import { SEAS_MAJOR_APPLIED_MATHEMATICS } from "./seas-major-applied-mathematics";
 import { SEAS_MAJOR_BIOMEDICAL_ENGINEERING } from "./seas-major-biomedical-engineering";
+import { SEAS_MAJOR_CHEMICAL_ENGINEERING } from "./seas-major-chemical-engineering";
+import { SEAS_MAJOR_COMPUTER_ENGINEERING } from "./seas-major-computer-engineering";
 import { SEAS_MAJOR_COMPUTER_SCIENCE } from "./seas-major-computer-science";
+import { SEAS_MAJOR_ELECTRICAL_ENGINEERING } from "./seas-major-electrical-engineering";
 import { SEAS_MAJOR_MECHANICAL_ENGINEERING } from "./seas-major-mechanical-engineering";
 import { SEAS_MAJOR_OPERATIONS_RESEARCH } from "./seas-major-operations-research";
 
@@ -46,6 +50,10 @@ const SEAS_MAJORS = [
   ["seas-major-biomedical-engineering", SEAS_MAJOR_BIOMEDICAL_ENGINEERING],
   ["seas-major-mechanical-engineering", SEAS_MAJOR_MECHANICAL_ENGINEERING],
   ["seas-major-operations-research", SEAS_MAJOR_OPERATIONS_RESEARCH],
+  ["seas-major-electrical-engineering", SEAS_MAJOR_ELECTRICAL_ENGINEERING],
+  ["seas-major-computer-engineering", SEAS_MAJOR_COMPUTER_ENGINEERING],
+  ["seas-major-chemical-engineering", SEAS_MAJOR_CHEMICAL_ENGINEERING],
+  ["seas-major-applied-mathematics", SEAS_MAJOR_APPLIED_MATHEMATICS],
 ] as const satisfies readonly (readonly [string, Program])[];
 
 /** The codes a rule names outright — the ones a duplicate can be spotted in. */
@@ -241,9 +249,312 @@ describe("courses the Bulletin names but our catalog lacks are kept, not dropped
     ["seas-major-mechanical-engineering", SEAS_MAJOR_MECHANICAL_ENGINEERING, "MATH UN3027"],
     ["seas-major-biomedical-engineering", SEAS_MAJOR_BIOMEDICAL_ENGINEERING, "BMEN E2910"],
     ["seas-major-operations-research", SEAS_MAJOR_OPERATIONS_RESEARCH, "COMS W3251"],
+    // Added 2026-08-26 with the four new majors, on the same reasoning.
+    ["seas-major-electrical-engineering", SEAS_MAJOR_ELECTRICAL_ENGINEERING, "COMS W3137"],
+    ["seas-major-computer-engineering", SEAS_MAJOR_COMPUTER_ENGINEERING, "COMS W1007"],
+    ["seas-major-computer-engineering", SEAS_MAJOR_COMPUTER_ENGINEERING, "SIEO W3600"],
+    /*
+     * `COMS W3561` is a harder case than the rest and is kept for a different
+     * reason. It is not merely absent from our four-term catalog — it returns an
+     * empty record from the Bulletin's OWN course endpoint, so it is not a
+     * course anywhere in the Bulletin. Both the HTML page and the PDF chart
+     * print it, so the error is upstream of CourseLeaf, and it is almost
+     * certainly a typo for `COMS W3251` COMPUTATIONAL LINEAR ALGEBRA — which is
+     * the linear-algebra option on two other SEAS pages. Kept as printed;
+     * `COMS W3251` deliberately NOT added, because that would be an inference
+     * dressed as a transcription.
+     */
+    ["seas-major-applied-mathematics", SEAS_MAJOR_APPLIED_MATHEMATICS, "COMS W3561"],
   ] as const)("%s still offers %s", (_id, program, code) => {
     const courseId = toCourseId(code);
     expect(courseId, `${code} is not even a parseable code`).toBeTruthy();
     expect(namedIds(program).has(courseId!)).toBe(true);
+  });
+
+  it("seas-major-chemical-engineering still offers CHEM UN2543", () => {
+    /*
+     * Asserted separately rather than in the table above, because this one is
+     * named inside a `points_matching` selector's `include` list and `namedIds`
+     * deliberately only reads codes a rule names outright — that helper exists
+     * to spot duplicates between the Core and a major, and a selector is not
+     * where a duplicate hides.
+     */
+    const laboratory = SEAS_MAJOR_CHEMICAL_ENGINEERING.groups.find(
+      (candidate) => candidate.id === "advanced-natural-science-laboratory",
+    )!;
+    if (laboratory.rule.kind !== "points_matching") throw new Error("expected points_matching");
+    expect(laboratory.rule.select.include).toContain("CHEM UN2543");
+  });
+});
+
+describe("Electrical and Computer Engineering are twins that differ in eight places", () => {
+  /*
+   * The two pages are structurally almost identical and the temptation to
+   * unify them — or to write the second by copying the first — is exactly what
+   * these tests exist to stop. Every divergence below was read off both live
+   * Bulletin pages on 2026-08-26, and each is printed on both pages rather than
+   * absent from one, so none of them is an editing slip.
+   */
+
+  it("Electrical Engineering runs three physics terms and Computer Engineering two", () => {
+    /*
+     * `PHYS UN1403` and `PHYS UN2601` appear nowhere on the Computer
+     * Engineering page — not in either grid, not in the PDF chart, not among
+     * its course anchors. Where EE puts a third physics lecture in the third
+     * slot, Computer Engineering puts the laboratory.
+     */
+    const ee = SEAS_MAJOR_ELECTRICAL_ENGINEERING.groups.find((g) => g.id === "physics")!;
+    const compe = SEAS_MAJOR_COMPUTER_ENGINEERING.groups.find((g) => g.id === "physics")!;
+    expect(ee.rule.kind).toBe("sequence_choice");
+    expect(compe.rule.kind).toBe("sequence_choice");
+    if (ee.rule.kind !== "sequence_choice" || compe.rule.kind !== "sequence_choice") return;
+
+    expect(ee.rule.sequences.map((s) => s.courses)).toContainEqual([
+      "PHYS UN1401",
+      "PHYS UN1402",
+      "PHYS UN1403",
+    ]);
+    for (const sequence of compe.rule.sequences) {
+      expect(sequence.courses).toHaveLength(2);
+    }
+    expect(namedIds(SEAS_MAJOR_COMPUTER_ENGINEERING).has(toCourseId("PHYS UN1403")!)).toBe(false);
+  });
+
+  it("Electrical Engineering bars STAT GU4001 from probability and Computer Engineering allows it", () => {
+    /*
+     * EE's footnote: "A course such as STAT GU4001 cannot generally be used to
+     * replace IEOR E3658 or STAT GU4203." Computer Engineering's, on the same
+     * requirement: STAT GU4001 "can be used instead of IEOR E3658", with only a
+     * warning about later prerequisites. Both are correct as printed; do not
+     * reconcile them.
+     */
+    const stat4001 = toCourseId("STAT GU4001")!;
+    const ee = SEAS_MAJOR_ELECTRICAL_ENGINEERING.groups.find((g) => g.id === "probability")!;
+    const compe = SEAS_MAJOR_COMPUTER_ENGINEERING.groups.find((g) => g.id === "probability")!;
+    expect(namedCodes(ee).map(toCourseId)).not.toContain(stat4001);
+    expect(namedCodes(compe).map(toCourseId)).toContain(stat4001);
+  });
+
+  it("neither degree accepts the shared five-course laboratory list", () => {
+    /*
+     * `seas-major-computer-science` and `seas-major-operations-research` use
+     * ["PHYS UN1494", "PHYS UN3081", "CHEM UN1500", "CHEM UN1507",
+     * "CHEM UN3085"]. `CHEM UN1507` and `CHEM UN3085` are printed on neither of
+     * these two pages, and widening the list would accept courses the
+     * departments never offered.
+     */
+    for (const major of [SEAS_MAJOR_ELECTRICAL_ENGINEERING, SEAS_MAJOR_COMPUTER_ENGINEERING]) {
+      const laboratory = major.groups.find((g) => g.id === "science-laboratory")!;
+      const codes = namedCodes(laboratory);
+      expect(codes).toHaveLength(3);
+      expect(codes).not.toContain("CHEM UN1507");
+      expect(codes).not.toContain("CHEM UN3085");
+    }
+  });
+
+  it("Computer Engineering requires ENGI E1006 AND a Java course; every other major treats them as alternatives", () => {
+    /*
+     * The PDF chart's computer science row is unambiguous: ENGI E1006 in
+     * semester I, COMS W1004 or W1007 in semester II, COMS W3203 later. Three
+     * separate computing requirements. Fold the Java course into
+     * `engineering-foundations` as an alternative — the way MechE and IEOR do —
+     * and a complete student is shown two unmet requirements.
+     */
+    const foundations = SEAS_MAJOR_COMPUTER_ENGINEERING.groups.find(
+      (g) => g.id === "engineering-foundations",
+    )!;
+    const java = SEAS_MAJOR_COMPUTER_ENGINEERING.groups.find((g) => g.id === "intro-programming")!;
+    expect(namedCodes(foundations)).toContain("ENGI E1006");
+    expect(java.rule.kind).toBe("n_of");
+    expect(namedCodes(java)).toEqual(["COMS W1004", "COMS W1007"]);
+    expect(namedCodes(java)).not.toContain("ENGI E1006");
+  });
+
+  it("Electrical Engineering has five laboratories and a capstone; Computer Engineering has four and none", () => {
+    const eeLabs = SEAS_MAJOR_ELECTRICAL_ENGINEERING.groups.find((g) => g.id === "ee-laboratories")!;
+    const compeLabs = SEAS_MAJOR_COMPUTER_ENGINEERING.groups.find((g) => g.id === "ce-laboratories")!;
+    expect(namedCodes(eeLabs)).toHaveLength(5);
+    expect(namedCodes(eeLabs)).toContain("ELEN E3043");
+    expect(namedCodes(compeLabs)).toHaveLength(4);
+    expect(namedCodes(compeLabs)).not.toContain("ELEN E3043");
+
+    expect(SEAS_MAJOR_ELECTRICAL_ENGINEERING.groups.map((g) => g.id)).toContain("senior-design");
+    expect(SEAS_MAJOR_COMPUTER_ENGINEERING.groups.map((g) => g.id)).not.toContain("senior-design");
+  });
+
+  it("Computer Engineering's applied-mathematics footnote is one branch wider than Electrical Engineering's", () => {
+    // The two footnotes read almost word for word the same. Computer
+    // Engineering adds COMS W3251; EE does not offer it.
+    const ee = SEAS_MAJOR_ELECTRICAL_ENGINEERING.groups.find(
+      (g) => g.id === "applied-mathematics",
+    )!;
+    const compe = SEAS_MAJOR_COMPUTER_ENGINEERING.groups.find(
+      (g) => g.id === "applied-mathematics",
+    )!;
+    expect(namedCodes(ee)).not.toContain("COMS W3251");
+    expect(namedCodes(compe)).toContain("COMS W3251");
+    // And neither carries MechE's MATH UN3027 branch, which is MechE's alone.
+    expect(namedCodes(ee)).not.toContain("MATH UN3027");
+    expect(namedCodes(compe)).not.toContain("MATH UN3027");
+  });
+});
+
+describe("Applied Mathematics hides four one-for-one substitutions in one footnote", () => {
+  /*
+   * The single biggest error available on that page. The grid prints six
+   * APMA/MATH core courses as flat rows; footnote 5 substitutes a Mathematics
+   * Department course for four of them. Transcribed as one `all_of` over the
+   * six — which is exactly what the grid looks like — a student who took
+   * MATH UN2010, MATH UN3028, MATH UN3007 and MATH UN2500, every one of them
+   * explicitly blessed by the Bulletin, fails FOUR requirements at once.
+   */
+  it.each([
+    ["linear-algebra", "MATH UN2010"],
+    ["partial-differential-equations", "MATH UN3028"],
+    ["complex-variables", "MATH UN3007"],
+    ["analysis", "MATH UN2500"],
+  ] as const)("%s accepts %s in place of the APAM course", (groupId, substitute) => {
+    const requirement = SEAS_MAJOR_APPLIED_MATHEMATICS.groups.find((g) => g.id === groupId)!;
+    expect(requirement.rule.kind).toBe("n_of");
+    expect(namedCodes(requirement)).toContain(substitute);
+  });
+
+  it("keeps APMA E4300 and APMA E4101 as an all_of, because footnote 5 does not touch them", () => {
+    // The tell that the four above are real: the two core rows beside them
+    // carry no footnote marker at all.
+    const core = SEAS_MAJOR_APPLIED_MATHEMATICS.groups.find(
+      (g) => g.id === "applied-mathematics-core",
+    )!;
+    expect(core.rule.kind).toBe("all_of");
+    expect(namedCodes(core)).toEqual(["APMA E4300", "APMA E4101"]);
+  });
+
+  it("excludes every named group from the MATH/APMA/STAT elective, or it is vacuous", () => {
+    /*
+     * Every required course in this major except ENGI E1006, ENGI E1102, the
+     * physics block and the chemistry-or-biology course is a MATH, APMA or STAT
+     * course. Without exclusions, a student who took exactly the prescribed
+     * curriculum and not one extra course scores 3 of 3 — the `cs-electives` bug
+     * of 2026-08-24, reproduced. `probability` and `applied-probability` are the
+     * two that were missed on the first pass of that fix.
+     */
+    const elective = SEAS_MAJOR_APPLIED_MATHEMATICS.groups.find(
+      (g) => g.id === "math-apma-stat-elective",
+    )!;
+    expect(elective.rule.kind).toBe("points_matching");
+    if (elective.rule.kind !== "points_matching") return;
+
+    const excluded = new Set(elective.rule.select.excludeGroups ?? []);
+    const mathish = SEAS_MAJOR_APPLIED_MATHEMATICS.groups.filter((candidate) =>
+      namedCodes(candidate).some((code) => /^(MATH|APMA|STAT) /.test(code)),
+    );
+    for (const candidate of mathish) {
+      expect(excluded.has(candidate.id), `${candidate.id} is not excluded`).toBe(true);
+    }
+  });
+
+  it("keeps PHYS UN3081 in the laboratory group and out of physics sequence 3", () => {
+    // It sits in the sequence-3 slot of semester III, but it is a laboratory.
+    // Listing it in both would be one course paying for two requirements
+    // evaluated independently, inside a single file.
+    const physics = SEAS_MAJOR_APPLIED_MATHEMATICS.groups.find((g) => g.id === "physics")!;
+    const laboratory = SEAS_MAJOR_APPLIED_MATHEMATICS.groups.find(
+      (g) => g.id === "physics-laboratory",
+    )!;
+    expect(namedCodes(physics)).not.toContain("PHYS UN3081");
+    expect(namedCodes(laboratory)).toContain("PHYS UN3081");
+  });
+
+  it("encodes the transfer student's PHYS BC3001 route as its own branch", () => {
+    // Footnote 2. A per-term alternative has no home in a rule whose branches
+    // are whole course lists — the same handling MechE gives its footnote 3.
+    const physics = SEAS_MAJOR_APPLIED_MATHEMATICS.groups.find((g) => g.id === "physics")!;
+    if (physics.rule.kind !== "sequence_choice") throw new Error("expected sequence_choice");
+    expect(physics.rule.sequences.map((s) => s.courses)).toContainEqual([
+      "PHYS UN1401",
+      "PHYS UN1402",
+      "PHYS BC3001",
+    ]);
+  });
+
+  it("requires both seminars, including the 0-point junior one", () => {
+    /*
+     * A deliberate departure from how the other SEAS files treat 0-point
+     * courses. APMA E2001 and ECON UN1155 are recitations welded to a lecture
+     * with an ampersand and are noted rather than required; APMA E4901 is a
+     * standalone course registered for in a different year, and the Curriculum
+     * tab says students are "required to register for … during both".
+     */
+    const seminars = SEAS_MAJOR_APPLIED_MATHEMATICS.groups.find((g) => g.id === "seminars")!;
+    expect(seminars.rule.kind).toBe("all_of");
+    expect(namedCodes(seminars)).toEqual(["APMA E4901", "APMA E4903"]);
+  });
+});
+
+describe("Chemical Engineering's chemistry is a sequence, and its laboratories are three", () => {
+  it("runs chemistry as a three-branch sequence into organic chemistry", () => {
+    /*
+     * Eight codes across three semesters. Written as `n_of { n: 3 }` it would
+     * accept CHEM UN1403 + CHEM UN1507 + CHEM UN2046 — the first term of
+     * sequence 1 welded to two terms of sequence 3, a registrable schedule that
+     * completes no sequence — and CHEM UN1604 + CHEM UN2443 + CHEM UN1500,
+     * which skips the intensive laboratory entirely.
+     */
+    const chemistry = SEAS_MAJOR_CHEMICAL_ENGINEERING.groups.find((g) => g.id === "chemistry")!;
+    expect(chemistry.rule.kind).toBe("sequence_choice");
+    if (chemistry.rule.kind !== "sequence_choice") return;
+    expect(chemistry.rule.sequences.map((s) => s.courses)).toEqual([
+      ["CHEM UN1403", "CHEM UN1500", "CHEM UN1404", "CHEM UN2443"],
+      ["CHEM UN1604", "CHEM UN1507", "CHEM UN2443"],
+      ["CHEM UN2045", "CHEM UN2046", "CHEM UN1507"],
+    ]);
+  });
+
+  it("keeps the chemistry laboratory out of the physics laboratory group", () => {
+    /*
+     * Copying the five-option `science-laboratory` list here would let a
+     * student satisfy this requirement with the very chemistry laboratory their
+     * chemistry sequence already required — one course paying for two.
+     */
+    const laboratory = SEAS_MAJOR_CHEMICAL_ENGINEERING.groups.find(
+      (g) => g.id === "physics-laboratory",
+    )!;
+    expect(namedCodes(laboratory)).toEqual(["PHYS UN1494", "PHYS UN3081"]);
+  });
+
+  it("prices the advanced natural-science laboratory in points, not courses", () => {
+    /*
+     * Two of the seven options are 1.5-point half-laboratories against a
+     * 3-point total. `n_of { n: 1 }` would go green on half a requirement;
+     * `n_of { n: 2 }` would refuse a student who took the single 3-point
+     * CHEM UN3085.
+     */
+    const laboratory = SEAS_MAJOR_CHEMICAL_ENGINEERING.groups.find(
+      (g) => g.id === "advanced-natural-science-laboratory",
+    )!;
+    expect(laboratory.rule.kind).toBe("points_matching");
+    if (laboratory.rule.kind !== "points_matching") return;
+    expect(laboratory.rule.points).toBe(3);
+    // Include-only: the selector matches its include list and nothing else.
+    expect(laboratory.rule.select.subjects).toBeUndefined();
+    expect(laboratory.rule.select.numberRange).toBeUndefined();
+    expect(laboratory.rule.select.include).toHaveLength(7);
+  });
+
+  it("does not require a linear algebra course twice", () => {
+    // MechE's five-branch `applied-mathematics` group trades APMA E2101 against
+    // a PAIR of courses. ChemE's ODE requirement is a flat one-of-two, and its
+    // linear algebra lives in the separate math elective.
+    const ode = SEAS_MAJOR_CHEMICAL_ENGINEERING.groups.find(
+      (g) => g.id === "differential-equations",
+    )!;
+    expect(namedCodes(ode)).toEqual(["MATH UN2030", "APMA E2101"]);
+    const elective = SEAS_MAJOR_CHEMICAL_ENGINEERING.groups.find((g) => g.id === "math-elective")!;
+    expect(namedCodes(elective)).toContain("MATH UN2010");
+  });
+
+  it("does not require ELEN E1201", () => {
+    // MechE and BME do; this degree's grid never prints it.
+    expect(namedIds(SEAS_MAJOR_CHEMICAL_ENGINEERING).has(toCourseId("ELEN E1201")!)).toBe(false);
   });
 });

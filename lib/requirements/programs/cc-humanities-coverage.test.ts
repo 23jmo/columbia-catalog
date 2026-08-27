@@ -34,6 +34,7 @@ import type { Program, RequirementGroup } from "../types";
 
 import { CC_MAJOR_ENGLISH } from "./cc-major-english";
 import { CC_MAJOR_HISTORY } from "./cc-major-history";
+import { CC_MAJOR_PHILOSOPHY } from "./cc-major-philosophy";
 import { CC_MAJOR_PSYCHOLOGY } from "./cc-major-psychology";
 
 function groupOf(program: Program, id: string): RequirementGroup {
@@ -254,5 +255,101 @@ describe("cc-major-english covers every row of the 2024-5-and-after major", () =
      * this group.
      */
     expect(ten.rule.select.excludeGroups).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Philosophy — added 2026-08-26
+// ---------------------------------------------------------------------------
+
+describe("cc-major-philosophy counts thirty points, not six courses", () => {
+  it("carries a thirty-point block above the six named requirements", () => {
+    /*
+     * "At least 30 points in philosophy ... including:" and then the six named
+     * rows. They come to 21–23 points. A six-group transcription — which is
+     * exactly what the Major table looks like — reports a student COMPLETE at
+     * 22 of 30, two or three courses short of the degree, and nothing else in
+     * the audit would notice.
+     */
+    const thirty = groupOf(CC_MAJOR_PHILOSOPHY, "thirty-points");
+    expect(thirty.rule.kind).toBe("points_matching");
+    if (thirty.rule.kind !== "points_matching") return;
+    expect(thirty.rule.points).toBe(30);
+    expect(thirty.rule.select.subjects).toEqual(["PHIL"]);
+  });
+
+  it("is cumulative by design, so it must not exclude the six named groups", () => {
+    // The six are the FIRST of the thirty points, not thirty more beside them.
+    // `vacuity.test.ts` allowlists this group for that reason; if a future edit
+    // adds `excludeGroups` here, the major silently grows by 21 points.
+    const thirty = groupOf(CC_MAJOR_PHILOSOPHY, "thirty-points");
+    if (thirty.rule.kind !== "points_matching") throw new Error("expected points_matching");
+    expect(thirty.rule.select.excludeGroups).toBeUndefined();
+  });
+
+  it("reads the Major table's 'UN or GU' as 1000–4999", () => {
+    /*
+     * The prose block and the department guide both say "UN, GU, or GR", which
+     * would be [1000, 6999]. The narrow reading wins: GR courses need
+     * instructor permission and are rare, under-counting sends a student to the
+     * DUS while over-counting sends them to the registrar after add/drop, and
+     * 9000-level PHIL is doctoral dissertation registration that must never
+     * count. If the department confirms the wider reading the change is one
+     * number.
+     */
+    const thirty = groupOf(CC_MAJOR_PHILOSOPHY, "thirty-points");
+    if (thirty.rule.kind !== "points_matching") throw new Error("expected points_matching");
+    expect(thirty.rule.select.numberRange).toEqual([1000, 4999]);
+  });
+
+  it("excludes the Barnard-only courses by name, because numberRange cannot", () => {
+    // Columbia and Barnard run one joint philosophy curriculum and all of it
+    // counts except the courses written for Barnard students. `numberRange`
+    // reads the four-digit number regardless of prefix, so PHIL BC4050–BC4052
+    // fall inside 1000–4999 and have to be named.
+    const thirty = groupOf(CC_MAJOR_PHILOSOPHY, "thirty-points");
+    if (thirty.rule.kind !== "points_matching") throw new Error("expected points_matching");
+    const excluded = thirty.rule.select.exclude ?? [];
+    expect(excluded).toContain("PHIL UN1401");
+    for (const code of ["PHIL BC4050", "PHIL BC4051", "PHIL BC4052"]) {
+      expect(excluded).toContain(code);
+    }
+  });
+
+  it("lists ethics but attests metaphysics, because the Bulletin lists one and exemplifies the other", () => {
+    /*
+     * The distinction is the whole reason these are two different rule kinds.
+     * The ethics table says "from the following:" and prints three codes — the
+     * one place on the page the department publishes a list. Every source for
+     * metaphysics and epistemology says "e.g.", and no approved-course list for
+     * that area is published anywhere, so a numeric rule there would be an
+     * invention.
+     */
+    const ethics = groupOf(CC_MAJOR_PHILOSOPHY, "ethics-social-and-political-philosophy");
+    expect(ethics.rule.kind).toBe("n_of");
+    if (ethics.rule.kind === "n_of") {
+      expect(ethics.rule.courses).toEqual(["PHIL UN2702", "PHIL UN3701", "PHIL UN3751"]);
+    }
+    expect(groupOf(CC_MAJOR_PHILOSOPHY, "metaphysics-and-epistemology").rule.kind).toBe(
+      "attested",
+    );
+  });
+
+  it("keeps the two History of Philosophy rows as two independent choices", () => {
+    // Not a sequence. Each row is its own one-of-three, and a student who took
+    // two ancient-philosophy courses has satisfied one requirement, not two.
+    for (const id of ["history-of-philosophy-i", "history-of-philosophy-ii"]) {
+      const rule = groupOf(CC_MAJOR_PHILOSOPHY, id).rule;
+      expect(rule.kind).toBe("n_of");
+      if (rule.kind !== "n_of") continue;
+      expect(rule.n).toBe(1);
+    }
+  });
+
+  it("says PHIL UN1401 does not count, on the group the student reads", () => {
+    // Named twice on the same tab as not counting toward the major, and it is
+    // the course a student is most likely to have taken by mistake.
+    expect(proseOf(groupOf(CC_MAJOR_PHILOSOPHY, "logic"))).toMatch(/PHIL UN1401/);
+    expect(toCourseId("PHIL UN1401")).not.toBeNull();
   });
 });

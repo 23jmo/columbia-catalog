@@ -109,6 +109,44 @@ const POINTS: Record<string, number> = {
   "PSYC UN1451": 0,
   "PSYC UN1456": 0,
   "PSYC UN1611": 0,
+  /*
+   * Philosophy is the one major here whose headline requirement is counted in
+   * POINTS, and half of its rows are worth four. At the fixture default of 3
+   * the `thirty-points` records would each be several points light and their
+   * arithmetic would be untraceable to the Bulletin, which is the only thing
+   * that makes them golden records rather than snapshots.
+   *
+   * PHIL UN2201 and PHIL UN3121 are worth stating twice over: our catalog
+   * holds both rows with a NULL point value, so the live audit scores them at
+   * zero. The Bulletin says four. These records are written against the
+   * Bulletin — if the catalog is ever the thing under test, that is a separate
+   * fixture and a separate assertion.
+   */
+  "PHIL UN2101": 4,
+  "PHIL UN2201": 4,
+  "PHIL UN3121": 4,
+  "PHIL UN3411": 4,
+  "PHIL UN3601": 4,
+  "PHIL UN3701": 4,
+  "PHIL UN3960": 4,
+  // Barnard's senior seminar, so the exclusion record can say how many points
+  // it is refusing to count rather than merely that it refuses.
+  "PHIL BC4050": 4,
+  /*
+   * Organic chemistry's two half-labs, 1.5 points each.
+   *
+   * The pair is the whole reason Chemical Engineering's advanced laboratory is
+   * `points_matching` and not `n_of`, and the two `cheme-*-lab` records below
+   * are unwritable without these values: at the default of 3 a single half-lab
+   * would satisfy a 3-point requirement on its own.
+   *
+   * Our live catalog stores CHEM UN2493 at 0.00 points, which is wrong — the
+   * Bulletin and the department both publish 1.5. The fixture states the
+   * Bulletin's number, and the catalog defect is named here rather than
+   * encoded, because a fixture that mirrored the defect would quietly bless it.
+   */
+  "CHEM UN2493": 1.5,
+  "CHEM UN2496": 1.5,
 };
 
 /**
@@ -219,6 +257,38 @@ const EXTRA_COURSES = [
   "PSYC UN3280",
   "PSYC UN3450",
   "PSYC UN3630",
+  // Mathematics electives — 3 points each, and named by no rule because the
+  // elective block is a subject-and-level selector rather than a list.
+  "MATH UN3020",
+  "MATH GU4051",
+  "MATH GU4053",
+  "MATH UN3386",
+  /*
+   * Philosophy courses the records take but no rule names.
+   *
+   * `metaphysics-and-epistemology` is `attested`, so the Bulletin's own
+   * examples for it — Philosophy of Science among them — appear in a note and
+   * in no rule, which means `buildCatalog` never sees them and `pointsFor`
+   * scores them zero. UN3352 is the ninth course that carries the substitution
+   * record past thirty points rather than stopping one short.
+   */
+  "PHIL UN3551",
+  "PHIL UN3352",
+  // Sociology electives. None of the twelve the Bulletin prints as examples —
+  // that is the point of the record that uses them.
+  "SOCI UN3203",
+  "SOCI UN3217",
+  "SOCI UN3235",
+  "SOCI UN3302",
+  "SOCI UN3901",
+  "SOCI UN3914",
+  "SOCI UN3968",
+  "SOCI GU4801",
+  // The statistics course Neuroscience and Behavior refuses by name.
+  "STAT UN1001",
+  // Intermediate physics laboratory, taken twice on paper and countable once.
+  "PHYS UN3081",
+  "PHYS UN3083",
 ];
 
 /* ==========================================================================
@@ -694,6 +764,1121 @@ export const GOLDEN_RECORDS: GoldenRecord[] = [
       statistics: { status: "satisfied" },
       "research-methods": { status: "satisfied" },
       "eleven-courses": { status: "in_progress", completed: 10 },
+    },
+    verified: "2026-08-26",
+  },
+
+  /* ---------------------------------------------------------------------- *
+   * Mathematics
+   * ---------------------------------------------------------------------- */
+  {
+    id: "math-honors-ap-sequence",
+    who: "Mathematics major with a 5 on the BC exam who began at Honors Mathematics A, so Calculus I and II are AP credit and appear on no transcript.",
+    /*
+     * `econ-honors-math`, reproduced on the department that owns calculus.
+     *
+     * Against a literal transcription of the honors route —
+     * `["MATH UN1101","MATH UN1102","MATH UN1207","MATH UN1208"]` and nothing
+     * else — this student reads 2 of 4 and is told to go back and take
+     * Calculus I. The Bulletin's own comment row is the alternative: "13-15
+     * points INCLUDING Advanced Placement Credit", which is why the AP-shortened
+     * branches are separate sequences rather than a footnote nobody encoded.
+     */
+    programId: "cc-major-mathematics",
+    taken: [
+      "MATH UN1207",
+      "MATH UN1208",
+      "MATH GU4041",
+      "MATH GU4042",
+      "MATH GU4061",
+      "MATH GU4062",
+      "MATH UN3951",
+      // Twelve points of electives: four 3-point courses, none of them
+      // consumed by a named group above.
+      "MATH UN3020",
+      "MATH GU4051",
+      "MATH GU4053",
+      "MATH UN3386",
+    ],
+    expect: {
+      "calculus-sequence": { status: "satisfied", completed: 2 },
+      "modern-algebra": { status: "satisfied", completed: 2 },
+      "modern-analysis": { status: "satisfied", completed: 2 },
+      seminar: { status: "satisfied", completed: 1 },
+      electives: { status: "satisfied", completed: 12 },
+    },
+    expectSatisfiedCount: 5,
+    verified: "2026-08-26",
+  },
+  {
+    id: "math-mixed-sequence",
+    who: "Mathematics major who took Calculus I, Calculus II, Accelerated Multivariable Calculus and Calculus IV — four calculus courses, no completed route.",
+    /*
+     * The schedule `n_of { n: 4 }` would wrongly pass, and it is buildable:
+     * `UN1205` belongs to the accelerated route and `UN1202` to the ordinary
+     * one, neither excludes the other, and both are offered.
+     *
+     * The electives line is the second half. `UN1202` and `UN1205` are below
+     * the 2000 floor, so twelve points of genuine calculus buys nothing here —
+     * which is the correct and counter-intuitive answer, and worth pinning
+     * before someone "fixes" the floor to be kind.
+     */
+    programId: "cc-major-mathematics",
+    taken: ["MATH UN1101", "MATH UN1102", "MATH UN1205", "MATH UN1202"],
+    expect: {
+      // Best alternative is the accelerated route at 3 of 4; Linear Algebra is
+      // what is missing. Not satisfied, and not unmet either.
+      "calculus-sequence": { status: "in_progress", completed: 3 },
+      "modern-algebra": { status: "unmet", completed: 0 },
+      electives: { status: "unmet", completed: 0 },
+    },
+    verified: "2026-08-26",
+  },
+  {
+    id: "math-analysis-substituted",
+    who: "Mathematics major not contemplating graduate study who replaced BOTH terms of Modern Analysis, using Analysis and Optimization and Fourier Analysis, as footnote 2 allows.",
+    /*
+     * Footnote 2 is the MechE-footnote-3 shape on this page: a per-term
+     * substitution that marks a complete student incomplete when it is missed.
+     * It also pins the `n_of { n: 2 }` decision — had the block stayed one
+     * `all_of` over four courses, this student reads 2 of 4.
+     *
+     * The load-bearing expectation is the last one. Every course this student
+     * holds was consumed by a named group, and `MATH UN3952` is barred by
+     * footnote 3 (only one seminar ever counts), so the elective block reads
+     * ZERO of twelve. Without `excludeGroups` it reads satisfied and reports a
+     * major finished a full year early.
+     */
+    programId: "cc-major-mathematics",
+    taken: [
+      "MATH UN1101",
+      "MATH UN1102",
+      "MATH UN1201",
+      "MATH UN1202",
+      "MATH UN2010",
+      "MATH GU4041",
+      "MATH GU4042",
+      "MATH UN2500",
+      "MATH GU4032",
+      "MATH UN3952",
+    ],
+    expect: {
+      "calculus-sequence": { status: "satisfied", completed: 5 },
+      "modern-algebra": { status: "satisfied", completed: 2 },
+      "modern-analysis": { status: "satisfied", completed: 2 },
+      // `n_of { n: 1 }`, not `all_of` — one seminar is the requirement.
+      seminar: { status: "satisfied", completed: 1 },
+      electives: { status: "unmet", completed: 0 },
+    },
+    expectSatisfiedCount: 4,
+    verified: "2026-08-26",
+  },
+  {
+    id: "math-cognate-elective",
+    who: "Mathematics major who filled part of the elective block with two approved cognates from outside the department.",
+    /*
+     * Two things at once, and a third that was found by writing it.
+     *
+     * First: the `include` list. A selector of `subjects: ["MATH"]` alone
+     * silently drops all 79 approved cognates, and this student's COMS and PHIL
+     * courses would count for nothing.
+     *
+     * Second: points, not courses. Three elective courses is not twelve points,
+     * and this record must read IN PROGRESS. A transcriber who writes
+     * `n_matching { n: 4 }` fails here and nowhere else.
+     *
+     * Third, and the reason the arithmetic below is not the obvious one: this
+     * student holds THREE courses acceptable to `modern-analysis`, which needs
+     * two. `evaluateGroup` reports `matched.slice(0, required)` and `ordered`
+     * sorts by course id, so the two it consumes are `MATH UN3007` and
+     * `MATH GU4061` — and `MATH GU4062`, the surplus, falls through into the
+     * elective pool. Which of the three is freed is decided by string order and
+     * nothing else. It happens not to matter here because all three are worth
+     * 3 points, but it is arbitrary, and this record is where that shows.
+     *
+     *   COMS W3203 (3) + MATH GU4062 (3) + PHIL UN3411 (4) = 10 of 12.
+     *
+     * Separately: the student has used 7 points from outside the department
+     * against a 6-point cap the audit does not enforce and the group note warns
+     * about.
+     */
+    programId: "cc-major-mathematics",
+    taken: [
+      "MATH UN1101",
+      "MATH UN1102",
+      "MATH UN1201",
+      "MATH UN1202",
+      "MATH UN2010",
+      "MATH GU4041",
+      "MATH GU4042",
+      "MATH GU4061",
+      "MATH GU4062",
+      "MATH UN3951",
+      "COMS W3203",
+      "PHIL UN3411",
+      "MATH UN3007",
+    ],
+    expect: {
+      "calculus-sequence": { status: "satisfied", completed: 5 },
+      "modern-analysis": { status: "satisfied", completed: 2 },
+      electives: { status: "in_progress", completed: 10 },
+    },
+    verified: "2026-08-26",
+  },
+
+  /* ---------------------------------------------------------------------- *
+   * Statistics
+   * ---------------------------------------------------------------------- */
+  {
+    id: "stat-honors-math",
+    who: "Statistics major who satisfied the mathematics prerequisite with Honors Mathematics A and B, as the bullet under the table permits.",
+    /*
+     * The honors route on this page is a bullet with no footnote marker, sitting
+     * BELOW a four-row block that looks exactly like an `all_of`. Encoded that
+     * way, this student reads 0 of 4 on the largest block of the major and is
+     * told to take four courses they have surpassed.
+     *
+     * `advanced-electives` is asserted deliberately: an `attested` group is
+     * unmet until the student ticks it, however much coursework they hold. That
+     * is the tier working as designed and not a bug to be optimised away.
+     */
+    programId: "cc-major-statistics",
+    taken: [
+      "MATH UN1207",
+      "MATH UN1208",
+      "COMS W1004",
+      "STAT UN1201",
+      "STAT GU4203",
+      "STAT GU4204",
+      "STAT GU4205",
+      "STAT GU4206",
+      "STAT GU4207",
+      "STAT GU4221",
+      "STAT GU4224",
+      "MATH GU4061",
+    ],
+    expect: {
+      "mathematics-prerequisite": { status: "satisfied", completed: 2 },
+      computing: { status: "satisfied", completed: 1 },
+      "statistics-prerequisite": { status: "satisfied", completed: 1 },
+      "statistics-core": { status: "satisfied", completed: 5 },
+      "statistics-elective": { status: "satisfied", completed: 1 },
+      "advanced-electives": { status: "unmet", completed: 0 },
+    },
+    expectSatisfiedCount: 5,
+    verified: "2026-08-26",
+  },
+  {
+    id: "stat-mixed-math",
+    who: "Statistics major who took Calculus I and Honors Mathematics A — two first-term courses from different tracks.",
+    /*
+     * The schedule `n_of { n: 2 }` would wrongly pass. Two terms of work,
+     * nothing finished, and the group must report against the HONORS route:
+     * 1 of 2 beats 1 of 4, and finishing the honors route is the shorter road
+     * from where this student stands.
+     */
+    programId: "cc-major-statistics",
+    taken: ["MATH UN1101", "MATH UN1207"],
+    expect: {
+      "mathematics-prerequisite": { status: "in_progress", completed: 1 },
+      "statistics-core": { status: "unmet", completed: 0 },
+    },
+    verified: "2026-08-26",
+  },
+  {
+    id: "stat-accelerated-math",
+    who: "Statistics major who took Accelerated Multivariable Calculus — the route this same department endorses for Data Science and Economics-Statistics, and does not print for this major.",
+    /*
+     * A deliberately CONSERVATIVE expectation, written down so that the day the
+     * DUS answers, the answer lands as a visible test change rather than a
+     * quiet edit.
+     *
+     * The Statistics page prints two mathematics routes and `MATH UN1205` is in
+     * neither, so this student matches alternative 1 on three of four courses
+     * and owes `MATH UN1201`. If UN1205 is confirmed acceptable, this flips to
+     * satisfied and a third alternative joins the rule. Until then the audit
+     * under-counts on purpose: that sends the student to their adviser, where
+     * the question can actually be answered.
+     */
+    programId: "cc-major-statistics",
+    taken: [
+      "MATH UN1101",
+      "MATH UN1102",
+      "MATH UN1205",
+      "MATH UN2010",
+      "STAT UN1201",
+    ],
+    expect: {
+      "mathematics-prerequisite": { status: "in_progress", completed: 3 },
+      "statistics-prerequisite": { status: "satisfied", completed: 1 },
+    },
+    verified: "2026-08-26",
+  },
+  {
+    id: "stat-computing-via-stat",
+    who: "Statistics major who satisfied the Computer Science Requirement with STAT UN2102 Applied Statistical Computing rather than a COMS course.",
+    /*
+     * Pins two boundaries that a reflex transcription gets wrong.
+     *
+     * The computing list is `n_of` over three NAMED courses, one of which is a
+     * STAT course — not a COMS-subject selector, which is the shape the heading
+     * "Computer Science Requirement" invites and which reports this student
+     * unmet.
+     *
+     * And `STAT UN2102` is numbered well below the 4221-4291 band, so it cannot
+     * leak into the elective. Eleven courses done, three electives owed: this
+     * is the record that catches an elective block accidentally satisfied by
+     * the core.
+     */
+    programId: "cc-major-statistics",
+    taken: [
+      "MATH UN1101",
+      "MATH UN1102",
+      "MATH UN1201",
+      "MATH UN2010",
+      "STAT UN2102",
+      "STAT UN1201",
+      "STAT GU4203",
+      "STAT GU4204",
+      "STAT GU4205",
+      "STAT GU4206",
+      "STAT GU4207",
+    ],
+    expect: {
+      "mathematics-prerequisite": { status: "satisfied", completed: 4 },
+      computing: { status: "satisfied", completed: 1 },
+      "statistics-prerequisite": { status: "satisfied", completed: 1 },
+      "statistics-core": { status: "satisfied", completed: 5 },
+      "statistics-elective": { status: "unmet", completed: 0 },
+      "advanced-electives": { status: "unmet", completed: 0 },
+    },
+    expectSatisfiedCount: 4,
+    verified: "2026-08-26",
+  },
+
+  /* ---------------------------------------------------------------------- *
+   * Physics
+   * ---------------------------------------------------------------------- */
+  {
+    id: "physics-honors-math",
+    who: "Physics major on the honors mathematics track — MATH UN1207 + UN1208 instead of Calculus I, II and Accelerated Multivariable.",
+    /*
+     * `econ-honors-math` again, and harder to see: the substitution that permits
+     * this route is a bare `<sup>` welded into the `MATH UN1205` title cell. A
+     * transcriber reading the rendered page sees a three-course `all_of` and
+     * writes one, and this student is told they have completed NONE of their
+     * calculus.
+     *
+     * The record also exercises the all-APMA side of the three mathematics
+     * either/ors; `physics-laboratory-two-semesters` below takes the all-MATH
+     * side, so the pair covers both.
+     */
+    programId: "cc-major-physics",
+    taken: [
+      "MATH UN1207",
+      "MATH UN1208",
+      "APMA E2101",
+      "APMA E3101",
+      "APMA E4204",
+      "PHYS UN1601",
+      "PHYS UN1602",
+      "PHYS UN2601",
+    ],
+    expect: {
+      calculus: { status: "satisfied", completed: 2 },
+      "differential-equations": { status: "satisfied", completed: 1 },
+      "linear-algebra": { status: "satisfied", completed: 1 },
+      "complex-variables": { status: "satisfied", completed: 1 },
+      "introductory-sequence": { status: "satisfied", completed: 3 },
+      "core-physics": { status: "unmet", completed: 0 },
+    },
+    verified: "2026-08-26",
+  },
+  {
+    id: "physics-mixed-intro-sequence",
+    who: "Physics major who took PHYS UN1401, then PHYS UN1602, then PHYS UN2601 — three terms of introductory physics, no completed sequence.",
+    /*
+     * The sharpest mixed-sequence case in the repo, because `PHYS UN2601` is the
+     * third term of BOTH Sequence A and Sequence B. A student who switched
+     * tracks after their first term lands on a shared endpoint and LOOKS
+     * finished: `n_of { n: 3 }` over the union reports satisfied. The department
+     * writes the warning itself — "Mixing courses across the sequences is
+     * strongly discouraged" — which is prose the rule language cannot hold, so
+     * the encoding has to hold it instead.
+     *
+     * Both A and B score 2 of 3, so the tie-break does not matter to the
+     * assertion: completed is 2 and required is 3 under either.
+     */
+    programId: "cc-major-physics",
+    taken: ["PHYS UN1401", "PHYS UN1602", "PHYS UN2601"],
+    expect: {
+      "introductory-sequence": { status: "in_progress", completed: 2 },
+    },
+    verified: "2026-08-26",
+  },
+  {
+    id: "physics-laboratory-two-semesters",
+    who: "Physics senior who has finished the entire major on paper and has done PHYS UN3081 once and PHYS UN3083 once — two of the three laboratory semesters Option 1 requires.",
+    /*
+     * The record that catches the tempting wrong encoding
+     * `n_of { n: 2, courses: ["PHYS UN3081", "PHYS UN3083"] }`, which looks
+     * exactly like Option 1 and reports this student's laboratory finished a
+     * semester early. Option 1 is THREE semesters — `UN3081` twice plus
+     * `UN3083` — and two facts make that unencodable: the rule language cannot
+     * ask for the same course twice, and `student_courses`' primary key
+     * `(user_id, course_id)` means a record could not evidence a repeat even if
+     * it could ask.
+     *
+     * So the group is `attested` and reads unmet until the student ticks it,
+     * with eight of nine groups green around it. Under-counting sends someone
+     * to their adviser; over-counting sends them to the registrar after
+     * add/drop.
+     */
+    programId: "cc-major-physics",
+    taken: [
+      "PHYS UN2801",
+      "PHYS UN2802",
+      "PHYS UN3003",
+      "PHYS UN3007",
+      "PHYS UN3008",
+      "PHYS GU4021",
+      "PHYS GU4022",
+      "PHYS GU4023",
+      "PHYS GU4018",
+      "PHYS GU4040",
+      "PHYS UN3072",
+      "PHYS UN3081",
+      "PHYS UN3083",
+      "MATH UN1101",
+      "MATH UN1102",
+      "MATH UN1205",
+      "MATH UN2030",
+      "MATH UN2010",
+      "MATH UN3007",
+    ],
+    expect: {
+      "introductory-sequence": { status: "satisfied", completed: 2 },
+      "core-physics": { status: "satisfied", completed: 6 },
+      "physics-electives": { status: "satisfied", completed: 2 },
+      "senior-seminar": { status: "satisfied", completed: 1 },
+      calculus: { status: "satisfied", completed: 3 },
+      "differential-equations": { status: "satisfied", completed: 1 },
+      "linear-algebra": { status: "satisfied", completed: 1 },
+      "complex-variables": { status: "satisfied", completed: 1 },
+      "intermediate-laboratory": { status: "unmet", completed: 0 },
+    },
+    expectSatisfiedCount: 8,
+    verified: "2026-08-26",
+  },
+  {
+    id: "physics-electives-in-an-include-list",
+    who: "Physics major whose two electives are PHYS UN3002 and PHYS GU4011 — both named by the Bulletin, neither held by our live catalog.",
+    /*
+     * The elective block is `n_matching` over an `include` list rather than
+     * `points_matching`, and this record is why.
+     *
+     * `matchesCompiledSelector` checks `exclude`, then `include`, then
+     * `hasShape` — an include hit returns true before the catalog is consulted
+     * at all, so a course we hold no row for still matches by course id. Under
+     * `points_matching`, `lookup` returns undefined for both, `pointsFor` falls
+     * through to 0, and this student is credited 0 of 6 points: two completed
+     * courses counted for nothing. That is `transfer-unknown-courses`' failure
+     * pointed at a requirement instead of at the Core.
+     *
+     * The synthetic catalog cannot reproduce the live gap — `buildCatalog`
+     * derives its membership from the courses each program NAMES, and an
+     * include list names them — so this record pins the include list and the
+     * satisfied outcome, and the paragraph above is what carries the reason.
+     * If it is ever changed to expect in_progress, someone switched the rule;
+     * fix the rule, not the expectation.
+     */
+    programId: "cc-major-physics",
+    taken: [
+      "PHYS UN1601",
+      "PHYS UN1602",
+      "PHYS UN2601",
+      "PHYS UN3002",
+      "PHYS GU4011",
+    ],
+    expect: {
+      "introductory-sequence": { status: "satisfied", completed: 3 },
+      "physics-electives": { status: "satisfied", completed: 2 },
+      "core-physics": { status: "unmet", completed: 0 },
+    },
+    verified: "2026-08-26",
+  },
+
+  /* ---------------------------------------------------------------------- *
+   * Philosophy
+   * ---------------------------------------------------------------------- */
+  {
+    id: "phil-six-required-only",
+    who: "Philosophy major who took exactly the six courses the Bulletin names by row, and nothing else.",
+    /*
+     * Every named row is green and the student is seven points and two courses
+     * short of the major. A transcription that stopped at the six rows scores
+     * them 100% complete.
+     *
+     * By hand, from the Bulletin: UN2101 (4) + UN2201 (4) + UN3411 (4) +
+     * UN3601 (4) + UN3701 (4) + UN3912 (3) = 23 of 30.
+     *
+     * `metaphysics-and-epistemology` is `attested` and stays unmet even though
+     * `PHIL UN3601 Metaphysics` is sitting right there on the transcript — the
+     * category is open and the DUS decides it, so no course number may. The
+     * record does not tick it, on purpose.
+     */
+    programId: "cc-major-philosophy",
+    taken: [
+      "PHIL UN2101",
+      "PHIL UN2201",
+      "PHIL UN3411",
+      "PHIL UN3601",
+      "PHIL UN3701",
+      "PHIL UN3912",
+    ],
+    expect: {
+      "history-of-philosophy-i": { status: "satisfied", completed: 1 },
+      "history-of-philosophy-ii": { status: "satisfied", completed: 1 },
+      logic: { status: "satisfied", completed: 1 },
+      "ethics-social-and-political-philosophy": { status: "satisfied", completed: 1 },
+      "major-seminar": { status: "satisfied", completed: 1 },
+      "metaphysics-and-epistemology": { status: "unmet", completed: 0 },
+      "thirty-points": { status: "in_progress", completed: 23 },
+    },
+    verified: "2026-08-26",
+  },
+  {
+    id: "phil-substituted-ancient",
+    who: "Philosophy major who took Plato instead of History of Philosophy I — the substitution the Bulletin itself names in parentheses.",
+    /*
+     * Fails against the obvious wrong encoding, `all_of ["PHIL UN2101"]`, which
+     * tells a student holding a course the Bulletin offers as a substitute that
+     * they must go back and take the course they substituted for.
+     *
+     * By hand: UN3121 (4) + UN2201 (4) + UN3411 (4) + UN3751 (3) + UN3912 (3) +
+     * UN3551 (3) + UN3960 (4) + UN3601 (4) = 29, one point short — so the
+     * record carries a ninth course, UN3352 (3), for 32. The block reports 30,
+     * because `points_matching` caps `completed` at what was asked for rather
+     * than claiming "32 of 30".
+     */
+    programId: "cc-major-philosophy",
+    taken: [
+      "PHIL UN3121",
+      "PHIL UN2201",
+      "PHIL UN3411",
+      "PHIL UN3751",
+      "PHIL UN3912",
+      "PHIL UN3551",
+      "PHIL UN3960",
+      "PHIL UN3601",
+      "PHIL UN3352",
+    ],
+    expect: {
+      "history-of-philosophy-i": { status: "satisfied", completed: 1 },
+      "history-of-philosophy-ii": { status: "satisfied", completed: 1 },
+      logic: { status: "satisfied", completed: 1 },
+      "ethics-social-and-political-philosophy": { status: "satisfied", completed: 1 },
+      "thirty-points": { status: "satisfied", completed: 30 },
+    },
+    verified: "2026-08-26",
+  },
+  {
+    id: "phil-barnard-senior-seminar",
+    who: "Philosophy major padding their points with Barnard's senior seminar and senior essay, and with Introduction to Logic — three courses the department excludes by name.",
+    /*
+     * The only record here that tests an `exclude` list, and the exclusions are
+     * the easiest thing in this transcription to leave out.
+     *
+     * `numberRange` reads the four-digit number irrespective of prefix, so
+     * `[1000, 4999]` matches `PHIL BC4050` and `PHIL BC4051` unless they are
+     * named — and `PHIL UN1401`, which the page says twice does not count.
+     *
+     * By hand: UN2101 (4) + UN2201 (4) + UN3411 (4) + UN3701 (4) + UN3912 (3)
+     * = 19 of 30. Without the three exclusions the same student reads 29 of 30
+     * — ten points of coursework the Bulletin refuses, and a major reported one
+     * point from done.
+     */
+    programId: "cc-major-philosophy",
+    taken: [
+      "PHIL UN2101",
+      "PHIL UN2201",
+      "PHIL UN3411",
+      "PHIL UN3701",
+      "PHIL UN3912",
+      "PHIL BC4050",
+      "PHIL BC4051",
+      "PHIL UN1401",
+    ],
+    expect: {
+      "thirty-points": { status: "in_progress", completed: 19 },
+    },
+    verified: "2026-08-26",
+  },
+
+  /* ---------------------------------------------------------------------- *
+   * Sociology
+   * ---------------------------------------------------------------------- */
+  {
+    id: "soci-core-is-not-electives",
+    who: "Sociology major who has finished all three core courses and taken no other sociology course.",
+    /*
+     * A bare `n_matching { n: 6, select: { subjects: ["SOCI"] } }` counts the
+     * three core courses as three of the six electives and reports this student
+     * 3 of 6 on a requirement they have not begun — a three-course overstatement
+     * of a nine-course major. Only `excludeGroups: ["soci-core"]` gets it right.
+     */
+    programId: "cc-major-sociology",
+    taken: ["SOCI UN1000", "SOCI UN3000", "SOCI UN3010"],
+    expect: {
+      "soci-core": { status: "satisfied", completed: 3 },
+      "soci-electives": { status: "unmet", completed: 0 },
+    },
+    verified: "2026-08-26",
+  },
+  {
+    id: "soci-discussion-sections-are-not-courses",
+    who: "Sociology major registered for the three core courses, their three required 0-point discussion sections, and two genuine electives.",
+    /*
+     * Every Columbia sociology major is auto-registered for these discussion
+     * sections; they are not courses the student chose and not courses the
+     * department counts. Without the `exclude` list they read as three more
+     * electives and this student is scored 5 of 6 instead of 2 of 6 — one
+     * course from being told a nine-course major is finished.
+     *
+     * The count is asserted, not just the status: a group can be correctly
+     * in-progress and still be lying about the number the student reads.
+     */
+    programId: "cc-major-sociology",
+    taken: [
+      "SOCI UN1000",
+      "SOCI UN1100",
+      "SOCI UN3000",
+      "SOCI UN3001",
+      "SOCI UN3010",
+      "SOCI UN3011",
+      "SOCI UN3235",
+      "SOCI UN3914",
+    ],
+    expect: {
+      "soci-core": { status: "satisfied", completed: 3 },
+      "soci-electives": { status: "in_progress", completed: 2 },
+    },
+    verified: "2026-08-26",
+  },
+  {
+    id: "soci-electives-beyond-the-examples",
+    who: "Sociology major who has finished the core and six electives, none of which is one of the twelve courses the Bulletin prints as examples.",
+    /*
+     * The student an `n_of` over the twelve printed examples fails completely:
+     * six real sociology electives, zero matches, a finished major reported as
+     * not started. The Bulletin's list is illustrative and the rule has to be
+     * a selector.
+     *
+     * Two secondary behaviours ride along. A GU 4000-level course counts — it
+     * is inside `[1000, 4999]` and the department's own course tab lists it —
+     * and the two `attested` groups stay unmet until the student ticks them,
+     * which is why the satisfied count is 2 and not 4.
+     */
+    programId: "cc-major-sociology",
+    taken: [
+      "SOCI UN1000",
+      "SOCI UN3000",
+      "SOCI UN3010",
+      "SOCI UN3203",
+      "SOCI UN3217",
+      "SOCI UN3302",
+      "SOCI UN3901",
+      "SOCI UN3968",
+      "SOCI GU4801",
+    ],
+    expect: {
+      "soci-core": { status: "satisfied", completed: 3 },
+      "soci-electives": { status: "satisfied", completed: 6 },
+      "soci-lecture-courses": { status: "unmet", completed: 0 },
+      "soci-seminars": { status: "unmet", completed: 0 },
+    },
+    expectSatisfiedCount: 2,
+    verified: "2026-08-26",
+  },
+
+  /* ---------------------------------------------------------------------- *
+   * Neuroscience and Behavior
+   * ---------------------------------------------------------------------- */
+  {
+    id: "nb-biology-electives-not-free",
+    who: "Neuroscience and Behavior major who has finished the required biology year and the required neurobiology year, and has taken no other biology course.",
+    /*
+     * `BIOL UN3004` and `BIOL UN3005` are the first two rows of the Biology
+     * major's Upper-Level Elective list AND the two courses this major requires
+     * by name. Written as `n_of { n: 2 }` over that list — the obvious
+     * transcription — this student reads 2 of 2 DONE on two courses they have
+     * not taken. Only `excludeGroups: ["neurobiology"]` gets it right. It is the
+     * same failure `cc-major-biology` shipped and fixed.
+     */
+    programId: "cc-major-neuroscience-and-behavior",
+    taken: [
+      "BIOL UN2005",
+      "BIOL UN2006",
+      "BIOL UN3004",
+      "BIOL UN3005",
+      "PSYC UN1001",
+      "PSYC UN2430",
+      "STAT UN1201",
+    ],
+    expect: {
+      "introductory-biology": { status: "satisfied", completed: 2 },
+      neurobiology: { status: "satisfied", completed: 2 },
+      "biology-electives": { status: "unmet", completed: 0 },
+      "psychology-introduction": { status: "satisfied", completed: 1 },
+      "neuroscience-lecture": { status: "satisfied", completed: 1 },
+      "statistics-or-research-methods": { status: "satisfied", completed: 1 },
+    },
+    verified: "2026-08-26",
+  },
+  {
+    id: "nb-stat-un1001-does-not-count",
+    who: "Neuroscience and Behavior major who took STAT UN1001 Introduction to Statistical Reasoning for the statistics requirement.",
+    /*
+     * The Bulletin is explicit: "Please note, STAT UN1001 does not count towards
+     * the Neuroscience & Behavior major." `cc-major-psychology`'s statistics
+     * group DOES include `STAT UN1001`, so the cheapest way to write this group
+     * is to copy that list — and the copy passes a student who has not met the
+     * requirement.
+     *
+     * This record fails against the copied list and passes against the
+     * Bulletin's, which is the only difference between the two.
+     */
+    programId: "cc-major-neuroscience-and-behavior",
+    taken: [
+      "PSYC UN1001",
+      "PSYC UN2450",
+      "STAT UN1001",
+      "BIOL UN2005",
+      "BIOL UN2006",
+    ],
+    expect: {
+      "statistics-or-research-methods": { status: "unmet", completed: 0 },
+      "psychology-introduction": { status: "satisfied", completed: 1 },
+      "neuroscience-lecture": { status: "satisfied", completed: 1 },
+      "introductory-biology": { status: "satisfied", completed: 2 },
+      neurobiology: { status: "unmet", completed: 0 },
+    },
+    verified: "2026-08-26",
+  },
+  {
+    id: "nb-alternative-intro-psych",
+    who: "Neuroscience and Behavior major who took PSYC UN1021, the Bulletin's alternative version of the introductory course, and is one term into introductory biology with the second term planned.",
+    /*
+     * Two things at once.
+     *
+     * The N&B block names only `PSYC UN1001`, so an over-literal transcription
+     * marks this student unmet on a requirement they have finished — the
+     * `econ-honors-math` failure mode applied to an "alternative version"
+     * rather than an honors one.
+     *
+     * And `PSYC UN1021` has no row in our catalog, so the record also pins what
+     * happens to a named course we cannot resolve: `n_of` matches by course id
+     * and never consults the lookup, so it counts. A rule that needed points or
+     * a flag would not, and should not.
+     *
+     * `BIOL UN2006` is PLANNED. A planned course counts toward the group and is
+     * marked as planned in the result — which is what makes the audit useful
+     * for choosing next term's courses rather than only for grading last one.
+     */
+    programId: "cc-major-neuroscience-and-behavior",
+    taken: ["PSYC UN1021", "PSYC UN1610", "BIOL UN2005"],
+    planned: ["BIOL UN2006"],
+    expect: {
+      "psychology-introduction": { status: "satisfied", completed: 1 },
+      "statistics-or-research-methods": { status: "satisfied", completed: 1 },
+      "introductory-biology": { status: "satisfied", completed: 2 },
+      neurobiology: { status: "unmet", completed: 0 },
+      "biology-electives": { status: "unmet", completed: 0 },
+      "neuroscience-lecture": { status: "unmet", completed: 0 },
+    },
+    verified: "2026-08-26",
+  },
+
+  /* ---------------------------------------------------------------------- *
+   * Electrical Engineering
+   * ---------------------------------------------------------------------- */
+  {
+    id: "ee-track3-physics-and-lab",
+    who: "Electrical Engineering major on the accelerated physics track — PHYS UN2801, PHYS UN2802, and PHYS UN3081 as their laboratory.",
+    /*
+     * The third cell of the sequence-3 physics row is a LABORATORY, not a
+     * lecture, and where it goes decides two groups at once. Fold `PHYS UN3081`
+     * into the physics sequence and this student's laboratory requirement is
+     * permanently unmet; take the laboratory list from the sibling SEAS files
+     * and it works, but it also accepts `CHEM UN1507` and `CHEM UN3085`, which
+     * the EE page never prints.
+     */
+    programId: "seas-major-electrical-engineering",
+    taken: [
+      "PHYS UN2801",
+      "PHYS UN2802",
+      "PHYS UN3081",
+      "MATH UN1101",
+      "MATH UN1102",
+      "APMA E2000",
+      "CHEM UN1403",
+    ],
+    expect: {
+      // Sequence 3 is two courses, not three.
+      physics: { status: "satisfied", completed: 2 },
+      "science-laboratory": { status: "satisfied", completed: 1 },
+      calculus: { status: "satisfied", completed: 3 },
+      chemistry: { status: "satisfied", completed: 1 },
+      "applied-mathematics": { status: "unmet", completed: 0 },
+    },
+    verified: "2026-08-26",
+  },
+  {
+    id: "ee-mixed-physics-sequence",
+    who: "Electrical Engineering major who took PHYS UN1401 (sequence 1, term 1) and PHYS UN1602 (sequence 2, term 2).",
+    /*
+     * Two terms of physics done, no sequence properly started. As
+     * `n_of { n: 2 }` this passes. It must read in progress — and not unmet
+     * either, because the student has genuinely done a term.
+     */
+    programId: "seas-major-electrical-engineering",
+    taken: ["PHYS UN1401", "PHYS UN1602"],
+    expect: {
+      physics: { status: "in_progress", completed: 1 },
+    },
+    verified: "2026-08-26",
+  },
+  {
+    id: "ee-ode-route-and-comms-choice",
+    who: "Electrical Engineering major who replaced APMA E2101 with MATH UN2030 + MATH UN2010, and satisfied the communications requirement with CSEE W4119 rather than ELEN E3701.",
+    /*
+     * The applied-mathematics footnote is a one-course-versus-two branch, which
+     * is why the group is `sequence_choice` and not a flat list: `all_of
+     * ["APMA E2101"]` marks this complete student incomplete, and
+     * `n_of { n: 1 }` over the union of all three branches passes a student
+     * holding `MATH UN2030` alone — half a route.
+     *
+     * The communications cell is the other half: a genuine either/or, not two
+     * required courses.
+     *
+     * `technical-electives` is `attested` and unticked. Worth noting what the
+     * audit cannot see: taking the two-course applied-mathematics route reduces
+     * this student's elective target from 18 points to 15, a footnote no rule
+     * kind in this language can express.
+     */
+    programId: "seas-major-electrical-engineering",
+    taken: [
+      "MATH UN2030",
+      "MATH UN2010",
+      "CSEE W4119",
+      "ENGI E1006",
+      "ENGI E1102",
+      "ELEN E1201",
+    ],
+    expect: {
+      "applied-mathematics": { status: "satisfied", completed: 2 },
+      "communications-or-networks": { status: "satisfied", completed: 1 },
+      "engineering-foundations": { status: "satisfied", completed: 3 },
+      "technical-electives": { status: "unmet", completed: 0 },
+    },
+    verified: "2026-08-26",
+  },
+
+  /* ---------------------------------------------------------------------- *
+   * Computer Engineering
+   * ---------------------------------------------------------------------- */
+  {
+    id: "compe-two-term-physics-and-track3-lab",
+    who: "Computer Engineering major on the accelerated physics track — PHYS UN2801, PHYS UN2802, then PHYS UN3081 as their laboratory.",
+    /*
+     * The two shapes most likely to be got wrong at once, and both come from
+     * copying the sibling page. Copy physics from Electrical or Mechanical
+     * Engineering and it becomes a THREE-term sequence, so this student reads
+     * 2 of 3; copy the laboratory from the shared SEAS five-course list and it
+     * accepts `CHEM UN1507` and `CHEM UN3085`, which this page never prints.
+     *
+     * It also pins that `PHYS UN3081` lives in the laboratory group and not
+     * inside the physics sequence — the same course may not pay for both.
+     */
+    programId: "seas-major-computer-engineering",
+    taken: [
+      "PHYS UN2801",
+      "PHYS UN2802",
+      "PHYS UN3081",
+      "CHEM UN1403",
+      "MATH UN1101",
+      "MATH UN1102",
+      "APMA E2000",
+    ],
+    expect: {
+      physics: { status: "satisfied", completed: 2 },
+      "science-laboratory": { status: "satisfied", completed: 1 },
+      chemistry: { status: "satisfied", completed: 1 },
+      calculus: { status: "satisfied", completed: 3 },
+      "applied-mathematics": { status: "unmet", completed: 0 },
+    },
+    verified: "2026-08-26",
+  },
+  {
+    id: "compe-honors-track",
+    who: "Computer Engineering major who took every honors variant the page offers — COMS W1007, COMS W3137, STAT GU4203 — and who still holds ENGI E1006, because this degree requires it AS WELL AS the Java course.",
+    /*
+     * Three honors substitutions in one record, plus the `ENGI E1006`-and-a-Java
+     * -course distinction that no other SEAS file in this repo has. Every other
+     * major treats those two as alternatives; Computer Engineering requires
+     * both. Encode `intro-programming` as `all_of ["COMS W1004"]`, or fold
+     * `ENGI E1006` into it the way Mechanical Engineering and IEOR do, and this
+     * complete student is told they are missing two requirements.
+     *
+     * `COMS W1007` and `COMS W3137` are not in our live catalog. They resolve
+     * here because `buildCatalog` derives membership from the courses the
+     * program names — which is exactly the "we cannot tell whether it was
+     * retired or merely never scheduled" case, and why the codes stay.
+     */
+    programId: "seas-major-computer-engineering",
+    taken: [
+      "COMS W1007",
+      "COMS W3137",
+      "STAT GU4203",
+      "ENGI E1006",
+      "ENGI E1102",
+      "ELEN E1201",
+      "COMS W3203",
+    ],
+    expect: {
+      "intro-programming": { status: "satisfied", completed: 1 },
+      "data-structures": { status: "satisfied", completed: 1 },
+      probability: { status: "satisfied", completed: 1 },
+      "engineering-foundations": { status: "satisfied", completed: 3 },
+      "discrete-mathematics": { status: "satisfied", completed: 1 },
+    },
+    verified: "2026-08-26",
+  },
+  {
+    id: "compe-surplus-core-electives-and-mixed-physics",
+    who: "Computer Engineering major who took five of the six choose-three Core Required Courses, and who took PHYS UN1601 and PHYS UN2802 — the first term of sequence 2 and the second term of sequence 3.",
+    /*
+     * Two independent edge cases in one record.
+     *
+     * The `n_of { n: 3 }` must report satisfied AT 3, not 5 of 3 — the card
+     * cannot claim a number larger than the requirement. The two leftovers are
+     * genuine technical-elective points, and this program cannot say so:
+     * `technical-electives` is `attested`, so the audit deliberately does not
+     * claim credit it cannot prove. `seas-major-computer-science` guards the
+     * same shape with `excludeGroups`; there is nothing here to exclude from.
+     *
+     * Meanwhile the physics pair is the mixed-sequence schedule `n_of { n: 2 }`
+     * would wrongly pass: two terms of physics done, no sequence finished.
+     */
+    programId: "seas-major-computer-engineering",
+    taken: [
+      "CSEE W4119",
+      "CSEE W4823",
+      "CSEE W4824",
+      "CSEE W4840",
+      "CSEE W4868",
+      "PHYS UN1601",
+      "PHYS UN2802",
+    ],
+    expect: {
+      "ce-core-electives": { status: "satisfied", completed: 3 },
+      physics: { status: "in_progress", completed: 1 },
+      "technical-electives": { status: "unmet", completed: 0 },
+    },
+    verified: "2026-08-26",
+  },
+
+  /* ---------------------------------------------------------------------- *
+   * Chemical Engineering
+   * ---------------------------------------------------------------------- */
+  {
+    id: "cheme-accelerated-chemistry",
+    who: "Chemical Engineering major on chemistry sequence 3 — intensive organic chemistry in the first year instead of general chemistry.",
+    /*
+     * The regression record for this program, and the direct analogue of
+     * `econ-honors-math`. A student on the HARDEST chemistry route holds no
+     * `CHEM UN1403`, no `CHEM UN1404` and no `CHEM UN2443`. Transcribed as a
+     * one-lecture `n_of` (the MechE and IEOR shape) or as a two-course
+     * BME-style sequence, they are told to go back and take general chemistry
+     * after completing a harder sequence the Bulletin publishes as sufficient.
+     *
+     * The `physics-laboratory` line is a deliberate second check: `PHYS UN3081`
+     * must satisfy the laboratory group and must NOT also count as a third term
+     * of physics sequence 3.
+     */
+    programId: "seas-major-chemical-engineering",
+    taken: [
+      "CHEM UN2045",
+      "CHEM UN2046",
+      "CHEM UN1507",
+      "PHYS UN2801",
+      "PHYS UN2802",
+      "PHYS UN3081",
+      "MATH UN1101",
+      "MATH UN1102",
+      "APMA E2000",
+      "APMA E2101",
+    ],
+    expect: {
+      chemistry: { status: "satisfied", completed: 3 },
+      physics: { status: "satisfied", completed: 2 },
+      "physics-laboratory": { status: "satisfied", completed: 1 },
+      calculus: { status: "satisfied", completed: 3 },
+      "differential-equations": { status: "satisfied", completed: 1 },
+      "advanced-natural-science-laboratory": { status: "unmet", completed: 0 },
+      "chemical-engineering-core": { status: "unmet", completed: 0 },
+      "engineering-foundations": { status: "unmet", completed: 0 },
+    },
+    verified: "2026-08-26",
+  },
+  {
+    id: "cheme-mixed-chemistry-sequence",
+    who: "Chemical Engineering major who took the first term of chemistry sequence 1 and then the second and third terms of sequence 3 — three chemistry courses, no completed sequence.",
+    /*
+     * The schedule a flat `n_of { n: 3 }` would wrongly pass. Every course is
+     * real, the student has done three terms of chemistry, and they have
+     * finished no sequence the department recognises.
+     *
+     * `sequence_choice` scores sequence 3 at 2 of 3 and sequence 1 at 1 of 4,
+     * reports sequence 3, and leaves `CHEM UN2045` as what remains.
+     */
+    programId: "seas-major-chemical-engineering",
+    taken: ["CHEM UN1403", "CHEM UN2046", "CHEM UN1507"],
+    expect: {
+      chemistry: { status: "in_progress", completed: 2 },
+    },
+    verified: "2026-08-26",
+  },
+  {
+    id: "cheme-half-points-lab",
+    who: "Chemical Engineering major who satisfied the advanced natural-science laboratory with the two 1.5-point organic half-labs.",
+    /*
+     * The record that distinguishes `points_matching` from `n_of`. Two half
+     * labs are three points and finish the requirement; `n_of { n: 1 }` would
+     * finish it after one, and `n_of { n: 2 }` would refuse a student who took
+     * a single 3-point laboratory instead.
+     *
+     * A live-catalog defect sits underneath this, named rather than encoded:
+     * our `courses` row for `CHEM UN2493` carries 0.00 points where the
+     * Bulletin publishes 1.5, so the LIVE audit scores this student 1.5 of 3
+     * and tells them to take another laboratory. The fixture states the
+     * Bulletin's number (see `POINTS` above). Fixing the catalog is what closes
+     * the gap; softening this expectation would only hide it.
+     */
+    programId: "seas-major-chemical-engineering",
+    taken: ["CHEM UN2493", "CHEM UN2496"],
+    expect: {
+      "advanced-natural-science-laboratory": { status: "satisfied", completed: 3 },
+    },
+    verified: "2026-08-26",
+  },
+  {
+    id: "cheme-one-half-lab-is-not-enough",
+    who: "Chemical Engineering major who has taken one of the two organic half-labs and stopped.",
+    /*
+     * The control for the record above, and the half that actually pins the
+     * rule kind: 1.5 of 3 points, in progress. Under `n_of { n: 1 }` — the
+     * shape every other laboratory group in the SEAS files uses — this student
+     * is told they are finished half a laboratory early.
+     */
+    programId: "seas-major-chemical-engineering",
+    taken: ["CHEM UN2493"],
+    expect: {
+      "advanced-natural-science-laboratory": { status: "in_progress", completed: 1.5 },
+    },
+    verified: "2026-08-26",
+  },
+
+  /* ---------------------------------------------------------------------- *
+   * Applied Mathematics
+   * ---------------------------------------------------------------------- */
+  {
+    id: "apmath-math-department-track",
+    who: "Applied Mathematics major who took every footnote-5 substitution — the Mathematics Department's courses rather than APAM's.",
+    /*
+     * The regression record for this program. One footnote offers four
+     * one-for-one substitutions, and this student took all four: they hold none
+     * of `APMA E3101`, `APMA E3102`, `APMA E4204` or `MATH GU4061`, and against
+     * a naive `all_of` transcription of the grid they fail FOUR requirements at
+     * once and are told to retake four courses they have already covered.
+     *
+     * The last expectation is the second thing this record protects. All seven
+     * courses are MATH or APMA and every one is consumed by a named group, so
+     * `math-apma-stat-elective` must read 0 of 3 points — not 3 of 3. Without
+     * `excludeGroups` it reads satisfied and tells a student a senior-year
+     * requirement is finished before they have taken a single extra course.
+     * That is the `cs-electives` bug, reproduced.
+     */
+    programId: "seas-major-applied-mathematics",
+    taken: [
+      "MATH UN2010",
+      "MATH UN3028",
+      "MATH UN3007",
+      "MATH UN2500",
+      "APMA E4300",
+      "APMA E4101",
+      "APMA E4901",
+    ],
+    expect: {
+      "linear-algebra": { status: "satisfied", completed: 1 },
+      "partial-differential-equations": { status: "satisfied", completed: 1 },
+      "complex-variables": { status: "satisfied", completed: 1 },
+      analysis: { status: "satisfied", completed: 1 },
+      "applied-mathematics-core": { status: "satisfied", completed: 2 },
+      // E4901 done, E4903 not. Both are required, including the 0-point one.
+      seminars: { status: "in_progress", completed: 1 },
+      "math-apma-stat-elective": { status: "unmet", completed: 0 },
+    },
+    verified: "2026-08-26",
+  },
+  {
+    id: "apmath-accelerated-physics",
+    who: "Applied Mathematics major on physics sequence 3 — Accelerated Physics, with the intermediate laboratory instead of a third lecture.",
+    /*
+     * The guard against folding `PHYS UN3081` into the physics sequence.
+     * Sequence 3 is two courses, the laboratory is a separate requirement, and
+     * the same course must not pay for both. If someone helpfully adds
+     * `PHYS UN3081` as a third term, this record still passes but the course
+     * starts showing up as cross-counted — which is what
+     * `crossCountedCourseIds` is for.
+     */
+    programId: "seas-major-applied-mathematics",
+    taken: ["PHYS UN2801", "PHYS UN2802", "PHYS UN3081"],
+    expect: {
+      physics: { status: "satisfied", completed: 2 },
+      "physics-laboratory": { status: "satisfied", completed: 1 },
+    },
+    verified: "2026-08-26",
+  },
+  {
+    id: "apmath-mixed-physics-sequence",
+    who: "Applied Mathematics major who took the first term of physics sequence 1 and the second and third of sequence 2 — three terms of physics, no completed sequence.",
+    /*
+     * The schedule `n_of { n: 3 }` would wrongly pass. The student has genuinely
+     * started sequence 2 and is two thirds through it, and has finished nothing.
+     */
+    programId: "seas-major-applied-mathematics",
+    taken: ["PHYS UN1401", "PHYS UN1602", "PHYS UN2601"],
+    expect: {
+      physics: { status: "in_progress", completed: 2 },
+    },
+    verified: "2026-08-26",
+  },
+  {
+    id: "apmath-transfer-physics",
+    who: "Applied Mathematics transfer student who finished the physics sequence with the Barnard classical-waves course footnote 2 allows.",
+    /*
+     * Footnote 2 is the MechE footnote-3 failure in its Applied Mathematics
+     * form: a per-term substitution that, if missed, marks a complete student
+     * incomplete. `PHYS BC3001` replaces the third term of sequence 1 and
+     * nothing else, which is why it is its own branch rather than an extra
+     * course dropped into sequence 1's list.
+     */
+    programId: "seas-major-applied-mathematics",
+    taken: ["PHYS UN1401", "PHYS UN1402", "PHYS BC3001", "PHYS UN1494"],
+    expect: {
+      physics: { status: "satisfied", completed: 3 },
+      "physics-laboratory": { status: "satisfied", completed: 1 },
     },
     verified: "2026-08-26",
   },

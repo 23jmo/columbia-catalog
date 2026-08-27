@@ -58,6 +58,11 @@ const CUMULATIVE_BY_DESIGN: Record<string, string> = {
   "cc-major-english:ten-courses":
     'The Bulletin reads "At least 10 courses in English and Comparative Literature". ' +
     "ENGL UN2000 is the first of the ten, not an eleventh course alongside them.",
+  "cc-major-philosophy:thirty-points":
+    'The Bulletin reads "At least 30 points in philosophy ... including:" and then lists ' +
+    "the six named requirements. They are the first of the thirty points, not thirty more " +
+    "beside them — the six come to 21-23 points, so this block is what the other two or " +
+    "three courses live in. Checked against the live Bulletin on 2026-08-26.",
 };
 
 /**

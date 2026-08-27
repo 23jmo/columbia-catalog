@@ -24,7 +24,9 @@ import { evaluateProgram, type CourseFacts, type TakenCourseInput } from "../eva
 import { CC_CONCENTRATION_ECONOMICS } from "./cc-concentration-economics";
 import { CC_MAJOR_BIOLOGY } from "./cc-major-biology";
 import { CC_MAJOR_ECONOMICS } from "./cc-major-economics";
+import { CC_MAJOR_NEUROSCIENCE_AND_BEHAVIOR } from "./cc-major-neuroscience-and-behavior";
 import { CC_MAJOR_POLITICAL_SCIENCE } from "./cc-major-political-science";
+import { CC_MAJOR_SOCIOLOGY } from "./cc-major-sociology";
 import type { Program, RequirementGroup } from "../types";
 
 /** Three points for everything and no flags — see `vacuity.test.ts`. */
@@ -417,6 +419,144 @@ describe("the four audited programs", () => {
           `${program.id}.${requirement.id} excludes unknown group "${target}"`,
         ).toBe(true);
       }
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sociology — added 2026-08-26
+// ---------------------------------------------------------------------------
+
+describe("cc-major-sociology", () => {
+  it("selects electives by subject, never by the twelve courses the Bulletin prints", () => {
+    /*
+     * "Some examples of electives include" and then twelve codes. Closed into
+     * an `n_of` over those twelve, a student who took six real Sociology
+     * courses that happen not to be on the example list reads 0 of 6 — a
+     * finished major reported as not started.
+     */
+    const electives = group(CC_MAJOR_SOCIOLOGY, "soci-electives");
+    expect(electives.rule.kind).toBe("n_matching");
+    if (electives.rule.kind !== "n_matching") return;
+    expect(electives.rule.n).toBe(6);
+    expect(electives.rule.select.subjects).toEqual(["SOCI"]);
+  });
+
+  it("keeps the three core courses out of the elective block", () => {
+    /*
+     * The evidence that the two blocks are disjoint is arithmetic, not prose:
+     * the Bulletin never says the electives are "in addition to" the core, but
+     * its point total only works if they are. Without the exclusion a student
+     * who has taken only the three core courses is already halfway through six
+     * electives they have not started.
+     */
+    const electives = group(CC_MAJOR_SOCIOLOGY, "soci-electives");
+    if (electives.rule.kind !== "n_matching") throw new Error("expected n_matching");
+    expect(electives.rule.select.excludeGroups).toEqual(["soci-core"]);
+  });
+
+  it("excludes the 0-point discussion sections by code, because they are scattered", () => {
+    // They sit at UN1100, UN2211, UN3001, UN3011, UN3103 and UN3676 — all
+    // inside the elective band, so no number range separates them from real
+    // courses. Counted, each one would be a free elective.
+    const electives = group(CC_MAJOR_SOCIOLOGY, "soci-electives");
+    if (electives.rule.kind !== "n_matching") throw new Error("expected n_matching");
+    const excluded = electives.rule.select.exclude ?? [];
+    for (const code of [
+      "SOCI UN1100",
+      "SOCI UN2211",
+      "SOCI UN3001",
+      "SOCI UN3011",
+      "SOCI UN3103",
+      "SOCI UN3676",
+    ]) {
+      expect(excluded).toContain(code);
+    }
+  });
+
+  it("attests the lecture and seminar split rather than guessing it from numbers", () => {
+    /*
+     * "At least three lecture courses at the 2000 or 3000 level" and "at least
+     * two seminars". Neither is decidable: the department's 3000-level range
+     * holds both kinds, and `CourseSelector` has no points field to separate a
+     * 3-point lecture from a 4-point seminar.
+     */
+    for (const id of ["soci-lecture-courses", "soci-seminars"]) {
+      expect(group(CC_MAJOR_SOCIOLOGY, id).rule.kind).toBe("attested");
+    }
+  });
+
+  it("records that the published core point total is stale", () => {
+    // The Bulletin calls the core block 10 points; its own course listings
+    // price all three at 4, which is 12. The major runs 32–33 points, not the
+    // published 30–31, and the student should hear that from us rather than
+    // discover it at graduation.
+    const core = group(CC_MAJOR_SOCIOLOGY, "soci-core");
+    expect(core.note).toMatch(/32-33 points/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Neuroscience and Behavior — added 2026-08-26
+// ---------------------------------------------------------------------------
+
+describe("cc-major-neuroscience-and-behavior", () => {
+  it("is one program filed under both departments that run it", () => {
+    // Biological Sciences and Psychology each publish their own half, and the
+    // halves disagree — the Psychology page says "seven" biology courses in the
+    // same sentence that says "eleven courses". Transcribed from both pages at
+    // once rather than assembled from either.
+    expect(CC_MAJOR_NEUROSCIENCE_AND_BEHAVIOR.department).toBe(
+      "Biological Sciences and Psychology",
+    );
+    const sources = new Set(CC_MAJOR_NEUROSCIENCE_AND_BEHAVIOR.groups.map((g) => g.sourceUrl));
+    expect(sources.size).toBe(2);
+  });
+
+  it("keeps the required neurobiology year out of the biology electives", () => {
+    /*
+     * The most important line in the file. BIOL UN3004 and UN3005 are required
+     * here AND are on the Biology major's upper-level elective list, which is
+     * the list this group selects from. Without the exclusion, every student
+     * who finished the required neurobiology year reads 2 of 2 electives having
+     * taken no elective at all.
+     */
+    const electives = group(CC_MAJOR_NEUROSCIENCE_AND_BEHAVIOR, "biology-electives");
+    expect(electives.rule.kind).toBe("n_matching");
+    if (electives.rule.kind !== "n_matching") return;
+    expect(electives.rule.select.excludeGroups).toEqual(["neurobiology"]);
+    expect(electives.rule.select.include).toContain("BIOL UN3004");
+  });
+
+  it("bars STAT UN1001, which the Psychology major accepts", () => {
+    /*
+     * Ten courses here, not the Psychology major's five, and STAT UN1001 is
+     * absent on the Bulletin's own instruction. Copying the Psychology group
+     * across would accept a course this major names in order to refuse.
+     */
+    const statistics = group(
+      CC_MAJOR_NEUROSCIENCE_AND_BEHAVIOR,
+      "statistics-or-research-methods",
+    );
+    expect(namedCodes(statistics)).not.toContain("STAT UN1001");
+    expect(namedCodes(statistics)).toHaveLength(10);
+  });
+
+  it("does not accept PSYC BC1001 for the introductory requirement", () => {
+    // The Psychology major does. Here it can be used only as the one permitted
+    // Barnard psychology course, and only with an approved substitution form —
+    // so it is named in the note rather than matched.
+    const introduction = group(CC_MAJOR_NEUROSCIENCE_AND_BEHAVIOR, "psychology-introduction");
+    expect(namedCodes(introduction)).toEqual(["PSYC UN1001", "PSYC UN1021"]);
+    expect(introduction.note).toMatch(/PSYC BC1001/);
+  });
+
+  it("attests the two psychology lists the department publishes off-Bulletin", () => {
+    // The approved lecture and seminar lists live on the Psychology
+    // Department's own Neuroscience & Behavior page, and the Bulletin warns
+    // that a course not on them will not count.
+    for (const id of ["psychology-lecture", "psychology-seminar"]) {
+      expect(group(CC_MAJOR_NEUROSCIENCE_AND_BEHAVIOR, id).rule.kind).toBe("attested");
     }
   });
 });
