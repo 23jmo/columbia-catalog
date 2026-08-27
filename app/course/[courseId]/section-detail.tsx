@@ -24,8 +24,8 @@ import { RegistrationHandoff } from "@/components/course/registration-handoff";
 import { BookmarkControls } from "@/components/bookmarks/bookmark-controls";
 import { SectionWeekPreview } from "@/components/course/section-week-preview";
 import { ProvenanceStamp, SeatPill } from "@/components/course/seat-state";
-import { AddToScheduleButton } from "@/components/schedule/add-to-schedule-button";
-import { REQUIREMENT_FILTERS } from "@/lib/constants";
+import { ButtonLink } from "@/components/base/buttons/button";
+import { REQUIREMENT_FILTERS, vergilSectionUrl } from "@/lib/constants";
 import type { Section } from "@/lib/types";
 import { cx } from "@/utils/cx";
 
@@ -270,15 +270,32 @@ export function SectionDetail({
     </div>
   );
 
+  /*
+   * The header's one high-emphasis action is the hand-off to Vergil, not a
+   * save to our own schedule.
+   *
+   * "Add to schedule" put our planner at the top of a screen a student opens
+   * when they are deciding whether to REGISTER. The next thing they do is
+   * open Vergil, and making them find that link three rows down — at `xs`,
+   * in secondary — ranked our bookkeeping above their actual errand.
+   *
+   * `RegistrationHandoff`'s compact row below keeps the call number, because
+   * SSOL wants it typed and Vergil wants it clicked; those are different
+   * errands. Its own Vergil link is gone, since it would now be the second
+   * copy of this one in the same header — `compact` is rendered here and
+   * nowhere else, so that removal is local.
+   */
   const scheduleButton = (
-    <AddToScheduleButton
-      sectionId={section.sectionId}
-      sectionCode={section.sectionCode}
-      termCode={section.termCode}
+    <ButtonLink
+      href={vergilSectionUrl(section.termCode, section.callNumber)}
+      target="_blank"
+      rel="noopener noreferrer"
       size="medium"
-      emphasis="high"
+      trailingIcon={RiArrowRightUpLine}
       className="shrink-0"
-    />
+    >
+      Open in Vergil
+    </ButtonLink>
   );
 
   const titleHeading = (

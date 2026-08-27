@@ -153,16 +153,13 @@ export function RegistrationHandoff({
           Call number
         </span>
         <CallNumberCopy callNumber={section.callNumber} />
-        <ButtonLink
-          size="xs"
-          variant="secondary"
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
-          trailingIcon={RiArrowRightUpLine}
-        >
-          Open in Vergil
-        </ButtonLink>
+        {/*
+          No Vergil link in `compact`. Its only caller — the section drawer's
+          header — now carries the hand-off as its primary action, and a second
+          copy of the same link two rows below it read as two different places
+          to go. The call number stays: it is for SSOL, which is a different
+          errand from clicking through.
+        */}
         {actions}
       </div>
     );
