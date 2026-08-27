@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ComponentType } from "react";
 import {
   RiBookmarkLine,
+  RiChat3Line,
   RiCalendarScheduleLine,
   RiGraduationCapLine,
   RiHome5Line,
@@ -10,36 +11,47 @@ import {
 import { cx } from "@/utils/cx";
 
 /**
- * The app's top-level destinations (spec §4). `/course/[id]` is deliberately
- * absent: it is a drawer over search, not a nav destination.
+ * The app's top-level destinations.
  *
- * Saved sits between Search and Schedule because that is the order the work
- * happens in: you find classes, you shortlist them, you schedule the ones that
- * survive. A nav that reads in the order of the task is one fewer thing to
- * learn.
+ * ── Two, because the product is one sentence ───────────────────────────────
  *
- * `/profile` is last because it is the only one that needs an account. It still
- * sits in the primary nav rather than behind the account menu: a degree audit
- * is a destination a student comes back to, and burying it in a dropdown would
- * make it feel like a settings page. Signed out it renders an explanation
- * rather than an auth wall, so linking at it unconditionally is safe.
+ * This list was five: Home, Search, Saved, Schedule, Profile. Each was a
+ * defensible page and together they described nothing. A student arriving at a
+ * five-item rail has to work out what this app is FOR before it can help them,
+ * and the answer — "find classes worth taking, keep the ones you want, hand
+ * them to Vergil" — was the one reading the nav did not give.
  *
- * Saved sits between Search and Schedule because that is the order the work
- * happens in: you find classes, you shortlist them, you schedule the ones that
- * survive. A nav that reads in the order of the task is one fewer thing to
- * learn.
+ * So the rail names the steps of that sentence and nothing else. Home is the
+ * recommendations — the answer to "what should I take", given without being
+ * asked. Chat is the same question in the student's own words, for everything
+ * a ranked list cannot anticipate. Saved is where the survivors wait.
  *
- * Route ownership note: `/search` and `/schedule` are built by other lanes.
- * This module only ever links at them, so it stays correct whether or not
- * those routes exist yet.
+ * Chat sits second, and second is the point. It used to BE the home page, with
+ * the recommendations reduced to a rail above the box. That had the burden
+ * backwards: "what should I take" is the state of not yet having a question,
+ * and an empty box is the worst possible answer to it. The box is now the
+ * thing you go to when the list did not cover your case.
  *
- * Progression is off this list on purpose. The `/progression` route still
- * exists — the page, the graph, the plan — but it is not a destination the
- * rail or the mobile sheet offers. Putting it back is adding one object here.
+ * ── Nothing was deleted ────────────────────────────────────────────────────
+ *
+ * `/search`, `/schedule` and `/profile` are untouched routes that still render,
+ * still work, and are still linked to from inside the app — search from the
+ * assistant and from empty states, profile from the account menu, schedule
+ * from a plan. `ShellNavKey` deliberately keeps their keys so those pages can
+ * go on declaring `activeNav` without a cast: they are pages you arrive at
+ * with a purpose, not places you browse to because the rail suggested it.
+ *
+ * Putting one back is adding one object here. That is the whole cost, and it
+ * should stay that cheap — but the bar is a page a student would go looking
+ * for on their own, not a page we are proud of.
+ *
+ * Route ownership note: this module only ever LINKS at routes, so it stays
+ * correct whether or not any of them exist.
  */
 
 export type ShellNavKey =
   | "home"
+  | "chat"
   | "search"
   | "saved"
   | "schedule"
@@ -61,33 +73,31 @@ export interface ShellNavItem {
 export const SHELL_NAV_ITEMS: ShellNavItem[] = [
   {
     key: "home",
-    label: "Home",
+    /*
+     * "Home" was the only label in this list that named a position instead of
+     * a page — and it was doing it above the one screen this whole product is
+     * for. A student reading the rail learned that `/` was the first item,
+     * which they could already see, and nothing about what was on it.
+     *
+     * The key stays `home` and the route stays `/`: every page in the app
+     * declares `activeNav="home"`, and this is a rename of the word on the
+     * button, not of the destination behind it.
+     */
+    label: "Recommendations",
     href: "/",
     icon: RiHome5Line,
   },
   {
-    key: "search",
-    label: "Search",
-    href: "/search",
-    icon: RiSearchLine,
+    key: "chat",
+    label: "Chat",
+    href: "/chat",
+    icon: RiChat3Line,
   },
   {
     key: "saved",
     label: "Saved",
     href: "/saved",
     icon: RiBookmarkLine,
-  },
-  {
-    key: "schedule",
-    label: "Schedule",
-    href: "/schedule",
-    icon: RiCalendarScheduleLine,
-  },
-  {
-    key: "profile",
-    label: "Profile",
-    href: "/profile",
-    icon: RiGraduationCapLine,
   },
 ];
 

@@ -98,6 +98,17 @@ const POINTS: Record<string, number> = {
   "PHED UN1012": 1,
   // University Writing and the Core seminars.
   "ENGL CC1010": 3,
+  /*
+   * Psychology's companion lab sections really are worth zero points, and the
+   * fixture has to say so. `eleven-courses` counts courses rather than points
+   * so the value does not change that record's outcome today — but a fixture
+   * that quietly called them 3-point courses would be lying about the exact
+   * property the Bulletin's rule turns on.
+   */
+  "PSYC UN1421": 0,
+  "PSYC UN1451": 0,
+  "PSYC UN1456": 0,
+  "PSYC UN1611": 0,
 };
 
 /**
@@ -120,7 +131,21 @@ function namedCoursesIn(rule: RequirementRule): string[] {
       return rule.sequences.flatMap((sequence) => sequence.courses);
     case "n_matching":
     case "points_matching":
-      return [...(rule.select.include ?? [])];
+      /*
+       * `exclude` as well as `include`, added 2026-08-26.
+       *
+       * An excluded code is named by the rule as surely as an included one, and
+       * leaving it out meant the synthetic catalog could not hold it — so no
+       * golden record could put an excluded course on a transcript, and no
+       * exclusion was testable at all. That is not a hypothetical gap: the
+       * psychology over-count below is exactly the bug it hid.
+       *
+       * Adding them cannot make a record pass that should fail. A course in
+       * `exclude` can never match the selector that excludes it; its presence
+       * in the catalog only matters to a record that puts it in `taken`, which
+       * is precisely the case we need to be able to write.
+       */
+      return [...(rule.select.include ?? []), ...(rule.select.exclude ?? [])];
     case "attested":
       return [];
   }
@@ -186,6 +211,14 @@ const EXTRA_COURSES = [
   "MATH UN2010",
   // Physical education.
   "PHED UN1012",
+  // Psychology distribution courses, to fill the eleven-course total with a
+  // transcript that looks like a real one rather than a list of prerequisites.
+  "PSYC UN2280",
+  "PSYC UN2450",
+  "PSYC UN2630",
+  "PSYC UN3280",
+  "PSYC UN3450",
+  "PSYC UN3630",
 ];
 
 /* ==========================================================================
@@ -620,6 +653,49 @@ export const GOLDEN_RECORDS: GoldenRecord[] = [
     },
     expectSatisfiedCount: 0,
     verified: "2026-08-24",
+  },
+  {
+    id: "psych-zero-point-lab-sections",
+    who: "Columbia College psychology major with TEN real psychology courses and the two 0-point lab sections the registrar enrolled them in automatically.",
+    /*
+     * The regression guard for the phantom-course bug (found 2026-08-26).
+     *
+     * Psychology attaches a 0-point companion section to its statistics and
+     * research-methods lectures, and each one carries its own PSYC course
+     * record inside 1000–4999. `eleven-courses` is `n_matching` over that
+     * subject and band, so both sections matched: this student's ten real
+     * courses scored TWELVE and the audit reported an eleven-course major
+     * DONE, for someone still a course short.
+     *
+     * The Bulletin's floor for this block is "3 or more points", which is
+     * exactly what a 0-point section fails. `CourseSelector` has no points
+     * field — so the floor itself stays unencodable, and the four rows in this
+     * subject that fail it are named in `exclude` instead.
+     *
+     * Over-counting is the direction that matters here. A student told they
+     * are one course short takes another course; a student told they are
+     * finished registers for a final semester and hears otherwise from the
+     * registrar after add/drop.
+     *
+     * `statistics` and `research-methods` are asserted alongside on purpose:
+     * the exclusion is scoped to the elective count, and the named groups that
+     * legitimately accept the lecture halves must stay green.
+     */
+    programId: "cc-major-psychology",
+    taken: [
+      // Ten real courses.
+      "PSYC UN1001", "PSYC UN1021", "PSYC UN1610", "PSYC UN1420",
+      "PSYC UN2280", "PSYC UN2450", "PSYC UN2630",
+      "PSYC UN3280", "PSYC UN3450", "PSYC UN3630",
+      // The two the registrar added on their behalf. Worth zero points each.
+      "PSYC UN1611", "PSYC UN1421",
+    ],
+    expect: {
+      statistics: { status: "satisfied" },
+      "research-methods": { status: "satisfied" },
+      "eleven-courses": { status: "in_progress", completed: 10 },
+    },
+    verified: "2026-08-26",
   },
 ];
 

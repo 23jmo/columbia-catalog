@@ -59,6 +59,26 @@ export const ONBOARDING_COOKIE_VALUE = "1";
 /** A year. Onboarding is a once-per-student event, not a session. */
 export const ONBOARDING_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
+/**
+ * Drop the "has finished the wizard" flag in the browser.
+ *
+ * `httpOnly` is false on purpose (see `completeOnboardingAction`), so the
+ * client can clear it when the student deletes their account or chooses
+ * Redo. Leaving it set is what made a re-sign-in after delete skip the
+ * first feed: the auth callback treated them as already done.
+ */
+export function clearOnboardingCompleteCookie(): void {
+  if (typeof document === "undefined") return;
+  const secure =
+    typeof window !== "undefined" && window.location.protocol === "https:" ? "; Secure" : "";
+  try {
+    document.cookie =
+      `${ONBOARDING_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax` + secure;
+  } catch {
+    /* Private mode: the next `completeOnboardingAction` will overwrite it. */
+  }
+}
+
 /* ==========================================================================
  * Re-rank cadence
  * ========================================================================== */

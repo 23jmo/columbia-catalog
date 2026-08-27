@@ -128,6 +128,17 @@ export interface SectionDetailProps {
    * drawer answers a click in milliseconds.
    */
   courseLevel?: ReactNode;
+  /**
+   * The course's reviews, hoisted to sit under the description.
+   *
+   * Filled on every standalone section page — including a multi-section
+   * course, which is where a student is actually choosing between sections and
+   * therefore where this is worth the most. Left empty by the DRAWER, which is
+   * a different trade: reviews cost two reads, and the drawer's whole promise
+   * is answering a click in milliseconds. The "Full page" link is one tap away
+   * for the reader who wants them.
+   */
+  courseReviews?: ReactNode;
   /** Standalone page: draw the instructor-profile hero. Drawer: plain header. */
   surface?: "page" | "drawer";
   /** Back navigation, rendered inside the page hero cover. */
@@ -182,6 +193,7 @@ export function SectionDetail({
   titleId = "section-title",
   showClose = false,
   courseLevel,
+  courseReviews,
   surface = "drawer",
   backLink,
 }: SectionDetailProps) {
@@ -546,6 +558,31 @@ export function SectionDetail({
           <ExpandableText text={course.description} className="w-full" />
         </ReferenceBlock>
       ) : null}
+
+      {/* ================================================================== */}
+      {/* Is it any good — the question a shared link was posted to answer     */}
+      {/* ================================================================== */}
+      {/*
+        Directly under the description, and above everything else, for the same
+        reason the description sits above the week grid: answer "what is this"
+        first, then "is it worth it", then the mechanics.
+
+        This matters most here. 78% of the courses offered in Fall 2026 have
+        exactly one section, so this surface — not the multi-section course
+        page — is what nearly every `/course/[id]` link resolves to, and
+        `/course/` is now open to signed-out visitors. Someone answering "is
+        Cannon's 3134 brutal" with a link needs the link to answer it before
+        the reader gives up scrolling.
+
+        Every standalone section page fills this, not only the single-section
+        ones. See the prop's own note and `page.tsx`: the left half is a claim
+        about the course and says so, and the right half is scoped to THIS
+        section's instructor, which is the half a student picking between six
+        sections of one course is actually reading for.
+
+        Empty in the drawer, which trades these two reads for its latency.
+      */}
+      {courseReviews}
 
       {/* ================================================================== */}
       {/* Does it fit, and where would you be                                 */}

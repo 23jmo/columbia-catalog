@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { prettyTitle } from "@/components/course/format";
 import { loadCourseDetail, resolveCourse } from "@/components/course/load-course-detail";
 import { loadSectionDetail } from "@/components/course/load-section-detail";
-import { CourseLevelPanels } from "@/components/course/course-level-panels";
+import { CourseLevelPanels, CourseReviewsPanel } from "@/components/course/course-level-panels";
 import { courseDetailIntegrations } from "./integrations";
 import { AppShell } from "@/components/shell/app-shell";
 import { pageIdentityContentClass } from "@/components/shell/page-hero-layout";
@@ -139,16 +139,35 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
        * behind the sibling check and not paid on every section page.
        */
       const isOnlySection = data.siblings.length === 0;
-      const courseData = isOnlySection
-        ? await loadCourseDetail(courseId, CURRENT_TERM)
-        : null;
-      const reputation =
-        courseData && courseDetailIntegrations.loadReputation
-          ? await courseDetailIntegrations.loadReputation({
-              courseId: courseData.course.courseId,
-              instructorName: courseData.instructors[0] ?? null,
+      const [courseData, reputation] = await Promise.all([
+        isOnlySection ? loadCourseDetail(courseId, CURRENT_TERM) : null,
+        /*
+         * Reviews on EVERY section page, not only where the section is the
+         * whole course.
+         *
+         * The old rule was that reviews are claims about the course and are
+         * "only as true as this section is the whole course". That is right
+         * about the left half and wrong about the panel: "Course experience"
+         * aggregates across everyone who has ever taught this course, which is
+         * equally true whichever section you are reading, and the block says so
+         * in its own subtitle. Withholding it from a multi-section course meant
+         * the pages where a student is actually CHOOSING — between six sections
+         * of the same course — were the only ones with nothing to choose on.
+         *
+         * The right half gets better here, not worse. It is scoped to one
+         * instructor, and a section page knows which one: `section.instructors`
+         * is this class's own teaching staff, where `courseData.instructors[0]`
+         * was whoever happened to come first across the whole course. On a
+         * six-section course those are usually different people, and the one
+         * this page is about is the one worth reading about.
+         */
+        courseDetailIntegrations.loadReputation
+          ? courseDetailIntegrations.loadReputation({
+              courseId: data.course.courseId,
+              instructorName: data.section.instructors[0] ?? null,
             })
-          : null;
+          : null,
+      ]);
 
       return (
         <AppShell activeNav="search">
@@ -161,12 +180,14 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
                 href: isOnlySection ? "/search" : `/course/${data.course.courseId}`,
                 label: isOnlySection ? "All courses" : `All sections of ${data.code}`,
               }}
+              courseReviews={<CourseReviewsPanel reputation={reputation} variant="section" />}
               courseLevel={
                 courseData ? (
                   <CourseLevelPanels
                     data={courseData}
                     reputation={reputation}
                     variant="section"
+                    includeReviews={false}
                   />
                 ) : null
               }

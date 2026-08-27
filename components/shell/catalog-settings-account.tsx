@@ -19,6 +19,7 @@ import { ProfileModal } from "@/components/profile/profile-modal";
 import { useSessionAccount } from "@/hooks/use-session-account";
 import { isConfigured } from "@/lib/db/client";
 import { signIn, signOut } from "@/lib/db/auth";
+import { clearOnboardingCompleteCookie } from "@/lib/onboarding/state";
 
 export interface CatalogSettingsAccountProps {
   onClose?: () => void;
@@ -71,9 +72,12 @@ export function CatalogSettingsAccount({ onClose }: CatalogSettingsAccountProps)
       }
 
       await signOut();
+      // Belt-and-suspenders with the server action: the stale flag is what
+      // skipped the first feed on the next sign-in after a delete.
+      clearOnboardingCompleteCookie();
       setIsDeleteOpen(false);
       onClose?.();
-      router.push("/");
+      router.push("/onboarding");
       router.refresh();
     });
   };

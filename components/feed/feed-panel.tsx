@@ -3,11 +3,10 @@ import Link from "next/link";
 import type { FeedResult } from "@/lib/recommend/feed";
 import { cx } from "@/utils/cx";
 
-import { FeedCardView } from "./feed-card";
-import { FEED_CARD_SLOT, FeedRailScroller } from "./feed-rail";
+import { FeedDeck } from "./feed-deck";
 
 /**
- * The feed — a rail of sections, and nothing around it.
+ * The feed — a grid of sections, and nothing around it.
  *
  * ── What used to be here ───────────────────────────────────────────────────
  *
@@ -40,7 +39,7 @@ export function FeedPanel({
     >
       {!feed.personalized ? <OnboardingNudge /> : null}
 
-      {feed.cards.length === 0 ? <EmptyFeed feed={feed} /> : <FeedRail feed={feed} />}
+      {feed.cards.length === 0 ? <EmptyFeed feed={feed} /> : <FeedGridBody feed={feed} />}
     </section>
   );
 }
@@ -74,43 +73,46 @@ function OnboardingNudge() {
 }
 
 /* ==========================================================================
- * The rail
+ * The grid
  * ========================================================================== */
 
 /**
- * The cards, as one horizontal run.
+ * The cards, as a list you read down.
  *
- * ── Why a rail and not a column ────────────────────────────────────────────
+ * ── Why this is no longer a rail ───────────────────────────────────────────
  *
- * The feed shares the home page with the assistant's box, and the box has to
- * stay on screen: it is the thing that answers the question the feed cannot
- * anticipate. A vertical list of twelve cards pushes it below the fold and
- * turns the page back into something you scroll before you can use.
+ * It was a rail because the feed shared the home page with the assistant's
+ * box, and the box had to stay on screen. A rail spends one card-height no
+ * matter how many cards it holds; a column of twelve pushed the box below the
+ * fold and turned the page into something you scroll before you can use.
  *
- * A rail spends one card-height of vertical space no matter how many cards
- * there are. It also states the right thing about the content: these twelve are
- * peers, ranked but not ordered into steps, and you are meant to browse across
- * them rather than read down them.
+ * The box has its own page now (`/chat`) and these recommendations ARE the
+ * home page, so the constraint that bought the rail is gone — and what the
+ * rail cost is worth naming, because it is the reason the owner asked for
+ * this. Eleven of twelve recommendations lived off the right edge behind a
+ * gesture the reader had to guess at, and the cards had to stay narrow enough
+ * to peek the next one, which is why "why we picked this" was one clamped grey
+ * line. A feed whose recommendations are invisible and unexplained is not a
+ * feed, it is a carousel.
  *
- * The fade, the snap and the card width live in `feed-rail.tsx` so the
- * skeleton sits in the same chrome. Changing them there changes both, which
- * is the point of extracting them.
+ * Reading order also states the right thing now. The rail said "these twelve
+ * are peers, browse across them"; ranking is real here — `assembleFeedCards`
+ * sorts by score and caps one per subject — so a numbered-feeling column that
+ * you read from the top is the honest shape.
  *
- * Keyboard access comes free and is worth stating, because a scroll container
- * that only responds to a mouse is a WCAG 2.1.1 failure: every card holds real
- * links — the title, the instructor, the meter, Vergil — so Tab walks into the
- * rail and the browser scrolls each one into view as it goes.
+ * The grid lives in `feed-layout.tsx` so the skeleton sits in identical
+ * chrome. Changing it there changes both, which is the point of extracting it.
+ *
+ * ── Why the body is one line now ───────────────────────────────────────────
+ *
+ * The list became swipeable, and a swipe needs a pointer, so the rows moved
+ * into `FeedDeck`, a client island. This panel stays a server component and
+ * hands it the cards: everything above — the heading, the nudge, the empty
+ * state — is still rendered on the server and shipped as HTML, and the only
+ * JavaScript the feed costs is the part that has to react to a thumb.
  */
-function FeedRail({ feed }: { feed: FeedResult }) {
-  return (
-    <FeedRailScroller>
-      {feed.cards.map((card) => (
-        <li key={card.courseId} className={FEED_CARD_SLOT}>
-          <FeedCardView card={card} className="w-full" />
-        </li>
-      ))}
-    </FeedRailScroller>
-  );
+function FeedGridBody({ feed }: { feed: FeedResult }) {
+  return <FeedDeck cards={feed.cards} />;
 }
 
 /* ==========================================================================

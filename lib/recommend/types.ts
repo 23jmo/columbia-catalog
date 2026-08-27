@@ -121,8 +121,16 @@ export type RecommendationReason =
   | { kind: "interesting_and_counts"; groupId: string; groupLabel: string; similarTo: CourseId[] }
   /** Pure taste. Names the courses that drove it. */
   | { kind: "because_you_took"; similarTo: CourseId[] }
-  /** Opens up courses further along. */
-  | { kind: "unlocks"; courseIds: CourseId[] };
+  /**
+   * Opens up courses further along.
+   *
+   * `courseIds` is a sample — at most three, so a card has something concrete
+   * to name — and `unlockedCount` is how many there actually are. They were
+   * one field until the feed tried to print a count from the sample and every
+   * card in the list said "opens up 3 more courses", including the ones that
+   * open up forty. A truncated list is a fine illustration and a false total.
+   */
+  | { kind: "unlocks"; courseIds: CourseId[]; unlockedCount: number };
 
 /**
  * A caveat that travels with the recommendation.

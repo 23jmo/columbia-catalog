@@ -35,9 +35,15 @@
  */
 
 import { ACTIVE_TERMS, termLabel } from "@/lib/constants";
+import { getInstructorReputations } from "@/lib/db/reputation";
 import { getTypicalMeetings } from "@/lib/db/typical-meetings";
 import { loadPrimaryPlanSnapshot } from "@/lib/db/primary-plan-snapshot";
-import type { CourseWithSections, Meeting, TermCode } from "@/lib/types";
+import type {
+  CourseWithSections,
+  Meeting,
+  ReputationSummary,
+  TermCode,
+} from "@/lib/types";
 
 import { recommendationClears } from "./clears";
 import { outstandingForClears, resolveClearsPool } from "./clears-pool";
@@ -114,6 +120,16 @@ export interface FeedCard {
   reasons: RecommendationReason[];
   /** What we could not vouch for. `prereq_unknown` MUST reach the screen. */
   caveats: RecommendationCaveat[];
+  /**
+   * What students have said about whoever teaches `best`.
+   *
+   * On the CARD rather than on `FeedSectionView` on purpose: the card names
+   * one instructor — the primary on the best section — and putting this on the
+   * section view would imply we had fetched it for `others` too, which we have
+   * not and should not. Null is the majority case and means only "nobody has
+   * reviewed this person"; see `lib/db/reputation.ts`.
+   */
+  instructorReputation: ReputationSummary | null;
   /** The best-fitting section — the one the card is about. */
   best: FeedSectionView;
   /** The rest, best-first. Rendered as "and N other sections". */
@@ -165,6 +181,24 @@ export interface FeedResult {
 
 /** How many cards the feed renders by default. */
 export const DEFAULT_FEED_LIMIT = 12;
+
+/**
+ * How many the home page asks for.
+ *
+ * Separate from `DEFAULT_FEED_LIMIT` because the two callers pay different
+ * prices for a card. The default is what the agent's `recommend` tool gets,
+ * and there every extra card is tokens spent describing a course the student
+ * may never ask about — twelve is already generous for something being read
+ * aloud. On `/` the cards are the entire page, they are read by eye, and the
+ * cost of one more is a scroll; a list that runs out after twelve invites
+ * "is that all there is" on a catalog of 8,189 courses.
+ *
+ * Not unbounded, and not 50. `buildFeed` hydrates full sections for every card
+ * it returns, and the honest ceiling is where the ranking stops being able to
+ * defend itself — past a couple of dozen the tail is "this also exists", which
+ * is what `/search` is for.
+ */
+export const HOME_FEED_LIMIT = 24;
 
 /**
  * How many courses to ask the engine for, per card shown.
@@ -457,17 +491,36 @@ export async function assembleFeedCards(input: {
     ? await getTypicalMeetings(timelessSectionIds)
     : new Map();
 
-  return winners.map((entry) => {
-    /*
-     * Re-choose with the historical patterns in hand. This can change WHICH
-     * section wins — a section that was "time TBA" may now have an estimate and
-     * a named instructor — and that is the intended behaviour: the estimate is
-     * information the ranking should see, even though it never gets to veto a
-     * section on conflict grounds (see `scoreSection`).
-     */
-    const choice =
-      chooseSection(entry.course.sections, { busy, terms, typical }) ?? entry.choice;
+  /*
+   * Re-choose with the historical patterns in hand. This can change WHICH
+   * section wins — a section that was "time TBA" may now have an estimate and
+   * a named instructor — and that is the intended behaviour: the estimate is
+   * information the ranking should see, even though it never gets to veto a
+   * section on conflict grounds (see `scoreSection`).
+   *
+   * Settled here rather than inside the final `map` because the reputation
+   * read below has to ask about the instructor who actually ends up on the
+   * card. Asking before this line would sometimes fetch the wrong person.
+   */
+  const chosen = winners.map((entry) => ({
+    entry,
+    choice: chooseSection(entry.course.sections, { busy, terms, typical }) ?? entry.choice,
+  }));
 
+  /*
+   * One read for the whole screen — see `getInstructorReputations`.
+   *
+   * Only the primary instructor of the winning section, because that is the
+   * only name the card prints. Co-teachers trail as a count and unrated is the
+   * common answer anyway; fetching for names nobody will read would widen the
+   * query to buy nothing.
+   */
+  const reputations = await getInstructorReputations(
+    chosen.map(({ choice }) => primaryInstructor(choice.best)).filter((name): name is string => name != null),
+  );
+
+  return chosen.map(({ entry, choice }) => {
+    const primary = primaryInstructor(choice.best);
     return {
       courseId: entry.course.courseId,
       code: entry.code,
@@ -477,10 +530,23 @@ export async function assembleFeedCards(input: {
       components: entry.components,
       reasons: entry.reasons,
       caveats: entry.caveats,
+      instructorReputation: (primary ? reputations.get(primary) : null) ?? null,
       best: toSectionView(choice.best),
       others: choice.others.slice(0, OTHER_SECTIONS_SHOWN).map(toSectionView),
     };
   });
+}
+
+/**
+ * The one name a card prints.
+ *
+ * The registrar writes empty strings into this field, so "first entry" and
+ * "first real name" are different things — `FeedCardView` filters the same way
+ * for the same reason. A section with only blanks has no instructor, which is
+ * a different statement from having one nobody has reviewed.
+ */
+function primaryInstructor(fit: SectionFit): string | null {
+  return fit.section.instructors.find((name) => name.trim().length > 0)?.trim() ?? null;
 }
 
 /* ==========================================================================

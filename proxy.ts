@@ -37,6 +37,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { AUTH_NEXT_COOKIE, safeSameOriginPath } from "@/lib/db/auth-return";
 import { guestOnboardingLocation, isGuestAllowedPath } from "@/lib/onboarding/guest-gate";
 
 /**
@@ -76,9 +77,17 @@ function rescueStrandedAuthCode(request: NextRequest): NextResponse | null {
   // the student declined Google's consent screen.
   for (const [name, value] of searchParams) target.searchParams.set(name, value);
   // Supabase discarded the original `redirectTo`, so the `next` it carried is
-  // gone. Send them back to where they landed rather than defaulting to home.
-  if (!target.searchParams.has("next") && pathname !== "/") {
-    target.searchParams.set("next", pathname);
+  // gone. Prefer the backup cookie `signIn()` set, then the path they landed
+  // on (when it is not the Site URL home). Leaving `next` unset lets the
+  // callback fall through to `postAuthPath`, which keeps unfinished students
+  // in onboarding instead of skipping the first feed.
+  if (!target.searchParams.has("next")) {
+    const fromCookie = safeSameOriginPath(request.cookies.get(AUTH_NEXT_COOKIE)?.value);
+    if (fromCookie) {
+      target.searchParams.set("next", fromCookie);
+    } else if (pathname !== "/") {
+      target.searchParams.set("next", pathname);
+    }
   }
   return NextResponse.redirect(target);
 }

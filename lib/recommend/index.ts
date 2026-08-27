@@ -383,10 +383,25 @@ function reasonsFor(args: {
     reasons.push({ kind: "because_you_took", similarTo: similar });
   }
 
-  if (unlocked.length >= UNLOCK_REASON_THRESHOLD) {
+  /*
+   * "Opens up" is a claim about the student, not about the course.
+   *
+   * `unlocked` is computed against `profile.taken`: it is the set of courses
+   * that become reachable BECAUSE this one is done. With an empty record that
+   * degenerates — every 1000-level course "unlocks" whatever sits behind it,
+   * for everyone, which is a fact about the catalog wearing a personal
+   * pronoun. The signed-out feed proved it: eight cards, eight identical rows.
+   *
+   * So it is only said to a student whose record can make it true. A guest
+   * gets no reason row at all, and the feed says why in one line above the
+   * cards ("Broadly what is on offer") rather than eight times inside them.
+   */
+  if (profile.taken.length > 0 && unlocked.length >= UNLOCK_REASON_THRESHOLD) {
     reasons.push({
       kind: "unlocks",
+      // Three to name, and the real total beside them. See the type.
       courseIds: unlocked.slice(0, 3) as CourseId[],
+      unlockedCount: unlocked.length,
     });
   }
 

@@ -10,12 +10,30 @@ describe("isGuestAllowedPath", () => {
     expect(isGuestAllowedPath("/api/agent")).toBe(true);
   });
 
-  it("sends every other page through the wizard", () => {
+  it("lets a guest read a shared course or instructor link", () => {
+    // These are the two URLs that get pasted into a group chat or a reddit
+    // reply during registration week. A link that answers "is this class any
+    // good" has to answer it, not ask the reader for an account first —
+    // nothing on either page is about a particular student.
+    expect(isGuestAllowedPath("/course/COMS1004W")).toBe(true);
+    expect(isGuestAllowedPath("/instructor/adam-cannon")).toBe(true);
+  });
+
+  it("keeps everything about a specific student behind the wizard", () => {
+    // The feed, the shortlist and the audit are what onboarding is FOR.
+    // Giving them away would leave nothing to sign in for.
     expect(isGuestAllowedPath("/")).toBe(false);
+    expect(isGuestAllowedPath("/saved")).toBe(false);
     expect(isGuestAllowedPath("/search")).toBe(false);
     expect(isGuestAllowedPath("/schedule")).toBe(false);
     expect(isGuestAllowedPath("/profile")).toBe(false);
-    expect(isGuestAllowedPath("/course/COMS1004W")).toBe(false);
+  });
+
+  it("does not open a path that merely starts with an allowed word", () => {
+    // `startsWith("/course/")` and not `startsWith("/course")`, so a future
+    // `/courses-i-hate` route cannot fall through the gate by accident.
+    expect(isGuestAllowedPath("/coursework")).toBe(false);
+    expect(isGuestAllowedPath("/instructors-admin")).toBe(false);
   });
 });
 
@@ -51,5 +69,11 @@ describe("postAuthPath", () => {
 
   it("lets a finished account land on home", () => {
     expect(postAuthPath("/", true)).toBe("/");
+  });
+
+  it("does not treat a deleted-and-rebuilt account as finished", () => {
+    // After delete the completion cookie must be cleared; if it is, a
+    // stranded OAuth return (next=/) stays in the wizard for the first feed.
+    expect(postAuthPath("/", false)).toBe("/onboarding");
   });
 });
