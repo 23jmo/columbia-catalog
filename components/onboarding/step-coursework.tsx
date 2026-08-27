@@ -10,6 +10,8 @@ import {
   useTransition,
 } from "react";
 
+import { RiUploadCloud2Line } from "@remixicon/react";
+import { cx } from "@/utils/cx";
 import { guessDeckAction } from "@/app/onboarding/actions";
 import type {
   GuessCandidate,
@@ -29,7 +31,6 @@ import {
   type OnboardingCourseSource,
 } from "@/lib/onboarding/state";
 import { sameIds, stabilizeStrip } from "@/lib/onboarding/stable-strip";
-import { dismiss, toast } from "@/lib/toast/store";
 
 import { AddChip, ChipWrap, RemovableChip, courseChipLines } from "./chip";
 import { CourseworkSkeleton } from "./coursework-skeleton";
@@ -91,14 +92,6 @@ export interface StepCourseworkProps {
  */
 const STRIP_LIMIT = 8;
 
-/**
- * Fades the top and bottom edge of the confirmed-course list when it is taller
- * than its box, so the cut reads as "scroll me" rather than as a chip that
- * failed to render. Written out as a full class string, never assembled, so
- * Tailwind's source scan can see it.
- */
-const CLIPPED_LIST_MASK =
-  "[mask-image:linear-gradient(to_bottom,transparent,black_0.5rem,black_calc(100%-0.5rem),transparent)]";
 
 /** Coalesce rapid taps into one re-rank so the strip does not shuffle mid-aim. */
 const RERANK_DEBOUNCE_MS = 180;
@@ -193,61 +186,6 @@ export function StepCoursework({
     addCoursesRef.current = addCourses;
     deckRef.current = deck;
   }, [state, addCourses, deck]);
-
-  /* ── The transcript entrance ──────────────────────────────────────────────
-   *
-   * A toast rather than a tab or a step. Transcript upload is the SECONDARY
-   * path by design — the guess-and-confirm flow is the base one — and giving it
-   * equal billing as a third tab told every student that the real way to do
-   * this was to go and find a PDF. As a toast it is an aside: offered once,
-   * dismissible, and gone the moment they step off this screen.
-   *
-   * `dedupeKey` keeps a remount from stacking a second one; `duration: null`
-   * pins it, because a student reading a list of course codes is not watching
-   * for a five-second offer in the corner.
-   */
-  const transcriptToastRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    const id = toast.info({
-      title: "Took something we missed?",
-      description:
-        "Import your transcript and we'll read the course list off it.",
-      duration: null,
-      dedupeKey: "onboarding-transcript",
-      action: {
-        label: "Import transcript",
-        onPress: () => setIsTranscriptOpen(true),
-      },
-    });
-    transcriptToastRef.current = id;
-    return () => {
-      dismiss(id);
-      transcriptToastRef.current = null;
-    };
-  }, []);
-
-  /**
-   * Retire the offer the moment the student adds a course by hand.
-   *
-   * A pinned toast is not a transient one: it holds the bottom of the viewport
-   * for as long as it is up, and on this screen — the one screen long enough to
-   * scroll — that means it sits over a row of the recommendation strip the
-   * whole time. Reserving space below the column (`hasPinnedToast`) keeps the
-   * advance arrow reachable, but padding cannot uncover content that is under
-   * the card mid-scroll; only taking the card away can.
-   *
-   * Adding a course is the signal to take it away. A student who has just
-   * added something from the strip or the search box has demonstrably found a
-   * way to correct our guesses, which is the entire thing the toast was
-   * offering to help with. Leaving it up after that is nagging, and it costs
-   * them a row of suggestions to do it.
-   */
-  const retireTranscriptOffer = useCallback(() => {
-    if (!transcriptToastRef.current) return;
-    dismiss(transcriptToastRef.current);
-    transcriptToastRef.current = null;
-  }, []);
 
   /**
    * Write tier 1 onto the record. Same filter the async path uses, so a warm
@@ -367,7 +305,6 @@ export function StepCoursework({
    */
   const confirm = useCallback(
     (course: GuestCourse) => {
-      retireTranscriptOffer();
       addCourse(course);
       seenRef.current.add(course.courseId);
 
@@ -396,7 +333,7 @@ export function StepCoursework({
         scheduleRerank();
       }
     },
-    [addCourse, onConfirmationBatch, retireTranscriptOffer, scheduleRerank],
+    [addCourse, onConfirmationBatch, scheduleRerank],
   );
 
   /**
@@ -455,42 +392,6 @@ export function StepCoursework({
     setPinnedIds((current) => (sameIds(current, next) ? current : next));
   }, [suggestions]);
 
-  /*
-   * The capped record below, kept legible.
-   *
-   * Two things have to be true of a list that is taller than its box. The
-   * newest chip has to be visible, or confirming a course loses the only
-   * feedback that the tap landed — so the box scrolls to the bottom whenever
-   * the record GROWS. And the clip has to read as "there is more", or a chip
-   * sliced through the middle by a hard edge reads as a rendering bug; the
-   * mask fades the cut instead.
-   *
-   * Not on mount, which is why the previous count is tracked rather than the
-   * effect just firing on every commit. A student returning to this step
-   * should land at the top of their own record, not scrolled to the end of it.
-   *
-   * The class is toggled on the node rather than held in state: it is derived
-   * from a measurement that only exists after layout, and routing it through
-   * `useState` would mean a second render on every confirmation to apply a
-   * decoration. Updating the DOM directly is what an effect is for.
-   */
-  const confirmedListRef = useRef<HTMLDivElement | null>(null);
-  const confirmedCount = state.courses.length;
-  const lastConfirmedCount = useRef(confirmedCount);
-  useEffect(() => {
-    const node = confirmedListRef.current;
-    if (!node) return;
-
-    const grew = confirmedCount > lastConfirmedCount.current;
-    lastConfirmedCount.current = confirmedCount;
-
-    node.classList.toggle(
-      CLIPPED_LIST_MASK,
-      node.scrollHeight > node.clientHeight + 1,
-    );
-    if (grew) node.scrollTop = node.scrollHeight;
-  }, [confirmedCount]);
-
   const showSkeleton =
     !error &&
     (!deck ||
@@ -514,57 +415,56 @@ export function StepCoursework({
         {showSkeleton ? <CourseworkSkeleton /> : null}
 
         {/*
-          ── Why this list is capped ──────────────────────────────────────
+          ── Why this list is NOT capped ──────────────────────────────────
 
-          It sits above the search box, the choose-one questions and the
-          maybe-strip, so every row it gains pushes all three down the page.
-          A student confirming their way through a junior year adds twenty-odd
-          chips, and roughly every third one starts a new row — which moves the
-          strip out from under the finger that was aiming at it. Capping the
-          block turns an unbounded pusher into a fixed-size one.
+          It sits above the search box and the maybe-strip, so every row it
+          gains pushes both down the page — and a student confirming their way
+          through a junior year adds twenty-odd chips, roughly every third one
+          starting a new row. That is a real cost, and it is why this block
+          spent a while inside a fixed-height scroller.
 
-          Scrolled rather than truncated with a "show all": this is the
-          student's own record on a screen whose entire job is letting them
-          correct it, and a chip they cannot reach is a chip they cannot
-          remove. `overscroll-contain` keeps a flick inside the list from
-          chaining into the page behind it.
+          The scroller was the wrong trade. This is the student's own record on
+          a screen whose entire job is asking them to check it, and a record
+          you have to scroll a nested box to read is one you will not read. It
+          hid most of the answer to the question the heading asks, to buy
+          stability in a strip further down. Seeing everything is the product;
+          the strip staying still is a nicety.
 
-          The alternative was moving the block below the strip, which fixes the
-          push by construction. It was not taken because "what you have told us
-          so far" belongs above the things that ask for more, and on a phone a
-          long record would put it off the bottom of the screen entirely.
+          So it renders at its natural height and the PAGE scrolls, which is
+          the scroll a phone user already expects. A long record is long — that
+          is what a long record looks like.
+
+          Moving the block below the strip would fix the push by construction
+          and is still not taken: "what we think you have taken" is the claim
+          the screen is making, and burying the claim under the things that ask
+          for more inverts the screen.
         */}
         {!showSkeleton && state.courses.length > 0 ? (
-          <div
-            ref={confirmedListRef}
-            className="max-h-40 overflow-y-auto overscroll-contain sm:max-h-56"
-          >
-            <ChipWrap className="gap-1.5 sm:gap-2">
-              {state.courses.map((course) => {
-                const lines = courseChipLines(course.code, course.title);
-                return (
-                  <RemovableChip
-                    key={course.courseId}
-                    sublabel={lines.sublabel}
-                    /*
-                    The one place "we do not have this course" is stated. It is a
-                    label, never a rejection: `student_courses.course_id` is
-                    deliberately not a foreign key so transfer credit, AP credit and
-                    archived terms are storable, and such rows are simply excluded
-                    from similarity and requirement matching downstream.
+          <ChipWrap className="gap-1.5 overflow-visible px-2.5 pt-2 sm:gap-2">
+            {state.courses.map((course) => {
+              const lines = courseChipLines(course.code, course.title);
+              return (
+                <RemovableChip
+                  key={course.courseId}
+                  sublabel={lines.sublabel}
+                  /*
+                    The one place "we do not have this course" is stated. It is
+                    a label, never a rejection: `student_courses.course_id` is
+                    deliberately not a foreign key so transfer credit, AP credit
+                    and archived terms are storable, and such rows are simply
+                    excluded from similarity and requirement matching downstream.
                   */
-                    note={course.inCatalog ? undefined : "not in our catalog"}
-                    onRemove={() => removeCourse(course.courseId)}
-                    removeLabel={`Remove ${lines.label}${
-                      lines.sublabel ? ` — ${lines.sublabel}` : ""
-                    }`}
-                  >
-                    {lines.label}
-                  </RemovableChip>
-                );
-              })}
-            </ChipWrap>
-          </div>
+                  note={course.inCatalog ? undefined : "not in our catalog"}
+                  onRemove={() => removeCourse(course.courseId)}
+                  removeLabel={`Remove ${lines.label}${
+                    lines.sublabel ? ` — ${lines.sublabel}` : ""
+                  }`}
+                >
+                  {lines.label}
+                </RemovableChip>
+              );
+            })}
+          </ChipWrap>
         ) : null}
 
         {error ? (
@@ -619,6 +519,42 @@ export function StepCoursework({
             </ChipWrap>
           </div>
         ) : null}
+        {/*
+          ── The transcript entrance ─────────────────────────────────────
+
+          Transcript upload is the SECONDARY path by design — guess-and-confirm
+          is the base one — and it spent a while as a pinned toast to say so.
+          Two things were wrong with that. A pinned toast holds the bottom of
+          the viewport, so on the one screen long enough to scroll it sat over
+          a row of the strip for as long as it was up. And it RETIRED itself
+          the moment a student added a course by hand, on the theory that
+          someone correcting our guesses had found their own way and was being
+          nagged.
+
+          That theory had it backwards. Adding one course by hand is the moment
+          a student discovers how much we missed, which is exactly when they
+          want the transcript — and it was the moment the offer disappeared. A
+          student who then remembers eight more courses has no way back to it
+          short of reloading the screen.
+
+          So it lives in the column instead: always present, never covering
+          anything, at the end of the two things it is an alternative to. Quiet
+          styling rather than a primary button, because it is still the
+          secondary path — perpetually available is not the same as loud.
+        */}
+        <div className="flex flex-col items-center gap-1.5 pt-1">
+          <p className="text-caption-1-regular text-text-tertiary">
+            Took something we missed?
+          </p>
+          <button
+            type="button"
+            onClick={() => setIsTranscriptOpen(true)}
+            className="flex cursor-pointer items-center gap-2 rounded-full border border-border-button-default px-4 py-2 text-body-medium text-text-secondary transition-colors outline-none hover:bg-background-secondary-hover hover:text-text-primary focus-visible:ring-2 focus-visible:ring-border-focus-ring pointer-coarse:py-2.5"
+          >
+            <RiUploadCloud2Line className="size-4 shrink-0" aria-hidden />
+            Import transcript
+          </button>
+        </div>
       </section>
 
       {isTranscriptOpen ? (

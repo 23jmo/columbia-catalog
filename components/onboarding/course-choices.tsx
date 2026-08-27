@@ -1,8 +1,9 @@
 "use client";
 
 import type { GuessChoice, GuessChoiceRoute } from "@/lib/onboarding/guess";
+import { cx } from "@/utils/cx";
 
-import { AddChip, ChipWrap, courseChipLines } from "./chip";
+import { ChipWrap, OptionChip, courseChipLines } from "./chip";
 
 /**
  * The body of the choose-one step. See `step-choices.tsx` for why it is a step.
@@ -24,30 +25,59 @@ import { AddChip, ChipWrap, courseChipLines } from "./chip";
  * chips it reads as eight separate guesses, most of which we know are false,
  * since a student who did Lit Hum did not also do CC.
  *
- * ── One tap answers the whole group ─────────────────────────────────────────
+ * ── One tap answers the whole group, and the group stays ────────────────────
  *
  * Picking a route confirms every course in it — both terms of a sequence — and
- * the group leaves the screen, taking the routes not chosen with it. That is
- * the "and the others vanish" half, and it falls out of the data rather than
- * needing its own state: a group whose courses are confirmed is answered, and
- * `StepChoices` filters it out on the next render.
+ * the route lights up as the answer. The group does NOT leave the screen.
+ *
+ * It used to. An answered group was filtered out, which read as the question
+ * being consumed, and it cost the student the two things a visible answer
+ * gives them: seeing what they said, and being able to change it. Correcting a
+ * mis-tap meant continuing to the next screen and hunting the course down in a
+ * list of twenty to remove it.
+ *
+ * Staying visible is also what makes switching answers correct rather than
+ * additive. These are choose-ONE groups, so picking Contemporary Civilization
+ * after Literature Humanities has to retract Lit Hum — otherwise the record
+ * claims both, which is the one thing the group's own rule says cannot be
+ * true. A vanished group had nowhere to express that.
+ *
+ * Hence `OptionChip` rather than `AddChip`, which is the same distinction
+ * stated in components: an `AddChip` is an offer, with a leading + and no
+ * pressed state, because accepting it ends it. Every other question in
+ * onboarding — school, class year, major — is an `OptionChip`, and a
+ * choose-one requirement is that same kind of question.
  *
  * "None yet" dismisses every route at once, which is the honest reading of a
  * student saying they have not done this requirement — and is what stops a
  * question they have already declined from coming back as suggestion chips on
- * the screen after this one.
+ * the screen after this one. Picking a route afterwards undoes it on its own:
+ * `addCourse` drops the course from `dismissedCourseIds`, since an explicit
+ * add is the newer statement.
  *
  * No heading of its own: the step's question IS the heading now, and repeating
  * it here would print the same sentence twice on one screen.
  */
+/** A group, plus what the student has already said about it. */
+export interface AnsweredChoice {
+  choice: GuessChoice;
+  /** The route whose courses are on the record, if any. */
+  selectedRouteId: string | null;
+  /** They said "None yet" and have not since picked a route. */
+  isDeclined: boolean;
+}
+
 export function CourseChoices({
   choices,
   onChoose,
   onDecline,
 }: {
-  choices: GuessChoice[];
-  /** Confirms every course in the route. */
-  onChoose: (route: GuessChoiceRoute) => void;
+  choices: readonly AnsweredChoice[];
+  /**
+   * Confirms every course in the route, retracts the sibling route it
+   * replaces, and un-picks it when it is already the answer.
+   */
+  onChoose: (choice: GuessChoice, route: GuessChoiceRoute) => void;
   /** Dismisses every course in every route. */
   onDecline: (choice: GuessChoice) => void;
 }) {
@@ -56,16 +86,29 @@ export function CourseChoices({
   return (
     <div className="flex flex-col gap-4">
       <ul className="flex flex-col gap-4">
-        {choices.map((choice) => (
+        {choices.map(({ choice, selectedRouteId, isDeclined }) => (
           <li key={choice.choiceId} className="flex flex-col gap-1">
             <div className="flex items-baseline justify-between gap-3 px-1">
               <h3 className="min-w-0 truncate text-caption-1-medium text-text-secondary">
                 {choice.label}
               </h3>
+              {/*
+                Pressed rather than hidden once chosen, for the same reason the
+                routes are: it is an answer the student gave and may want back.
+                `aria-pressed` because it toggles nothing off — picking a route
+                is what clears it — so it reports state without promising a
+                second tap will undo it.
+              */}
               <button
                 type="button"
+                aria-pressed={isDeclined}
                 onClick={() => onDecline(choice)}
-                className="shrink-0 rounded-sm text-caption-2-regular text-text-tertiary underline-offset-2 outline-none hover:text-text-primary hover:underline focus-visible:ring-2 focus-visible:ring-border-focus-ring"
+                className={cx(
+                  "shrink-0 rounded-sm text-caption-2-regular underline-offset-2 outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
+                  isDeclined
+                    ? "text-accent-500"
+                    : "text-text-tertiary hover:text-text-primary hover:underline",
+                )}
               >
                 None yet
               </button>
@@ -81,14 +124,15 @@ export function CourseChoices({
               {choice.routes.map((route) => {
                 const lines = routeChipLines(route, choice.routes);
                 return (
-                  <AddChip
+                  <OptionChip
                     key={route.routeId}
-                    onPress={() => onChoose(route)}
+                    isSelected={route.routeId === selectedRouteId}
+                    onPress={() => onChoose(choice, route)}
                     sublabel={lines.sublabel}
                     label={`I took ${lines.label}${lines.sublabel ? ` — ${lines.sublabel}` : ""}`}
                   >
                     {lines.label}
-                  </AddChip>
+                  </OptionChip>
                 );
               })}
             </ChipWrap>

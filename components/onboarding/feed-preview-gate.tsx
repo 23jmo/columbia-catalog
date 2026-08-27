@@ -1,16 +1,16 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useReducedMotion } from "motion/react";
 
 import { onboardingFeedPreviewAction } from "@/app/onboarding/actions";
-import { Button } from "@/components/base/buttons/button";
 import { FeedCardView } from "@/components/feed/feed-card";
 import { loadFeedPreviewCached, peekCachedFeedPreview } from "@/lib/onboarding/feed-preview-cache";
 import type { FeedCard } from "@/lib/recommend/feed";
 import type { GuestOnboardingState } from "@/lib/onboarding/state";
-import { haptic } from "@/lib/haptics";
 import { cx } from "@/utils/cx";
 
+import { FeedFinishControl } from "./feed-finish-control";
 import { FeedSignInPanel } from "./feed-sign-in-panel";
 import { FeedPreviewCardSkeleton } from "./feed-teaser-cards";
 
@@ -67,6 +67,26 @@ export function FeedPreviewGate({
   const loadingPreview = previewCards === null && !previewError;
   const gated = !signedIn;
 
+  /*
+   * ── Which arrivals get the reveal ────────────────────────────────────────
+   *
+   * Only the ones the student watched happen. `peekCachedFeedPreview` can
+   * return the cards synchronously — that is the path back from Google, where
+   * the ten are already in `localStorage` — and those are painted in the same
+   * frame as the screen itself, which `OnboardingScreen` is already fading and
+   * sliding in. Animating them again would be two entrances stacked on one
+   * mount, and the second one would start after the first had finished.
+   *
+   * A lazy `useState` initialiser is the mechanism, and a ref is not: a ref
+   * holds the same value but reading `.current` during render is what
+   * `react-hooks/refs` exists to stop, and it is right to — a value the render
+   * output depends on belongs in state, where React knows about it. The
+   * initialiser runs once, so this stays the answer to "were we empty when
+   * this mounted" and never drifts. Nothing ever sets it.
+   */
+  const [revealOnArrival] = useState(() => previewCards === null);
+  const shouldReduceMotion = useReducedMotion();
+
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -109,7 +129,15 @@ export function FeedPreviewGate({
      * width and the right edge of the sign-in card shears off.
      */
     <div className="relative w-full min-w-0 max-w-full pt-2">
-      {firstCard ? <PreviewCardSlot item={firstCard} index={0} gated={gated} /> : null}
+      {firstCard ? (
+        <PreviewCardSlot
+          item={firstCard}
+          index={0}
+          gated={gated}
+          reveal={revealOnArrival && !loadingPreview}
+          flat={shouldReduceMotion ?? false}
+        />
+      ) : null}
 
       {gated ? (
         <div className="relative z-10 -mt-6 flex min-w-0 shrink-0 flex-col items-center gap-4 px-0 sm:-mt-8 sm:px-1">
@@ -142,7 +170,14 @@ export function FeedPreviewGate({
           aria-hidden={gated}
         >
           {restCards.map((item, index) => (
-            <PreviewCardSlot key={item.key} item={item} index={index + 1} gated={gated} />
+            <PreviewCardSlot
+              key={item.key}
+              item={item}
+              index={index + 1}
+              gated={gated}
+              reveal={revealOnArrival && !loadingPreview}
+              flat={shouldReduceMotion ?? false}
+            />
           ))}
         </div>
       ) : null}
@@ -167,35 +202,130 @@ export function FeedPreviewGate({
           {previewError ? (
             <p className="text-center text-caption-1-regular text-text-error-primary">{previewError}</p>
           ) : null}
-          <Button
-            variant="secondary"
-            onClick={() => {
-              haptic("success");
-              onFinish(displayCards);
-            }}
-          >
-            Take me to the catalog
-          </Button>
+          <FeedFinishControl
+            onFinish={() => onFinish(displayCards)}
+            failed={migration.status === "failed"}
+          />
         </div>
       )}
     </div>
   );
 }
 
+/**
+ * How long one card takes to arrive, and how far apart they arrive.
+ *
+ * 260ms is at the slow end of the UI range because these are the largest
+ * elements on the screen and a big surface crossing a short distance reads as
+ * abrupt at 150. 45ms of stagger is enough to see the cards resolve one after
+ * another rather than as one block, and short enough that it never becomes a
+ * queue the student is waiting in.
+ *
+ * The stagger stops counting at the fifth card. Past that the cards are below
+ * the fold, and an uncapped ramp would have card ten still sliding 400ms after
+ * a student who flicked down had already arrived at it — motion happening in
+ * the corner of an eye that has moved on. Everything from index four down
+ * arrives together.
+ */
+const REVEAL_DURATION_MS = 260;
+const REVEAL_STAGGER_MS = 45;
+const REVEAL_STAGGER_CAP = 4;
+const REVEAL_RISE_PX = 8;
+
+/**
+ * The same curve as `STEP_TRANSITION` in `screen.tsx`, and for the same
+ * reason: it is the `--ease-out` token from `styles/theme.css`, written out
+ * because neither a WAAPI options object nor a `motion` JS config can read a
+ * CSS custom property. Retune the token and both literals need updating.
+ */
+const REVEAL_EASE = "cubic-bezier(0.23, 1, 0.32, 1)";
+
 /** Progressive blur on the first few cards; a cheaper wash on the rest. */
 function PreviewCardSlot({
   item,
   index,
   gated,
+  reveal,
+  flat,
 }: {
   item: { key: string; node: ReactNode };
   index: number;
   gated: boolean;
+  /** This card replaced a skeleton the student was watching. */
+  reveal: boolean;
+  /** `prefers-reduced-motion` — fade, but do not travel. */
+  flat: boolean;
 }) {
+  /*
+   * ── Why the cards arrive one at a time ─────────────────────────────────
+   *
+   * Four pulsing placeholders are replaced by ten real cards of unrelated
+   * heights, in one frame. Everything below the swap jumps, and the moment
+   * the whole flow has been building to — this is the first time the student
+   * sees anything the app actually ranked for them — lands as a flicker.
+   *
+   * A stagger is the fix for both halves. It bridges the swap so the change
+   * is watched rather than blinked past, and it spends the delight budget
+   * where onboarding is allowed to: on something seen exactly once.
+   *
+   * `transform` and `opacity` only, so this stays off the layout and paint
+   * path — the cards are arriving at the precise moment React has just
+   * committed ten of them and the browser is resolving their links.
+   *
+   * ── Why WAAPI and not `motion`, which this folder otherwise uses ────────
+   *
+   * Because `motion` cannot do it here. `OnboardingScreen` wraps every step
+   * in `<AnimatePresence mode="wait" initial={false}>` so the first question
+   * does not animate in on page load. That `initial={false}` is published on
+   * `PresenceContext`, and every `motion` component that mounts anywhere
+   * beneath it reads that context and skips its own `initial` — including one
+   * mounting seconds later, for reasons that have nothing to do with the step
+   * transition. Built with `motion.div` this animation silently did not run:
+   * the cards were written straight to their end state, no error, nothing in
+   * the console. It was measurable only by recording computed opacity per
+   * frame and finding it never left 1.
+   *
+   * `element.animate()` has no such context to inherit. It is also the right
+   * primitive on the merits — off the main thread like a CSS animation, but
+   * with the per-card delay computed in JS, which is the one thing a static
+   * stylesheet cannot express. And `styles/**` is frozen, so a `@keyframes`
+   * was never available anyway.
+   */
+  const revealRef = useRef<HTMLDivElement>(null);
+  const delay = Math.min(index, REVEAL_STAGGER_CAP) * REVEAL_STAGGER_MS;
+
+  useEffect(() => {
+    if (!reveal) return;
+    const node = revealRef.current;
+    if (!node?.animate) return;
+
+    const animation = node.animate(
+      [
+        { opacity: 0, transform: `translateY(${flat ? 0 : REVEAL_RISE_PX}px)` },
+        { opacity: 1, transform: "translateY(0px)" },
+      ],
+      {
+        duration: REVEAL_DURATION_MS,
+        easing: REVEAL_EASE,
+        delay,
+        // `backwards` is what makes the stagger a stagger. Without it a card
+        // waiting out its delay sits at its natural opacity, so all ten paint
+        // at once and then take turns fading in from already-visible.
+        fill: "backwards",
+      },
+    );
+    return () => animation.cancel();
+  }, [reveal, flat, delay]);
+
   return (
     <div
+      ref={revealRef}
       className={cx(
-        "relative min-w-0 transition-opacity duration-300 ease-out",
+        // No `transition-opacity` here. It was vestigial — nothing on this
+        // element ever changed opacity by class — and a CSS transition on a
+        // property `motion` is writing frame by frame makes every frame chase
+        // the last one, which shows up as a card that lags its own entrance.
+        "relative min-w-0",
         // Contain the card's own stacking (instructor links are
         // `relative z-[1]` so they beat a stretched-link overlay).
         // Without isolation those names paint above this blur.

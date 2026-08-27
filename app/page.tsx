@@ -41,7 +41,7 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { RiArrowRightLine } from "@remixicon/react";
+import { RiChat3Line } from "@remixicon/react";
 
 import { FeedPanel } from "@/components/feed/feed-panel";
 import { FeedSkeleton } from "@/components/feed/feed-skeleton";
@@ -120,25 +120,69 @@ async function HomeFeed() {
  * student who has already read the list and found it did not cover their case.
  * Putting it above the cards would ask a question of someone who came here to
  * be handed an answer; putting it below is where the reader who exhausted the
- * list actually is. It is a line and a link rather than a panel because it is
- * a door, not a destination.
+ * list actually is.
+ *
+ * ── Still a door, and now shaped like one ──────────────────────────────────
+ *
+ * This was one sentence with an inline link in it, and the constraint that
+ * produced it is right and is kept: it must not read as an eleventh
+ * recommendation. But "not a card" had been implemented as "not anything" —
+ * a bare line of text left-aligned under a column of bordered cards, which
+ * reads as a caption belonging to the card above rather than as its own
+ * offer, gives no sign the list has ended, and puts the only tap target on a
+ * run of inline text about four words wide.
+ *
+ * Three cheap things fix all of that without turning it into a destination.
+ * A hairline that fades out at both ends punctuates the end of the list —
+ * a full-strength rule would read as a table divider, and the taper says
+ * "this is the edge of the content" instead. Centring breaks the column's
+ * left-aligned rhythm, which is what stops it reading as more card. And the
+ * link becomes an outline pill: a real target, and the same shape the
+ * transcript control in onboarding uses, so the app has one way of drawing
+ * "a secondary action you may not need".
+ *
+ * Outline rather than filled accent specifically because the chat FAB is
+ * filled accent and floats over this same corner below `xl`. Two identical
+ * loud buttons to one destination, one of them a hundred pixels from the
+ * other, is a duplicate rather than a choice — so the persistent shortcut
+ * stays the loud one and the contextual explanation stays quiet.
  */
 function AskInstead() {
   return (
-    <p className="px-1 pb-2 text-body-regular text-text-secondary">
-      Something here not covered?{" "}
-      <Link
-        href="/chat"
-        className={cx(
-          "inline-flex items-center gap-1 rounded-sm text-accent-600 outline-none",
-          "transition-colors duration-150",
-          "hover:text-accent-700 hover:underline hover:underline-offset-2",
-          "focus-visible:ring-2 focus-visible:ring-border-focus-ring",
-        )}
-      >
-        Ask about your own case
-        <RiArrowRightLine className="size-4 shrink-0" aria-hidden />
-      </Link>
-    </p>
+    <div className="flex flex-col items-center gap-5 px-1 pb-2">
+      {/*
+        Held at full strength across the middle and tapered only at the ends.
+        A linear fade from the centre — the obvious `via-` gradient — peaked at
+        the one hairline value the cards already use and averaged well under
+        it, so the rule was fainter than every border above it and stopped
+        reading as a boundary at all.
+      */}
+      <div
+        aria-hidden
+        className="h-px w-full bg-[linear-gradient(to_right,transparent,var(--color-border-table)_20%,var(--color-border-table)_80%,transparent)]"
+      />
+      <div className="flex flex-col items-center gap-2.5">
+        <p className="text-center text-pretty text-headline-regular text-text-secondary">
+          Something here not covered?
+        </p>
+        <Link
+          href="/chat"
+          className={cx(
+            "inline-flex items-center gap-2 rounded-full border border-border-button-default",
+            "px-4 py-2 text-body-medium text-text-secondary outline-none",
+            "transition-colors duration-150",
+            "hover:bg-background-secondary-hover hover:text-text-primary",
+            "focus-visible:ring-2 focus-visible:ring-border-focus-ring",
+            "pointer-coarse:py-2.5",
+          )}
+        >
+          <RiChat3Line
+            className="size-[1.125rem] shrink-0 text-accent-600"
+            aria-hidden
+          />
+          Ask about your own case
+        </Link>
+      </div>
+    </div>
   );
 }

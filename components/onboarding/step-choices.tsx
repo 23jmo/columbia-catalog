@@ -21,7 +21,7 @@ import {
 } from "@/lib/onboarding/guess-cache";
 import type { GuestCourse, GuestOnboardingState } from "@/lib/onboarding/state";
 
-import { CourseChoices } from "./course-choices";
+import { CourseChoices, type AnsweredChoice } from "./course-choices";
 import { CourseworkSkeleton } from "./coursework-skeleton";
 
 /**
@@ -132,16 +132,38 @@ export function StepChoices({
    * leaves the screen on tap rather than waiting for a refetch that this
    * screen deliberately never makes.
    */
-  const choices = useMemo(() => {
+  /*
+   * Every group the deck asked about, annotated with what has been said.
+   *
+   * Nothing is filtered out. An answered question stays on the screen showing
+   * its answer, so the student can see what they told us and change it — see
+   * `CourseChoices` for why that is worth the extra height.
+   *
+   * A route counts as chosen when ANY of its courses is on the record, not all
+   * of them. Tapping adds every course in the route together, so the two agree
+   * for anything answered here; `some` additionally catches a record that
+   * already contained one half — a student who found Lit Hum through the search
+   * box on a previous visit has answered this question, and showing it blank
+   * would invite them to answer it twice.
+   */
+  const choices = useMemo<AnsweredChoice[]>(() => {
     const confirmed = new Set(state.courses.map((course) => course.courseId));
     const dismissed = new Set(state.dismissedCourseIds);
-    return (deck?.choices ?? []).filter((choice) => {
-      const everyCourse = choice.routes.flatMap((route) => route.courses);
-      if (everyCourse.some((facts) => confirmed.has(facts.courseId)))
-        return false;
-      return !choice.routes.every((route) =>
-        route.courses.some((facts) => dismissed.has(facts.courseId)),
+    return (deck?.choices ?? []).map((choice) => {
+      const chosen = choice.routes.find((route) =>
+        route.courses.some((facts) => confirmed.has(facts.courseId)),
       );
+      return {
+        choice,
+        selectedRouteId: chosen?.routeId ?? null,
+        // Declining is only the current answer while nothing is picked; an
+        // explicit route is the newer statement and outranks it.
+        isDeclined:
+          !chosen &&
+          choice.routes.every((route) =>
+            route.courses.some((facts) => dismissed.has(facts.courseId)),
+          ),
+      };
     });
   }, [deck, state.courses, state.dismissedCourseIds]);
 
@@ -160,8 +182,37 @@ export function StepChoices({
    * server-side against the full prerequisite graph rather than against the
    * partial map this screen happens to be holding.
    */
+  /**
+   * Answer the group — or change the answer, or take it back.
+   *
+   * The retraction is the part that matters. These groups are choose-ONE, so a
+   * student who taps Contemporary Civilization after Literature Humanities is
+   * correcting themselves, not reporting a second course, and leaving Lit Hum
+   * on the record would assert something the requirement itself rules out.
+   * Every sibling route is cleared before the new one goes on.
+   *
+   * Tapping the current answer again removes it, which is what the pressed
+   * state promises. `removeCourse` files it under `dismissedCourseIds`, so the
+   * deck on the next screen does not offer straight back what was just
+   * un-ticked.
+   */
   const chooseRoute = useCallback(
-    (route: GuessChoiceRoute) => {
+    (choice: GuessChoice, route: GuessChoiceRoute) => {
+      const confirmed = new Set(
+        stateRef.current.courses.map((course) => course.courseId),
+      );
+      const isSelected = route.courses.some((facts) =>
+        confirmed.has(facts.courseId),
+      );
+
+      for (const other of choice.routes) {
+        if (other.routeId === route.routeId && !isSelected) continue;
+        for (const facts of other.courses) {
+          if (confirmed.has(facts.courseId)) removeCourse(facts.courseId);
+        }
+      }
+      if (isSelected) return;
+
       addCourses(
         route.courses.map((facts) => ({
           courseId: facts.courseId,
@@ -175,7 +226,7 @@ export function StepChoices({
         })),
       );
     },
-    [addCourses],
+    [addCourses, removeCourse],
   );
 
   /**
@@ -203,20 +254,16 @@ export function StepChoices({
    * ones. The flow is told, and skips past in whichever direction the student
    * was already travelling.
    *
-   * Guarded on "was it empty when it ARRIVED", not "is it empty now". A
-   * student who answers the last question empties the list too, and
-   * auto-advancing out from under that tap would take the confirmation of
-   * their own answer with it.
+   * "Empty" needs no qualifying any more. Answering a question no longer
+   * removes it, so the list only reaches zero by never having had anything in
+   * it — an earlier version filtered answered groups out and had to latch on
+   * "was it empty when it ARRIVED", or answering the last question would
+   * auto-advance out from under the tap that answered it.
    */
   const hasAnnouncedRef = useRef(false);
-  const hadChoicesOnArrivalRef = useRef(false);
 
   useEffect(() => {
-    // Latched in the effect rather than during render: `choices` is derived
-    // synchronously from the deck, so the commit that lands a deck already
-    // carries the right list and there is no empty frame to miss.
-    if (choices.length > 0) hadChoicesOnArrivalRef.current = true;
-    if (hasAnnouncedRef.current || hadChoicesOnArrivalRef.current) return;
+    if (hasAnnouncedRef.current || choices.length > 0) return;
     // An error is not an empty deck. Skipping on a failed fetch would silently
     // drop questions the student did have, so the error is shown instead.
     if (!deck || error) return;

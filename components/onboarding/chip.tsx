@@ -78,6 +78,26 @@ const COURSE_CHIP =
 /** Title line: short on phones so two pills share a row; full length from `sm`. */
 const COURSE_TITLE = "max-w-[7.5rem] truncate sm:max-w-[22rem]";
 
+/**
+ * The dismiss badge both chips wear, on the top-right corner.
+ *
+ * One constant rather than two copies because it is one object: "take this off
+ * my record" is the same gesture whether it is aimed at a course the student
+ * confirmed or at one we guessed, and the coursework screen stacks both lists
+ * one above the other where any difference would read as a difference in
+ * meaning.
+ *
+ * Mid-grey (`neutral-500`) rather than the near-black it started as. Black
+ * gave the screen fifteen of its highest-contrast objects at once, all of them
+ * attached to the secondary action — the badges read before the courses did.
+ * `text-tertiary` was the other candidate and is too faint to carry a white
+ * glyph at this size.
+ *
+ * A full class string, never assembled, so Tailwind's source scan can see it.
+ */
+const DISMISS_BADGE =
+  "absolute -top-1.5 -right-1.5 flex size-5 cursor-pointer items-center justify-center rounded-full shadow-sm bg-text-secondary text-background-primary-default transition-opacity hover:opacity-80 pointer-coarse:size-6";
+
 /** Unselected pills are a muted fill with dark text; selected is the accent, quietly. */
 const CHIP_IDLE =
   "border-transparent bg-background-tertiary-default text-text-primary hover:bg-background-secondary-hover";
@@ -142,10 +162,20 @@ export function OptionChip({
 /**
  * A pill that is already an answer, with the way to take it back.
  *
- * The × is a real button inside the pill rather than a second tap on the pill
- * itself, because these carry a `note` — "not in our catalog" — and a student
- * reading that label should be able to reach for the remove without wondering
- * whether tapping the words does something else.
+ * The × is a real button rather than a second tap on the pill itself, because
+ * these carry a `note` — "not in our catalog" — and a student reading that
+ * label should be able to reach for the remove without wondering whether
+ * tapping the words does something else.
+ *
+ * It rides the corner as a badge, the same one `AddChip` uses, because the two
+ * lists sit one above the other on the coursework screen and "take this off my
+ * record" is one gesture whichever list it is aimed at. It used to be a glyph
+ * inside the pill, which made the same action look like two different controls
+ * depending on which half of the screen you were on.
+ *
+ * The pill keeps symmetric padding now that nothing sits inside it on the
+ * right — the old `pr-0.5` was a slot reserved for a control that has moved
+ * out, and left behind it read as a chip missing its right edge.
  */
 export function RemovableChip({
   children,
@@ -165,7 +195,7 @@ export function RemovableChip({
     <li
       className={cx(
         COURSE_CHIP,
-        "border-accent-500 bg-accent-500/10 pr-0.5 pl-2.5 text-accent-500 sm:pr-1 sm:pl-4",
+        "relative border-accent-500 bg-accent-500/10 px-2.5 text-accent-500 sm:px-4",
         sublabel && "py-1 sm:py-2",
       )}
     >
@@ -183,9 +213,9 @@ export function RemovableChip({
           onRemove();
         }}
         aria-label={removeLabel}
-        className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-full text-accent-500 transition-colors hover:bg-accent-500/20 sm:size-8 pointer-coarse:size-7 sm:pointer-coarse:size-9"
+        className={DISMISS_BADGE}
       >
-        <RiCloseLine className="size-3.5 sm:size-4" aria-hidden />
+        <RiCloseLine className="size-3" aria-hidden />
       </button>
     </li>
   );
@@ -197,7 +227,8 @@ export function RemovableChip({
  * The × in the top-right is a separate control — "I have not taken this" —
  * modelled on iOS's app-delete badge so it reads as dismiss, not as the
  * same tap that would add. It must not sit inside the add button: a nested
- * button is invalid HTML and would fire both handlers.
+ * button is invalid HTML and would fire both handlers. See `DISMISS_BADGE`
+ * for the styling, which `RemovableChip` shares.
  */
 export function AddChip({
   children,
@@ -241,14 +272,7 @@ export function AddChip({
             onDismiss();
           }}
           aria-label={dismissLabel ?? "I have not taken this"}
-          className={cx(
-            // Inverted like iOS jiggle-mode delete: a dark disc, light ×,
-            // sitting on the corner. A same-family fill on the grey chip
-            // disappeared into it — the preview made that obvious.
-            "absolute -top-1.5 -right-1.5 flex size-5 cursor-pointer items-center justify-center rounded-full shadow-sm",
-            "bg-text-primary text-background-primary-default hover:opacity-80",
-            "pointer-coarse:size-6",
-          )}
+          className={DISMISS_BADGE}
         >
           <RiCloseLine className="size-3" aria-hidden />
         </button>

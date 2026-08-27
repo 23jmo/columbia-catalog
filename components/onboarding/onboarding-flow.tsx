@@ -742,9 +742,6 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
         wide
         nextLabel="Continue to what you liked"
         hue="violetRose"
-        // The only screen that raises the transcript toast, and so the only one
-        // whose advance arrow would otherwise end up underneath it.
-        hasPinnedToast
       >
         <StepCoursework
           state={state}

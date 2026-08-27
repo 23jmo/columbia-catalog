@@ -85,16 +85,6 @@ export interface OnboardingScreenProps {
   footer?: ReactNode;
   /** Widens the column for the screens that hold more than a row of chips. */
   wide?: boolean;
-  /**
-   * Reserves room at the bottom of the column for a toast pinned to the
-   * viewport's bottom edge.
-   *
-   * Without it the advance arrow — the last thing in the column and the only
-   * way forward — comes to rest UNDER the toast card at full scroll, and a tap
-   * on it hits the toast instead. The student is then stuck on a screen whose
-   * only exit is invisible, which is the worst failure this flow can have.
-   */
-  hasPinnedToast?: boolean;
   /** Which two-hue pairing the ornament wears. One per screen, so the flow
    *  shifts colour as it advances without ever animating. */
   hue?: OrnamentHue;
@@ -139,7 +129,6 @@ export function OnboardingScreen({
   nextLabel = "Continue",
   footer,
   wide = false,
-  hasPinnedToast = false,
   hue,
   lockViewport = false,
   direction = 1,
@@ -220,16 +209,12 @@ export function OnboardingScreen({
           // to push it under Safari chrome. sm keeps the original air.
           lockViewport ? "pt-14 sm:pt-[15vh]" : "pt-[13vh] sm:pt-[15vh]",
           wide ? "max-w-[760px]" : "max-w-[620px]",
-          // Deep enough to clear the toast card at its two-line worst, which is
-          // what a 390px viewport gives it. The locked feed has no advance
-          // arrow and no toast — `pb-24` there was empty space under the
-          // button. Extra cards now live below the gate, so leave room to
-          // scroll past the last one.
-          hasPinnedToast
-            ? "pb-44"
-            : lockViewport
-              ? "pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]"
-              : "pb-24",
+          // The locked feed has no advance arrow — `pb-24` there was empty
+          // space under the button. Extra cards now live below the gate, so
+          // leave room to scroll past the last one.
+          lockViewport
+            ? "pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]"
+            : "pb-24",
           "min-h-0 flex-none",
         )}
       >

@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import { Button } from "@/components/base/buttons/button";
 import { GoogleMarkIcon } from "@/components/shell/sign-in-prompt-card";
 import { SignInPromptArt } from "@/components/shell/sign-in-prompt-art";
@@ -27,17 +29,48 @@ export interface FeedSignInPanelProps {
  * Below `sm` the gutter shrinks to a few rem. A 38% reservation on a 340px
  * card left ~180px for the paragraph, which overflowed the card and sheared
  * the right edge of the viewport.
+ *
+ * ── Why this one is louder than the other two sign-in surfaces ─────────────
+ *
+ * `SignInPromptArt` renders in three places and is deliberately quiet in the
+ * other two: in the account menu and the assistant it is decoration on a
+ * surface the reader went looking for. Here it is not decoration. The gate
+ * pulls this card UP over the feed (`-mt-6` on the row above), so it lands as
+ * a white rounded rectangle flush against a white rounded rectangle, the same
+ * width, in a column of them — and it read as the bottom half of the course
+ * card above rather than as the one thing on the screen asking for a decision.
+ *
+ * Two changes, one at rest and one on approach. At rest an accent ring and a
+ * tinted lift separate it from the stack, which is what a border cannot do
+ * when the thing above is the same colour. On approach the water is `stirred`:
+ * the shader's own intensity knob, which raises the swell and the glint rate
+ * over about half a second and settles back over two. Pointer OR keyboard
+ * focus, since a student tabbing to the button should get the same response as
+ * one reaching for it.
  */
 export function FeedSignInPanel({ onSignIn, disabled, error, className }: FeedSignInPanelProps) {
+  const [isStirred, setIsStirred] = useState(false);
+
   return (
     <div
+      // `focus`/`blur` rather than `focusin`/`focusout`: React's onFocus and
+      // onBlur already bubble, so these fire for the button inside.
+      onPointerEnter={() => setIsStirred(true)}
+      onPointerLeave={() => setIsStirred(false)}
+      onFocus={() => setIsStirred(true)}
+      onBlur={() => setIsStirred(false)}
       className={cx(
-        "relative w-full min-w-0 max-w-full overflow-hidden rounded-2xl border border-border-table bg-background-full shadow-card",
+        "relative w-full min-w-0 max-w-full overflow-hidden rounded-2xl bg-background-full",
+        // Ring rather than border: it draws outside the box, so the card keeps
+        // its width in a column whose neighbours are exactly as wide.
+        "ring-1 ring-accent-500/25 transition-shadow duration-500",
+        "shadow-[0_10px_36px_-12px_var(--color-accent-500)]",
+        !disabled && "hover:shadow-[0_16px_48px_-10px_var(--color-accent-500)]",
         disabled && "opacity-60",
         className,
       )}
     >
-      <SignInPromptArt />
+      <SignInPromptArt stirred={isStirred && !disabled} />
 
       <div className="relative z-10 flex min-h-44 min-w-0 flex-col gap-4 p-4 sm:p-5">
         {/*
