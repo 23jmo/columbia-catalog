@@ -24,9 +24,11 @@ import {
 } from "@/lib/onboarding/guess-cache";
 import type { CourseHit, ResolvedCourse } from "@/lib/onboarding/server";
 import {
+  degreeSignature,
   RERANK_BATCH_SIZE,
   type GuestCourse,
   type GuestOnboardingState,
+  type OnboardingCourseSource,
 } from "@/lib/onboarding/state";
 import { sameIds, stabilizeStrip } from "@/lib/onboarding/stable-strip";
 import { dismiss, toast } from "@/lib/toast/store";
@@ -156,6 +158,21 @@ export function StepCoursework({
    */
   const paintedWarmDeckRef = useRef(false);
 
+  /**
+   * The degree the deck on screen was built for.
+   *
+   * `null` until a deck lands. After that it is the answer to "is what the
+   * student is looking at still a claim we would make?", and the effect below
+   * rebuilds when it stops being one.
+   *
+   * Recorded from the client's own state rather than stamped onto the deck by
+   * the server, because the two can only disagree if the server forgets — and a
+   * guard that silently stops guarding is worse than no guard. `applyDeck`
+   * reads the same `stateRef` the request was built from, so this is the degree
+   * the deck actually answers.
+   */
+  const deckSignatureRef = useRef<string | null>(null);
+
   const confirmedIds = new Set(state.courses.map((course) => course.courseId));
 
   /*
@@ -242,6 +259,7 @@ export function StepCoursework({
   const applyDeck = useCallback((next: GuessDeck) => {
     setError(null);
     setDeck(next);
+    deckSignatureRef.current = degreeSignature(stateRef.current);
 
     const alreadyConfirmed = new Set(
       stateRef.current.courses.map((course) => course.courseId),
@@ -256,7 +274,10 @@ export function StepCoursework({
     for (const candidate of [...next.tier1, ...next.tier2]) {
       seenRef.current.add(candidate.courseId);
     }
-    if (fresh.length > 0) addCoursesRef.current(fresh.map(toGuestCourse));
+    if (fresh.length > 0) {
+      // Our claim, not theirs: nobody has looked at this screen yet.
+      addCoursesRef.current(fresh.map((c) => toGuestCourse(c, "onboarding_guess")));
+    }
   }, []);
 
   /*
@@ -296,6 +317,35 @@ export function StepCoursework({
       active = false;
     };
   }, [applyDeck, rerankToken]);
+
+  /**
+   * Rebuild when the deck on screen answers a degree the student no longer has.
+   *
+   * `updateDegree` in the flow already funnels every degree write through
+   * `reconcileDegreeChange`, and stepping back to a degree question unmounts
+   * this screen — so on today's routes this effect does not fire. It is here
+   * for the route that does not exist yet.
+   *
+   * The funnel's own comment warns that "a fifth degree control added later
+   * that calls `updateOnboardingState` directly would silently reintroduce the
+   * stale 'here's what we think you've taken' screen". That is a real hazard
+   * with no compiler behind it: the failure is silent, it looks like nothing
+   * happened, and it is the exact bug this file was last fixed for. Comparing
+   * signatures is the check that does not depend on remembering the rule.
+   *
+   * It keys on the DEGREE, never on the record, so confirming a course cannot
+   * trip it — that path is paced by `RERANK_BATCH_SIZE` and must stay that way.
+   */
+  useEffect(() => {
+    const applied = deckSignatureRef.current;
+    if (applied === null || applied === degreeSignature(state)) return;
+    // Stale. Take it off screen before the rebuild lands: continuing to show a
+    // list built from the old major, with the old major's chips pre-checked, is
+    // what made this look like nothing had happened.
+    deckSignatureRef.current = null;
+    paintedWarmDeckRef.current = false;
+    setRerankToken((token) => token + 1);
+  }, [state]);
 
   useEffect(() => {
     return () => {
@@ -625,7 +675,7 @@ export function StepCoursework({
                 return (
                   <AddChip
                     key={candidate.courseId}
-                    onPress={() => confirm(toGuestCourse(candidate))}
+                    onPress={() => confirm(toGuestCourse(candidate, "onboarding_confirm"))}
                     onDismiss={() => dismissSuggestion(candidate.courseId)}
                     sublabel={lines.sublabel}
                     label={`Add ${lines.label}${
@@ -680,7 +730,20 @@ export function StepCoursework({
  * Helpers
  * ========================================================================== */
 
-function toGuestCourse(candidate: GuessCandidate): GuestCourse {
+/**
+ * A deck candidate as a record row.
+ *
+ * `source` is a parameter rather than a constant because the same candidate
+ * means two different things depending on who put it on the record. Arriving
+ * pre-checked is `onboarding_guess` — our claim, retired when the degree
+ * answers it was made from change. Being pressed in the strip is
+ * `onboarding_confirm` — the student's claim, which survives. See
+ * `ONBOARDING_COURSE_SOURCES` and migration 0036.
+ */
+function toGuestCourse(
+  candidate: GuessCandidate,
+  source: OnboardingCourseSource,
+): GuestCourse {
   return {
     courseId: candidate.courseId,
     code: candidate.code,
@@ -688,7 +751,7 @@ function toGuestCourse(candidate: GuessCandidate): GuestCourse {
     termLabel: null,
     points: candidate.points,
     liked: null,
-    source: "onboarding_guess",
+    source,
     // Every deck candidate came out of the catalog or a program the catalog
     // resolves, so this is true by construction. Transcript rows are where
     // `false` actually happens.

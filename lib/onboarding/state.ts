@@ -158,13 +158,29 @@ export function nextStep(step: OnboardingStepId): OnboardingStepId | null {
  * generated is weaker evidence than one they searched for by name, and the
  * profile screen displays the difference.
  *
+ * ── Why `onboarding_confirm` is separate from `onboarding_guess` ────────────
+ *
+ * They come off the same screen and they are not the same claim.
+ * `onboarding_guess` is written by `applyDeck` the instant a deck lands, before
+ * the student has looked at it — our claim about their transcript.
+ * `onboarding_confirm` is a chip in the "usually taken too" strip that they
+ * read and pressed — their claim, and the only thing separating it from
+ * `picker` is that they found the course in a list instead of a search box.
+ *
+ * The distinction is load-bearing rather than cosmetic: `isStudentAsserted`
+ * reads it to decide what survives a change of degree. While both were spelled
+ * `onboarding_guess`, switching major silently deleted every chip the student
+ * had personally tapped — no notice, no undo, and no way for them to tell it
+ * had happened. Migration 0036 has the longer argument.
+ *
  * Deliberately NOT imported from `lib/profile/types.ts`. That module's
- * `CourseSource` union does not yet include `onboarding_guess`, and widening it
- * would mean editing a file another lane owns. The database constraint is the
- * real contract and both unions answer to it.
+ * `CourseSource` union does not yet include either onboarding value, and
+ * widening it would mean editing a file another lane owns. The database
+ * constraint is the real contract and both unions answer to it.
  */
 export const ONBOARDING_COURSE_SOURCES = [
   "onboarding_guess",
+  "onboarding_confirm",
   "picker",
   "transcript_paste",
   "transcript_pdf",
@@ -499,13 +515,20 @@ export function degreeSignature(state: GuestOnboardingState): string {
  *
  * Two ways to qualify, and the second one matters as much as the first:
  *
- *  - `source !== "onboarding_guess"` — they searched it up, or it came off a
- *    transcript. That is their statement about their own history and no answer
- *    they give about their degree can make it untrue.
+ *  - the source is anything but `onboarding_guess` — they searched it up, it
+ *    came off a transcript, or they pressed the chip themselves
+ *    (`onboarding_confirm`). That is their statement about their own history
+ *    and no answer they give about their degree can make it untrue.
  *  - `liked !== null` — we guessed it, but they then told the love screen how
  *    they felt about it. Answering a question about a course is an implicit
  *    confirmation that they took it, and it is a stronger signal than the guess
  *    that put it there. Dropping it would also silently discard the opinion.
+ *
+ * `onboarding_guess` is therefore the ONLY source this function retires, and
+ * the exclusion is written as a negation on purpose: a source added later is
+ * kept by default. Retiring a student's answer is unrecoverable and silent,
+ * while keeping one guess too many costs a glance at a chip with an × on it, so
+ * the default has to fall on the side that is visible when it is wrong.
  */
 function isStudentAsserted(course: GuestCourse): boolean {
   return course.source !== "onboarding_guess" || course.liked !== null;
