@@ -230,8 +230,13 @@ export function FeedDeck({ cards }: { cards: readonly FeedCard[] }) {
     [cards],
   );
 
+  /*
+   * Returns whether the card should stay thrown. A false tells SwipeableCard
+   * to spring back — used when a save is refused, so the throw that already
+   * started from the drag position does not leave a hole with no residual.
+   */
   const commit = useCallback(
-    async (card: FeedCard, action: SwipeAction) => {
+    async (card: FeedCard, action: SwipeAction): Promise<boolean> => {
       setHintCourseId(null);
       // A card being thrown again is not a card coming back; clear the entrance
       // so an undo-then-reswipe does not fly in from the wrong edge next time.
@@ -252,9 +257,9 @@ export function FeedDeck({ cards }: { cards: readonly FeedCard[] }) {
          */
         if (result.kind === "denied") {
           showSignInToast();
-          return;
+          return false;
         }
-        if (result.kind === "failed" || result.kind === "busy") return;
+        if (result.kind === "failed" || result.kind === "busy") return false;
         haptic("success");
       } else {
         // Discards alone are written to disk; see `handled` above.
@@ -308,6 +313,7 @@ export function FeedDeck({ cards }: { cards: readonly FeedCard[] }) {
           action: { label: "Refine in chat", onPress: () => router.push("/chat") },
         });
       }
+      return true;
     },
     [router, settle],
   );
@@ -365,7 +371,7 @@ export function FeedDeck({ cards }: { cards: readonly FeedCard[] }) {
                   hinting={hintCourseId === card.courseId}
                   returningFrom={returningFrom.get(card.courseId) ?? null}
                   reduceMotion={Boolean(reduceMotion)}
-                  onCommit={(action) => void commit(card, action)}
+                  onCommit={(action) => commit(card, action)}
                 />
               )}
             </AnimatePresence>
@@ -392,22 +398,26 @@ function SwipeableCard({
   /** `1` or `-1` when this card is being un-swiped; `null` on an ordinary mount. */
   returningFrom: 1 | -1 | null;
   reduceMotion: boolean;
-  onCommit: (action: SwipeAction) => void;
+  /** Resolves false when the action was refused — the card must spring back. */
+  onCommit: (action: SwipeAction) => Promise<boolean>;
 }) {
   const x = useMotionValue(0);
   /*
-   * Set the instant the gesture commits, and never cleared — the card is on
-   * its way out.
+   * Direction of a committed throw, set the instant the gesture counts.
    *
-   * Without it the throw visibly stutters. `onDragEnd` hands the decision up,
-   * but the residual that triggers the exit is a state update a tick later,
-   * and in that tick `animate={{ x: 0 }}` is still the live target: the spring
-   * grabs the card, pulls it back to centre, and only then does the exit fling
-   * it out. The reader sees a bounce in the middle of a throw. This drops the
-   * rest target for the rest of the card's life so the exit continues from
-   * wherever the thumb left it.
+   * Left-swipe (discard) used to look fine and right-swipe (save) did not,
+   * for one reason: discard writes the residual in the same tick as the drag
+   * end, so AnimatePresence's exit continues from the thumb. Save awaits
+   * `toggleBookmark` first. In that gap `animate={{ x: 0 }}` and the
+   * dragConstraints spring both pull the card home, and the exit only starts
+   * once the bookmark returns — from centre. Setting `animate` to undefined
+   * was not enough; Motion still snaps to the constraints on release.
+   *
+   * Aiming at ±520 here keeps the throw going from wherever the thumb left
+   * it, matching the exit variant, while the parent finishes the side effect.
+   * A refused save clears this and the spring returns the card.
    */
-  const [committed, setCommitted] = useState(false);
+  const [throwDir, setThrowDir] = useState<1 | -1 | null>(null);
 
   /*
    * The backdrop reads the same motion value the card does, so the green and
@@ -472,7 +482,7 @@ function SwipeableCard({
          * from the first few pixels and leaves the other one to the browser.
          * `touch-pan-y` tells the compositor the same thing.
          */
-        drag="x"
+        drag={throwDir == null ? "x" : false}
         dragDirectionLock
         dragConstraints={{ left: 0, right: 0 }}
         dragElastic={0.55}
@@ -480,8 +490,12 @@ function SwipeableCard({
         onDragEnd={(_event, info) => {
           const verdict = swipeVerdict(info.offset.x, info.velocity.x);
           if (!verdict) return;
-          setCommitted(true);
-          onCommit(verdict);
+          // Keep flying from the release point — do not wait on the parent.
+          const dir: 1 | -1 = verdict === "saved" ? 1 : -1;
+          setThrowDir(dir);
+          void onCommit(verdict).then((ok) => {
+            if (!ok) setThrowDir(null);
+          });
         }}
         /*
          * The hint, and the exit. Both are the same property, so they are
@@ -497,32 +511,35 @@ function SwipeableCard({
           returningFrom && !reduceMotion ? { x: returningFrom * 440, opacity: 0 } : false
         }
         animate={
-          committed
-            ? undefined
+          throwDir != null
+            ? { x: throwDir * 520, opacity: 0 }
             : hinting && !reduceMotion
               ? { x: [0, 52, -52, 0], opacity: 1 }
               : { x: 0, opacity: 1 }
         }
         transition={
-          hinting
-            ? { duration: 1.9, times: [0, 0.28, 0.68, 1], ease: [0.4, 0, 0.2, 1] }
-            : /*
-               * Softer than it was. At 520/42 the spring was effectively a cut
-               * — the card was back before the eye had followed it out, which
-               * is the "too snappy" the owner saw. This still settles without
-               * a wobble but the return is legible as a movement.
-               */
-              {
-                type: "spring",
-                stiffness: 340,
-                damping: 32,
-                mass: 0.9,
-                // The fade trails the movement rather than matching it: a card
-                // that is fully opaque before it has stopped moving reads as a
-                // solid object arriving, where a simultaneous fade reads as a
-                // dissolve.
-                opacity: { duration: 0.18 },
-              }
+          throwDir != null
+            ? // Same curve as the exit variant so a late residual swap is seamless.
+              { duration: 0.3, ease: [0.4, 0, 0.9, 0.5] }
+            : hinting
+              ? { duration: 1.9, times: [0, 0.28, 0.68, 1], ease: [0.4, 0, 0.2, 1] }
+              : /*
+                 * Softer than it was. At 520/42 the spring was effectively a cut
+                 * — the card was back before the eye had followed it out, which
+                 * is the "too snappy" the owner saw. This still settles without
+                 * a wobble but the return is legible as a movement.
+                 */
+                {
+                  type: "spring",
+                  stiffness: 340,
+                  damping: 32,
+                  mass: 0.9,
+                  // The fade trails the movement rather than matching it: a card
+                  // that is fully opaque before it has stopped moving reads as a
+                  // solid object arriving, where a simultaneous fade reads as a
+                  // dissolve.
+                  opacity: { duration: 0.18 },
+                }
         }
         /*
          * Thrown, not faded. `custom` above says which way; the card leaves
