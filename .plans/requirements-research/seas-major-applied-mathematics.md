@@ -3,8 +3,11 @@
 - **Proposed program id:** `seas-major-applied-mathematics`
 - **School:** SEAS (`school: "SEAS"`) · **Kind:** `major` ·
   **Department:** `"Applied Physics and Applied Mathematics"`
-- **Degree points:** 128 school-wide (belongs on `seas-core`, not here). **The
-  published Applied Mathematics track does not add up to 128 — see *Point
+- **Degree points:** 128 school-wide. It belongs on `seas-core`, where
+  `degreePoints: 128` already sits, and **not** on this file. The published
+  Applied Mathematics track sums to ~119 and is *not intended* to reach 128:
+  128 is a credit floor the student tops up with their own elective credit, not
+  the sum of the prescribed track. **Settled 2026-08-26 — see *Point
   arithmetic*.**
 - **Bulletin edition:** 2026–2027
 - **Primary source URL:**
@@ -16,17 +19,25 @@
   - Bulletin-hosted PDF degree chart, linked from the Degree Track tab:
     `…/applied-mathematics-bs/2026-2027_Engineering_Bulletin_Charts_APAM.pdf`
 - **Date researched:** 2026-08-26
-- **Confidence: 9/10.** Every group is traced to a URL with the rendered text
+- **Confidence: 10/10** (was 9/10 until 2026-08-26). Every group is traced to a
+  URL with the rendered text
   quoted; all seven Degree Track footnotes are resolved and attached; every
   course code was checked twice — against our catalog by direct query and
   against the Bulletin's own course-inventory endpoint
   (`bulletin.columbia.edu/ribbit/index.cgi?page=getcourse.rjs&code=…`), which
   found two codes the Bulletin prints that do not exist in its own database.
   The structural question (own file vs shared APAM file) is answered with
-  reasoning below. The missing tenth of a point is the arithmetic: the APAM
-  charts publish no first/second-year total and the track sums to roughly
-  119–122 against a published 128-point degree, with no reconciling statement
-  anywhere on the Bulletin. That gap is named, not papered over.
+  reasoning below.
+
+  **Raised from 9/10 to 10/10 on 2026-08-26.** The one item held back was the
+  point arithmetic — the track summing to ~119 against a published 128. That is
+  now settled from primary sources: 128 is a *minimum credit floor* that the
+  Bulletin states separately from the program requirements, so the prescribed
+  track is not supposed to sum to it. No requirement block is missing. See
+  *Point arithmetic*. Open questions 2–4 remain recorded, but each is a defect
+  in what the Bulletin prints (a course code absent from the Bulletin's own
+  database, two same-titled records, an unstated level floor) rather than a gap
+  in the reading of it.
 
 ---
 
@@ -615,30 +626,59 @@ everywhere (physics sequence 2 at 3.5/3.5/3.5, `BIOL UN2005` at 4 in place of
 chemistry, Global Core at 4 each) it reaches about **121–122**. The published
 requirement is **128**.
 
-**This is a real, unreconciled gap of six to nine points, and I could not close
-it.** What I checked:
+**Settled 2026-08-26: there is no gap to close.** The track is not supposed to
+sum to 128. What settles it, all from `bulletin.columbia.edu`:
 
-- It is not my arithmetic. Every third/fourth-year semester matches the chart's
-  own total exactly, and both internal cross-checks (27 elective points, 27
-  nontechnical points) close on the nose.
-- It is not specific to Applied Mathematics. The Applied Physics chart prints
-  16 · 15 · 16 · 17 = 64 for the same years over an identical first-two-year
-  block, reaching roughly 122.
-- It is not how APAM writes charts in general versus other departments. The
-  Chemical Engineering chart in the same PDF series reconciles to **exactly**
-  128 (68 + 60).
-- The Bulletin nowhere says an Applied Mathematics student takes free elective
-  credit beyond the track. The only 128-point statements are on the SEAS First
-  Year/Sophomore Program page ("the 128 points of credit required for a B.S.
-  degree") and the APAM Double Major page ("the regular 128-point
-  requirement").
+> "The general requirement for the Bachelor of Science degree is the completion
+> of a **minimum of 128 academic credits** with a minimum cumulative
+> grade-point average (GPA) of 2.0 (C) at the time of graduation. The program
+> requirements, specified elsewhere in this bulletin, **include** the
+> first-year/sophomore course requirements, the major departmental
+> requirements, and technical and nontechnical elective requirements."
+>
+> — SEAS *Junior and Senior Programs*,
+> `https://bulletin.columbia.edu/columbia-engineering/undergraduate-studies/undergraduate-programs/junior-senior-programs/`
 
-**The most likely explanation** is that the APAM track is published as a
-*minimum* course plan and the remaining six to nine points are free elective
-credit the student supplies — which would also explain why APAM alone omits the
-first/second-year total row. **It affects no group's rule**, so it does not
-block transcription; it is recorded here and belongs in the file header, and it
-is item 1 under *Open questions*.
+128 is a **credit floor**, and the sentence enumerates the program requirements
+as a separate list of things the degree *includes*. Nothing anywhere claims the
+prescribed track equals 128. A track that lands below the floor is the expected
+shape, not a transcription error — the balance is unprescribed credit the
+student supplies.
+
+Three corroborating checks, all re-verified against the Bulletin-hosted PDFs:
+
+- **APAM really does omit the first/second-year total**, and the reason is
+  visible on the chart. Its years 1–2 prescribe ~14 points a term; ChemE's
+  prescribe 17, because ChemE loads three department courses (`CHEN E1000`,
+  `E2100`, `E3020`) and an 11-point elective block into the same two years that
+  Applied Mathematics leaves as a single 3-point technical elective. APAM omits
+  the row because there is slack in it to omit.
+- **ChemE's "TOTAL POINTS 17 17 17 17" is footnoted**, and the footnote reads
+  "Taking the first track in each row and E1102 in Semester II." It is one
+  illustrative branch, not a requirement, so its landing exactly on 68 + 60 =
+  128 is a property of that branch rather than a rule APAM violates.
+- **The arithmetic itself was never wrong.** Every third/fourth-year semester
+  matches the chart's printed total (15 · 15 · 16 · 15 = 61, with Semester VII's
+  16 assuming `APMA E4903` at 4), and both internal cross-checks — the 27
+  elective points and the 27 nontechnical points — close exactly. Those closures
+  are the ones that matter, because they are checks against totals the Bulletin
+  actually publishes.
+
+**Trap 6 in the BRIEF ("reconcile the arithmetic against the published total")
+applies to a published *block* total, not to a school-wide credit floor.**
+Applying it to 128 is what manufactured this as an anomaly. The two block
+totals on this page — 27 and 27 — both reconcile.
+
+**Repo impact: none.** `degreePoints` is a display field on `kind: "core"`
+programs; `cc-core.ts` states the design directly — "`degreePoints` records the
+total as a number to display; nothing audits against it." `seas-core.ts:112`
+already carries `degreePoints: 128`. This file should carry no point total.
+
+**`apam.columbia.edu` was never needed.** The chart that prints the point values
+is `2026-2027_Engineering_Bulletin_Charts_APAM.pdf`, linked by a *relative* href
+from the Degree Track tab and served by `bulletin.columbia.edu`, which does not
+challenge automated clients. The 403 was real but irrelevant — it guarded a
+secondary copy of a document the primary host already serves.
 
 **Catalog- and chart-versus-Bulletin point mismatches found while
 reconciling:**
@@ -777,17 +817,16 @@ No `<sup>` marker on the page is unaccounted for. `ENGI E1006`, `ENGI E1102`,
 
 ## Open questions
 
-1. **Why does the Applied Mathematics track total 119–122 points against a
-   128-point degree?** Ranked first because it is the only finding that could
-   mean a whole requirement block is missing from the page. Everything I can
-   check says it is not: every third/fourth-year semester matches the chart's
-   printed total, both internal cross-checks close exactly, and the sibling
-   Applied Physics track has the same shortfall while the Chemical Engineering
-   chart in the same PDF series reconciles perfectly. **What would resolve it:**
-   the APAM department's own degree-requirement page — `apam.columbia.edu`
-   returns HTTP 403 to curl, to WebFetch and to a browser user-agent alike — or
-   a prior-edition APAM chart that printed a first/second-year total, or asking
-   the department.
+1. ~~**Why does the Applied Mathematics track total 119–122 points against a
+   128-point degree?**~~ **RESOLVED 2026-08-26 — no longer an open question.**
+   The premise was wrong: the track is not meant to total 128. The Bulletin's
+   *Junior and Senior Programs* page states the degree requires "a **minimum of**
+   128 academic credits" and lists the program requirements as a separate set of
+   things the degree *includes*. A prescribed track below the floor is expected;
+   the balance is the student's own elective credit. The blocker was also
+   mis-scoped: `apam.columbia.edu` still 403s, but it was never needed — the PDF
+   chart carrying every point value is hosted on `bulletin.columbia.edu` and
+   linked by a relative href from the Degree Track tab. See *Point arithmetic*.
 2. **Is `COMS W3561` a typo for `COMS W3251`?** The Bulletin prints `W3561` in
    both the HTML footnote and the PDF chart, and `W3561` exists in neither the
    Bulletin's course database nor ours. `COMS W3251` COMPUTATIONAL LINEAR
@@ -814,7 +853,10 @@ No `<sup>` marker on the page is unaccounted for. `ENGI E1006`, `ENGI E1102`,
    `CHEM UN1403` at 3 points (chart) vs 4.00 (Bulletin course record), where the
    course record is right. **Where they disagree, trust the HTML Bulletin
    page** — and the fact that they disagree twice is itself a reason not to lean
-   on the chart for anything but arithmetic.
+   on the chart for anything but arithmetic. **Update 2026-08-26:** the 403 cost
+   nothing. The only thing the department site was wanted for — the point
+   arithmetic — was settled from the Bulletin itself, and the PDF chart the
+   department publishes is mirrored on `bulletin.columbia.edu` anyway.
 
 ---
 
