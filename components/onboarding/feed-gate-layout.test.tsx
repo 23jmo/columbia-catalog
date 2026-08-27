@@ -1,11 +1,18 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { emptyGuestState } from "@/lib/onboarding/state";
-
 import { FeedPreviewGate } from "./feed-preview-gate";
 import { FeedSignInPanel } from "./feed-sign-in-panel";
 import { OnboardingScreen } from "./screen";
+import type { FeedPreview } from "./use-feed-preview";
+
+/** A settled preview with nothing in it — the gate's empty case. */
+const EMPTY_PREVIEW: FeedPreview = {
+  status: "ready",
+  cards: [],
+  error: null,
+  watched: false,
+};
 
 /**
  * The last onboarding screen used to pin `h-dvh overflow-hidden` and park
@@ -41,7 +48,7 @@ describe("onboarding feed gate layout", () => {
   it("puts the sign-in card in flow between the first card and the rest", () => {
     const html = renderToStaticMarkup(
       <FeedPreviewGate
-        state={emptyGuestState()}
+        preview={EMPTY_PREVIEW}
         signedIn={false}
         migration={{ status: "idle" }}
         onSignIn={() => undefined}

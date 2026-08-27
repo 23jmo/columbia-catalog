@@ -6,7 +6,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { RiArrowLeftLine, RiArrowRightLine } from "@remixicon/react";
 
 import { Avatar } from "@/components/base/avatar/avatar";
-import { OrnamentAvatar } from "@/components/ornament/ornament-avatar";
+import { OrnamentAvatar, type OrnamentMood } from "@/components/ornament/ornament-avatar";
 import { haptic } from "@/lib/haptics";
 import { cx } from "@/utils/cx";
 
@@ -118,6 +118,12 @@ export interface OnboardingScreenProps {
   signInError?: string | null;
   /** Signed-in student. Replaces Log in on the first screen with their photo. */
   account?: { name: string; avatarUrl?: string } | null;
+  /**
+   * What the ornament is doing. `tracking` on every screen that asks the
+   * student something, which is nearly all of them; `thinking` on the one
+   * screen where the app is the one working and the student is waiting.
+   */
+  mood?: OrnamentMood;
 }
 
 export function OnboardingScreen({
@@ -135,6 +141,7 @@ export function OnboardingScreen({
   onSignIn,
   signInError,
   account,
+  mood = "tracking",
 }: OnboardingScreenProps) {
   /*
    * Reduced motion keeps the crossfade and drops the horizontal travel. The
@@ -218,7 +225,7 @@ export function OnboardingScreen({
           "min-h-0 flex-none",
         )}
       >
-        <OrnamentAvatar hue={hue} mood="tracking" />
+        <OrnamentAvatar hue={hue} mood={mood} />
 
         {/*
           Keyed on the question rather than on the flow's step: the degree step

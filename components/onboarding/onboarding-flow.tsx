@@ -48,6 +48,8 @@ import type { School } from "@/lib/requirements/types";
 import { OrnamentAvatar } from "@/components/ornament/ornament-avatar";
 
 import { OnboardingScreen } from "./screen";
+import { useFeedPreview } from "./use-feed-preview";
+import { FeedPreviewCardSkeleton } from "./feed-teaser-cards";
 import { StepChoices } from "./step-choices";
 import { StepCoursework } from "./step-coursework";
 import {
@@ -302,6 +304,16 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
     state.interestTags,
     programOptions,
   ]);
+
+  /*
+   * The last screen's cards, ranked here rather than inside the gate.
+   *
+   * `enabled` is what keeps this from firing a rank on the school question:
+   * the hook mounts with the flow and does nothing until the student is
+   * actually on the last step. The prefetch above usually means the answer is
+   * already sitting in the cache by then, and this resolves in the same frame.
+   */
+  const feedPreview = useFeedPreview(state, isHydrated && state.step === "feed");
 
   /* ── Guest → account ──────────────────────────────────────────────────── */
 
@@ -789,6 +801,47 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
   }
 
   /*
+   * ── The beat before the feed ───────────────────────────────────────────
+   *
+   * Ranking a cold feed pages the active catalog and builds a prerequisite
+   * graph over every course in it, which is measured in seconds. Rendering the
+   * final screen through that wait meant the headline announced "Here's your
+   * first feed." above four pulsing placeholders — the app claiming a thing it
+   * did not have, on the one screen the whole flow has been building toward.
+   *
+   * So the wait gets its own question. The ornament switches to `thinking`,
+   * which is the mood written for exactly this (it reads as work happening
+   * rather than as a progress bar lying about progress), and the placeholders
+   * stay, because they are the shape of what is coming and an empty ground
+   * would be a worse wait than a busy one.
+   *
+   * The transition needs no new motion. `OnboardingScreen` keys its
+   * `AnimatePresence` on the question, so changing the question IS the reveal
+   * — the same 240ms crossfade every other step gets, followed by the cards'
+   * own stagger underneath it. Two beats the student watches instead of one
+   * they miss.
+   *
+   * A warm cache skips this screen entirely rather than flashing it; see
+   * `useFeedPreview`.
+   */
+  if (feedPreview.status === "loading") {
+    return (
+      <OnboardingScreen
+        onBack={back}
+        direction={direction}
+        question="Building your first feed."
+        wide
+        hue="cyanViolet"
+        mood="thinking"
+        lockViewport={session.account === null}
+        account={session.account}
+      >
+        <FeedPreviewWorking />
+      </OnboardingScreen>
+    );
+  }
+
+  /*
    * The last screen advances by leaving the flow, so it has no arrow. Guests
    * sign in; signed-in students take the catalog button. There is no guest
    * browse exit — unsigned visitors stay here until they have an account.
@@ -804,11 +857,34 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
       account={session.account}
     >
       <StepFeed
-        state={state}
+        preview={feedPreview}
         signedIn={session.account !== null}
         migration={migration}
         onFinish={finish}
       />
     </OnboardingScreen>
+  );
+}
+
+/**
+ * What the last screen looks like while its cards are still being ranked.
+ *
+ * The same four placeholders and the same column the gate uses, so the swap
+ * into the real feed changes what is in the cards and not where they are.
+ * `aria-busy` and a live label carry the same information to a screen reader
+ * that the ornament carries visually; the placeholders themselves are
+ * `aria-hidden` and say nothing.
+ */
+function FeedPreviewWorking() {
+  return (
+    <div
+      className="relative flex w-full min-w-0 max-w-full flex-col gap-3.5 pt-2"
+      aria-busy="true"
+      aria-label="Ranking your first recommendations"
+    >
+      {Array.from({ length: 4 }, (_, index) => (
+        <FeedPreviewCardSkeleton key={index} />
+      ))}
+    </div>
   );
 }

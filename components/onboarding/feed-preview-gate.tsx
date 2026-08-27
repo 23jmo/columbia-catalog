@@ -1,18 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { useReducedMotion } from "motion/react";
 
-import { onboardingFeedPreviewAction } from "@/app/onboarding/actions";
 import { FeedCardView } from "@/components/feed/feed-card";
-import { loadFeedPreviewCached, peekCachedFeedPreview } from "@/lib/onboarding/feed-preview-cache";
 import type { FeedCard } from "@/lib/recommend/feed";
-import type { GuestOnboardingState } from "@/lib/onboarding/state";
 import { cx } from "@/utils/cx";
 
 import { FeedFinishControl } from "./feed-finish-control";
 import { FeedSignInPanel } from "./feed-sign-in-panel";
 import { FeedPreviewCardSkeleton } from "./feed-teaser-cards";
+import type { FeedPreview } from "./use-feed-preview";
 
 type MigrationState = {
   status: "idle" | "running" | "done" | "failed";
@@ -20,7 +18,12 @@ type MigrationState = {
 };
 
 export interface FeedPreviewGateProps {
-  state: GuestOnboardingState;
+  /**
+   * The cards and how they got here. Loaded by `useFeedPreview` up in
+   * `OnboardingFlow`, because the headline above this component has to be able
+   * to say whether they have arrived — see that hook for why.
+   */
+  preview: FeedPreview;
   signedIn: boolean;
   migration: MigrationState;
   onSignIn: () => void | Promise<void>;
@@ -51,7 +54,7 @@ export interface FeedPreviewGateProps {
  * ornament, and on a phone they do not.
  */
 export function FeedPreviewGate({
-  state,
+  preview,
   signedIn,
   migration,
   onSignIn,
@@ -59,56 +62,35 @@ export function FeedPreviewGate({
   signInDisabled,
   signInError,
 }: FeedPreviewGateProps) {
-  const [previewCards, setPreviewCards] = useState<FeedCard[] | null>(() =>
-    peekCachedFeedPreview(state),
-  );
-  const [previewError, setPreviewError] = useState<string | null>(null);
-
-  const loadingPreview = previewCards === null && !previewError;
+  const previewError = preview.error;
   const gated = !signedIn;
 
   /*
    * ── Which arrivals get the reveal ────────────────────────────────────────
    *
-   * Only the ones the student watched happen. `peekCachedFeedPreview` can
-   * return the cards synchronously — that is the path back from Google, where
-   * the ten are already in `localStorage` — and those are painted in the same
-   * frame as the screen itself, which `OnboardingScreen` is already fading and
-   * sliding in. Animating them again would be two entrances stacked on one
-   * mount, and the second one would start after the first had finished.
-   *
-   * A lazy `useState` initialiser is the mechanism, and a ref is not: a ref
-   * holds the same value but reading `.current` during render is what
-   * `react-hooks/refs` exists to stop, and it is right to — a value the render
-   * output depends on belongs in state, where React knows about it. The
-   * initialiser runs once, so this stays the answer to "were we empty when
-   * this mounted" and never drifts. Nothing ever sets it.
+   * Only the ones the student watched happen, which `useFeedPreview` is what
+   * decides. The path back from Google returns to warm `localStorage` and
+   * repaints the same ten cards in the same frame as the screen itself, which
+   * `OnboardingScreen` is already fading and sliding in — animating those
+   * would be two entrances stacked on one mount, and the second would start
+   * after the first had finished.
    */
-  const [revealOnArrival] = useState(() => previewCards === null);
+  const revealOnArrival = preview.watched;
   const shouldReduceMotion = useReducedMotion();
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const result = await loadFeedPreviewCached(state, onboardingFeedPreviewAction);
-      if (cancelled) return;
-      if (!result.ok || !result.cards) {
-        setPreviewError(result.error ?? "We could not load recommendations right now.");
-        setPreviewCards((current) => current ?? []);
-        return;
-      }
-      setPreviewCards(result.cards);
-    })();
+  const displayCards = preview.cards;
 
-    return () => {
-      cancelled = true;
-    };
-  }, [state]);
-
-  const displayCards = previewCards ?? [];
-
+  /*
+   * Placeholders are now the empty case only.
+   *
+   * While the ranking is in flight this component is not on screen at all —
+   * `OnboardingFlow` shows the working screen instead — so the skeletons are
+   * left for the one case that survives: a student the recommender had nothing
+   * to say about. A gate with no cards in it has no shape, and the sign-in
+   * panel would float on an empty ground.
+   */
   const cardItems =
-    loadingPreview || (displayCards.length === 0 && !previewError)
+    displayCards.length === 0
       ? Array.from({ length: 4 }, (_, index) => ({
           // Four placeholders fill the first screen and peek the next card.
           key: `skeleton-${index}`,
@@ -134,7 +116,7 @@ export function FeedPreviewGate({
           item={firstCard}
           index={0}
           gated={gated}
-          reveal={revealOnArrival && !loadingPreview}
+          reveal={revealOnArrival}
           flat={shouldReduceMotion ?? false}
         />
       ) : null}
@@ -175,7 +157,7 @@ export function FeedPreviewGate({
               item={item}
               index={index + 1}
               gated={gated}
-              reveal={revealOnArrival && !loadingPreview}
+              reveal={revealOnArrival}
               flat={shouldReduceMotion ?? false}
             />
           ))}
