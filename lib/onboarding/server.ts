@@ -40,7 +40,7 @@
  *                  only the ORDER within a tier.
  */
 
-import { getCourseListings, getCoursesByIds } from "@/lib/data/catalog";
+import { getCourseListings, resolveCourseFacts } from "@/lib/data/catalog";
 import { createSupabaseCandidateProviderWithIncludes } from "@/lib/db/candidate-source";
 import { ACTIVE_TERMS } from "@/lib/constants";
 import { auditProfile, programsFor } from "@/lib/profile/audit";
@@ -67,7 +67,6 @@ import { expandCandidatesForPrograms } from "@/lib/requirements/candidates";
 import { formatCourseId, toCourseId, type CourseId } from "@/lib/requirements/code";
 import type { CourseFacts } from "@/lib/requirements/evaluate";
 import type { GroupResult, Program } from "@/lib/requirements/types";
-import type { CourseWithSections } from "@/lib/types";
 
 import { FEED_PREVIEW_LIMIT } from "./feed-preview";
 import {
@@ -95,13 +94,26 @@ export interface CatalogFact {
 }
 
 /**
- * Catalog rows for a set of course ids, across both active terms.
+ * Catalog rows for a set of course ids, across every term and every renumbering.
  *
- * Two terms because a student's record is mostly PAST courses and we hold no
- * archive of retired offerings — the only honest source of facts about
- * `MATH1201UN` is that MATH1201UN is still taught. First term to supply a
- * record wins; both describe the same course. Mirrors `loadFacts` in
- * `lib/profile/page-data.ts` so the two cannot report different titles.
+ * ── This used to ask two terms, and that was the bug ───────────────────────
+ *
+ * The old implementation ran `getCoursesByIds` over `ACTIVE_TERMS`, which
+ * selects `sections!inner` filtered to a term — so a course with no section
+ * this term or next came back as nothing, and the student was told their real
+ * Columbia coursework was "not in our catalog". A record is mostly PAST
+ * courses, so the two-term window was aimed at exactly the wrong set.
+ *
+ * `courses` is term-independent; `sections` is where terms live. Asking through
+ * `resolveCourseFacts` asks the term-independent table, which is the table that
+ * answers "is this a real course and what is it called".
+ *
+ * It also resolves the registrar's renumbering — `MATH V2010` to `MATH UN2010`,
+ * `PSYC X1001` to `PSYC BC1001` — which is the other half of why chips read as
+ * unmatched. See `LEGACY_QUALIFIER_SUCCESSORS`.
+ *
+ * Keyed by the id the CALLER asked for, so a caller holding a record spelled
+ * the old way still finds its entry.
  */
 export async function loadCatalogFacts(
   courseIds: readonly string[],
@@ -110,15 +122,13 @@ export async function loadCatalogFacts(
   const wanted = [...new Set(courseIds)];
   if (wanted.length === 0) return facts;
 
-  const perTerm = await Promise.all(
-    ACTIVE_TERMS.map((termCode) => getCoursesByIds(wanted, termCode)),
-  );
-
-  for (const courses of perTerm) {
-    for (const course of courses) {
-      if (facts.has(course.courseId)) continue;
-      facts.set(course.courseId, toCatalogFact(course));
-    }
+  const resolved = await resolveCourseFacts(wanted as CourseId[]);
+  for (const [requestedId, fact] of resolved) {
+    facts.set(requestedId, {
+      code: fact.code,
+      title: fact.title,
+      points: fact.points,
+    });
   }
 
   // Cores the deck names that have no live-term row still need a title on the
@@ -137,17 +147,6 @@ export async function loadCatalogFacts(
   }
 
   return facts;
-}
-
-function toCatalogFact(course: CourseWithSections): CatalogFact {
-  return {
-    code: formatCourseId(course.courseId),
-    title: course.title,
-    // `pointsMin`, matching the audit. Counting a variable-credit course at its
-    // maximum would let a points requirement look satisfied on credit the
-    // student may not have earned.
-    points: course.pointsMin ?? course.pointsMax,
-  };
 }
 
 /* ==========================================================================
@@ -208,32 +207,45 @@ export interface GuestAudit {
  * courses a program names outright.
  */
 export async function auditGuest(state: GuestOnboardingState): Promise<GuestAudit> {
-  const profile = toAuditProfile(state);
-  const programs = programsFor(profile);
+  const declared = toAuditProfile(state);
+  const programs = programsFor(declared);
+  const declaredIds = declared.courses.map((course) => course.courseId);
+
+  /*
+   * Resolved across every term and across the registrar's renumbering, not
+   * over the two active terms — see `loadCatalogFacts` for why the old
+   * two-term window was aimed at the wrong set.
+   */
+  const resolved = await resolveCourseFacts(declaredIds as CourseId[]);
+
+  /*
+   * The record is rewritten to the CANONICAL ids before it is audited.
+   *
+   * Keying the catalog map by the student's own spelling would be enough for
+   * the flag-driven rules — a `scienceB` course is a `scienceB` course under
+   * either number — but not for the rules that name courses outright. A major
+   * that lists `MATH UN2010` will not see a record that says `MATH V2010`, so
+   * a student would clear the Core and still be told they owe Linear Algebra.
+   * Rewriting once, here, makes both kinds of rule agree.
+   */
+  const profile: AppStudentProfile = {
+    ...declared,
+    courses: declared.courses.map((course) => ({
+      ...course,
+      courseId: resolved.get(course.courseId as CourseId)?.courseId ?? course.courseId,
+    })),
+  };
   const recordIds = profile.courses.map((course) => course.courseId);
 
-  // One fetch per term — reused for both audit facts and unmatched detection.
-  const perTerm = await Promise.all(
-    ACTIVE_TERMS.map((termCode) => getCoursesByIds(recordIds, termCode)),
-  );
-
-  const factsForRecord = new Map<string, CatalogFact>();
   const catalog = new Map<CourseId, CourseFacts>();
-
-  for (const courses of perTerm) {
-    for (const course of courses) {
-      if (!factsForRecord.has(course.courseId)) {
-        factsForRecord.set(course.courseId, toCatalogFact(course));
-      }
-      if (!catalog.has(course.courseId)) {
-        catalog.set(course.courseId, {
-          courseId: course.courseId,
-          title: course.title,
-          points: course.pointsMin ?? course.pointsMax,
-          requirementFlags: course.requirementFlags,
-        });
-      }
-    }
+  for (const fact of resolved.values()) {
+    if (catalog.has(fact.courseId)) continue;
+    catalog.set(fact.courseId, {
+      courseId: fact.courseId,
+      title: fact.title,
+      points: fact.points,
+      requirementFlags: fact.requirementFlags,
+    });
   }
 
   const audit = auditProfile({ profile, catalog });
@@ -256,7 +268,16 @@ export async function auditGuest(state: GuestOnboardingState): Promise<GuestAudi
     programs,
     outstanding: allGroups.filter((group) => group.status !== "satisfied"),
     satisfiedOnly: [...satisfiedOnlyCourseIds(allGroups)],
-    unmatchedCourseIds: recordIds.filter((courseId) => !factsForRecord.has(courseId)),
+    /*
+     * DECLARED ids, not canonical ones. `CourseworkCard` marks a row by
+     * testing `unmatched.has(course.courseId)` against the record it was
+     * handed — the student's own — so an id rewritten to its modern number
+     * would match nothing and the "not in our catalog" flag would silently
+     * stop appearing on the rows that need it.
+     */
+    unmatchedCourseIds: declaredIds.filter(
+      (courseId) => !resolved.has(courseId as CourseId),
+    ),
   };
 }
 
@@ -593,18 +614,35 @@ export async function resolveCourseCodes(codes: readonly string[]): Promise<Reso
 
   if (parsed.length === 0) return [];
 
-  const facts = await loadCatalogFacts(parsed.map((entry) => entry.courseId));
+  const facts = await resolveCourseFacts(parsed.map((entry) => entry.courseId));
 
   const seen = new Set<string>();
   const resolved: ResolvedCourse[] = [];
 
   for (const { courseId } of parsed) {
-    if (seen.has(courseId)) continue;
-    seen.add(courseId);
-
     const fact = facts.get(courseId);
+
+    /*
+     * Store the CANONICAL id, not the one the student typed.
+     *
+     * This is the whole point of resolving the renumbering. A record holding
+     * `MATH2010V` is invisible to the degree audit, to requirement candidate
+     * lists and to the taste vector, because every one of those keys on the
+     * catalog's own id — so a student who took Linear Algebra at Columbia was
+     * told it counted for nothing. Writing `MATH2010UN` fixes all three at
+     * once, and the student's own spelling survives on `code` when the catalog
+     * has no opinion.
+     *
+     * Deduplication moves to the canonical id for the same reason: a transcript
+     * that lists both the old and new numbering for one course must not put two
+     * chips on the screen or two rows on the record.
+     */
+    const canonicalId = fact?.courseId ?? courseId;
+    if (seen.has(canonicalId)) continue;
+    seen.add(canonicalId);
+
     resolved.push({
-      courseId,
+      courseId: canonicalId,
       code: fact?.code ?? formatCourseId(courseId),
       title: fact?.title ?? null,
       points: fact?.points ?? null,
