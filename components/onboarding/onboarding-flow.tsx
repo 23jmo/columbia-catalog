@@ -48,6 +48,7 @@ import type { School } from "@/lib/requirements/types";
 import { OrnamentAvatar } from "@/components/ornament/ornament-avatar";
 
 import { OnboardingScreen } from "./screen";
+import { StepChoices } from "./step-choices";
 import { StepCoursework } from "./step-coursework";
 import {
   ClassYearQuestion,
@@ -507,8 +508,8 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
    *
    * Stepping back INTO the degree step lands on its last question rather than
    * its first, because that is the one the student just came from — arriving at
-   * "which school?" after pressing back from the coursework screen would read
-   * as having lost the two answers in between.
+   * "which school?" after pressing back through the coursework screen would
+   * read as having lost the two answers in between.
    */
   const back = () => {
     setDirection(-1);
@@ -516,7 +517,10 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
       if (degreeIndex > 0) setVisitedQuestion(degreeQuestions[degreeIndex - 1]);
       return;
     }
-    if (state.step === "coursework")
+    // `choices` is what sits directly after the degree questions now, so it is
+    // the step whose back button re-enters them — and it re-enters at the LAST
+    // one, which is the question the student actually just came from.
+    if (state.step === "choices")
       setVisitedQuestion(degreeQuestions[degreeQuestions.length - 1]);
     updateOnboardingState((current) => goBack(current));
   };
@@ -696,6 +700,35 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
           noneSelected={hasDeclinedMinors(state.programIds)}
           onSelectNone={toggleNoMinors}
           onToggleMinor={toggleMinor}
+        />
+      </OnboardingScreen>
+    );
+  }
+
+  if (state.step === "choices") {
+    return (
+      <OnboardingScreen
+        {...chrome}
+        question="You took one of each of these — which?"
+        wide
+        nextLabel="Continue"
+        // Not `cyanRose` (the degree question before) or `violetRose` (the
+        // coursework screen after): the ornament changes hue per screen so
+        // the flow reads as moving, and a repeat next to its own neighbour is
+        // the one place that stops working.
+        hue="blueRose"
+      >
+        <StepChoices
+          state={state}
+          addCourses={addCourses}
+          removeCourse={removeCourse}
+          /*
+            Nothing to ask — a first-year, most often, whose deck carries no
+            choose-one questions at all. Skip in whatever direction the student
+            was already travelling, so a back press from the coursework screen
+            does not bounce off an empty screen straight back forward again.
+          */
+          onNothingToAsk={direction === 1 ? forward : back}
         />
       </OnboardingScreen>
     );

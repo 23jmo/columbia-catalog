@@ -109,19 +109,36 @@ export function shouldRerank(confirmationsSinceRerank: number): boolean {
  * ========================================================================== */
 
 /**
- * The five steps, in order.
+ * The steps, in order.
  *
  * `feed` is the last one and it is still part of onboarding: the spec's step 5
  * is "first feed, rendered for a guest", and the sign-in gate (step 6) is a
  * condition ON that screen rather than a screen of its own — there is nothing
  * to look at on a gate.
+ *
+ * `choices` comes BEFORE `coursework`, and the order is the point. It asks the
+ * questions with definite answers — which physics sequence, Lit Hum or CC —
+ * and everything the guess deck does afterwards is better for having them.
+ * A choose-one answer is not just two more chips on the record: it unblocks
+ * prerequisite chains, retires whole requirement groups, and changes what the
+ * engine ranks. Asking it on the same screen as the guesses meant the guesses
+ * were computed without it, so the student answered a question whose whole
+ * value was in what came before.
  */
-export const ONBOARDING_STEPS = ["school", "coursework", "love", "interests", "feed"] as const;
+export const ONBOARDING_STEPS = [
+  "school",
+  "choices",
+  "coursework",
+  "love",
+  "interests",
+  "feed",
+] as const;
 
 export type OnboardingStepId = (typeof ONBOARDING_STEPS)[number];
 
 export const STEP_TITLE: Record<OnboardingStepId, string> = {
   school: "Your degree",
+  choices: "Which ones you took",
   coursework: "What you've taken",
   love: "What you liked",
   interests: "What you're into",

@@ -1,0 +1,246 @@
+"use client";
+
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
+import { guessDeckAction } from "@/app/onboarding/actions";
+import type {
+  GuessChoice,
+  GuessChoiceRoute,
+  GuessDeck,
+} from "@/lib/onboarding/guess";
+import {
+  loadGuessDeckCached,
+  peekCachedGuessDeck,
+} from "@/lib/onboarding/guess-cache";
+import type { GuestCourse, GuestOnboardingState } from "@/lib/onboarding/state";
+
+import { CourseChoices } from "./course-choices";
+import { CourseworkSkeleton } from "./coursework-skeleton";
+
+/**
+ * "You took one of each of these — which?"
+ *
+ * ── Why this is a screen of its own, and why it comes first ─────────────────
+ *
+ * These questions used to sit above the suggestion strip on the coursework
+ * screen. Moving them to their own step ahead of it is not a layout
+ * preference; it changes what the guess deck is able to compute.
+ *
+ * A choose-one answer is worth far more than the one or two chips it adds. It
+ * retires an entire requirement group, so nothing downstream keeps offering
+ * the rails not taken. It satisfies prerequisites, so courses the engine was
+ * withholding as "you cannot have taken this yet" become reachable. And it
+ * moves the level ceiling, because confirming a course is the evidence
+ * `levelCeilingFor` uses. Asked on the same screen as the guesses, every one
+ * of those effects arrived a beat too late: the deck the student was looking
+ * at had already been built without the answer.
+ *
+ * Asked here, the coursework screen behind it is built from a record that
+ * already knows which physics sequence they did — which is the difference
+ * between guessing at a fork and reasoning past one.
+ *
+ * ── No re-rank, deliberately ───────────────────────────────────────────────
+ *
+ * The deck is fetched once. Answering a question filters it out of the list
+ * locally, and nothing else on this screen depends on the ranking — there is
+ * no strip to refill and no score to update, because the set of choose-one
+ * groups is fixed by the student's declared programs and can only ever
+ * SHRINK as they answer. Re-fetching between taps would buy nothing and
+ * reintroduce exactly the mid-tap churn the strip had to be fixed for.
+ */
+export interface StepChoicesProps {
+  state: GuestOnboardingState;
+  addCourses: (courses: GuestCourse[]) => void;
+  removeCourse: (courseId: string) => void;
+  /**
+   * There is nothing to ask this student. Fired once, after the deck has
+   * landed — see the effect below for why "once" and "after" both matter.
+   */
+  onNothingToAsk: () => void;
+}
+
+export function StepChoices({
+  state,
+  addCourses,
+  removeCourse,
+  onNothingToAsk,
+}: StepChoicesProps) {
+  const [deck, setDeck] = useState<GuessDeck | null>(() =>
+    peekCachedGuessDeck(state),
+  );
+  const [error, setError] = useState<string | null>(null);
+
+  /*
+   * `stateRef` rather than a dependency, matching `StepCoursework`: the deck
+   * request needs the current state, and re-running it on every confirmation
+   * is the churn this screen is written to avoid.
+   */
+  const stateRef = useRef(state);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
+  /*
+   * The degree questions prefetch the deck, so in the common path it is
+   * already in the cache and this screen paints answered rather than
+   * skeletal. Same trick, and same reason, as the coursework screen.
+   */
+  const paintedWarmDeckRef = useRef(false);
+  useLayoutEffect(() => {
+    const cached = peekCachedGuessDeck(stateRef.current);
+    if (!cached) return;
+    paintedWarmDeckRef.current = true;
+    setDeck(cached);
+  }, []);
+
+  useEffect(() => {
+    if (paintedWarmDeckRef.current) return;
+    let active = true;
+
+    void (async () => {
+      const result = await loadGuessDeckCached(
+        stateRef.current,
+        guessDeckAction,
+      );
+      if (!active) return;
+      if (!result.ok || !result.deck) {
+        setError(
+          result.error ?? "We could not work out which of these you took.",
+        );
+        return;
+      }
+      setDeck(result.deck);
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  /**
+   * The questions still worth asking.
+   *
+   * The deck already dropped groups that were answered when it was built;
+   * this is the same filter against state that has changed since, so a group
+   * leaves the screen on tap rather than waiting for a refetch that this
+   * screen deliberately never makes.
+   */
+  const choices = useMemo(() => {
+    const confirmed = new Set(state.courses.map((course) => course.courseId));
+    const dismissed = new Set(state.dismissedCourseIds);
+    return (deck?.choices ?? []).filter((choice) => {
+      const everyCourse = choice.routes.flatMap((route) => route.courses);
+      if (everyCourse.some((facts) => confirmed.has(facts.courseId)))
+        return false;
+      return !choice.routes.every((route) =>
+        route.courses.some((facts) => dismissed.has(facts.courseId)),
+      );
+    });
+  }, [deck, state.courses, state.dismissedCourseIds]);
+
+  /**
+   * Answer one requirement. Every course in the route lands, which for a
+   * sequence is both terms — the student said "Literature Humanities", and
+   * Lit Hum is two semesters.
+   *
+   * `picker`, not `onboarding_guess`: they chose this one themselves, and the
+   * profile screen shows the difference between our guess and their answer.
+   *
+   * Implied prerequisites are NOT collected here, and that is not an
+   * omission. The coursework screen rebuilds the deck from this new record,
+   * and `impliedPrerequisites` runs inside `buildGuessDeck` — so anything
+   * this answer implies arrives on the very next screen as tier 1, computed
+   * server-side against the full prerequisite graph rather than against the
+   * partial map this screen happens to be holding.
+   */
+  const chooseRoute = useCallback(
+    (route: GuessChoiceRoute) => {
+      addCourses(
+        route.courses.map((facts) => ({
+          courseId: facts.courseId,
+          code: facts.code,
+          title: facts.title,
+          termLabel: null,
+          points: facts.points,
+          liked: null,
+          source: "picker" as const,
+          inCatalog: true,
+        })),
+      );
+    },
+    [addCourses],
+  );
+
+  /**
+   * "None yet" — dismiss every route, not just the first.
+   *
+   * A student saying they have not done the Physics requirement has ruled out
+   * all three sequences, and recording only one would leave the other two to
+   * come back as suggestion chips on the screen after this one.
+   */
+  const declineChoice = useCallback(
+    (choice: GuessChoice) => {
+      for (const route of choice.routes) {
+        for (const facts of route.courses) removeCourse(facts.courseId);
+      }
+    },
+    [removeCourse],
+  );
+
+  /*
+   * Students with nothing to answer here must not see this screen at all.
+   *
+   * First-years are the whole population: `buildGuessDeck` will not ask a
+   * student in week five which physics sequence they finished, so their deck
+   * carries no choices and this screen would be a blank wall between two real
+   * ones. The flow is told, and skips past in whichever direction the student
+   * was already travelling.
+   *
+   * Guarded on "was it empty when it ARRIVED", not "is it empty now". A
+   * student who answers the last question empties the list too, and
+   * auto-advancing out from under that tap would take the confirmation of
+   * their own answer with it.
+   */
+  const hasAnnouncedRef = useRef(false);
+  const hadChoicesOnArrivalRef = useRef(false);
+
+  useEffect(() => {
+    // Latched in the effect rather than during render: `choices` is derived
+    // synchronously from the deck, so the commit that lands a deck already
+    // carries the right list and there is no empty frame to miss.
+    if (choices.length > 0) hadChoicesOnArrivalRef.current = true;
+    if (hasAnnouncedRef.current || hadChoicesOnArrivalRef.current) return;
+    // An error is not an empty deck. Skipping on a failed fetch would silently
+    // drop questions the student did have, so the error is shown instead.
+    if (!deck || error) return;
+    hasAnnouncedRef.current = true;
+    onNothingToAsk();
+  }, [choices.length, deck, error, onNothingToAsk]);
+
+  if (error) {
+    return (
+      <p className="text-center text-body-regular text-text-secondary">
+        {error}
+      </p>
+    );
+  }
+
+  if (!deck) return <CourseworkSkeleton />;
+
+  return (
+    <div className="flex flex-col gap-5">
+      <CourseChoices
+        choices={choices}
+        onChoose={chooseRoute}
+        onDecline={declineChoice}
+      />
+    </div>
+  );
+}

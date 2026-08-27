@@ -13,8 +13,6 @@ import {
 import { guessDeckAction } from "@/app/onboarding/actions";
 import type {
   GuessCandidate,
-  GuessChoice,
-  GuessChoiceRoute,
   GuessDeck,
   GuessFacts,
 } from "@/lib/onboarding/guess";
@@ -35,7 +33,6 @@ import { dismiss, toast } from "@/lib/toast/store";
 
 import { AddChip, ChipWrap, RemovableChip, courseChipLines } from "./chip";
 import { CourseworkSkeleton } from "./coursework-skeleton";
-import { CourseChoices } from "./course-choices";
 import { CourseSearch } from "./course-search";
 import { TranscriptImport } from "./transcript-import";
 
@@ -428,62 +425,6 @@ export function StepCoursework({
   );
 
   /**
-   * Answer one choose-one requirement.
-   *
-   * Every course in the route lands, which for a sequence is both terms — the
-   * student said "Literature Humanities", and Lit Hum is two semesters. Routed
-   * through `confirm` per course rather than a bulk add so each one still picks
-   * up its own implied prerequisites and re-rank bookkeeping.
-   */
-  const chooseRoute = useCallback(
-    (route: GuessChoiceRoute) => {
-      for (const facts of route.courses) {
-        // `picker`, not `onboarding_guess`: they chose this one themselves, and
-        // the profile screen shows the difference between our guess and their
-        // answer.
-        confirm({ ...toGuestCourseFromFacts(facts), source: "picker" });
-      }
-    },
-    [confirm],
-  );
-
-  /**
-   * "None yet" — dismiss every route, not just the first.
-   *
-   * A student saying they have not done the Physics requirement has ruled out
-   * all three sequences, and recording only one would leave the other two to
-   * come back as suggestion chips a moment later.
-   */
-  const declineChoice = useCallback(
-    (choice: GuessChoice) => {
-      for (const route of choice.routes) {
-        for (const facts of route.courses) dismissSuggestion(facts.courseId);
-      }
-    },
-    [dismissSuggestion],
-  );
-
-  /**
-   * The questions still worth asking.
-   *
-   * The deck already dropped groups that were answered when it was built; this
-   * is the same filter against state that has changed since, so a group leaves
-   * the screen on tap instead of waiting for the next re-rank.
-   */
-  const choices = useMemo(() => {
-    const confirmed = new Set(state.courses.map((course) => course.courseId));
-    const dismissed = new Set(state.dismissedCourseIds);
-    return (deck?.choices ?? []).filter((choice) => {
-      const everyCourse = choice.routes.flatMap((route) => route.courses);
-      if (everyCourse.some((facts) => confirmed.has(facts.courseId)))
-        return false;
-      return !choice.routes.every((route) =>
-        route.courses.some((facts) => dismissed.has(facts.courseId)),
-      );
-    });
-  }, [deck, state.courses, state.dismissedCourseIds]);
-
-  /**
    * The strip: tier 2, minus anything already on the record or dismissed,
    * with currently-visible chips held in place. New ids append at the end.
    *
@@ -649,20 +590,6 @@ export function StepCoursework({
             })
           }
         />
-
-        {/*
-          Above the strip, and deliberately not part of it. These are questions
-          we know the student can answer; the strip below is guesses they can
-          wave away. Mixing them cost the strip half its slots — see
-          `course-choices.tsx`.
-        */}
-        {!showSkeleton ? (
-          <CourseChoices
-            choices={choices}
-            onChoose={chooseRoute}
-            onDecline={declineChoice}
-          />
-        ) : null}
 
         {!showSkeleton && suggestions.length > 0 ? (
           <div className="flex flex-col gap-3">

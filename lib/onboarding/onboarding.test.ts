@@ -40,6 +40,7 @@ import {
   goToStep,
   ONBOARDING_STEPS,
   NO_MINORS_PROGRAM_ID,
+  nextStep,
   previousStep,
   reconcileDegreeChange,
   removeCourse,
@@ -51,6 +52,7 @@ import {
   upsertCourse,
   type GuestCourse,
   type GuestOnboardingState,
+  type OnboardingStepId,
 } from "./state";
 
 /* ==========================================================================
@@ -291,16 +293,30 @@ describe("every step is reversible", () => {
   it("walks forward to the last step and back to the first, losing nothing", () => {
     let state: GuestOnboardingState = { ...emptyGuestState(), school: "CC" };
 
-    // Forward, accumulating an answer at each stop so the back walk has
-    // something to lose if it is going to lose anything.
-    state = advance(state);
-    state = upsertCourse(state, course({ courseId: "COMS1004W", code: "COMS W1004" }));
-    state = advance(state);
-    state = setLiked(state, "COMS1004W", true);
-    state = advance(state);
-    state = { ...state, interestTags: ["ai-ml"] };
-    state = advance(state);
+    /*
+     * Forward, accumulating an answer at each stop so the back walk has
+     * something to lose if it is going to lose anything.
+     *
+     * Driven by the step list rather than a fixed run of `advance` calls.
+     * Inserting a step used to break this on the COUNT — it stopped one short
+     * and failed on `state.step`, which says nothing about whether the walk is
+     * still lossless and buries the real assertions below an arithmetic edit.
+     */
+    const answerOn: Partial<
+      Record<OnboardingStepId, (current: GuestOnboardingState) => GuestOnboardingState>
+    > = {
+      coursework: (current) =>
+        upsertCourse(current, course({ courseId: "COMS1004W", code: "COMS W1004" })),
+      love: (current) => setLiked(current, "COMS1004W", true),
+      interests: (current) => ({ ...current, interestTags: ["ai-ml"] }),
+    };
 
+    while (nextStep(state.step)) {
+      state = answerOn[state.step]?.(state) ?? state;
+      state = advance(state);
+    }
+
+    expect(state.step).toBe(ONBOARDING_STEPS[ONBOARDING_STEPS.length - 1]);
     expect(state.step).toBe("feed");
     expect(state.furthestStep).toBe("feed");
 
