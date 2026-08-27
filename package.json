@@ -33,6 +33,7 @@
     "@tanstack/react-virtual": "^3.14.10",
     "@types/three": "^0.185.4",
     "@vercel/analytics": "^2.0.1",
+    "@vercel/speed-insights": "^2.0.0",
     "@xyflow/react": "^12.11.3",
     "agentation": "^3.0.2",
     "ai": "^7.0.78",
