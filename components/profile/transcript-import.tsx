@@ -13,6 +13,12 @@ import { Checkbox } from "@/components/base/checkbox/checkbox";
 import { Chip } from "@/components/base/badges/chip";
 import { extractPdfText } from "@/lib/profile/pdf-text";
 import {
+  isImageFile,
+  ocrImages,
+  pdfPageImages,
+  type OcrProgress,
+} from "@/lib/onboarding/transcript-ocr";
+import {
   defaultSelection,
   parseTranscriptText,
   WARNING_LABEL,
@@ -29,9 +35,16 @@ import { ProfileModal } from "./profile-modal";
  *
  * **The file never leaves the browser.** `extractPdfText` inflates the PDF's
  * content streams with the platform's own `DecompressionStream` and pulls the
- * text out in this tab. There is no upload endpoint, no storage bucket, and no
- * server action that takes a file. What crosses the network is a list of course
- * codes the student ticked, and nothing else.
+ * text out in this tab; a scan with no text to inflate goes to `ocrImages`,
+ * which is tesseract compiled to WASM, running in a worker on the student's own
+ * machine. There is no upload endpoint, no storage bucket, and no server action
+ * that takes a file. What crosses the network is a list of course codes the
+ * student ticked, and nothing else.
+ *
+ * The OCR path is why this reads pictures at all. It used to tell a student
+ * holding a scan "nothing can read it without OCR" and send them off to copy
+ * and paste — which is not a thing you can do with an image, so the advice was
+ * a dead end for exactly the file the Vergil unofficial record is.
  *
  * That is not an implementation detail, it is the reason the feature is
  * allowed to exist. `vergil_api_spec.md` §15 is explicit that centralized
@@ -66,7 +79,7 @@ export interface TranscriptImportProps {
   className?: string;
 }
 
-const MAX_PDF_BYTES = 12 * 1024 * 1024;
+const MAX_FILE_BYTES = 12 * 1024 * 1024;
 
 export function TranscriptImport({ signedIn = true, className }: TranscriptImportProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -101,7 +114,7 @@ export function TranscriptImport({ signedIn = true, className }: TranscriptImpor
     const parse = parseTranscriptText(text);
     if (parse.candidates.length === 0) {
       setError(
-        "We could not find any course codes in that. If it came from a scan, the PDF has no text layer to read — copy and paste the text instead.",
+        "We could not find any course codes in that. If it was a scan or a photo, a sharper one usually reads — otherwise copy and paste the text instead.",
       );
       return;
     }
@@ -114,40 +127,72 @@ export function TranscriptImport({ signedIn = true, className }: TranscriptImpor
     setMode("review");
   }, []);
 
-  const readPdf = useCallback(
+  /**
+   * Read a dropped or chosen file.
+   *
+   * Two sources, and the order matters: a PDF's text layer is exact where OCR
+   * is a guess, so the scan path is only reached when there is no text to be
+   * had. Both end at `review`, so there is one parser and one confirm table
+   * whatever the student handed us.
+   */
+  const readFile = useCallback(
     async (file: File) => {
       setError(null);
       setNotice(null);
 
-      if (!file.name.toLowerCase().endsWith(".pdf")) {
-        setError("That is not a PDF. Paste the text instead — it works just as well.");
+      const isPdf = file.name.toLowerCase().endsWith(".pdf");
+      if (!isPdf && !isImageFile(file)) {
+        setError("That is not a PDF or a picture. Paste the text instead — it works just as well.");
         return;
       }
-      if (file.size > MAX_PDF_BYTES) {
+      if (file.size > MAX_FILE_BYTES) {
         setError("That file is larger than a transcript should be.");
         return;
       }
 
       setIsReading(true);
+      /*
+       * Progress rides on `notice` rather than a second piece of state. OCR is
+       * the only thing here slow enough to need it, and a scan takes seconds a
+       * page — long enough that a dropzone reading "Reading it here in your
+       * browser…" with nothing moving reads as a hang.
+       */
+      const report = (progress: OcrProgress) => setNotice(progress.label);
+
       try {
-        const extraction = await extractPdfText(await file.arrayBuffer());
-        if (extraction.outcome === "no_text_layer") {
+        if (isImageFile(file)) {
+          review(await ocrImages([file], report), "transcript_pdf");
+          return;
+        }
+
+        const bytes = await file.arrayBuffer();
+        const extraction = await extractPdfText(bytes);
+        if (extraction.outcome === "ok") {
+          review(extraction.text, "transcript_pdf");
+          return;
+        }
+
+        /*
+         * No text layer, or glyph soup. Both describe a scan, which is what the
+         * Vergil unofficial record is — JPEGs of the page — so pull those
+         * images out and read them rather than sending the student away.
+         */
+        const images = await pdfPageImages(new Uint8Array(bytes));
+        if (images.length === 0) {
           setError(
-            "That PDF is a scan — an image of a page, with no text behind it. Nothing can read it without OCR. Open the original in your browser, select the text and paste it here.",
+            "That PDF has no text in it and no page images we can read either. Paste the text instead.",
           );
           return;
         }
-        if (extraction.outcome === "unreadable") {
-          setError(
-            "We inflated the PDF but could not recover readable text from it — that usually means an unusual embedded font. Paste the text instead.",
-          );
-          return;
-        }
-        review(extraction.text, "transcript_pdf");
-      } catch {
+        review(await ocrImages(images, report), "transcript_pdf");
+      } catch (cause) {
+        // Includes a worker that never started — blocked WASM, or memory on an
+        // old machine. The remedy is the same as for any unreadable file.
+        console.error("transcript: read failed", cause);
         setError("Something went wrong reading that file. Pasting the text always works.");
       } finally {
         setIsReading(false);
+        setNotice(null);
       }
     },
     [review],
@@ -266,7 +311,7 @@ export function TranscriptImport({ signedIn = true, className }: TranscriptImpor
                 event.preventDefault();
                 setDragOver(false);
                 const file = event.dataTransfer.files?.[0];
-                if (file) void readPdf(file);
+                if (file) void readFile(file);
               }}
               className={cx(
                 "group flex h-[164px] w-full cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed p-4 text-center outline-none transition-colors duration-200",
@@ -279,13 +324,13 @@ export function TranscriptImport({ signedIn = true, className }: TranscriptImpor
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".pdf,application/pdf"
+                accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/*"
                 className="sr-only"
                 tabIndex={-1}
                 onChange={(event) => {
                   const file = event.target.files?.[0];
                   event.target.value = "";
-                  if (file) void readPdf(file);
+                  if (file) void readFile(file);
                 }}
               />
               <span className="flex size-10 items-center justify-center rounded-full bg-file-upload-icon-background p-2.5">
@@ -296,7 +341,9 @@ export function TranscriptImport({ signedIn = true, className }: TranscriptImpor
               </span>
               <div className="flex flex-col gap-1">
                 <p className="text-body-medium text-text-secondary">
-                  {isReading ? "Reading it here in your browser…" : "Drop your transcript PDF"}
+                  {isReading
+                    ? (notice ?? "Reading it here in your browser…")
+                    : "Drop your transcript PDF or a photo of it"}
                 </p>
                 <p className="text-caption-1-regular text-text-tertiary">
                   or click to choose a file
@@ -310,7 +357,8 @@ export function TranscriptImport({ signedIn = true, className }: TranscriptImpor
                 aria-hidden
               />
               <p className="text-caption-1-regular text-pretty text-text-secondary">
-                The PDF is opened and read by this tab. It is never uploaded, we keep no copy of
+                The file is opened and read by this tab — a scan by an optical reader that runs
+                here too. It is never uploaded, we keep no copy of
                 it, and there is nowhere on our servers it could go. After you confirm, what we
                 store is a list of course codes — no grades, no GPA, no name, no UNI.
               </p>
