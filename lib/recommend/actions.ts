@@ -52,6 +52,8 @@ const subjectSchema = z
   .max(20)
   .optional();
 
+const courseIdSchema = z.string().trim().min(4).max(24);
+
 const feedInputSchema = z.object({
   limit: z.number().int().min(1).max(50).optional(),
   subjects: subjectSchema,
@@ -61,6 +63,13 @@ const feedInputSchema = z.object({
    * we do not, and a regex would let it through.
    */
   terms: z.array(z.enum(ACTIVE_TERMS as [TermCode, ...TermCode[]])).min(1).optional(),
+  /** Already shown, already saved, or already discarded this session. */
+  excludeCourseIds: z.array(courseIdSchema).max(500).optional(),
+  /**
+   * Discarded courses. Ranked down as a neighbourhood, not just dropped — the
+   * next page should not be the same class with a different number.
+   */
+  demoteCourseIds: z.array(courseIdSchema).max(400).optional(),
 });
 
 export type FeedActionInput = z.infer<typeof feedInputSchema>;
@@ -82,6 +91,8 @@ export async function getFeedAction(input: FeedActionInput = {}): Promise<FeedRe
     limit: parsed.limit ?? DEFAULT_FEED_LIMIT,
     subjects: parsed.subjects,
     terms: parsed.terms,
+    excludeCourseIds: parsed.excludeCourseIds,
+    demoteCourseIds: parsed.demoteCourseIds,
   });
 }
 

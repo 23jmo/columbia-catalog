@@ -1,23 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, useMotionValue, useReducedMotion, useTransform } from "motion/react";
 import { RiArrowGoBackLine, RiBookmarkFill, RiCloseLine } from "@remixicon/react";
 
 import { showSignInToast } from "@/components/bookmarks/bookmark-toasts";
+import { useBookmarks } from "@/hooks/use-bookmarks";
 import { toggleBookmark } from "@/lib/bookmarks/store";
 import { haptic } from "@/lib/haptics";
 import type { FeedCard } from "@/lib/recommend/feed";
+import { courseIdsFromSectionIds } from "@/lib/recommend/section-id";
 import { showToast } from "@/lib/toast/store";
 import { cx } from "@/utils/cx";
 
 import {
   COMMIT_PX,
-  DISCARDS_BEFORE_REFINE,
   SAVES_BEFORE_HANDOFF,
   type SwipeAction,
   milestoneFor,
+  shouldRerank,
   swipeVerdict,
 } from "./swipe-rules";
 
@@ -73,13 +75,18 @@ import { FEED_CARD_SLOT, FeedGrid } from "./feed-layout";
  * card from leaping up under a thumb that is still moving — the single most
  * common way a swipe list produces a second, unintended swipe.
  *
- * ── Discards live in this browser ──────────────────────────────────────────
+ * ── Saved classes leave the feed ──────────────────────────────────────────
  *
- * `localStorage`, not the database. A discard is a "not this one, not now"
- * about a ranked list that is recomputed every visit, and it is not worth a
- * table or a migration to remember it across devices. It survives a refresh,
- * which is the part that would otherwise feel broken, and `buildFeed` already
- * takes `excludeCourseIds` if this ever needs to become a real preference.
+ * `handled` used to be in-memory only, so a trip to `/saved` and back brought
+ * the same card back with a filled bookmark. That is a ranking that did not
+ * hear the decision. `buildFeed` now drops saved courses on the server, and
+ * the bookmark store hides any that appear here in the meantime — a tap on the
+ * corner icon, a save that raced the server render.
+ *
+ * A discard still lives in this browser. It is "not this one, not now" about a
+ * ranked list that is recomputed every visit, and `buildFeed` takes
+ * `excludeCourseIds` / `demoteCourseIds` on refresh so the next ranking is
+ * not the same neighbourhood with a different number.
  *
  * Bookmarks are the opposite and already have their own store: a save is a
  * decision the student will act on from another device, so a swipe right calls
@@ -100,7 +107,14 @@ const RESIDUAL_MS = 6000;
 
 type Residual = { courseId: string; action: SwipeAction; label: string };
 
-export function FeedDeck({ cards }: { cards: readonly FeedCard[] }) {
+export function FeedDeck({
+  cards,
+  onRerank,
+}: {
+  cards: readonly FeedCard[];
+  /** Rebuild the ranking from current discards. Fired every N skips. */
+  onRerank?: () => void;
+}) {
   const router = useRouter();
   const reduceMotion = useReducedMotion();
 
@@ -118,6 +132,17 @@ export function FeedDeck({ cards }: { cards: readonly FeedCard[] }) {
     getDismissed,
     getDismissedServerSnapshot,
   );
+  const bookmarks = useBookmarks();
+  const savedCourseIds = useMemo(
+    () => courseIdsFromSectionIds(bookmarks.saved),
+    [bookmarks.saved],
+  );
+  /*
+   * Course ids with a save in flight. The bookmark store flips before
+   * `setResiduals` runs, and without this the filled-bookmark filter would
+   * unmount the card in that gap — no residual, no undo, a hole.
+   */
+  const committing = useRef(new Set<string>());
   /*
    * Every card that has been swiped this visit, whichever way.
    *
@@ -126,11 +151,6 @@ export function FeedDeck({ cards }: { cards: readonly FeedCard[] }) {
    * the second right-swipe on it would UNSAVE the course while the tally below
    * counted it as another save — three swipes on one card would then announce
    * a shortlist of one that is no longer even bookmarked.
-   *
-   * In memory and not on disk, unlike `dismissed`. A discard means "stop
-   * showing me this"; a save means "I have dealt with this", and on the next
-   * visit a saved course is a perfectly good recommendation to see again —
-   * wearing a filled bookmark, which is the state that persisted.
    */
   const [handled, setHandled] = useState<ReadonlySet<string>>(() => new Set());
   const [residuals, setResiduals] = useState<readonly Residual[]>([]);
@@ -248,6 +268,7 @@ export function FeedDeck({ cards }: { cards: readonly FeedCard[] }) {
       });
 
       if (action === "saved") {
+        committing.current.add(card.courseId);
         const result = await toggleBookmark(card.best.sectionId);
         /*
          * A refusal must not consume the card. `denied` is the signed-out gate
@@ -256,10 +277,14 @@ export function FeedDeck({ cards }: { cards: readonly FeedCard[] }) {
          * was and the existing toast explains why.
          */
         if (result.kind === "denied") {
+          committing.current.delete(card.courseId);
           showSignInToast();
           return false;
         }
-        if (result.kind === "failed" || result.kind === "busy") return false;
+        if (result.kind === "failed" || result.kind === "busy") {
+          committing.current.delete(card.courseId);
+          return false;
+        }
         haptic("success");
       } else {
         // Discards alone are written to disk; see `handled` above.
@@ -268,6 +293,7 @@ export function FeedDeck({ cards }: { cards: readonly FeedCard[] }) {
       }
 
       setHandled((set) => new Set(set).add(card.courseId));
+      committing.current.delete(card.courseId);
       setResiduals((rows) => [
         ...rows.filter((row) => row.courseId !== card.courseId),
         { courseId: card.courseId, action, label: card.code },
@@ -305,17 +331,17 @@ export function FeedDeck({ cards }: { cards: readonly FeedCard[] }) {
       if (milestone === "refine") {
         fired.current.refine = true;
         showToast({
-          title: `${DISCARDS_BEFORE_REFINE} in a row is a signal.`,
-          description: "Tell the assistant what you actually want and it will re-rank from that.",
+          title: "Updating recommendations",
+          description: "The next cards will rank away from the classes you skipped.",
           status: "info",
-          duration: 9000,
+          duration: 7000,
           dedupeKey: "feed-refine",
-          action: { label: "Refine in chat", onPress: () => router.push("/chat") },
         });
       }
+      if (shouldRerank(action, tally)) onRerank?.();
       return true;
     },
-    [router, settle],
+    [onRerank, router, settle],
   );
 
   const residualFor = (courseId: string) => residuals.find((row) => row.courseId === courseId);
@@ -328,7 +354,15 @@ export function FeedDeck({ cards }: { cards: readonly FeedCard[] }) {
         // written the instant the swipe commits, so a refresh mid-countdown
         // still respects a discard; the residual is what holds the slot open
         // until then.
-        if (!row && (handled.has(card.courseId) || dismissed.has(card.courseId))) return null;
+        if (
+          !row &&
+          !committing.current.has(card.courseId) &&
+          (handled.has(card.courseId) ||
+            dismissed.has(card.courseId) ||
+            savedCourseIds.has(card.courseId))
+        ) {
+          return null;
+        }
 
         /*
          * Which way this card leaves. `AnimatePresence` hands its `custom`

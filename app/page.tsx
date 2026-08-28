@@ -110,7 +110,7 @@ export default async function HomePage({
  */
 async function HomeFeed() {
   const feed = await buildFeed({ limit: HOME_FEED_LIMIT });
-  return <FeedPanel feed={feed} />;
+  return <FeedPanel feed={feed} limit={HOME_FEED_LIMIT} />;
 }
 
 /**

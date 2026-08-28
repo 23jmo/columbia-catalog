@@ -72,6 +72,11 @@ export function milestoneFor(
   if (action === "saved" && !alreadyFired.handoff && tally.saved >= SAVES_BEFORE_HANDOFF) {
     return "handoff";
   }
+  /*
+   * Refine is once-per-page as a prompt, but the ranking itself re-runs every
+   * `DISCARDS_BEFORE_REFINE` discards — see `shouldRerank`. The toast would
+   * become a nag if it followed that cadence.
+   */
   if (
     action === "discarded" &&
     !alreadyFired.refine &&
@@ -80,4 +85,16 @@ export function milestoneFor(
     return "refine";
   }
   return null;
+}
+
+/**
+ * Whether this discard should rebuild the feed.
+ *
+ * Every N discards, not just the first N. A student who skips six systems
+ * electives is telling us something on the fifth and sixth too, and a ranking
+ * that only listened once would keep serving the same neighbourhood.
+ */
+export function shouldRerank(action: SwipeAction, tally: SwipeTally): boolean {
+  if (action !== "discarded" || tally.discarded <= 0) return false;
+  return tally.discarded % DISCARDS_BEFORE_REFINE === 0;
 }

@@ -23,8 +23,8 @@
  * A discard is "not this one, not now" about a ranked list that is recomputed
  * every visit. It is not worth a table or a migration to remember across
  * devices, it survives a refresh — which is the part that would otherwise feel
- * broken — and `buildFeed` already takes `excludeCourseIds` if this ever needs
- * to become a real preference.
+ * broken — and a refresh sends them as `excludeCourseIds` / `demoteCourseIds`
+ * so the next ranking is not the same neighbourhood with a different number.
  */
 
 const KEY = "lionplan.feed.dismissed.v1";

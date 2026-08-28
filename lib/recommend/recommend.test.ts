@@ -659,6 +659,67 @@ describe("satisfied requirement groups", () => {
 });
 
 /* ==========================================================================
+ * Discards
+ * ========================================================================== */
+
+describe("rejected courses", () => {
+  it("never recommends a course the student just discarded", () => {
+    const results = recommended({
+      profile: { taken: taken([INTRO_PROGRAMMING, true]) },
+      candidates: CANDIDATES,
+      vectors,
+      prereqs,
+      rejected: [DISCRETE_MATH],
+    });
+
+    expect(results.map((entry) => entry.course.courseId)).not.toContain(DISCRETE_MATH);
+  });
+
+  it("ranks a neighbour of a discarded course below a dissimilar one", () => {
+    /*
+     * Without a discard, Advanced Programming (same computing cluster as
+     * Databases) outranks a humanities course on taste. After Databases is
+     * swiped away, "looks like Databases" is a reason to drop Advanced
+     * Programming, not a reason to keep showing it.
+     */
+    const open: PrereqSource = {
+      statusFor: () => ({ status: "met", outstanding: [], advisories: [] }),
+      newlyUnlockedBy: () => [],
+    };
+    const pair = [
+      course(ADVANCED_PROGRAMMING, "ADVANCED PROGRAMMING"),
+      course(AFRICAN_AMERICAN_STUDIES, "INTRO TO AFRICAN-AMER STUDIES"),
+    ];
+
+    const before = recommended({
+      profile: { taken: taken([INTRO_PROGRAMMING, true]) },
+      candidates: pair,
+      vectors,
+      prereqs: open,
+    });
+    expect(before[0]!.course.courseId).toBe(ADVANCED_PROGRAMMING);
+
+    const after = recommended({
+      profile: { taken: taken([INTRO_PROGRAMMING, true]) },
+      candidates: pair,
+      vectors,
+      prereqs: open,
+      rejected: [DATABASES],
+    });
+
+    const advanced = after.find((entry) => entry.course.courseId === ADVANCED_PROGRAMMING)!;
+    const humanities = after.find((entry) => entry.course.courseId === AFRICAN_AMERICAN_STUDIES)!;
+    const advancedBefore = before.find((entry) => entry.course.courseId === ADVANCED_PROGRAMMING)!;
+
+    // The neighbour is the one that moved. A humanities course that was never
+    // near Databases should not be the thing that changed.
+    expect(advanced.score).toBeLessThan(advancedBefore.score);
+    expect(advanced.score).toBeLessThan(humanities.score);
+    expect(after[0]!.course.courseId).toBe(AFRICAN_AMERICAN_STUDIES);
+  });
+});
+
+/* ==========================================================================
  * Mutually exclusive requirement groups
  * ========================================================================== */
 
