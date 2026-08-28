@@ -7,6 +7,7 @@
  */
 
 export { AttestToggle } from "./attest-toggle";
+export { AuditTree } from "./audit-tree";
 export { CandidateChips } from "./candidate-chips";
 export { CoursePicker, type CourseSuggestion } from "./course-picker";
 export { CourseworkCard } from "./coursework-card";
@@ -16,7 +17,6 @@ export { DegreeSetup, type ProgramOption } from "./degree-setup";
 export { OutstandingCard } from "./outstanding-card";
 export { ProfileHero } from "./profile-hero";
 export { ProfileModal } from "./profile-modal";
-export { ProgramAuditCard } from "./program-audit-card";
 export { RecommendedCourses } from "./recommended-courses";
 export { RecordControls } from "./record-controls";
 export { RemoveCourseButton } from "./remove-course-button";

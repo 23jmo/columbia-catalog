@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 
 import {
+  AuditTree,
   CourseworkCard,
   DataCard,
   OutstandingCard,
   ProfileHero,
-  ProgramAuditCard,
   RecommendedCourses,
   SignInNotice,
 } from "@/components/profile";
@@ -96,9 +96,11 @@ export default async function ProfilePage() {
               hasPrograms={data.audit.programs.length > 0}
             />
 
-            {data.audit.programs.map((result) => (
-              <ProgramAuditCard key={result.program.id} result={result} />
-            ))}
+            <AuditTree
+              programs={data.audit.programs}
+              termLabels={data.termLabels}
+              uncounted={data.uncounted}
+            />
 
             <CourseworkCard
               courses={profile.courses}

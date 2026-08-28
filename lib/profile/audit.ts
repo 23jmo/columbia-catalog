@@ -26,6 +26,21 @@ export interface ProfileAudit {
   totalPoints: number;
   /** Courses we could not find in the catalog — they count for less, honestly. */
   unmatchedCourseIds: string[];
+  /**
+   * Courses on the record that no requirement counted, in any program.
+   *
+   * NOT the same list as `unmatchedCourseIds`, and the difference matters. That
+   * one is "we have never heard of this code"; this one is "we know exactly
+   * what this course is and nothing in your degree needs it". A transfer credit
+   * we cannot resolve is the first. A perfectly ordinary elective taken out of
+   * interest is the second, and printing it as an error would be wrong — an
+   * elective that counts toward nothing is a normal part of a degree.
+   *
+   * It is worth surfacing anyway, because the other reason a course lands here
+   * is that we got the audit wrong, and a student who can see the courses we
+   * ignored can tell us which one we should not have.
+   */
+  uncountedCourseIds: string[];
   /** Every group still outstanding, flattened and ordered for the "what's left" card. */
   remaining: RemainingRequirement[];
 }
@@ -113,6 +128,23 @@ export function auditProfile({ profile, catalog }: AuditOptions): ProfileAudit {
     .map((course) => course.courseId)
     .filter((courseId) => !catalog.has(courseId));
 
+  /*
+   * Every course any group counted, across every program. Built from `matched`
+   * rather than by re-running the selectors: `matched` is what the audit
+   * actually credited after exclusions were applied, and a course the engine
+   * declined to count must read as uncounted here even when a selector would
+   * have accepted it.
+   */
+  const countedCourseIds = new Set<string>();
+  for (const result of results) {
+    for (const group of result.groups) {
+      for (const match of group.matched) countedCourseIds.add(match.courseId);
+    }
+  }
+  const uncountedCourseIds = profile.courses
+    .map((course) => course.courseId)
+    .filter((courseId) => !countedCourseIds.has(courseId));
+
   const remaining: RemainingRequirement[] = [];
   for (const result of results) {
     for (const group of result.groups) {
@@ -153,6 +185,7 @@ export function auditProfile({ profile, catalog }: AuditOptions): ProfileAudit {
     crossCounted: crossCountedCourseIds(results),
     totalPoints,
     unmatchedCourseIds,
+    uncountedCourseIds,
     remaining,
   };
 }

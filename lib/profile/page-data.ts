@@ -54,6 +54,16 @@ export interface ProfilePageData {
   recommendations: Recommendation[];
   /** Catalog titles for courses on the record, keyed by course id. */
   titles: Record<string, string>;
+  /**
+   * `courseId` → the term the student says they took it, for the audit tree.
+   *
+   * Read off `TakenCourse`, not off the audit: `GroupMatch` carries no term,
+   * and giving it one would push a fact about the student's record into a type
+   * that describes a rule being satisfied.
+   */
+  termLabels: Record<string, string | null>;
+  /** Courses on the record that no requirement counted, resolved for display. */
+  uncounted: { courseId: string; code: string; title: string | null }[];
   /** Courses named by outstanding requirements, for the picker. */
   suggestions: {
     courseId: string;
@@ -128,6 +138,17 @@ export async function loadProfilePageData(): Promise<ProfilePageData> {
     if (title) titles[course.courseId] = title;
   }
 
+  const termLabels: Record<string, string | null> = {};
+  for (const course of profile.courses) {
+    termLabels[course.courseId] = course.termLabel;
+  }
+
+  const uncounted = audit.uncountedCourseIds.map((courseId) => ({
+    courseId,
+    code: formatCourseId(courseId),
+    title: facts.get(courseId)?.title ?? null,
+  }));
+
   const candidateIds = [
     ...new Set(audit.remaining.flatMap((requirement) => requirement.candidates)),
   ];
@@ -174,6 +195,8 @@ export async function loadProfilePageData(): Promise<ProfilePageData> {
     progress: overallProgress(audit),
     recommendations,
     titles,
+    termLabels,
+    uncounted,
     suggestions,
     programOptions: listPrograms().map((program) => ({
       id: program.id,
