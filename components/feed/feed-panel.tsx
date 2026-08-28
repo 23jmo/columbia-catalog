@@ -1,9 +1,9 @@
 import Link from "next/link";
 
-import type { FeedResult } from "@/lib/recommend/feed";
+import { HOME_FEED_LIMIT, type FeedResult } from "@/lib/recommend/feed";
 import { cx } from "@/utils/cx";
 
-import { FeedDeck } from "./feed-deck";
+import { FeedSession } from "./feed-session";
 
 /**
  * The feed — a grid of sections, and nothing around it.
@@ -106,13 +106,13 @@ function OnboardingNudge() {
  * ── Why the body is one line now ───────────────────────────────────────────
  *
  * The list became swipeable, and a swipe needs a pointer, so the rows moved
- * into `FeedDeck`, a client island. This panel stays a server component and
- * hands it the cards: everything above — the heading, the nudge, the empty
- * state — is still rendered on the server and shipped as HTML, and the only
- * JavaScript the feed costs is the part that has to react to a thumb.
+ * into `FeedDeck`, a client island. Refresh and discard-driven re-ranking live
+ * in `FeedSession` next to it: the panel stays a server component and hands
+ * over the first ranking as HTML, and the only JavaScript the feed costs is
+ * the part that has to react to a thumb or a tap.
  */
 function FeedGridBody({ feed }: { feed: FeedResult }) {
-  return <FeedDeck cards={feed.cards} />;
+  return <FeedSession feed={feed} limit={HOME_FEED_LIMIT} />;
 }
 
 /* ==========================================================================

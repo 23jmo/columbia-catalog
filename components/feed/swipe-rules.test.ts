@@ -6,6 +6,7 @@ import {
   DISCARDS_BEFORE_REFINE,
   SAVES_BEFORE_HANDOFF,
   milestoneFor,
+  shouldRerank,
   swipeVerdict,
 } from "./swipe-rules";
 
@@ -95,5 +96,23 @@ describe("milestoneFor", () => {
     // Discarding six courses must not congratulate anyone on a shortlist.
     expect(milestoneFor("discarded", { saved: 0, discarded: 6 }, nothingFired)).toBe("refine");
     expect(milestoneFor("saved", { saved: 1, discarded: 6 }, nothingFired)).toBeNull();
+  });
+});
+
+describe("shouldRerank", () => {
+  it("rebuilds on every Nth discard, not just the first N", () => {
+    expect(shouldRerank("discarded", { saved: 0, discarded: 1 })).toBe(false);
+    expect(shouldRerank("discarded", { saved: 0, discarded: DISCARDS_BEFORE_REFINE })).toBe(true);
+    expect(shouldRerank("discarded", { saved: 0, discarded: DISCARDS_BEFORE_REFINE + 1 })).toBe(
+      false,
+    );
+    expect(shouldRerank("discarded", { saved: 0, discarded: DISCARDS_BEFORE_REFINE * 2 })).toBe(
+      true,
+    );
+  });
+
+  it("never rebuilds on a save", () => {
+    // Saving is a keep, not a taste signal about the rest of the list.
+    expect(shouldRerank("saved", { saved: 2, discarded: 2 })).toBe(false);
   });
 });

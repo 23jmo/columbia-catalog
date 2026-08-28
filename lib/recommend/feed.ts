@@ -55,6 +55,7 @@ import {
   loadStudent,
   loadVectorSource,
 } from "./pipeline";
+import { loadSavedCourseIds } from "./saved";
 import {
   chooseSection,
   offeringScore,
@@ -229,8 +230,14 @@ export interface BuildFeedOptions {
   terms?: readonly TermCode[];
   /** Restrict to these subject codes, e.g. `["COMS"]`. Used by the UI filter. */
   subjects?: readonly string[];
-  /** Drop these course ids — already on screen this conversation. */
+  /** Drop these course ids — already on screen this conversation, or already saved. */
   excludeCourseIds?: readonly string[];
+  /**
+   * Courses the student has discarded. They are excluded from the cards, and
+   * remaining candidates that look like them are ranked down so the next page
+   * is not "the same class, different number".
+   */
+  demoteCourseIds?: readonly string[];
   /**
    * Keep only courses whose requirement reason matches this label, e.g.
    * `"Global Core"`. Substring, case-insensitive. The unfiltered feed is
@@ -258,17 +265,28 @@ export async function buildFeed(options: BuildFeedOptions = {}): Promise<FeedRes
    * Rank from a skinny listing (id, code, title, points, number). Sections
    * are loaded after `recommend()` for the shortlist only — see hydrate below.
    */
-  const [student, catalog, prereqs, vectors] = await Promise.all([
+  const [student, catalog, prereqs, vectors, savedCourseIds] = await Promise.all([
     loadStudent(),
     loadCatalog(terms),
     loadPrereqSource(),
     loadVectorSource(),
+    loadSavedCourseIds(),
   ]);
 
   const personalized = student.engine.taken.length > 0 || student.outstanding.length > 0;
 
   const wantedSubjects = options.subjects?.map((subject) => subject.toUpperCase());
-  const skip = new Set(options.excludeCourseIds ?? []);
+  /*
+   * Saved classes are a decision already made. They used to survive a trip to
+   * `/saved` and back, because the deck only hid them in memory. The ranking
+   * has to drop them too, or the next page is the same card with a filled
+   * bookmark.
+   */
+  const skip = new Set([
+    ...(options.excludeCourseIds ?? []),
+    ...savedCourseIds,
+    ...(options.demoteCourseIds ?? []),
+  ]);
   const listingById = new Map(catalog.listings.map((listing) => [listing.courseId, listing]));
 
   const auditPool = resolveClearsPool({
@@ -334,6 +352,7 @@ export async function buildFeed(options: BuildFeedOptions = {}): Promise<FeedRes
     outstanding,
     prereqs,
     vectors,
+    rejected: options.demoteCourseIds,
     limit: rankLimit,
     /*
      * The feed shows none of this. It is counted for the honest line at the

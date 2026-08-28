@@ -155,6 +155,20 @@ export const WEIGHTS = {
    */
   unlock: 0.3,
   offering: 0.2,
+  /**
+   * How hard we push remaining candidates away from courses the student just
+   * discarded. Below requirement fit on purpose: skipping two systems electives
+   * should not hide the Global Core they still need. Above taste, because a
+   * clear "not like those" should beat "you liked a similar class" for the
+   * neighbours of what they just skipped.
+   *
+   * This is a penalty against similarity to the discarded set, not a subtraction
+   * from the taste vector. LSA space is not oriented so that "away from
+   * databases" means humanities — see `taste.ts`. Comparing each candidate to
+   * the rejected courses themselves is a real claim: this looks like something
+   * you just said no to.
+   */
+  rejection: 0.6,
 } as const;
 
 /**
@@ -168,6 +182,22 @@ export const WEIGHTS = {
  */
 export function unlockScore(unlockedCount: number): number {
   return Math.log1p(Math.max(0, unlockedCount));
+}
+
+/**
+ * How much this candidate looks like the set of discarded courses.
+ *
+ * Max rather than mean: discarding one systems course should demote other
+ * systems courses even if the student also skipped something unrelated. A mean
+ * would let the unrelated skip wash the signal out.
+ */
+function maxCosine(candidate: Float32Array, against: readonly Float32Array[]): number {
+  let highest = 0;
+  for (const vector of against) {
+    const similarity = cosine(candidate, vector);
+    if (similarity > highest) highest = similarity;
+  }
+  return highest;
 }
 
 /* ==========================================================================
@@ -187,6 +217,11 @@ export interface RecommendInput {
    * help with were the ones the engine could say nothing about.
    */
   outstanding?: readonly GroupResult[];
+  /**
+   * Courses the student has discarded from the feed. Excluded from the ranked
+   * list, and used to demote remaining candidates that look like them.
+   */
+  rejected?: readonly CourseId[];
   limit?: number;
   /**
    * Cap on `withheld`. Separate from `limit` because the two answer different
@@ -226,6 +261,10 @@ export function recommend(input: RecommendInput): RecommendResult {
   ]);
 
   const alreadyDecided = new Set<string>(completed);
+  const rejected = new Set<string>(input.rejected ?? []);
+  const rejectedVectors = [...rejected]
+    .map((courseId) => vectors.vectorFor(courseId as CourseId))
+    .filter((vector): vector is Float32Array => vector != null);
 
   const taste = buildTasteVector(profile.taken, vectors);
   const requirementIndex = indexOutstanding(input.outstanding ?? []);
@@ -234,8 +273,10 @@ export function recommend(input: RecommendInput): RecommendResult {
   const withheld: WithheldCourse[] = [];
 
   for (const course of candidates) {
-    // A student cannot be recommended what they have already taken or planned.
-    if (alreadyDecided.has(course.courseId)) continue;
+    // A student cannot be recommended what they have already taken, planned,
+    // or just swiped away. Saving is handled by the feed's skip set — a
+    // bookmark is not "taken" and must not count toward prerequisites.
+    if (alreadyDecided.has(course.courseId) || rejected.has(course.courseId)) continue;
 
     const prereq = prereqs.statusFor(course.courseId, completed);
 
@@ -279,6 +320,9 @@ export function recommend(input: RecommendInput): RecommendResult {
 
     const tasteSimilarity =
       taste.vector && courseVector ? cosine(taste.vector, courseVector) : 0;
+    const rejectionSimilarity = courseVector
+      ? maxCosine(courseVector, rejectedVectors)
+      : 0;
 
     const groups = requirementIndex.get(course.courseId) ?? [];
     const unlocked = prereqs.newlyUnlockedBy(course.courseId, completed);
@@ -295,7 +339,12 @@ export function recommend(input: RecommendInput): RecommendResult {
 
     scored.push({
       course,
-      score: components.requirementFit + components.taste + components.unlock + components.offering,
+      score:
+        components.requirementFit +
+        components.taste +
+        components.unlock +
+        components.offering -
+        WEIGHTS.rejection * rejectionSimilarity,
       components,
       reasons: reasonsFor({
         groups,
