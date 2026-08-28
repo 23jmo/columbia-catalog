@@ -152,7 +152,11 @@ function titleAfter(line: string, endOfCode: number): string | null {
   const rest = line.slice(endOfCode);
   const cut = rest.search(/\s{2,}\d|\s\d+\.\d{2}\b|\s\d{1,2}\.\d\b/);
   const candidate = (cut === -1 ? rest : rest.slice(0, cut))
-    .replace(/[.…]+$/, "")
+    // Trailing filler, not title. Leader dots are the printed form; the rest
+    // are what those dots become once a scan goes through OCR, which reads a
+    // dotted rule as tildes, hyphens or underscores about as often as dots.
+    // No course title ends in a run of punctuation, so stripping is safe.
+    .replace(/[.…~\-_·]+$/, "")
     .trim();
   if (candidate.length < 3) return null;
   // A leftover grade or credit column is not a title.

@@ -89,3 +89,8 @@ scratch-*.mts
 .culpa-backfill.json
 .culpa-backfill.json.tmp
 .culpa-backfill.log
+
+# tesseract.js language data. The browser fetches this from a CDN and keeps it
+# in the worker, but running OCR under Node — which any local check of the
+# transcript scan path does — drops a 5 MB copy in the repo root instead.
+*.traineddata

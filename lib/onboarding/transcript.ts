@@ -37,6 +37,7 @@
  */
 
 import { extractPdfText } from "@/lib/profile/pdf-text";
+import { isImageFile, ocrImages, pdfPageImages, type OcrProgress } from "./transcript-ocr";
 import {
   parseTranscriptText,
   WARNING_LABEL,
@@ -125,13 +126,37 @@ export interface TranscriptFileResult {
  * `lib/profile/pdf-text.ts` extracts the text layer client-side and there is no
  * storage bucket for the file (migration 0028). That is not an optimisation: a
  * transcript is the most sensitive document a student has, and the strongest
- * possible guarantee about it is that it never left their machine.
+ * possible guarantee about it is that it never left their machine. OCR does not
+ * weaken that — `./transcript-ocr.ts` runs tesseract in a web worker on the
+ * student's own machine, which is why it is WASM here and not a vision model.
  *
- * `.txt` and pasted text go through the same parser — once a PDF is flattened
- * to text the two are the same problem.
+ * Three sources, narrowing to one:
+ *
+ *   TEXT LAYER  Preferred wherever it exists. Exact.
+ *   PAGE IMAGE  The fallback, for a scan or a photo. A guess, so it is only
+ *               reached when there is no text to be had.
+ *   PASTED      `.txt` and pasted text go through the same parser — once a PDF
+ *               is flattened to text the two are the same problem.
+ *
+ * All three end in `parseTranscript`, so there is one set of warnings and one
+ * review screen whatever the student handed us.
  */
-export async function readTranscriptFile(file: File): Promise<TranscriptFileResult> {
+export async function readTranscriptFile(
+  file: File,
+  onProgress?: (progress: OcrProgress) => void,
+): Promise<TranscriptFileResult> {
   const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+
+  /*
+   * A photograph or a screenshot has no text layer to try, so it goes straight
+   * to OCR. This used to fall through to `file.text()`, which decodes JPEG
+   * bytes as UTF-8, finds no course codes in the mojibake, and reports "we
+   * could not find any course codes in that file" — a true sentence that reads
+   * as a parser failure rather than as "we cannot read pictures".
+   */
+  if (isImageFile(file)) {
+    return fromOcr([file], onProgress, "We read that image but found no course codes in it.");
+  }
 
   if (!isPdf) {
     const text = await file.text();
@@ -142,29 +167,69 @@ export async function readTranscriptFile(file: File): Promise<TranscriptFileResu
     };
   }
 
-  const extraction = await extractPdfText(await file.arrayBuffer());
+  const bytes = await file.arrayBuffer();
+  const extraction = await extractPdfText(bytes);
 
-  if (extraction.outcome === "no_text_layer") {
+  /*
+   * The text layer wins whenever there is one. It is exact where OCR is a
+   * guess, so falling back to OCR on a readable PDF would trade correctness
+   * for nothing — the fallback is for the files that have no text at all.
+   */
+  if (extraction.outcome === "ok") {
+    const candidates = parseTranscript(extraction.text);
+    if (candidates.length > 0) return { candidates, problem: null };
+  }
+
+  /*
+   * No text layer, glyph soup, or a clean read that yielded no course codes.
+   * All three describe the Vergil unofficial record, which is JPEGs of the
+   * page — so pull those images out of the PDF and read them.
+   */
+  const images = await pdfPageImages(new Uint8Array(bytes));
+  if (images.length === 0) {
     return {
       candidates: [],
       problem:
-        "That PDF is a scan — there is no text in it to read. Use the grid below, or paste the text instead.",
-    };
-  }
-  if (extraction.outcome === "unreadable") {
-    return {
-      candidates: [],
-      problem:
-        "We could read the PDF but not its text. Use the grid below, or paste the text instead.",
+        extraction.outcome === "ok"
+          ? "We read that PDF but found no course codes in it. Use the grid below instead."
+          : "We could not find any text or any page images in that PDF. Use the grid below instead.",
     };
   }
 
-  const candidates = parseTranscript(extraction.text);
+  return fromOcr(
+    images,
+    onProgress,
+    "We read the page but could not make out any course codes. A sharper screenshot usually fixes it — or use the grid below.",
+  );
+}
+
+/**
+ * OCR some images and narrow the result to the same shape as every other path.
+ *
+ * Failures are returned, never thrown. This runs behind a file picker in the
+ * middle of onboarding, and the worker can fail for reasons the student can do
+ * nothing about — blocked WASM, a wedged worker, memory on an old phone. Each
+ * of those has the same remedy as an unreadable scan, which is the grid.
+ */
+async function fromOcr(
+  images: readonly Blob[],
+  onProgress: ((progress: OcrProgress) => void) | undefined,
+  emptyMessage: string,
+): Promise<TranscriptFileResult> {
+  let text: string;
+  try {
+    text = await ocrImages(images, onProgress);
+  } catch (cause) {
+    console.error("transcript: OCR failed", cause);
+    return {
+      candidates: [],
+      problem: "We could not read that file in this browser. Use the grid below instead.",
+    };
+  }
+
+  const candidates = parseTranscript(text);
   return {
     candidates,
-    problem:
-      candidates.length === 0
-        ? "We read the PDF but found no course codes in it. Use the grid below instead."
-        : null,
+    problem: candidates.length === 0 ? emptyMessage : null,
   };
 }
