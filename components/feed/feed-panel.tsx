@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { HOME_FEED_LIMIT, type FeedResult } from "@/lib/recommend/feed";
+import type { FeedResult } from "@/lib/recommend/feed";
 import { cx } from "@/utils/cx";
 
 import { FeedSession } from "./feed-session";
@@ -27,9 +27,12 @@ import { FeedSession } from "./feed-session";
 
 export function FeedPanel({
   feed,
+  limit,
   className,
 }: {
   feed: FeedResult;
+  /** How many cards a refresh should ask for. Same count the server used. */
+  limit: number;
   className?: string;
 }) {
   return (
@@ -39,7 +42,11 @@ export function FeedPanel({
     >
       {!feed.personalized ? <OnboardingNudge /> : null}
 
-      {feed.cards.length === 0 ? <EmptyFeed feed={feed} /> : <FeedGridBody feed={feed} />}
+      {feed.cards.length === 0 ? (
+        <EmptyFeed feed={feed} />
+      ) : (
+        <FeedGridBody feed={feed} limit={limit} />
+      )}
     </section>
   );
 }
@@ -111,8 +118,8 @@ function OnboardingNudge() {
  * over the first ranking as HTML, and the only JavaScript the feed costs is
  * the part that has to react to a thumb or a tap.
  */
-function FeedGridBody({ feed }: { feed: FeedResult }) {
-  return <FeedSession feed={feed} limit={HOME_FEED_LIMIT} />;
+function FeedGridBody({ feed, limit }: { feed: FeedResult; limit: number }) {
+  return <FeedSession feed={feed} limit={limit} />;
 }
 
 /* ==========================================================================

@@ -5,7 +5,7 @@ import { RiRefreshLine } from "@remixicon/react";
 
 import { Button } from "@/components/base/buttons/button";
 import { useBookmarks } from "@/hooks/use-bookmarks";
-import { getFeedAction } from "@/lib/recommend/actions";
+import { refreshFeedAction } from "@/app/feed-actions";
 import type { FeedCard, FeedResult } from "@/lib/recommend/feed";
 import { courseIdsFromSectionIds } from "@/lib/recommend/section-id";
 import { showToast } from "@/lib/toast/store";
@@ -19,7 +19,7 @@ import { FeedDeck } from "./feed-deck";
  *
  * The home page is a server component, so the first ranking is HTML. Everything
  * after that — a tap on Refresh, a second discard — has to happen here, because
- * a server tree cannot call `getFeedAction` in response to a thumb.
+ * a server tree cannot call `refreshFeedAction` in response to a thumb.
  *
  * Discards travel with the rebuild. They live in this browser (see
  * `dismissed-store.ts`) so the server has never heard of them unless we send
@@ -55,7 +55,7 @@ export function FeedSession({
       setPending(true);
       try {
         const dismissed = [...getDismissed()];
-        const next = await getFeedAction({
+        const next = await refreshFeedAction({
           limit,
           excludeCourseIds: [...dismissed, ...savedCourseIds],
           demoteCourseIds: dismissed,
