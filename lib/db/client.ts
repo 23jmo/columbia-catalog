@@ -24,18 +24,27 @@
 import { createBrowserClient, createServerClient } from "@supabase/ssr";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+import {
+  SUPABASE_PUBLISHABLE_KEY,
+  SUPABASE_URL,
+  isConfigured,
+  present,
+} from "./env";
 import type { Database } from "./schema";
+
+/*
+ * Re-exported so that `@/lib/db/client` remains the one import path for all of
+ * this. They live in `./env` now for a single reason — a module that imports
+ * them should not have to pull the Supabase SDK in with them — and that file's
+ * header has the argument. Nothing else changed.
+ */
+export { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL, isConfigured };
 
 export type CatalogClient = SupabaseClient<Database>;
 
 // ---------------------------------------------------------------------------
 // Environment
 // ---------------------------------------------------------------------------
-
-/** A blank variable means "not set", not "set to empty string". */
-function present(value: string | undefined): string | undefined {
-  return value && value.length > 0 ? value : undefined;
-}
 
 /**
  * Server-only variables, read at call time.
@@ -49,43 +58,6 @@ function present(value: string | undefined): string | undefined {
 function serverEnv(name: string): string | undefined {
   if (typeof process === "undefined") return undefined;
   return present(process.env[name]);
-}
-
-/*
- * The two public variables MUST be written as static member accesses.
- *
- * Next replaces `process.env.NEXT_PUBLIC_X` with the literal value at build
- * time, and it can only do that when the property is syntactically static.
- * Reading them through a helper defeats the substitution completely: the
- * server still resolves them from the real environment, the browser bundle
- * gets nothing at all, and `isConfigured()` then answers `true` on the server
- * and `false` in the browser.
- *
- * That divergence is invisible to the test suite and to any server-rendered
- * page, and it surfaces as two things at once — a hydration mismatch on every
- * component whose label depends on the session, and a browser client that is
- * permanently `null`, so sign-in, watches and alerts never work no matter how
- * the environment is configured. It cost a debugging session once; the shape
- * of these two lines is the fix, so do not "tidy" them back into a helper.
- *
- * Inlining also removes the `process` reference entirely from client code,
- * which is strictly safer than a runtime lookup in a runtime that has no
- * `process` at all.
- */
-export const SUPABASE_URL = present(process.env.NEXT_PUBLIC_SUPABASE_URL);
-
-export const SUPABASE_PUBLISHABLE_KEY =
-  present(process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) ??
-  present(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-
-/**
- * `true` when the browser/server clients can be constructed. Callers use this
- * to choose between the database and the seed:
- *
- *   if (!isConfigured()) return seedFallback();
- */
-export function isConfigured(): boolean {
-  return Boolean(SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY);
 }
 
 /** `true` when privileged, server-only operations (ingest, alerts) are possible. */
