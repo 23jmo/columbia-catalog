@@ -9,6 +9,7 @@ import { showSignInToast } from "@/components/bookmarks/bookmark-toasts";
 import { useBookmarks } from "@/hooks/use-bookmarks";
 import { toggleBookmark } from "@/lib/bookmarks/store";
 import { haptic } from "@/lib/haptics";
+import { bindSwipeHaptics } from "@/lib/haptics/swipe";
 import type { FeedCard } from "@/lib/recommend/feed";
 import { courseIdsFromSectionIds } from "@/lib/recommend/section-id";
 import { showToast } from "@/lib/toast/store";
@@ -437,7 +438,16 @@ function SwipeableCard({
   /** Resolves false when the action was refused — the card must spring back. */
   onCommit: (action: SwipeAction) => Promise<boolean>;
 }) {
+  const cardRef = useRef<HTMLDivElement | null>(null);
   const x = useMotionValue(0);
+
+  useEffect(() => {
+    const node = cardRef.current;
+    if (!node) return;
+    // Native touch, not Motion's onDragStart — that callback is a
+    // turn late and both vibrate and the iOS switch miss the gesture.
+    return bindSwipeHaptics(node);
+  }, []);
   /*
    * Direction of a committed throw, set the instant the gesture counts.
    *
@@ -509,13 +519,10 @@ function SwipeableCard({
       </div>
 
       <motion.div
+        ref={cardRef}
         data-swipe-card=""
         className="relative flex w-full min-w-0 touch-pan-y"
         style={{ x, rotate }}
-        onDragStart={() => {
-          // Start of the throw — a tick so the grab registers in the hand.
-          haptic("selection");
-        }}
         /*
          * `dragDirectionLock` is the whole reason this can live in a scrolling
          * column. Without it a drag that starts 5° off vertical captures the
