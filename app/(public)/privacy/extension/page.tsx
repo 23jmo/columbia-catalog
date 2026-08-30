@@ -57,8 +57,11 @@ export default function ExtensionPrivacyPage() {
         <p>
           Sharing is off by default. If you turn on help keeping the
           catalog current, only the signed-in LionPlan site may request the
-          sanitized capture, and only after you review it. No data is sold,
-          used for advertising, or transferred for another purpose.
+          sanitized capture, and only after a complete single-term refresh
+          passes the extension&rsquo;s consistency checks. The site asks
+          for that capture so you can review it on the page. Nothing is
+          sent to our servers until you confirm. No data is sold, used for
+          advertising, or transferred for another purpose.
         </p>
       </PublicSection>
 
