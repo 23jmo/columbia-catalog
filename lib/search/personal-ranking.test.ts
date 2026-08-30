@@ -22,8 +22,12 @@ import { describe, expect, it } from "vitest";
 
 import { projectCourse } from "@/lib/catalog-list-types";
 import { buildIndex } from "@/lib/search/build";
-import { SearchEngine, type PersonalOverlayEntry } from "@/lib/search/engine";
-import { decodeIndex, encodeIndex } from "@/lib/search/index-format";
+import {
+  SearchEngine,
+  type PersonalOverlayEntry,
+  type SearchEngineOptions,
+} from "@/lib/search/engine";
+import { buildEmbeddingBlock, decodeIndex, encodeIndex } from "@/lib/search/index-format";
 import type { CourseWithSections } from "@/lib/types";
 
 const catalog = JSON.parse(
@@ -31,7 +35,7 @@ const catalog = JSON.parse(
 ) as CourseWithSections[];
 const ordered = [...catalog].sort((a, b) => a.courseId.localeCompare(b.courseId));
 
-function freshEngine(): SearchEngine {
+function freshEngine(options?: SearchEngineOptions): SearchEngine {
   const encoded = encodeIndex(
     (() => {
       const index = buildIndex(ordered, {
@@ -49,11 +53,61 @@ function freshEngine(): SearchEngine {
         encoded.byteOffset + encoded.byteLength,
       ) as ArrayBuffer,
     ),
+    options,
   );
 }
 
 const idsFor = (engine: SearchEngine, query: string): string[] =>
   engine.search({ q: query }).hits.map((hit) => hit.courseId);
+
+const BAND_FRACTION = 0.02;
+
+/**
+ * Turn on semantic fusion with vectors we choose, so scores can be driven
+ * negative on purpose.
+ *
+ * `applySemantic` adds `semanticWeight * cosine` to the lexical score, and a
+ * document whose binary code is the complement of the query's scores a cosine
+ * of exactly -1. At the default weight of 12 that is far below any BM25 score
+ * this seed produces, so `orientation` is a direct switch on the sign of every
+ * fused score — the regime the banding has to survive and the one no lexical
+ * query can reach on its own.
+ */
+function attachSemantics(engine: SearchEngine, orientation: (ordinal: number) => 1 | -1): void {
+  const dims = 32;
+  const unit = 1 / Math.sqrt(dims);
+  const query = new Float32Array(dims).fill(unit);
+  const vectors = Array.from({ length: engine.courseCount }, (_, ordinal) => {
+    const vector = new Float32Array(dims);
+    vector.fill(orientation(ordinal) * unit);
+    return vector;
+  });
+  engine.attachEmbeddings(buildEmbeddingBlock(vectors, dims, "personal-ranking-test", true));
+  engine.setQueryEmbedder(() => query);
+}
+
+/**
+ * The contract, checked against the scores the engine itself reports.
+ *
+ * Bands must be non-increasing down the ranked list. That is precisely "query
+ * relevance is the primary key": personal relevance may reorder hits inside a
+ * band and nowhere else, whatever the sign of the scores involved.
+ *
+ * Recomputing the band from the materialized hits is only sound because this
+ * seed never exceeds `maxHits` — a truncated list would have a higher floor
+ * than the engine used, and so narrower bands than the engine's.
+ */
+function expectQueryOrderPreserved(hits: { score: number }[]): void {
+  const scores = hits.map((hit) => hit.score);
+  const top = Math.max(...scores);
+  const bottom = Math.min(...scores);
+  const bandWidth = (top - bottom) * BAND_FRACTION;
+  if (bandWidth <= 0) return;
+  const bandOf = (score: number) => Math.floor((score - bottom) / bandWidth);
+  for (let i = 1; i < scores.length; i++) {
+    expect(bandOf(scores[i])).toBeLessThanOrEqual(bandOf(scores[i - 1]));
+  }
+}
 
 describe("personal relevance overlay", () => {
   it("changes nothing until it is installed", () => {
@@ -129,6 +183,86 @@ describe("personal relevance overlay", () => {
     const ranked = idsFor(engine, "computer");
     expect(ranked[0]).toBe(best);
     expect(ranked.indexOf(worst)).toBeGreaterThan(0);
+  });
+
+  /*
+   * The regime the first version of the banding got wrong.
+   *
+   * It measured bands as a fraction of the top score and floored everything
+   * nonpositive into band 0. Semantic fusion makes both assumptions false:
+   * a fused score has no lower bound at zero, so the unbounded negative tail
+   * landed in the same band as the weakest positive matches, and a query whose
+   * every score came out nonpositive had no top to measure against at all.
+   */
+  describe("with semantic fusion driving scores below zero", () => {
+    /*
+     * Every document points away from the query, so each retrieved hit is
+     * fused down by the full semantic weight. On this seed "computer" scores
+     * 95, 60, 9.2 and then a long tail at 0.01, which at the default weight of
+     * 12 becomes 83, 48, -2.8 and a tail at -12.
+     *
+     * That -2.8 is the whole case. It is a far better answer than the -12 tail
+     * -- nine points of lexical score better -- and the first version of the
+     * banding put it in the same band as all 34 of them, where personal
+     * relevance decided the order.
+     */
+    it("keeps a stronger negative match above a weaker one", () => {
+      const engine = freshEngine();
+      attachSemantics(engine, () => -1);
+
+      const baseline = engine.search({ q: "computer" }).hits;
+      expect(baseline.some((hit) => hit.score > 0)).toBe(true);
+      const negatives = baseline.filter((hit) => hit.score < 0);
+      expect(negatives.length).toBeGreaterThan(2);
+      // The result set has to straddle zero for this to be testing anything.
+      expect(negatives[0].score).toBeGreaterThan(negatives[1].score + 1);
+
+      // Personal relevance in exactly the reverse of the query's own order:
+      // the worst match is what the student most needs. Nothing here may
+      // promote it past a better answer to what they typed.
+      const overlay: PersonalOverlayEntry[] = baseline.map((hit, rank) => ({
+        courseId: hit.courseId,
+        score: rank + 1,
+      }));
+      engine.setPersonalOverlay(overlay);
+
+      const ranked = engine.search({ q: "computer" }).hits;
+      const lastPositive = ranked.findLastIndex((hit) => hit.score > 0);
+      const firstNegative = ranked.findIndex((hit) => hit.score < 0);
+      expect(firstNegative).toBeGreaterThan(lastPositive);
+      // The strongest negative match still leads the negatives.
+      expect(ranked[firstNegative].courseId).toBe(negatives[0].courseId);
+      expectQueryOrderPreserved(ranked);
+    });
+
+    /*
+     * And the degenerate case: a query where NOTHING scores above zero after
+     * fusion. Measuring bands against the top score has no scale to work with
+     * here at all, and the whole result set falls through to personal order
+     * with query relevance ignored outright.
+     */
+    it("keeps the best answer on top when every fused score is negative", () => {
+      // A semantic weight past the top lexical score is what pushes the entire
+      // set below zero; at the default of 12 the strongest matches stay
+      // positive and the case cannot be reached.
+      const engine = freshEngine({ semanticWeight: 200 });
+      attachSemantics(engine, () => -1);
+
+      const baseline = engine.search({ q: "computer" }).hits;
+      expect(baseline.length).toBeGreaterThan(2);
+      expect(baseline.every((hit) => hit.score < 0)).toBe(true);
+
+      const overlay: PersonalOverlayEntry[] = baseline.map((hit, rank) => ({
+        courseId: hit.courseId,
+        score: rank + 1,
+      }));
+      engine.setPersonalOverlay(overlay);
+
+      const ranked = engine.search({ q: "computer" }).hits;
+      expect(ranked[0].courseId).toBe(baseline[0].courseId);
+      expect(ranked[0].score).toBe(Math.max(...ranked.map((hit) => hit.score)));
+      expectQueryOrderPreserved(ranked);
+    });
   });
 
   it("orders comparably relevant hits personally", () => {

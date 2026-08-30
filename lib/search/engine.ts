@@ -92,7 +92,7 @@ const FULL_TITLE_BOOST = 60;
 const TITLE_PREFIX_BOOST = 35;
 
 /**
- * How wide a relevance band is, as a fraction of the query's own top score.
+ * How wide a relevance band is, as a fraction of one query's own score spread.
  *
  * This is what makes "query relevance first, then personal relevance" mean
  * something. A strict lexicographic sort on the two would be a no-op: BM25
@@ -102,17 +102,20 @@ const TITLE_PREFIX_BOOST = 35;
  * the course they actually searched for.
  *
  * So hits are bucketed by relevance first and ordered personally inside each
- * bucket. Two hits within 2% of the top score are treated as equally relevant
- * to the query, because at that distance they are: the difference is term
- * frequency noise, not an answer the student would rank differently.
+ * bucket. Two hits within 2% of the spread between this query's best and worst
+ * match are treated as equally relevant, because at that distance they are:
+ * the difference is term frequency noise, not an answer the student would rank
+ * differently.
  *
  * Bucketing is a pure function of the score, so the comparator stays
  * transitive -- the property a "close enough to tie" predicate would break,
  * and the reason this is not written as a tolerance test.
  *
- * Scaling to the top score rather than to an absolute width is what lets one
+ * Scaling to the score range rather than to an absolute width is what lets one
  * constant cover both regimes in this file: an exact code match scores 250 and
- * a two-word title match scores single digits.
+ * a two-word title match scores single digits. Scaling to the SPREAD rather
+ * than to the top is what keeps it working once semantic fusion puts scores
+ * below zero -- see the banding loop for why the top alone is not a scale.
  */
 const RELEVANCE_BAND_FRACTION = 0.02;
 
@@ -544,18 +547,49 @@ export class SearchEngine {
       for (let i = 0; i < hitCount; i++) hitPersonal[i] = personal[hitDoc[i]];
 
       if (usedQuery) {
-        let top = 0;
-        for (let i = 0; i < hitCount; i++) if (hitScore[i] > top) top = hitScore[i];
-        const bandWidth = top * RELEVANCE_BAND_FRACTION;
+        /*
+         * Bands span the scores this query actually produced, floor included.
+         *
+         * Measuring against the top alone cannot work, because a fused score
+         * is not bounded below by zero: `applySemantic` adds
+         * `semanticWeight * cosine`, and a cosine is negative for a document
+         * pointing away from the query. Anything that treats "nonpositive" as
+         * one value collapses that whole unbounded tail into the band holding
+         * the weakest positive matches, and personal relevance is compared
+         * before the raw score -- so a course that scored -4 would outrank one
+         * that scored +0.4. Worse, a query whose every fused score came out
+         * nonpositive would have no top at all, and the entire result set
+         * would be ordered personally with query relevance ignored.
+         *
+         * The spread is also the only scale that means anything here. "Within
+         * 2%" needs a quantity to be 2% OF, and once scores can sit on both
+         * sides of zero the top is not it.
+         */
+        let top = -Infinity;
+        let bottom = Infinity;
+        for (let i = 0; i < hitCount; i++) {
+          const value = hitScore[i];
+          if (value > top) top = value;
+          if (value < bottom) bottom = value;
+        }
+        const bandWidth = (top - bottom) * RELEVANCE_BAND_FRACTION;
         if (bandWidth > 0) {
-          // Truncation is safe: the quotient is capped at 1 / the fraction, and
-          // semantic fusion can push a weak hit slightly below zero, which
-          // floors into the bottom band with everything else weak.
+          /*
+           * `Math.floor`, never `| 0`. Truncation rounds toward zero, which
+           * makes the band straddling zero twice as wide as every other band
+           * and lands negative and positive scores in it together -- the same
+           * defect in a subtler form. Floor keeps the bands uniform, which is
+           * what makes this monotone in the score: a strictly higher score can
+           * never land in a lower band, so the sort below can reorder hits
+           * within one band and nowhere else.
+           */
           for (let i = 0; i < hitCount; i++) {
-            const value = hitScore[i];
-            hitBand[i] = value > 0 ? (value / bandWidth) | 0 : 0;
+            hitBand[i] = Math.floor((hitScore[i] - bottom) / bandWidth);
           }
         } else {
+          // Zero spread is a genuine tie: every hit scored identically, so
+          // there is no query order left to preserve and personal relevance
+          // is the only thing that can separate them.
           hitBand.fill(0, 0, hitCount);
         }
       } else {
