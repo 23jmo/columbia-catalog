@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -6,6 +9,18 @@ import {
   isPublicMarketingPath,
   postAuthPath,
 } from "./guest-gate";
+
+describe("Search Console verification file", () => {
+  it("is the exact URL-prefix body Google fetches at the site root", () => {
+    // Google GETs /googlea7837cf2147ea393.html and compares this string.
+    // A wrapper, BOM, or missing newline fails the check.
+    const body = readFileSync(
+      join(process.cwd(), "public/googlea7837cf2147ea393.html"),
+      "utf8",
+    );
+    expect(body).toBe("google-site-verification: googlea7837cf2147ea393.html\n");
+  });
+});
 
 describe("isGuestAllowedPath", () => {
   it("lets a guest stay on onboarding, auth, and APIs", () => {
@@ -30,7 +45,9 @@ describe("isGuestAllowedPath", () => {
     expect(isGuestAllowedPath("/sitemap.xml")).toBe(true);
     expect(isGuestAllowedPath("/llms.txt")).toBe(true);
     expect(isGuestAllowedPath("/llms-full.txt")).toBe(true);
+    expect(isGuestAllowedPath("/googlea7837cf2147ea393.html")).toBe(true);
     expect(isPublicMarketingPath("/robots.txt")).toBe(true);
+    expect(isPublicMarketingPath("/googlea7837cf2147ea393.html")).toBe(true);
     expect(isPublicMarketingPath("/faq")).toBe(true);
     expect(isPublicMarketingPath("/onboarding")).toBe(false);
   });
@@ -63,6 +80,10 @@ describe("isGuestAllowedPath", () => {
     expect(isGuestAllowedPath("/privacy-review")).toBe(false);
     expect(isGuestAllowedPath("/faq-admin")).toBe(false);
     expect(isGuestAllowedPath("/programs-admin")).toBe(false);
+    // Search Console files are `/google<token>.html` only — not `/google` itself
+    // and not a nested path that happens to end in that name.
+    expect(isGuestAllowedPath("/google")).toBe(false);
+    expect(isGuestAllowedPath("/admin/googlea7837cf2147ea393.html")).toBe(false);
   });
 });
 

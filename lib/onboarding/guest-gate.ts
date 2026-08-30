@@ -23,7 +23,9 @@ const CARRIED_PARAMS = ["auth_error"] as const;
  * no-login pages.
  * `/robots.txt`, `/sitemap.xml`, `/llms.txt`, and `/llms-full.txt` are
  * crawler files. If any of those 307 to /onboarding, Googlebot stores the
- * school picker as robots.txt and the site cannot rank. Home (`/`) stays
+ * school picker as robots.txt and the site cannot rank. `/google*.html` is
+ * the Search Console URL-prefix check: Google fetches that path and
+ * expects the verification string, not the school picker. Home (`/`) stays
  * gated: a returning student who types the origin still lands on Log in.
  *
  * ── `/course/` and `/instructor/` are open, and the rest is not ────────────
@@ -73,6 +75,15 @@ function exactOrChild(pathname: string, root: string): boolean {
 }
 
 /**
+ * Search Console URL-prefix files live at `/google<token>.html`.
+ * Google fetches the path and expects the verification line, so a 307
+ * to the wizard fails the check.
+ */
+function isGoogleSiteVerificationPath(pathname: string): boolean {
+  return /^\/google[^/]*\.html$/.test(pathname);
+}
+
+/**
  * Public HTML and crawler files. `proxy.ts` skips the session refresh
  * here so the response can stay `Cache-Control: public` instead of
  * picking up `private, no-store` from `getUser()`.
@@ -80,6 +91,7 @@ function exactOrChild(pathname: string, root: string): boolean {
 export function isPublicMarketingPath(pathname: string): boolean {
   return (
     CRAWLER_FILES.has(pathname) ||
+    isGoogleSiteVerificationPath(pathname) ||
     exactOrChild(pathname, "/about") ||
     exactOrChild(pathname, "/faq") ||
     exactOrChild(pathname, "/privacy") ||

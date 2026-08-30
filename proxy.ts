@@ -166,10 +166,10 @@ export const config = {
      * `index/` matters: the lexical artifact is ~700 KB and immutable, and
      * running an auth round trip in front of a CDN-cacheable binary would be a
      * measurable regression on the one request the whole search experience
-     * waits for. `robots.txt`, `sitemap.xml`, and `llms.txt` are excluded so
-     * a matcher miss cannot 307 Googlebot into the wizard. The guest gate
-     * still allow-lists them as a second check.
+     * waits for. `robots.txt`, `sitemap.xml`, `llms.txt`, and `google*.html`
+     * are excluded so a matcher miss cannot 307 Googlebot or Search Console
+     * into the wizard. The guest gate still allow-lists them as a second check.
      */
-    "/((?!_next/static|_next/image|favicon.ico|robots\\.txt|sitemap\\.xml|llms\\.txt|llms-full\\.txt|index/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|woff2?)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|robots\\.txt|sitemap\\.xml|llms\\.txt|llms-full\\.txt|google[^/]*\\.html|index/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|woff2?)$).*)",
   ],
 };
