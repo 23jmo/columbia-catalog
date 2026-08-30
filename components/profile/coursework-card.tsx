@@ -1,5 +1,6 @@
 import { RiAlertLine } from "@remixicon/react";
 
+import { displayCourseTitle } from "@/lib/onboarding/course-title";
 import { COURSE_SOURCE_LABEL, type TakenCourse } from "@/lib/profile/types";
 import { formatCourseId } from "@/lib/requirements/code";
 import { cx } from "@/utils/cx";
@@ -140,56 +141,93 @@ export function CourseworkCard({
           </p>
         </div>
       ) : (
+        /*
+         * ── One line per course, on one surface per term ──────────────────────
+         *
+         * This was three nested rounded surfaces deep — the card, a filled box
+         * per term, and a bordered box per course — and the innermost one broke
+         * the concentric rule outright: a 10px radius sitting inside 12px of
+         * padding inside another 10px radius has nowhere to be concentric to.
+         * Eighteen courses came to about twelve hundred pixels, four times what
+         * the same eighteen rows cost in the audit tree directly above.
+         *
+         * The row is now a single line on the term's surface, separated by the
+         * hairline the tree uses. Provenance stays on every row — spec §3, and
+         * the point of it is that a student can tell months later which rows
+         * they actually checked — but it moves to the right-hand column with
+         * the other qualifiers instead of claiming a second line of its own.
+         */
         <div className="flex flex-col gap-2">
           {groups.map((group) => (
             <div
               key={group.label}
-              className="flex flex-col gap-1.5 rounded-2lg bg-background-primary-default p-3"
+              className="flex flex-col overflow-hidden rounded-2lg bg-background-primary-default"
             >
-              <p className="text-caption-1-semibold tracking-[0.04em] text-text-tertiary">
+              <p className="px-3 pb-1 pt-2.5 text-caption-1-semibold tracking-[0.04em] text-text-tertiary">
                 {group.label}
               </p>
-              <ul className="flex flex-col gap-1">
+              <ul className="flex flex-col">
                 {group.courses.map((course) => {
                   const code = formatCourseId(course.courseId);
                   const title = titles[course.courseId];
+                  const name = title ? displayCourseTitle(title) : null;
                   return (
                     <li
                       key={course.courseId}
-                      className="flex items-center gap-2 rounded-lg border border-border-table px-2.5 py-1.5"
+                      className="flex min-h-11 items-center gap-2 border-t border-border-table px-3 py-1.5"
                     >
-                      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                          <a
-                            href={`/course/${course.courseId}`}
-                            className="text-body-semibold tabular-nums text-text-primary outline-none transition-colors duration-150 hover:text-accent-600 focus-visible:ring-2 focus-visible:ring-border-focus-ring"
-                          >
-                            {code}
-                          </a>
-                          {title ? (
-                            <span className="min-w-0 truncate text-body-regular text-text-secondary">
-                              {title}
-                            </span>
-                          ) : null}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-caption-2-regular text-text-tertiary">
-                          <span>{COURSE_SOURCE_LABEL[course.source]}</span>
-                          {course.points != null ? <span>{course.points} pts</span> : null}
-                          {/*
-                            Both markers are two words, not a sentence. The
-                            explanation lives once at the bottom of the card:
-                            repeating it on every row turned a nine-course
-                            record into nine paragraphs of the same caveat, and
-                            a warning printed that often stops being read.
-                          */}
-                          {unmatched.has(course.courseId) ? (
-                            <span className="text-status-yellow-text">not in our catalog</span>
-                          ) : null}
-                          {crossed.has(course.courseId) ? (
-                            <span className="text-status-cyan-text">double-counted</span>
-                          ) : null}
-                        </div>
-                      </div>
+                      <a
+                        href={`/course/${course.courseId}`}
+                        className={cx(
+                          "min-w-0 flex-1 truncate rounded-md text-subheadline-regular text-text-primary outline-none",
+                          "transition-colors duration-150 motion-reduce:transition-none",
+                          "hover:text-accent-600 focus-visible:ring-2 focus-visible:ring-border-focus-ring",
+                          !name && "tabular-nums",
+                        )}
+                      >
+                        {name ?? code}
+                      </a>
+
+                      {/*
+                        Both markers are two words, not a sentence. The
+                        explanation lives once at the bottom of the card:
+                        repeating it on every row turned a nine-course record
+                        into nine paragraphs of the same caveat, and a warning
+                        printed that often stops being read.
+                      */}
+                      {unmatched.has(course.courseId) ? (
+                        <span className="shrink-0 text-caption-2-regular text-status-yellow-text">
+                          not in our catalog
+                        </span>
+                      ) : null}
+                      {crossed.has(course.courseId) ? (
+                        <span className="shrink-0 text-caption-2-regular text-status-cyan-text">
+                          double-counted
+                        </span>
+                      ) : null}
+
+                      {/*
+                        Behind the markers, and a fixed width, so the codes
+                        form a column an eye can run down. Ahead of them the
+                        column stepped left on every row that carried a
+                        "double-counted" or "not in our catalog" note.
+                      */}
+                      <span className="hidden w-[6.5rem] shrink-0 text-right text-caption-2-regular tabular-nums text-text-tertiary sm:inline">
+                        {/* Empty, not absent, when the code is already the row's
+                            label — an absent column would step every column to
+                            its right off the grid on that one row. */}
+                        {name ? code : null}
+                      </span>
+
+                      {course.points != null ? (
+                        <span className="hidden shrink-0 text-caption-2-regular tabular-nums text-text-tertiary sm:inline">
+                          {course.points} pts
+                        </span>
+                      ) : null}
+                      <span className="hidden w-[7rem] shrink-0 truncate text-right text-caption-2-regular text-text-tertiary md:inline">
+                        {COURSE_SOURCE_LABEL[course.source]}
+                      </span>
+
                       <RemoveCourseButton courseId={course.courseId} code={code} />
                     </li>
                   );
