@@ -16,8 +16,8 @@
 export const OVERLAY_ATTR = "data-haptic-overlay";
 
 // Links (sidebar dests, chat FAB) are not buttons. `data-haptic` opts them in.
+// Never overlay a swipe card — an input on top of it eats Motion's drag.
 const HOST_SELECTOR = "button, [role='button'], [data-haptic]";
-const SWIPE_SELECTOR = "[data-swipe-card]";
 
 let overlaysInstalled = false;
 let overlayObserver: MutationObserver | null = null;
@@ -95,9 +95,12 @@ function ensureContainingBlock(host: HTMLElement): void {
   }
 }
 
-function attachOverlay(host: HTMLElement, swipe: boolean): void {
+function attachOverlay(host: HTMLElement): void {
   if (host.querySelector(`[${OVERLAY_ATTR}]`)) return;
   if (host.closest(`[${OVERLAY_ATTR}]`)) return;
+  // A switch over a throw card would steal the pointer. Haptics there
+  // come from the touch listener, not from this overlay.
+  if (host.closest("[data-swipe-card]")) return;
 
   ensureContainingBlock(host);
 
@@ -118,39 +121,33 @@ function attachOverlay(host: HTMLElement, swipe: boolean): void {
     "padding:0",
     "opacity:0",
     "cursor:inherit",
-    "pointer-events:auto",
+    "pointer-events:inherit",
     "appearance:auto",
     "-webkit-appearance:switch",
-    "clip-path:inset(0 round 16px)",
-    swipe ? "touch-action:pan-y" : "touch-action:manipulation",
+    "clip-path:inset(0 round 999px)",
+    "touch-action:manipulation",
     "-webkit-tap-highlight-color:transparent",
   ].join(";");
 
-  if (!swipe) {
-    sw.addEventListener("click", (event) => {
-      // The finger landed on the switch, so the Taptic Engine already fired.
-      lastOverlayTickAt = Date.now();
-      event.stopPropagation();
-      if (host instanceof HTMLButtonElement && host.disabled) return;
-      // Re-dispatch so the host's onClick still runs. The original target is
-      // the switch, and a button must not see that as its own activation.
-      host.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
-    });
-  }
+  sw.addEventListener("click", (event) => {
+    // The finger landed on the switch, so the Taptic Engine already fired.
+    lastOverlayTickAt = Date.now();
+    event.stopPropagation();
+    if (host instanceof HTMLButtonElement && host.disabled) return;
+    // Re-dispatch so the host's onClick still runs. The original target is
+    // the switch, and a button must not see that as its own activation.
+    host.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+  });
 
   host.appendChild(sw);
 }
 
 function attachTree(root: ParentNode): void {
-  const press = (el: HTMLElement) => attachOverlay(el, false);
-  const swipe = (el: HTMLElement) => attachOverlay(el, true);
-  if (root instanceof HTMLElement) {
-    if (root.matches(SWIPE_SELECTOR)) swipe(root);
-    else if (root.matches(HOST_SELECTOR)) press(root);
+  if (root instanceof HTMLElement && root.matches(HOST_SELECTOR)) {
+    attachOverlay(root);
   }
-  for (const el of root.querySelectorAll<HTMLElement>(SWIPE_SELECTOR)) swipe(el);
   for (const el of root.querySelectorAll<HTMLElement>(HOST_SELECTOR)) {
-    if (!el.matches(SWIPE_SELECTOR)) press(el);
+    attachOverlay(el);
   }
 }
 
