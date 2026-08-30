@@ -24,6 +24,7 @@ import {
   threadHref,
   type ConversationSummary,
 } from "@/lib/agent/history";
+import { haptic } from "@/lib/haptics";
 import { cx } from "@/utils/cx";
 
 export function ChatThreadList({ onNavigate }: { onNavigate?: () => void }) {
@@ -73,7 +74,11 @@ export function ChatThreadList({ onNavigate }: { onNavigate?: () => void }) {
             >
               <Link
                 href={threadHref(thread.conversationId)}
-                onClick={onNavigate}
+                data-haptic=""
+                onClick={() => {
+                  haptic("selection");
+                  onNavigate?.();
+                }}
                 aria-current={thread.conversationId === activeId ? "page" : undefined}
                 className={cx(
                   "flex min-w-0 flex-1 items-center gap-1.5 rounded-lg px-2 py-1",
@@ -97,7 +102,10 @@ export function ChatThreadList({ onNavigate }: { onNavigate?: () => void }) {
             <TreeRow isLast>
               <button
                 type="button"
-                onClick={() => setFindOpen(true)}
+                onClick={() => {
+                  haptic("selection");
+                  setFindOpen(true);
+                }}
                 className={cx(
                   "flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1",
                   "text-left transition-colors duration-150 ease-out motion-reduce:transition-none",

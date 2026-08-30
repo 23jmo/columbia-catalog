@@ -4,6 +4,7 @@ import { useState, useTransition, type ComponentType, type ReactNode } from "rea
 import { RiCustomerServiceLine, RiSettings4Line } from "@remixicon/react";
 
 import { CatalogSettingsModal } from "@/components/shell/catalog-settings-modal";
+import { haptic } from "@/lib/haptics";
 import { cx } from "@/utils/cx";
 
 type IconComponent = ComponentType<{
@@ -72,6 +73,7 @@ export function SidebarSecondaryNav({ collapsed }: { collapsed: boolean }) {
   const paymentLink = process.env.NEXT_PUBLIC_STRIPE_PAYMENT_LINK?.trim();
 
   const openSupport = () => {
+    haptic("selection");
     if (paymentLink) {
       window.open(paymentLink, "_blank", "noopener,noreferrer");
       return;
@@ -95,7 +97,10 @@ export function SidebarSecondaryNav({ collapsed }: { collapsed: boolean }) {
           icon={RiSettings4Line}
           label="Settings"
           collapsed={collapsed}
-          onClick={() => setSettingsOpen(true)}
+          onClick={() => {
+            haptic("selection");
+            setSettingsOpen(true);
+          }}
         />
       </nav>
 
