@@ -13,6 +13,7 @@ import { PublicDoc } from "@/components/marketing/public-doc";
  * `revalidate` keeps these pages cacheable. Onboarding stays a cookie
  * page and keeps its own no-store.
  */
+export const dynamic = "force-static";
 export const revalidate = 3600;
 
 export default function PublicLayout({ children }: { children: ReactNode }) {
