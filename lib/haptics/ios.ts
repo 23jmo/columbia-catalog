@@ -17,10 +17,20 @@ export const OVERLAY_ATTR = "data-haptic-overlay";
 
 // Links (sidebar dests, chat FAB) are not buttons. `data-haptic` opts them in.
 const HOST_SELECTOR = "button, [role='button'], [data-haptic]";
+const SWIPE_SELECTOR = "[data-swipe-card]";
 
 let overlaysInstalled = false;
 let overlayObserver: MutationObserver | null = null;
+let trackTouch: ((event: TouchEvent) => void) | null = null;
 let lastOverlayTickAt = 0;
+let lastTouchX = 0;
+let lastTouchY = 0;
+
+/** Remember the finger so `iosTick` can flip the switch it is sitting on. */
+export function noteTouch(x: number, y: number): void {
+  lastTouchX = x;
+  lastTouchY = y;
+}
 
 /** True when this tap already fired a Taptic tick via an overlay. */
 export function overlayJustTicked(): boolean {
@@ -39,9 +49,28 @@ export function isIos(): boolean {
  * One Taptic tick via a scripted switch click. Safe to call from anywhere.
  * No-ops on iOS 26.5+ and on any runtime without a document.
  */
+function overlayUnderFinger(): HTMLInputElement | null {
+  if (typeof document === "undefined" || typeof document.elementFromPoint !== "function") {
+    return null;
+  }
+  const el = document.elementFromPoint(lastTouchX, lastTouchY);
+  if (!el || typeof el.closest !== "function") return null;
+  const hit = el.closest(`[${OVERLAY_ATTR}]`);
+  if (hit && "checked" in hit) return hit as HTMLInputElement;
+  return null;
+}
+
 export function iosTick(): boolean {
   if (typeof document === "undefined" || !document.body) return false;
   try {
+    // Prefer the switch the finger is on. iOS 26.5+ ignores a parked
+    // `.click()`; flipping the control under the touch still counts.
+    const held = overlayUnderFinger();
+    if (held) {
+      held.checked = !held.checked;
+      lastOverlayTickAt = Date.now();
+      return true;
+    }
     const input = document.createElement("input");
     input.type = "checkbox";
     input.setAttribute("switch", "");
@@ -66,7 +95,7 @@ function ensureContainingBlock(host: HTMLElement): void {
   }
 }
 
-function attachOverlay(host: HTMLElement): void {
+function attachOverlay(host: HTMLElement, swipe: boolean): void {
   if (host.querySelector(`[${OVERLAY_ATTR}]`)) return;
   if (host.closest(`[${OVERLAY_ATTR}]`)) return;
 
@@ -89,33 +118,39 @@ function attachOverlay(host: HTMLElement): void {
     "padding:0",
     "opacity:0",
     "cursor:inherit",
-    "pointer-events:inherit",
+    "pointer-events:auto",
     "appearance:auto",
     "-webkit-appearance:switch",
-    "clip-path:inset(0 round 999px)",
-    "touch-action:manipulation",
+    "clip-path:inset(0 round 16px)",
+    swipe ? "touch-action:pan-y" : "touch-action:manipulation",
     "-webkit-tap-highlight-color:transparent",
   ].join(";");
 
-  sw.addEventListener("click", (event) => {
-    // The finger landed on the switch, so the Taptic Engine already fired.
-    lastOverlayTickAt = Date.now();
-    event.stopPropagation();
-    if (host instanceof HTMLButtonElement && host.disabled) return;
-    // Re-dispatch so the host's onClick still runs. The original target is
-    // the switch, and a button must not see that as its own activation.
-    host.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
-  });
+  if (!swipe) {
+    sw.addEventListener("click", (event) => {
+      // The finger landed on the switch, so the Taptic Engine already fired.
+      lastOverlayTickAt = Date.now();
+      event.stopPropagation();
+      if (host instanceof HTMLButtonElement && host.disabled) return;
+      // Re-dispatch so the host's onClick still runs. The original target is
+      // the switch, and a button must not see that as its own activation.
+      host.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+  }
 
   host.appendChild(sw);
 }
 
 function attachTree(root: ParentNode): void {
-  if (root instanceof HTMLElement && root.matches(HOST_SELECTOR)) {
-    attachOverlay(root);
+  const press = (el: HTMLElement) => attachOverlay(el, false);
+  const swipe = (el: HTMLElement) => attachOverlay(el, true);
+  if (root instanceof HTMLElement) {
+    if (root.matches(SWIPE_SELECTOR)) swipe(root);
+    else if (root.matches(HOST_SELECTOR)) press(root);
   }
+  for (const el of root.querySelectorAll<HTMLElement>(SWIPE_SELECTOR)) swipe(el);
   for (const el of root.querySelectorAll<HTMLElement>(HOST_SELECTOR)) {
-    attachOverlay(el);
+    if (!el.matches(SWIPE_SELECTOR)) press(el);
   }
 }
 
@@ -132,6 +167,13 @@ export function installIosOverlays(): () => void {
   }
   overlaysInstalled = true;
   attachTree(document.body ?? document.documentElement);
+
+  trackTouch = (event: TouchEvent) => {
+    const t = event.touches[0] ?? event.changedTouches[0];
+    if (t) noteTouch(t.clientX, t.clientY);
+  };
+  document.addEventListener("touchstart", trackTouch, { passive: true });
+  document.addEventListener("touchmove", trackTouch, { passive: true });
 
   overlayObserver = new MutationObserver((mutations) => {
     for (const mutation of mutations) {
@@ -151,6 +193,11 @@ export function installIosOverlays(): () => void {
 export function uninstallIosOverlays(): void {
   overlayObserver?.disconnect();
   overlayObserver = null;
+  if (trackTouch && typeof document !== "undefined") {
+    document.removeEventListener("touchstart", trackTouch);
+    document.removeEventListener("touchmove", trackTouch);
+  }
+  trackTouch = null;
   overlaysInstalled = false;
   if (typeof document === "undefined") return;
   const found = document.querySelectorAll?.(`[${OVERLAY_ATTR}]`);

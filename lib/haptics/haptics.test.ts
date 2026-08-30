@@ -34,7 +34,7 @@ function stubIphone() {
   });
 }
 
-function stubIosDocument() {
+function stubIosDocument(held?: { checked: boolean; closest: () => unknown }) {
   const clicks: HTMLInputElement[] = [];
   const created: Array<{ type: string; click: ReturnType<typeof vi.fn>; setAttribute: ReturnType<typeof vi.fn> }> =
     [];
@@ -45,6 +45,7 @@ function stubIosDocument() {
   const document = {
     body,
     readyState: "complete",
+    elementFromPoint: () => held ?? null,
     createElement: (tag: string) => {
       const el = {
         type: "",
@@ -142,5 +143,14 @@ describe("haptic", () => {
     expect(installWebHaptics()).toEqual(expect.any(Function));
     stubIphone();
     expect(() => installWebHaptics()).not.toThrow();
+  });
+
+  it("flips the switch under the finger instead of parking a new one", () => {
+    stubIphone();
+    const held = { checked: false, closest: () => held };
+    const { created } = stubIosDocument(held);
+    expect(haptic("selection")).toBe(true);
+    expect(held.checked).toBe(true);
+    expect(created).toHaveLength(0);
   });
 });
