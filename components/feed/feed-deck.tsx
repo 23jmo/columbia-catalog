@@ -268,6 +268,9 @@ export function FeedDeck({
       });
 
       if (action === "saved") {
+        // Tick with the swipe, not the round trip. After `await` the
+        // user gesture is gone and both vibrate and iOS switch no-op.
+        haptic("success");
         committing.current.add(card.courseId);
         const result = await toggleBookmark(card.best.sectionId);
         /*
@@ -285,7 +288,6 @@ export function FeedDeck({
           committing.current.delete(card.courseId);
           return false;
         }
-        haptic("success");
       } else {
         // Discards alone are written to disk; see `handled` above.
         haptic("selection");

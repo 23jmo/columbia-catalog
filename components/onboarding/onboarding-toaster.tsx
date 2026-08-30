@@ -4,6 +4,7 @@ import { useSyncExternalStore } from "react";
 import { RiCloseLine } from "@remixicon/react";
 
 import { NotificationViewport } from "@/components/base/notification/notification";
+import { HapticRoot } from "@/components/haptics/haptic-root";
 import {
   dismiss,
   getToastServerSnapshot,
@@ -44,7 +45,9 @@ export function OnboardingToaster() {
   );
 
   return (
-    <NotificationViewport position="bottom-center" aria-label="Notifications">
+    <>
+      <HapticRoot />
+      <NotificationViewport position="bottom-center" aria-label="Notifications">
       {toasts.map((toast) => (
         <div
           key={toast.id}
@@ -101,6 +104,7 @@ export function OnboardingToaster() {
           </button>
         </div>
       ))}
-    </NotificationViewport>
+      </NotificationViewport>
+    </>
   );
 }
