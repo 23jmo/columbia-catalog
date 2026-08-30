@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ActiveFilterChips } from "@/components/catalog/active-filter-chips";
 import {
@@ -18,8 +18,10 @@ import {
   type SearchFacets,
 } from "@/components/catalog/search-source";
 import { loadSearchIndex, type LoadProgress } from "@/lib/search/client";
-import type { SearchEngine } from "@/lib/search/engine";
+import type { PersonalOverlayEntry, SearchEngine } from "@/lib/search/engine";
 import type { SearchResult, TermCode } from "@/lib/types";
+
+import { getCatalogRelevanceAction } from "./relevance-actions";
 
 import { EmptyResults } from "./empty-results";
 import { FilterPopover } from "./filter-popover";
@@ -60,6 +62,22 @@ export function SearchScreen({ initialFilters, termCode }: SearchScreenProps) {
   const [filters, setFilters] = useState<CatalogSearchFilters>(initialFilters);
   const [engine, setEngine] = useState<SearchEngine | null>(null);
   const [progress, setProgress] = useState<LoadProgress | null>(null);
+
+  /*
+   * Personal relevance — the catalog's secondary sort key — and the engine it
+   * belongs to, held in refs because they arrive from two independent async
+   * sources and either can win the race.
+   *
+   * `rankingVersion` counts installs. It is a cache key rather than an input:
+   * an overlay mutates the engine in place, so the same object now answers
+   * differently and identity cannot say so. Without it in the memo's
+   * dependencies below, results keep the pre-overlay ordering until the next
+   * keystroke.
+   */
+  const engineRef = useRef<SearchEngine | null>(null);
+  const relevanceRef = useRef<PersonalOverlayEntry[] | null>(null);
+  const [rankingVersion, setRankingVersion] = useState(0);
+
   useEffect(() => {
     let cancelled = false;
     const lastProgress = { current: null as LoadProgress | null };
@@ -67,7 +85,14 @@ export function SearchScreen({ initialFilters, termCode }: SearchScreenProps) {
     const adopt = (next: SearchEngine) => {
       if (cancelled) return;
       next.setSeatOverlay(next.seatOverlayForTerm(termCode));
+      // A fresher index can land after the ranking did, and `onUpdate` swaps
+      // the engine out from under it. Carrying the overlay across is what
+      // stops a background index refresh from dropping the student back into
+      // course order mid-session.
+      if (relevanceRef.current) next.setPersonalOverlay(relevanceRef.current);
+      engineRef.current = next;
       setEngine(next);
+      if (relevanceRef.current) setRankingVersion((version) => version + 1);
     };
 
     const handle = loadSearchIndex({
@@ -88,6 +113,39 @@ export function SearchScreen({ initialFilters, termCode }: SearchScreenProps) {
     };
   }, [termCode]);
 
+  /*
+   * The ranking, fetched in parallel with the index rather than before it.
+   *
+   * `search()` is synchronous by contract and nothing on this screen may wait
+   * on the network, so the catalog renders in course order the moment the
+   * index is ready and re-ranks when this lands — usually within the same
+   * second, since both requests start together.
+   *
+   * A visitor with no record gets `personalized: false` and no overlay at all,
+   * which leaves the engine ranking exactly as it did before this existed.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    getCatalogRelevanceAction()
+      .then((response) => {
+        if (cancelled || !response.personalized || response.entries.length === 0) return;
+        relevanceRef.current = response.entries;
+        // No engine yet means the index is still downloading, and `adopt`
+        // installs this the moment it arrives.
+        const active = engineRef.current;
+        if (!active) return;
+        active.setPersonalOverlay(response.entries);
+        setRankingVersion((version) => version + 1);
+      })
+      .catch(() => {
+        // Personal ordering is an improvement on the catalog, not the catalog.
+        // A failed rank leaves every course exactly where it already was.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const effectiveFilters = useMemo<CatalogSearchFilters>(
     () => ({ ...filters, termCode: filters.termCode ?? termCode }),
     [filters, termCode],
@@ -95,7 +153,8 @@ export function SearchScreen({ initialFilters, termCode }: SearchScreenProps) {
 
   const result = useMemo(
     () => (engine ? engine.search(effectiveFilters) : EMPTY_RESULT),
-    [engine, effectiveFilters],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- rankingVersion is a cache key: the overlay mutates `engine` in place, so identity cannot signal a re-rank
+    [engine, effectiveFilters, rankingVersion],
   );
 
   const facets = useMemo(
@@ -158,10 +217,25 @@ export function SearchScreen({ initialFilters, termCode }: SearchScreenProps) {
     [filters],
   );
 
+  /*
+   * The ordering says so out loud.
+   *
+   * Results that silently rearrange a second after the page settles, with
+   * nothing on screen to explain it, is the exact failure
+   * `components/catalog/search-parity.test.ts` was written about. The re-rank
+   * here is deliberate rather than a bug, which makes it worse to leave
+   * unlabelled, not better. This line is already `aria-live="polite"` inside
+   * `SearchBar`, so the change is announced rather than just drawn.
+   *
+   * Read from `rankingVersion` rather than `engine.hasPersonalOverlay`: the
+   * engine's flag is mutable state that render must not reach into, and the
+   * counter is the state change that made the overlay visible anyway.
+   */
+  const personalizedOrder = rankingVersion > 0;
   const resultSummary = engine
     ? `${result.total.toLocaleString()} ${result.total === 1 ? "course" : "courses"}${
         result.total === totalCatalogCourses ? "" : ` of ${totalCatalogCourses.toLocaleString()}`
-      }`
+      }${personalizedOrder ? " · ordered for you" : ""}`
     : "Loading…";
 
   return (

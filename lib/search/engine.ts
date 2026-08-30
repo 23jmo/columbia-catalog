@@ -91,6 +91,31 @@ const FULL_TITLE_BOOST = 60;
 /** Additive score when the title *starts* with the query. */
 const TITLE_PREFIX_BOOST = 35;
 
+/**
+ * How wide a relevance band is, as a fraction of the query's own top score.
+ *
+ * This is what makes "query relevance first, then personal relevance" mean
+ * something. A strict lexicographic sort on the two would be a no-op: BM25
+ * scores are floats and exact ties essentially never happen, so the personal
+ * key would never be consulted. A plain weighted blend has the opposite
+ * failure -- pick the weight too high and a course the student needs outranks
+ * the course they actually searched for.
+ *
+ * So hits are bucketed by relevance first and ordered personally inside each
+ * bucket. Two hits within 2% of the top score are treated as equally relevant
+ * to the query, because at that distance they are: the difference is term
+ * frequency noise, not an answer the student would rank differently.
+ *
+ * Bucketing is a pure function of the score, so the comparator stays
+ * transitive -- the property a "close enough to tie" predicate would break,
+ * and the reason this is not written as a tolerance test.
+ *
+ * Scaling to the top score rather than to an absolute width is what lets one
+ * constant cover both regimes in this file: an exact code match scores 250 and
+ * a two-word title match scores single digits.
+ */
+const RELEVANCE_BAND_FRACTION = 0.02;
+
 /** Prefix expansion guards — bound the as-you-type fan-out. */
 const MAX_PREFIX_TERMS = 24;
 const MAX_PREFIX_SCAN = 4096;
@@ -130,6 +155,23 @@ export interface ReputationOverlayEntry {
   courseId: string;
   workload: number | null;
   teachingQuality: number | null;
+}
+
+/**
+ * How much this course matters to THIS student, keyed by course id.
+ *
+ * Computed on the server by `catalogRelevanceAction` -- the recommender needs
+ * the degree audit, the prerequisite graph and the LSA vectors, none of which
+ * belong in a browser bundle. It arrives as one flat array of numbers so the
+ * engine can rank by it inside a frame without knowing any of that.
+ *
+ * The number is an ordering, never a quantity, and nothing renders it. See the
+ * action for what the bands mean; the engine only needs "higher is more
+ * relevant to this student, and absent means no signal".
+ */
+export interface PersonalOverlayEntry {
+  courseId: string;
+  score: number;
 }
 
 export interface SearchEngineOptions {
@@ -181,6 +223,8 @@ export class SearchEngine {
 
   private readonly hitDoc: Int32Array;
   private readonly hitScore: Float32Array;
+  private readonly hitPersonal: Float32Array;
+  private readonly hitBand: Int32Array;
   private readonly order: Int32Array;
   private readonly matchedSections: Int32Array;
 
@@ -214,6 +258,7 @@ export class SearchEngine {
   private repWorkload: Float32Array | null = null;
   private repTeaching: Float32Array | null = null;
   private repHas: Uint8Array | null = null;
+  private personal: Float32Array | null = null;
 
   // --- semantics ----------------------------------------------------------
   private embedding: EmbeddingBlock | null = null;
@@ -236,6 +281,8 @@ export class SearchEngine {
     this.touched = new Int32Array(n);
     this.hitDoc = new Int32Array(n);
     this.hitScore = new Float32Array(n);
+    this.hitPersonal = new Float32Array(n);
+    this.hitBand = new Int32Array(n);
     this.order = new Int32Array(n);
     this.matchedSections = new Int32Array(Math.max(1, this.sectionCount));
 
@@ -333,6 +380,40 @@ export class SearchEngine {
     this.repHas = null;
   }
 
+  /**
+   * Install per-student relevance, the catalog's secondary sort key.
+   *
+   * Until this is called the engine ranks exactly as it always has -- query
+   * relevance, then catalog order. That is not a degraded mode, it is the
+   * correct answer for a visitor we know nothing about, and it is why the
+   * ranking path branches on the overlay's presence rather than on a flag.
+   *
+   * Courses absent from `entries` keep a score of zero, which is a real
+   * position in the ordering and not a missing value: "no signal" sits above
+   * everything the student cannot take yet and below everything we ranked.
+   */
+  setPersonalOverlay(entries: Iterable<PersonalOverlayEntry>): void {
+    const personal = this.personal ?? new Float32Array(this.courseCount);
+    personal.fill(0);
+    const byId = new Map<string, number>();
+    for (let doc = 0; doc < this.courseCount; doc++) byId.set(this.courseIds[doc], doc);
+    for (const entry of entries) {
+      const doc = byId.get(entry.courseId);
+      if (doc === undefined) continue;
+      personal[doc] = entry.score;
+    }
+    this.personal = personal;
+  }
+
+  clearPersonalOverlay(): void {
+    this.personal = null;
+  }
+
+  /** True once a personal overlay is installed. Ranking says so in the UI. */
+  get hasPersonalOverlay(): boolean {
+    return this.personal !== null;
+  }
+
   // -------------------------------------------------------------------------
   // Semantics (progressive — lexical search works without any of this)
   // -------------------------------------------------------------------------
@@ -422,8 +503,9 @@ export class SearchEngine {
         hitCount++;
       }
     } else {
-      // No query: every course is a candidate. Ranking falls back to catalog
-      // order (lower course numbers first) so browsing is stable and useful.
+      // No query: every course is a candidate. The score carries course number
+      // so browsing is stable and useful -- and stays the tiebreak once a
+      // personal overlay takes over the ordering below.
       for (let doc = 0; doc < n; doc++) {
         if (!this.passesCourseFilters(doc, plan)) continue;
         if (sectionPass && this.collectMatchingSections(doc, plan) === 0) continue;
@@ -438,12 +520,66 @@ export class SearchEngine {
     for (let i = 0; i < hitCount; i++) order[i] = i;
     const hitScore = this.hitScore;
     const hitDoc = this.hitDoc;
-    order.sort((a, b) => {
-      const diff = hitScore[b] - hitScore[a];
-      if (diff !== 0) return diff;
-      // Deterministic tie-break: catalog order (courseId ascending).
-      return hitDoc[a] - hitDoc[b];
-    });
+    const personal = this.personal;
+
+    if (personal === null) {
+      order.sort((a, b) => {
+        const diff = hitScore[b] - hitScore[a];
+        if (diff !== 0) return diff;
+        // Deterministic tie-break: catalog order (courseId ascending).
+        return hitDoc[a] - hitDoc[b];
+      });
+    } else {
+      /*
+       * Query relevance first, then personal relevance.
+       *
+       * Both keys are precomputed into parallel arrays before the sort rather
+       * than read through `this` inside the comparator: this runs O(n log n)
+       * times per keystroke on up to `maxHits` entries, and a property load
+       * per comparison is the difference between hitting the frame budget and
+       * not.
+       */
+      const hitPersonal = this.hitPersonal;
+      const hitBand = this.hitBand;
+      for (let i = 0; i < hitCount; i++) hitPersonal[i] = personal[hitDoc[i]];
+
+      if (usedQuery) {
+        let top = 0;
+        for (let i = 0; i < hitCount; i++) if (hitScore[i] > top) top = hitScore[i];
+        const bandWidth = top * RELEVANCE_BAND_FRACTION;
+        if (bandWidth > 0) {
+          // Truncation is safe: the quotient is capped at 1 / the fraction, and
+          // semantic fusion can push a weak hit slightly below zero, which
+          // floors into the bottom band with everything else weak.
+          for (let i = 0; i < hitCount; i++) {
+            const value = hitScore[i];
+            hitBand[i] = value > 0 ? (value / bandWidth) | 0 : 0;
+          }
+        } else {
+          hitBand.fill(0, 0, hitCount);
+        }
+      } else {
+        /*
+         * No query, so nothing is more relevant to it than anything else and
+         * every hit shares one band. Personal relevance becomes the primary
+         * key -- which is the whole point: a catalog opened cold should lead
+         * with the courses this student can actually use.
+         */
+        hitBand.fill(0, 0, hitCount);
+      }
+
+      order.sort((a, b) => {
+        const band = hitBand[b] - hitBand[a];
+        if (band !== 0) return band;
+        const person = hitPersonal[b] - hitPersonal[a];
+        if (person !== 0) return person;
+        // Inside a band the raw score still orders; with no query it carries
+        // course number, which is what keeps browsing stable.
+        const diff = hitScore[b] - hitScore[a];
+        if (diff !== 0) return diff;
+        return hitDoc[a] - hitDoc[b];
+      });
+    }
 
     // --- materialize --------------------------------------------------------
     const limit = hitCount < this.maxHits ? hitCount : this.maxHits;

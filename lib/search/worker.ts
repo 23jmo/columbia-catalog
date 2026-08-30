@@ -24,7 +24,13 @@
 import type { SearchFilters, SearchResult } from "../types";
 import type { IndexMeta } from "./index-format";
 import { decodeEmbeddingBlock } from "./index-format";
-import { SearchEngine, type ReputationOverlayEntry, type SeatOverlayEntry, type SearchEngineOptions } from "./engine";
+import {
+  SearchEngine,
+  type PersonalOverlayEntry,
+  type ReputationOverlayEntry,
+  type SeatOverlayEntry,
+  type SearchEngineOptions,
+} from "./engine";
 import { createFoldInQueryEmbedder } from "./query-embedder";
 import { engineFromBytes, loadSearchIndex, type LoadProgress } from "./client";
 
@@ -45,6 +51,8 @@ export type SearchWorkerRequest =
   | { kind: "search"; id: number; filters: SearchFilters }
   | { kind: "setSeatOverlay"; id: number; entries: SeatOverlayEntry[] }
   | { kind: "setReputationOverlay"; id: number; entries: ReputationOverlayEntry[] }
+  | { kind: "setPersonalOverlay"; id: number; entries: PersonalOverlayEntry[] }
+  | { kind: "clearPersonalOverlay"; id: number }
   | { kind: "clearSeatOverlay"; id: number };
 
 export interface SearchWorkerReadyPayload {
@@ -172,6 +180,20 @@ export function installSearchWorker(scope: WorkerScope): void {
         const active = requireEngine(request.id);
         if (!active) return;
         active.setReputationOverlay(request.entries);
+        scope.postMessage({ kind: "ok", id: request.id });
+        return;
+      }
+      case "setPersonalOverlay": {
+        const active = requireEngine(request.id);
+        if (!active) return;
+        active.setPersonalOverlay(request.entries);
+        scope.postMessage({ kind: "ok", id: request.id });
+        return;
+      }
+      case "clearPersonalOverlay": {
+        const active = requireEngine(request.id);
+        if (!active) return;
+        active.clearPersonalOverlay();
         scope.postMessage({ kind: "ok", id: request.id });
         return;
       }
@@ -306,6 +328,14 @@ export class SearchWorkerClient {
 
   clearSeatOverlay(): Promise<void> {
     return this.send<void>({ kind: "clearSeatOverlay", id: this.nextId++ });
+  }
+
+  setPersonalOverlay(entries: PersonalOverlayEntry[]): Promise<void> {
+    return this.send<void>({ kind: "setPersonalOverlay", id: this.nextId++, entries });
+  }
+
+  clearPersonalOverlay(): Promise<void> {
+    return this.send<void>({ kind: "clearPersonalOverlay", id: this.nextId++ });
   }
 
   setReputationOverlay(entries: ReputationOverlayEntry[]): Promise<void> {
