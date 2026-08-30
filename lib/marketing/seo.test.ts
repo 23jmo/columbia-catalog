@@ -10,6 +10,7 @@ describe("crawler files", () => {
     expect(body).toContain("Allow: /");
     expect(body).toContain("Allow: /about");
     expect(body).toContain("Allow: /faq");
+    expect(body).toContain("Allow: /programs");
     expect(body).toContain(`Sitemap: ${SITE_ORIGIN}/sitemap.xml`);
     expect(body).not.toMatch(/Disallow: \/\s*$/m);
     expect(body).toContain("Disallow: /api/");
@@ -17,11 +18,17 @@ describe("crawler files", () => {
     expect(body).not.toContain("Disallow: /feed");
   });
 
-  it("lists about, faq, privacy, and terms on the www host", () => {
+  it("lists about, faq, privacy, terms, and the public programs on the www host", () => {
     const body = sitemapXml();
     for (const path of SITEMAP_PATHS) {
       expect(body).toContain(`<loc>${SITE_ORIGIN}${path}</loc>`);
     }
+    expect(body).toContain(`<loc>${SITE_ORIGIN}/programs</loc>`);
+    expect(body).toContain(`<loc>${SITE_ORIGIN}/programs/cc-major-computer-science</loc>`);
+    expect(body).toContain(`<loc>${SITE_ORIGIN}/programs/seas-major-computer-science</loc>`);
+    expect(body).toContain(`<loc>${SITE_ORIGIN}/programs/cc-core</loc>`);
+    expect(body).toContain(`<loc>${SITE_ORIGIN}/programs/seas-core</loc>`);
+    expect(body).not.toContain("cc-minor-computer-science");
     expect(body.startsWith("<?xml")).toBe(true);
   });
 

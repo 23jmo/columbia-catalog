@@ -19,7 +19,8 @@ const CARRIED_PARAMS = ["auth_error"] as const;
  * `/api/` authorizes itself per route; a HTML-only gate must not sit in front
  * of the crawler or the agent.
  *
- * `/about`, `/faq`, `/privacy`, and `/terms` are the public, no-login pages.
+ * `/about`, `/faq`, `/privacy`, `/terms`, and `/programs` are the public,
+ * no-login pages.
  * `/robots.txt`, `/sitemap.xml`, `/llms.txt`, and `/llms-full.txt` are
  * crawler files. If any of those 307 to /onboarding, Googlebot stores the
  * school picker as robots.txt and the site cannot rank. Home (`/`) stays
@@ -82,7 +83,8 @@ export function isPublicMarketingPath(pathname: string): boolean {
     exactOrChild(pathname, "/about") ||
     exactOrChild(pathname, "/faq") ||
     exactOrChild(pathname, "/privacy") ||
-    exactOrChild(pathname, "/terms")
+    exactOrChild(pathname, "/terms") ||
+    exactOrChild(pathname, "/programs")
   );
 }
 

@@ -24,6 +24,8 @@ describe("isGuestAllowedPath", () => {
     expect(isGuestAllowedPath("/privacy")).toBe(true);
     expect(isGuestAllowedPath("/privacy/extension")).toBe(true);
     expect(isGuestAllowedPath("/terms")).toBe(true);
+    expect(isGuestAllowedPath("/programs")).toBe(true);
+    expect(isGuestAllowedPath("/programs/cc-major-computer-science")).toBe(true);
     expect(isGuestAllowedPath("/robots.txt")).toBe(true);
     expect(isGuestAllowedPath("/sitemap.xml")).toBe(true);
     expect(isGuestAllowedPath("/llms.txt")).toBe(true);
@@ -60,6 +62,7 @@ describe("isGuestAllowedPath", () => {
     expect(isGuestAllowedPath("/about-us")).toBe(false);
     expect(isGuestAllowedPath("/privacy-review")).toBe(false);
     expect(isGuestAllowedPath("/faq-admin")).toBe(false);
+    expect(isGuestAllowedPath("/programs-admin")).toBe(false);
   });
 });
 

@@ -1,3 +1,4 @@
+import { programSitemapPaths } from "./public-programs";
 import { SITE_ORIGIN, SITEMAP_PATHS } from "./site";
 
 /**
@@ -28,6 +29,7 @@ export function robotsTxt(): string {
     "/faq",
     "/privacy",
     "/terms",
+    "/programs",
     "/onboarding",
     "/llms.txt",
     "/llms-full.txt",
@@ -44,12 +46,15 @@ export function robotsTxt(): string {
 }
 
 export function sitemapXml(): string {
-  const urls = SITEMAP_PATHS.map((path) => {
+  const paths = [...SITEMAP_PATHS, ...programSitemapPaths()];
+  const urls = paths.map((path) => {
+    const priority =
+      path === "/about" || path === "/faq" || path === "/programs" ? "0.8" : path.startsWith("/programs/") ? "0.6" : "0.5";
     return [
       "  <url>",
       `    <loc>${SITE_ORIGIN}${path}</loc>`,
       "    <changefreq>weekly</changefreq>",
-      `    <priority>${path === "/about" || path === "/faq" ? "0.8" : "0.5"}</priority>`,
+      `    <priority>${priority}</priority>`,
       "  </url>",
     ].join("\n");
   });
@@ -75,6 +80,7 @@ export function llmsTxt(): string {
     "A different student project is also called LionPlan. That one is an eight-semester visual planner. This site is the requirements map and next-course recommender at https://www.lionplan.org.",
     "",
     "About: https://www.lionplan.org/about",
+    "Programs: https://www.lionplan.org/programs",
     "FAQ: https://www.lionplan.org/faq",
     "Privacy: https://www.lionplan.org/privacy",
     "Terms: https://www.lionplan.org/terms",

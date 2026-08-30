@@ -1,0 +1,48 @@
+import { getProgram, listPrograms } from "@/lib/requirements/programs";
+import { SCHOOL_LABEL, type Program } from "@/lib/requirements/types";
+
+/**
+ * Authored CC and SEAS cores and majors, for the public /programs pages.
+ *
+ * Concentrations and minors are skipped so we do not ship thin duplicates
+ * of a major. Barnard and General Studies are skipped because those
+ * schools are not live. Parsed programs are skipped because nobody has
+ * read them.
+ */
+export function listPublicPrograms(): Program[] {
+  return listPrograms().filter(
+    (program) =>
+      program.origin === "authored" &&
+      (program.school === "CC" || program.school === "SEAS") &&
+      (program.kind === "core" || program.kind === "major"),
+  );
+}
+
+export function getPublicProgram(id: string): Program | undefined {
+  const program = getProgram(id);
+  if (!program) return undefined;
+  return listPublicPrograms().some((entry) => entry.id === program.id)
+    ? program
+    : undefined;
+}
+
+export function programHref(program: Program): string {
+  return `/programs/${program.id}`;
+}
+
+/** Search-shaped title. Same string is the H1. */
+export function programPageTitle(program: Program): string {
+  return `${program.name} at ${SCHOOL_LABEL[program.school]}: what LionPlan checks`;
+}
+
+export function programPageDescription(program: Program): string {
+  const school = SCHOOL_LABEL[program.school];
+  if (program.kind === "core") {
+    return `What LionPlan checks for the ${program.name} at ${school}. An unofficial companion to Stellic and Vergil, not a replacement.`;
+  }
+  return `What to take for ${program.name} at ${school}. LionPlan checks these bulletin groups and shows what a class satisfies and what it unlocks.`;
+}
+
+export function programSitemapPaths(): string[] {
+  return ["/programs", ...listPublicPrograms().map(programHref)];
+}

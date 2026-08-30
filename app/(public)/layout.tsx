@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { PublicDoc } from "@/components/marketing/public-doc";
 
 /**
- * Shared frame for /about, /faq, /privacy, and /terms.
+ * Shared frame for /about, /faq, /privacy, /terms, and /programs.
  *
  * A route group so the URLs stay flat. Guests are allowed through
  * `isGuestAllowedPath` in `lib/onboarding/guest-gate.ts`; without that

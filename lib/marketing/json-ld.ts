@@ -1,4 +1,8 @@
+import type { Program } from "@/lib/requirements/types";
+import { SCHOOL_LABEL } from "@/lib/requirements/types";
+
 import { FAQ_ITEMS } from "./faq";
+import { programHref, programPageTitle } from "./public-programs";
 import { SITE_ORIGIN } from "./site";
 
 export function organizationWebsiteGraph(): Record<string, unknown> {
@@ -49,5 +53,25 @@ export function faqPageJsonLd(): Record<string, unknown> {
         text: item.answer,
       },
     })),
+  };
+}
+
+/** WebPage only. No FAQPage here: the answers live on /faq. */
+export function programWebPageJsonLd(program: Program): Record<string, unknown> {
+  return {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    name: programPageTitle(program),
+    url: `${SITE_ORIGIN}${programHref(program)}`,
+    isPartOf: {
+      "@type": "WebSite",
+      name: "LionPlan",
+      url: SITE_ORIGIN,
+    },
+    about: {
+      "@type": "EducationalOccupationalProgram",
+      name: program.name,
+      educationalProgramMode: SCHOOL_LABEL[program.school],
+    },
   };
 }

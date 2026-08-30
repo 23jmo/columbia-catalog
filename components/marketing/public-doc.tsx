@@ -52,6 +52,7 @@ export function PublicDoc({ children }: { children: ReactNode }) {
           className="mx-auto flex w-full max-w-[720px] flex-wrap gap-x-4 gap-y-2 px-4 py-4 sm:px-6"
         >
           <FooterLink href="/about">About</FooterLink>
+          <FooterLink href="/programs">Programs</FooterLink>
           <FooterLink href="/faq">FAQ</FooterLink>
           <FooterLink href="/privacy">Privacy</FooterLink>
           <FooterLink href="/terms">Terms</FooterLink>
