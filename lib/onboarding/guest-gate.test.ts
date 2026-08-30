@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { guestOnboardingLocation, isGuestAllowedPath, postAuthPath } from "./guest-gate";
+import {
+  guestOnboardingLocation,
+  isGuestAllowedPath,
+  isPublicMarketingPath,
+  postAuthPath,
+} from "./guest-gate";
 
 describe("isGuestAllowedPath", () => {
   it("lets a guest stay on onboarding, auth, and APIs", () => {
@@ -8,6 +13,26 @@ describe("isGuestAllowedPath", () => {
     expect(isGuestAllowedPath("/onboarding/")).toBe(true);
     expect(isGuestAllowedPath("/auth/callback")).toBe(true);
     expect(isGuestAllowedPath("/api/agent")).toBe(true);
+  });
+
+  it("lets a guest read About, FAQ, Privacy, Terms, and crawler files", () => {
+    // HTML pages a journalist or an answer engine has to reach, plus the
+    // files Googlebot fetches first. The Chrome Web Store listing already
+    // points at /privacy/extension, so that prefix has to stay open too.
+    expect(isGuestAllowedPath("/about")).toBe(true);
+    expect(isGuestAllowedPath("/faq")).toBe(true);
+    expect(isGuestAllowedPath("/privacy")).toBe(true);
+    expect(isGuestAllowedPath("/privacy/extension")).toBe(true);
+    expect(isGuestAllowedPath("/terms")).toBe(true);
+    expect(isGuestAllowedPath("/programs")).toBe(true);
+    expect(isGuestAllowedPath("/programs/cc-major-computer-science")).toBe(true);
+    expect(isGuestAllowedPath("/robots.txt")).toBe(true);
+    expect(isGuestAllowedPath("/sitemap.xml")).toBe(true);
+    expect(isGuestAllowedPath("/llms.txt")).toBe(true);
+    expect(isGuestAllowedPath("/llms-full.txt")).toBe(true);
+    expect(isPublicMarketingPath("/robots.txt")).toBe(true);
+    expect(isPublicMarketingPath("/faq")).toBe(true);
+    expect(isPublicMarketingPath("/onboarding")).toBe(false);
   });
 
   it("lets a guest read a shared course or instructor link", () => {
@@ -34,6 +59,10 @@ describe("isGuestAllowedPath", () => {
     // `/courses-i-hate` route cannot fall through the gate by accident.
     expect(isGuestAllowedPath("/coursework")).toBe(false);
     expect(isGuestAllowedPath("/instructors-admin")).toBe(false);
+    expect(isGuestAllowedPath("/about-us")).toBe(false);
+    expect(isGuestAllowedPath("/privacy-review")).toBe(false);
+    expect(isGuestAllowedPath("/faq-admin")).toBe(false);
+    expect(isGuestAllowedPath("/programs-admin")).toBe(false);
   });
 });
 
