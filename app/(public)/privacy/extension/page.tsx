@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
 
 import { PublicSection } from "@/components/marketing/public-doc";
+import { publicPageMetadata } from "@/lib/marketing/site";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = publicPageMetadata({
   title: "Extension privacy · LionPlan",
   description:
     "Privacy policy for the LionPlan schedule-refresh browser extension. It reads public meeting times. It does not read your transcript.",
-};
+  path: "/privacy/extension",
+});
 
 /**
  * Chrome Web Store listing URL. The store page already points here

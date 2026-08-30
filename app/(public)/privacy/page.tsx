@@ -2,12 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { PublicSection } from "@/components/marketing/public-doc";
+import { publicPageMetadata } from "@/lib/marketing/site";
 
-export const metadata: Metadata = {
-  title: "Privacy · LionPlan",
+export const metadata: Metadata = publicPageMetadata({
+  title: "Privacy · LionPlan, a Columbia course planner",
   description:
     "How LionPlan handles the academic record you give it. Transcript files stay in your browser. We do not sell student data.",
-};
+  path: "/privacy",
+});
 
 /**
  * Product privacy page. Must render for logged-out visitors: the guest

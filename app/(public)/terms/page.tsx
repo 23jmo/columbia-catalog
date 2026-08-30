@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
 
 import { PublicSection } from "@/components/marketing/public-doc";
+import { publicPageMetadata } from "@/lib/marketing/site";
 
-export const metadata: Metadata = {
-  title: "Terms · LionPlan",
+export const metadata: Metadata = publicPageMetadata({
+  title: "Terms · LionPlan, a Columbia course planner",
   description:
-    "LionPlan is an unofficial student project. It is not affiliated with Columbia University and is not a substitute for Stellic, Vergil, or CSA.",
-};
+    "LionPlan is an unofficial student project. It is a companion to Stellic and Vergil, not a replacement, and not a substitute for CSA advising.",
+  path: "/terms",
+});
 
 /**
  * Terms of use. Same guest-gate requirement as /privacy: this URL has to

@@ -2,13 +2,20 @@ import type { Metadata } from "next";
 import { RiArrowRightLine } from "@remixicon/react";
 
 import { ButtonLink } from "@/components/base/buttons/button";
+import { JsonLd } from "@/components/marketing/json-ld";
 import { PublicSection } from "@/components/marketing/public-doc";
+import {
+  organizationWebsiteGraph,
+  softwareApplicationJsonLd,
+} from "@/lib/marketing/json-ld";
+import { publicPageMetadata } from "@/lib/marketing/site";
 
-export const metadata: Metadata = {
-  title: "About · LionPlan",
+export const metadata: Metadata = publicPageMetadata({
+  title: "LionPlan, a Columbia course planner for CC and SEAS",
   description:
-    "Tell us your school, your major and what you've taken, and we'll work out what you should take next. Live for Columbia College and Columbia Engineering.",
-};
+    "A Columbia course planner for Columbia College and Columbia Engineering. Tell us your school, major, and what you have taken, and we work out what you should take next. A companion to Stellic and Vergil, not a replacement.",
+  path: "/about",
+});
 
 /**
  * The public product page.
@@ -27,9 +34,11 @@ export const metadata: Metadata = {
 export default function AboutPage() {
   return (
     <>
+      <JsonLd data={organizationWebsiteGraph()} />
+      <JsonLd data={softwareApplicationJsonLd()} />
       <header className="flex flex-col gap-4">
         <h1 className="text-display-4-semibold -tracking-[0.02em] text-balance text-text-primary">
-          What you should take next
+          A Columbia course planner for CC and SEAS
         </h1>
         <p className="text-headline-regular max-w-[46ch] text-pretty text-text-secondary">
           Tell us your school, your major, and what you have taken. We work

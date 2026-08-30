@@ -13,8 +13,8 @@ import { cx } from "@/utils/cx";
  * not want any of that, and the nav targets would bounce them into the
  * wizard. This frame is a document: mark, legal links, one CTA.
  *
- * There is no site footer and no author or GitHub credit. Privacy and Terms
- * live in the header so they stay reachable without becoming a credit bar.
+ * A small footer links About, FAQ, Privacy, and Terms so those pages are
+ * not orphans. No author credit, no GitHub, no athletic mark.
  */
 
 export function PublicDoc({ children }: { children: ReactNode }) {
@@ -24,7 +24,7 @@ export function PublicDoc({ children }: { children: ReactNode }) {
         <div className="mx-auto flex w-full max-w-[720px] items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <Link
             href="/about"
-            aria-label="LionPlan — about"
+            aria-label="LionPlan, about"
             className={cx(
               "flex min-w-0 items-center gap-2 rounded-2lg p-1 outline-none",
               "focus-visible:ring-2 focus-visible:ring-border-focus-ring",
@@ -36,30 +36,39 @@ export function PublicDoc({ children }: { children: ReactNode }) {
             <span className="text-body-medium text-text-primary">LionPlan</span>
           </Link>
 
-          <div className="flex shrink-0 items-center gap-3">
-            <Link
-              href="/privacy"
-              className="text-caption-1-medium text-text-secondary outline-none hover:text-text-primary focus-visible:ring-2 focus-visible:ring-border-focus-ring"
-            >
-              Privacy
-            </Link>
-            <Link
-              href="/terms"
-              className="text-caption-1-medium text-text-secondary outline-none hover:text-text-primary focus-visible:ring-2 focus-visible:ring-border-focus-ring"
-            >
-              Terms
-            </Link>
-            <ButtonLink href="/onboarding" size="small">
-              Get started
-            </ButtonLink>
-          </div>
+          <ButtonLink href="/onboarding" size="small">
+            Get started
+          </ButtonLink>
         </div>
       </header>
 
       <main className="mx-auto flex w-full max-w-[720px] flex-1 flex-col gap-8 px-4 py-10 sm:px-6 sm:py-14">
         {children}
       </main>
+
+      <footer className="border-t border-border-table">
+        <nav
+          aria-label="About this site"
+          className="mx-auto flex w-full max-w-[720px] flex-wrap gap-x-4 gap-y-2 px-4 py-4 sm:px-6"
+        >
+          <FooterLink href="/about">About</FooterLink>
+          <FooterLink href="/faq">FAQ</FooterLink>
+          <FooterLink href="/privacy">Privacy</FooterLink>
+          <FooterLink href="/terms">Terms</FooterLink>
+        </nav>
+      </footer>
     </div>
+  );
+}
+
+function FooterLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="text-caption-1-medium text-text-secondary outline-none hover:text-text-primary focus-visible:ring-2 focus-visible:ring-border-focus-ring"
+    >
+      {children}
+    </Link>
   );
 }
 
