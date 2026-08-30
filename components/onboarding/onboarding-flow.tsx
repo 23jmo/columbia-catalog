@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 
 import { useSessionAccount } from "@/hooks/use-session-account";
 import {
@@ -27,7 +28,6 @@ import {
   type GuestOnboardingState,
 } from "@/lib/onboarding/state";
 import { canPrefetchGuessDeck, prefetchGuessDeck } from "@/lib/onboarding/guess-cache";
-import { signIn } from "@/lib/db/auth";
 import {
   canPrefetchFeedPreview,
   peekCachedFeedPreview,
@@ -50,8 +50,6 @@ import { OrnamentAvatar } from "@/components/ornament/ornament-avatar";
 import { OnboardingScreen } from "./screen";
 import { useFeedPreview } from "./use-feed-preview";
 import { FeedPreviewCardSkeleton } from "./feed-teaser-cards";
-import { StepChoices } from "./step-choices";
-import { StepCoursework } from "./step-coursework";
 import {
   ClassYearQuestion,
   MajorsQuestion,
@@ -64,9 +62,103 @@ import {
   schoolsWithPrograms,
   type ProgramOption,
 } from "./step-degree";
-import { StepFeed } from "./step-feed";
-import { StepInterests } from "./step-interests";
-import { StepLove } from "./step-love";
+
+/* ==========================================================================
+ * The steps after the degree questions, split out of the first load
+ * ========================================================================== */
+
+/**
+ * Only the degree questions are imported outright. Everything after them is
+ * behind `dynamic`, and the reason is a bandwidth argument rather than a
+ * parse-time one.
+ *
+ * This route's document is render-blocked by one stylesheet, and that
+ * stylesheet shares an HTTP/2 connection with every script tag Next emits.
+ * Statically importing all seven screens put the transcript importer, the
+ * course search box, the feed card and everything the feed card reaches —
+ * bookmark controls, the week strip, instructor links, enrolment chips — into
+ * the entry chunk, so 2.1 MB of JavaScript competed with a 36 KB stylesheet for
+ * a throttled connection and first paint waited on the loser. Splitting the
+ * later screens out does not make the parse cheaper for a student who walks the
+ * whole flow; it takes their bytes off the wire during the seconds that decide
+ * when the first question appears.
+ *
+ * `ssr` stays on. These chunks still render on the server for whoever they
+ * belong to, and a student who resumes mid-flow gets their screen's markup in
+ * the document rather than a hole.
+ *
+ * The trade — a chunk fetch at the moment the student advances — is paid off by
+ * `useWarmStepChunks` below, which fetches them on an idle callback once the
+ * first question is up and the connection is quiet.
+ */
+const StepChoices = dynamic(() => import("./step-choices").then((m) => m.StepChoices));
+const StepCoursework = dynamic(() => import("./step-coursework").then((m) => m.StepCoursework));
+const StepLove = dynamic(() => import("./step-love").then((m) => m.StepLove));
+const StepInterests = dynamic(() => import("./step-interests").then((m) => m.StepInterests));
+const StepFeed = dynamic(() => import("./step-feed").then((m) => m.StepFeed));
+
+/**
+ * Pull the later screens' chunks down once the page has finished loading.
+ *
+ * Ordered the way the flow is walked, so the screen the student reaches next is
+ * the one already in cache.
+ *
+ * ── Why `load` and not an idle callback ────────────────────────────────────
+ *
+ * An idle callback was the first attempt and it undid the split. The main
+ * thread goes idle constantly while a page is still fetching — it is idle every
+ * time it is waiting on the network, which on a throttled connection is most of
+ * the first two seconds — so `requestIdleCallback` fired long before the entry
+ * chunk had landed and put all five chunks back into contention with it.
+ * Measured on this route it cancelled the entire gain: the same 580 KB crossed
+ * the wire before first paint, just in a different order.
+ *
+ * `load` is the event that actually means "the things that decide first paint
+ * are done". Idle is still the right moment *after* that, so the two are used
+ * together rather than one instead of the other.
+ */
+function useWarmStepChunks(enabled: boolean): void {
+  useEffect(() => {
+    if (!enabled) return;
+
+    let cancelled = false;
+    let idleHandle: number | undefined;
+    let timeoutHandle: number | undefined;
+
+    const warm = () => {
+      if (cancelled) return;
+      void import("./step-choices");
+      void import("./step-coursework");
+      void import("./step-love");
+      void import("./step-interests");
+      void import("./step-feed");
+    };
+
+    const scheduleWarm = () => {
+      if (cancelled) return;
+      // Safari has no `requestIdleCallback`. A short timeout is the same
+      // intent: not in this frame, but soon.
+      if (typeof window.requestIdleCallback === "function") {
+        idleHandle = window.requestIdleCallback(warm, { timeout: 2000 });
+      } else {
+        timeoutHandle = window.setTimeout(warm, 300);
+      }
+    };
+
+    if (document.readyState === "complete") {
+      scheduleWarm();
+    } else {
+      window.addEventListener("load", scheduleWarm, { once: true });
+    }
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("load", scheduleWarm);
+      if (idleHandle !== undefined) window.cancelIdleCallback(idleHandle);
+      if (timeoutHandle !== undefined) window.clearTimeout(timeoutHandle);
+    };
+  }, [enabled]);
+}
 
 /**
  * The onboarding wizard.
@@ -262,13 +354,38 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
   }, []);
 
   /*
-   * Warm course listings as soon as the flow is up. The coursework search used
-   * to cold-load the full catalog-with-sections dump on the first keystroke.
+   * Warm course listings once the flow is up. The coursework search used to
+   * cold-load the full catalog-with-sections dump on the first keystroke.
+   *
+   * After `load` rather than straight out of the effect. This is a server
+   * action, so it is a POST that carries an RSC render of the route back with
+   * it, and it used to fire the instant hydration finished — which is the same
+   * instant the first question finally paints. Priming a cache the student
+   * cannot reach for another three screens is not worth contending with that.
    */
   useEffect(() => {
     if (!isHydrated) return;
-    void warmCourseSearchAction();
+    let cancelled = false;
+    const warm = () => {
+      if (!cancelled) void warmCourseSearchAction();
+    };
+    if (document.readyState === "complete") {
+      const handle = window.setTimeout(warm, 300);
+      return () => {
+        cancelled = true;
+        window.clearTimeout(handle);
+      };
+    }
+    window.addEventListener("load", warm, { once: true });
+    return () => {
+      cancelled = true;
+      window.removeEventListener("load", warm);
+    };
   }, [isHydrated]);
+
+  // The screens after the degree questions, fetched while the connection is
+  // quiet so advancing never waits on a chunk. See `useWarmStepChunks`.
+  useWarmStepChunks(isHydrated);
 
   /*
    * Warm the guess deck and feed preview while the student finishes degree
@@ -551,6 +668,16 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
 
   const startFirstPageSignIn = async () => {
     setSignInError(null);
+    /*
+     * `signIn` is reached through `import()` rather than a static import for
+     * the same reason `use-session-account.ts` defers its client: the module
+     * behind it is the whole Supabase SDK, and a static import here would put
+     * it back in this route's entry chunk — in front of hydration, and so in
+     * front of the first question — to serve a control most students never
+     * press. Here it is loaded by the press itself, which is already a
+     * navigation away from the page.
+     */
+    const { signIn } = await import("@/lib/db/auth");
     // Stay on this path so a returning student who is not done with setup
     // keeps walking the wizard, now with their photo in the corner.
     const { error } = await signIn({ next: "/onboarding" });
