@@ -3,6 +3,8 @@
 import type { GuessChoice, GuessChoiceRoute } from "@/lib/onboarding/guess";
 import { cx } from "@/utils/cx";
 
+import { displayCourseTitle } from "@/lib/onboarding/course-title";
+
 import { ChipWrap, OptionChip, courseChipLines } from "./chip";
 
 /**
@@ -171,15 +173,19 @@ export function CourseChoices({
  * content: PHYS UN1401 and PHYS UN1601 is a choice a Columbia student can
  * actually make, "Sequence 1 or Sequence 2" is not.
  *
- * Leading with the course TITLES instead was the obvious alternative and it
- * does not work: 31 of the 46 courses named across every `sequence_choice`
- * group in the catalog have no title at all, because we hold only the two
- * active terms and most of these are not currently taught. Physics Sequence 3
- * resolves to zero titles. A rule that leads with names would print blanks on
- * exactly the groups that need help most.
+ * Where the label is an index, the course the sequence OPENS with is tried
+ * next, because that is the course the branches actually differ on: "Intro to
+ * Mechanics & Thermo" over "PHYS UN1401, UN1402, UN1403" says more than
+ * "Sequence 1" ever did. It is guarded the same way the labels are, and the
+ * guard earns its keep — measured across the real program data, opening titles
+ * tell the options apart in 7 of the 11 index-labelled groups. In the other
+ * four they do not: Mechanical Engineering offers three physics routes that
+ * all begin with PHYS UN1401 and differ only in their third term, so leading
+ * with the opening title would print the same button three times. There the
+ * call numbers are the only distinguishing content there is, and they lead.
  *
- * So: lead with the name wherever one exists, and fall back to the codes only
- * where the source document never gave the option a name.
+ * So: lead with the name wherever one exists AND tells the options apart, and
+ * fall back to the codes only where nothing else does.
  */
 export function routeChipLines(
   route: GuessChoiceRoute,
@@ -190,27 +196,98 @@ export function routeChipLines(
 } {
   const [only] = route.courses;
   if (route.courses.length === 1 && only) {
+    // `courseChipLines` already puts the name on top and the call number
+    // underneath, which is the rule; normally there is nothing to rearrange,
+    // and a route with no title comes back as a bare code rather than printing
+    // the code twice.
     const lines = courseChipLines(only.code, only.title);
-    // `courseChipLines` returns a bare code with no sublabel when it has no
-    // title to show; keep that rather than printing the code twice.
-    return lines.sublabel
-      ? { label: lines.sublabel, sublabel: lines.label }
-      : lines;
+    return lines.sublabel && !titlesDistinguish(siblings) ? swap(lines) : lines;
   }
 
   const rawCodes = route.courses.map((facts) => facts.code);
   const codes = formatCodeList(rawCodes);
+  const opening = labelsDistinguish(siblings) ? null : openingTitleFor(route, siblings);
   const lines = labelsDistinguish(siblings)
     ? { label: describeRoute(route.label), sublabel: codes }
-    // The label is an index ("Sequence 2") and carries nothing the codes do
-    // not, so it goes underneath rather than on top.
-    : { label: codes, sublabel: route.label };
+    : opening
+      // The label is an index, but the course the sequence OPENS with has a
+      // name, and here it is a different name for each option.
+      ? { label: opening, sublabel: codes }
+      // Nothing on this route is named in a way that tells it from its
+      // siblings, so the codes carry the choice and the index goes underneath.
+      : { label: codes, sublabel: route.label };
 
   // Computer engineering labels its applied-maths routes with their own call
   // numbers — "MATH UN2030 + APMA E3101" — so the two lines would say the same
   // thing in two punctuations. One line, in the punctuation every other chip
   // on the screen uses.
   return labelIsJustCodes(lines.sublabel, rawCodes) ? { label: codes } : lines;
+}
+
+/** Put the sublabel on top. Used where a name cannot tell the options apart. */
+function swap(lines: { label: string; sublabel?: string }): {
+  label: string;
+  sublabel?: string;
+} {
+  return { label: lines.sublabel ?? lines.label, sublabel: lines.label };
+}
+
+/**
+ * Whether a group's single-course options have names that tell them apart.
+ *
+ * Usually they do, and then the name leads — nobody recognises a class they
+ * took from its call number. But Applied Mathematics lists "Partial
+ * Differential Equations" twice in one group, as MATH UN3028 and APMA E4200,
+ * and "Probability Theory" twice as STAT GU4203 and MATH GU4155. Rendered
+ * name-first those are two buttons a student cannot tell apart at a glance,
+ * and there the call number is the part that differs.
+ *
+ * The swap is group-wide rather than per-collision so that one group does not
+ * mix two chip shapes; and it is decided only on the titles that EXIST, since
+ * a route with no title renders as a bare code and is never confusable with a
+ * named one. That distinction matters: the Linear Algebra group has two
+ * untitled routes among six, and blocking on those would have sent the whole
+ * group back to leading with call numbers — the exact thing this fixes.
+ */
+function titlesDistinguish(siblings: readonly GuessChoiceRoute[]): boolean {
+  const named: string[] = [];
+  for (const sibling of siblings) {
+    if (sibling.courses.length !== 1) continue;
+    const [only] = sibling.courses;
+    if (!only) continue;
+    const lines = courseChipLines(only.code, only.title);
+    if (lines.sublabel) named.push(lines.label.toLowerCase());
+  }
+  return new Set(named).size === named.length;
+}
+
+/**
+ * The name of the course a sequence OPENS with, when that alone tells the
+ * group's options apart.
+ *
+ * A sequence's branches diverge at their first course far more often than not
+ * — PHYS UN1401 against PHYS UN1601 against PHYS UN2801 — so its title is a
+ * real name for a route the Bulletin only numbered. It is offered only when
+ * every branch has one and no two are the same, because a group of buttons
+ * that all read "Intro to Mechanics & Thermo" is worse than a group that reads
+ * "Sequence 1/2/3": the index at least implies you should look below it.
+ */
+function openingTitleFor(
+  route: GuessChoiceRoute,
+  siblings: readonly GuessChoiceRoute[],
+): string | null {
+  const branches = siblings.filter((sibling) => sibling.courses.length > 1);
+  if (branches.length < 2) return null;
+
+  const titles = branches.map((sibling) => {
+    const opening = sibling.courses[0]?.title?.trim();
+    return opening ? displayCourseTitle(opening) : null;
+  });
+  if (titles.some((title) => !title)) return null;
+  if (new Set(titles.map((title) => title?.toLowerCase())).size !== titles.length) return null;
+
+  const index = branches.indexOf(route);
+  return index === -1 ? null : (titles[index] ?? null);
 }
 
 /**

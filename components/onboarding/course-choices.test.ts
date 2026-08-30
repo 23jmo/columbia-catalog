@@ -49,16 +49,49 @@ describe("routeChipLines", () => {
     });
   });
 
-  it("swaps to codes first when the labels are only an index", () => {
+  it("names an index-labelled sequence by the course it opens with", () => {
     // "Sequence 1/2/3" is what the Bulletin calls the SEAS physics options, and
-    // it distinguishes nothing on a button. The call numbers do.
+    // it distinguishes nothing on a button. The branches diverge at their first
+    // course, so its title is the name the source document never gave them.
     expect(routeChipLines(physics[0]!, physics)).toEqual({
+      label: "Intro to Mechanics",
+      sublabel: "PHYS UN1401, UN1402",
+    });
+    expect(routeChipLines(physics[2]!, physics)).toEqual({
+      label: "Accelerated Physics I",
+      sublabel: "PHYS UN2801, UN2802",
+    });
+  });
+
+  it("falls back to codes when the opening courses share a title", () => {
+    // Mechanical engineering's three physics routes all begin with PHYS UN1401
+    // and differ only in their third term. Leading with the opening title would
+    // print the same button three times, which is worse than an index — the
+    // index at least implies you should read the line below it.
+    const shared = [
+      route("Sequence 1", [
+        ["PHYS UN1401", "Intro to Mechanics"],
+        ["PHYS UN1402", "Thermodynamics"],
+      ]),
+      route("Sequence 1, third term EEEB UN2001", [
+        ["PHYS UN1401", "Intro to Mechanics"],
+        ["EEEB UN2001", "Environmental Biology I"],
+      ]),
+    ];
+    expect(routeChipLines(shared[0]!, shared)).toEqual({
       label: "PHYS UN1401, UN1402",
       sublabel: "Sequence 1",
     });
-    expect(routeChipLines(physics[2]!, physics)).toEqual({
+  });
+
+  it("falls back to codes when an opening course has no title at all", () => {
+    const untitled = [
+      route("Sequence 1", [["PHYS UN1401", "Intro to Mechanics"], ["PHYS UN1402", null]]),
+      route("Sequence 2", [["PHYS UN2801", null], ["PHYS UN2802", null]]),
+    ];
+    expect(routeChipLines(untitled[1]!, untitled)).toEqual({
       label: "PHYS UN2801, UN2802",
-      sublabel: "Sequence 3",
+      sublabel: "Sequence 2",
     });
   });
 
@@ -77,14 +110,53 @@ describe("routeChipLines", () => {
     });
   });
 
-  it("leads with the code for a single course, whatever the siblings are", () => {
-    // Unchanged behaviour: siblings inside one group have near-identical
-    // titles, so the call number is the only reliably distinct part.
+  it("leads with the course name for a single course, code underneath", () => {
+    // The rule everywhere else in onboarding, and it was inverted here: the
+    // button said "MATH UN2010" loudest and "Linear Algebra" in grey below it.
+    // Nobody recognises a class they took from its call number.
     const artHum = route("HUMA UN1121", [["HUMA UN1121", "Masterpieces of Western Art"]]);
     const musicHum = route("HUMA UN1123", [["HUMA UN1123", "Masterpieces of Western Music"]]);
     expect(routeChipLines(artHum, [artHum, musicHum])).toEqual({
-      label: "HUMA UN1121",
-      sublabel: "Masterpieces of Western Art",
+      label: "Masterpieces of Western Art",
+      sublabel: "HUMA UN1121",
+    });
+  });
+
+  it("swaps to codes when two options in a group share a title", () => {
+    // Applied Maths lists "Partial Differential Equations" twice in one group,
+    // as MATH UN3028 and APMA E4200. Name-first those are two buttons a student
+    // cannot tell apart; the call number is the part that differs.
+    const pde = [
+      route("MATH UN3028", [["MATH UN3028", "Partial Differential Equations"]]),
+      route("APMA E4200", [["APMA E4200", "Partial Differential Equations"]]),
+    ];
+    expect(routeChipLines(pde[0]!, pde)).toEqual({
+      label: "MATH UN3028",
+      sublabel: "Partial Differential Equations",
+    });
+  });
+
+  it("keeps names leading when only the untitled routes are ambiguous", () => {
+    // The Linear Algebra group has two routes with no title among six. Blocking
+    // on those would send the whole group back to call numbers, which is the
+    // defect this exists to fix — a bare code is never confusable with a name.
+    const linear = [
+      route("MATH UN2010", [["MATH UN2010", "Linear Algebra"]]),
+      route("COMS W3251", [["COMS W3251", null]]),
+      route("MATH UN2020", [["MATH UN2020", null]]),
+    ];
+    expect(routeChipLines(linear[0]!, linear)).toEqual({
+      label: "Linear Algebra",
+      sublabel: "MATH UN2010",
+    });
+    expect(routeChipLines(linear[1]!, linear)).toEqual({ label: "COMS W3251" });
+  });
+
+  it("repairs registrar casing on a single-course name", () => {
+    const linAlg = route("MATH UN2010", [["MATH UN2010", "LINEAR ALGEBRA"]]);
+    expect(routeChipLines(linAlg, [linAlg])).toEqual({
+      label: "Linear Algebra",
+      sublabel: "MATH UN2010",
     });
   });
 
