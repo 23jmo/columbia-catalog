@@ -89,7 +89,7 @@ export function OutstandingCard({ remaining, className }: OutstandingCardProps) 
                   and a "(Category B)", and cutting both to "Science Requirement
                   (Cate…" leaves two rows a reader cannot tell apart.
                 */}
-                <span className="text-pretty text-subheadline-regular text-text-primary">
+                <span className="text-pretty text-body-regular text-text-primary">
                   {requirement.label}
                 </span>
 

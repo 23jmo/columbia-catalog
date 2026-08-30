@@ -156,6 +156,11 @@ export function CourseworkCard({
          * the point of it is that a student can tell months later which rows
          * they actually checked — but it moves to the right-hand column with
          * the other qualifiers instead of claiming a second line of its own.
+         *
+         * "Single line" is a claim about `sm` and up. Below it the qualifiers
+         * wrap under the name rather than being hidden: the column grid has no
+         * room at 390px, and dropping the source there would have been the one
+         * abbreviation this record is not allowed to make.
          */
         <div className="flex flex-col gap-2">
           {groups.map((group) => (
@@ -176,57 +181,86 @@ export function CourseworkCard({
                       key={course.courseId}
                       className="flex min-h-11 items-center gap-2 border-t border-border-table px-3 py-1.5"
                     >
-                      <a
-                        href={`/course/${course.courseId}`}
-                        className={cx(
-                          "min-w-0 flex-1 truncate rounded-md text-subheadline-regular text-text-primary outline-none",
-                          "transition-colors duration-150 motion-reduce:transition-none",
-                          "hover:text-accent-600 focus-visible:ring-2 focus-visible:ring-border-focus-ring",
-                          !name && "tabular-nums",
-                        )}
-                      >
-                        {name ?? code}
-                      </a>
-
                       {/*
-                        Both markers are two words, not a sentence. The
-                        explanation lives once at the bottom of the card:
-                        repeating it on every row turned a nine-course record
-                        into nine paragraphs of the same caveat, and a warning
-                        printed that often stops being read.
-                      */}
-                      {unmatched.has(course.courseId) ? (
-                        <span className="shrink-0 text-caption-2-regular text-status-yellow-text">
-                          not in our catalog
-                        </span>
-                      ) : null}
-                      {crossed.has(course.courseId) ? (
-                        <span className="shrink-0 text-caption-2-regular text-status-cyan-text">
-                          double-counted
-                        </span>
-                      ) : null}
+                        The name owns the first line on a phone and the
+                        qualifiers wrap underneath it; from `sm` the whole row
+                        is one line again.
 
-                      {/*
-                        Behind the markers, and a fixed width, so the codes
-                        form a column an eye can run down. Ahead of them the
-                        column stepped left on every row that carried a
-                        "double-counted" or "not in our catalog" note.
+                        Written once rather than twice: the qualifier wrapper
+                        below is `sm:contents`, so at `sm` it stops being a box
+                        and its children become flex items of this row, which is
+                        where the fixed widths and right-alignment apply. Same
+                        device as `components/course/enrollment-chip.tsx`.
                       */}
-                      <span className="hidden w-[6.5rem] shrink-0 text-right text-caption-2-regular tabular-nums text-text-tertiary sm:inline">
-                        {/* Empty, not absent, when the code is already the row's
-                            label — an absent column would step every column to
-                            its right off the grid on that one row. */}
-                        {name ? code : null}
-                      </span>
+                      <div className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-2">
+                        <a
+                          href={`/course/${course.courseId}`}
+                          className={cx(
+                            "min-w-0 truncate rounded-md text-body-regular text-text-primary outline-none",
+                            "transition-colors duration-150 motion-reduce:transition-none",
+                            "hover:text-accent-600 focus-visible:ring-2 focus-visible:ring-border-focus-ring",
+                            "sm:flex-1",
+                            !name && "tabular-nums",
+                          )}
+                        >
+                          {name ?? code}
+                        </a>
 
-                      {course.points != null ? (
-                        <span className="hidden shrink-0 text-caption-2-regular tabular-nums text-text-tertiary sm:inline">
-                          {course.points} pts
+                        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-caption-2-regular text-text-tertiary sm:contents">
+                          {/*
+                            Both markers are two words, not a sentence. The
+                            explanation lives once at the bottom of the card:
+                            repeating it on every row turned a nine-course record
+                            into nine paragraphs of the same caveat, and a warning
+                            printed that often stops being read.
+                          */}
+                          {unmatched.has(course.courseId) ? (
+                            <span className="shrink-0 text-status-yellow-text">
+                              not in our catalog
+                            </span>
+                          ) : null}
+                          {crossed.has(course.courseId) ? (
+                            <span className="shrink-0 text-status-cyan-text">double-counted</span>
+                          ) : null}
+
+                          {/*
+                            Behind the markers, and a fixed width from `sm`, so
+                            the codes form a column an eye can run down. Ahead of
+                            them the column stepped left on every row that carried
+                            a "double-counted" or "not in our catalog" note.
+                          */}
+                          <span
+                            className={cx(
+                              "shrink-0 tabular-nums sm:w-[6.5rem] sm:text-right",
+                              // Empty, not absent, when the code is already the
+                              // row's label — an absent column would step every
+                              // column to its right off the grid on that one row.
+                              // On a phone there is no grid to hold, so it goes.
+                              !name && "hidden sm:inline",
+                            )}
+                          >
+                            {name ? code : null}
+                          </span>
+
+                          {course.points != null ? (
+                            <span className="shrink-0 tabular-nums">{course.points} pts</span>
+                          ) : null}
+
+                          {/*
+                            Provenance, on every row, at every width — it used to
+                            be `md:inline` here, which quietly dropped it on the
+                            screen most of this is read on. `CourseSource` is
+                            documented "Always displayed" and the reason is in the
+                            module header: an audit built on self-report is
+                            useful, one that PRESENTS as official is dangerous,
+                            and the difference is whether the provenance travels.
+                            So the row wraps instead.
+                          */}
+                          <span className="sm:w-[7rem] sm:shrink-0 sm:truncate sm:text-right">
+                            {COURSE_SOURCE_LABEL[course.source]}
+                          </span>
                         </span>
-                      ) : null}
-                      <span className="hidden w-[7rem] shrink-0 truncate text-right text-caption-2-regular text-text-tertiary md:inline">
-                        {COURSE_SOURCE_LABEL[course.source]}
-                      </span>
+                      </div>
 
                       <RemoveCourseButton courseId={course.courseId} code={code} />
                     </li>

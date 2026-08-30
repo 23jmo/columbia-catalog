@@ -120,7 +120,7 @@ export function useFeedPreview(
   }, [enabled, cacheKey]);
 
   /*
-   * Latched on arrival at the last step, and never cleared.
+   * Latched on arrival at the last step, and scoped to the answers.
    *
    * Two things put the working screen up. The cards not being ready yet is the
    * obvious one. The other is that this student has not seen their feed built
@@ -134,20 +134,34 @@ export function useFeedPreview(
    * keeps it from becoming a tax — it plays once per set of answers, and a
    * student coming back from Google SSO lands straight on their feed.
    *
-   * This is React's documented adjust-state-during-render pattern rather than
-   * an effect, and deliberately: an effect runs after the browser has painted,
-   * so the flag would arrive a frame late and the floor below would start a
-   * frame after the screen it is meant to hold. Setting it here re-renders
-   * before anything is committed to the screen. The value is a boolean and the
-   * guard makes it one-way, so the render stays pure — there is no clock read
-   * and no second write.
+   * ── Why the latch is keyed and not just mounted ───────────────────────────
+   *
+   * This hook is called unconditionally by `OnboardingFlow`, so it outlives
+   * every step change — `enabled` toggles, the hook does not remount. A student
+   * who reaches the feed, goes back, likes a different course and returns has a
+   * new `cacheKey`, a new ranking, and a feed they have genuinely not watched
+   * being built; but a latch scoped to the mount would still read "already
+   * seen" and settle in the same frame. The fetch effect below is already keyed
+   * this way. `prevKey` is React's documented reset-on-change pattern, and it
+   * keeps the presentation state and the data state agreeing on what "this
+   * feed" means.
+   *
+   * The write happens during render rather than in an effect, deliberately: an
+   * effect runs after the browser has painted, so the flag would arrive a frame
+   * late and the floor would start a frame after the screen it is meant to
+   * hold. Setting it here re-renders before anything is committed.
    */
+  const [prevKey, setPrevKey] = useState(cacheKey);
   const [waited, setWaited] = useState(false);
-  if (enabled && !waited && (cards === null || !hasRevealedFeedPreview(cacheKey))) {
+  const [heldLongEnough, setHeldLongEnough] = useState(false);
+
+  if (prevKey !== cacheKey) {
+    setPrevKey(cacheKey);
+    setWaited(false);
+    setHeldLongEnough(false);
+  } else if (enabled && !waited && (cards === null || !hasRevealedFeedPreview(cacheKey))) {
     setWaited(true);
   }
-
-  const [heldLongEnough, setHeldLongEnough] = useState(false);
 
   useEffect(() => {
     if (!waited || heldLongEnough) return;

@@ -275,7 +275,7 @@ function RequirementBranch({
       */}
       <span
         className={cx(
-          "min-w-0 flex-1 text-pretty text-subheadline-regular",
+          "min-w-0 flex-1 text-pretty text-body-regular",
           done ? "text-text-secondary" : "text-text-primary",
         )}
       >
