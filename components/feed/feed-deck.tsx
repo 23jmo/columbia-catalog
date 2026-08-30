@@ -509,8 +509,13 @@ function SwipeableCard({
       </div>
 
       <motion.div
+        data-swipe-card=""
         className="relative flex w-full min-w-0 touch-pan-y"
         style={{ x, rotate }}
+        onDragStart={() => {
+          // Start of the throw — a tick so the grab registers in the hand.
+          haptic("selection");
+        }}
         /*
          * `dragDirectionLock` is the whole reason this can live in a scrolling
          * column. Without it a drag that starts 5° off vertical captures the
@@ -525,7 +530,11 @@ function SwipeableCard({
         dragMomentum={false}
         onDragEnd={(_event, info) => {
           const verdict = swipeVerdict(info.offset.x, info.velocity.x);
-          if (!verdict) return;
+          if (!verdict) {
+            // Released short of a commit — tick the snap back.
+            haptic("selection");
+            return;
+          }
           // Keep flying from the release point — do not wait on the parent.
           const dir: 1 | -1 = verdict === "saved" ? 1 : -1;
           setThrowDir(dir);

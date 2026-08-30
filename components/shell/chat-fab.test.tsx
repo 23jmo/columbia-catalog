@@ -18,6 +18,8 @@ describe("ChatFab", () => {
     const html = markup();
     expect(html).toContain(`href="${CHAT_PATH}"`);
     expect(html).toContain("Open chat");
+    // Opts the link into the iOS switch overlay — it is not a <button>.
+    expect(html).toContain("data-haptic");
   });
 
   it("renders nothing when asked to hide", () => {

@@ -15,7 +15,8 @@
 
 export const OVERLAY_ATTR = "data-haptic-overlay";
 
-const HOST_SELECTOR = "button, [role='button']";
+// Links (sidebar dests, chat FAB) are not buttons. `data-haptic` opts them in.
+const HOST_SELECTOR = "button, [role='button'], [data-haptic]";
 
 let overlaysInstalled = false;
 let overlayObserver: MutationObserver | null = null;
