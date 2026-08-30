@@ -255,3 +255,148 @@ export async function explainCourseAction(
   }
   return { status: "not_offered", recommendation: null, withheld: null };
 }
+
+/* ==========================================================================
+ * The catalog's ordering
+ * ========================================================================== */
+
+/**
+ * One course's personal relevance, as the search engine's overlay wants it.
+ *
+ * The number is an ORDERING, not a quantity. Nothing renders it, nothing
+ * compares it across calls, and its only job is to sort one course above
+ * another — so it is min-max normalized per call into bands that stay apart:
+ *
+ *     +1.0 … +2.0   ranked: the engine scored it and the student can take it
+ *      0            absent from the map — no signal either way
+ *     -1.0          withheld: prerequisites we can prove are missing
+ *     -2.0          already taken or planned: they have decided
+ *
+ * The gaps matter more than the values. A course we know nothing about must
+ * outrank one we know the student is not ready for, and both must outrank one
+ * they have already sat through. Collapsing those three into "no score" is what
+ * would make the catalog's first screen show a student the class they took last
+ * spring.
+ */
+export interface CatalogRelevanceEntry {
+  courseId: string;
+  score: number;
+}
+
+export interface CatalogRelevanceResult {
+  /**
+   * False when we have nothing to personalize with. The catalog then keeps its
+   * course-number order rather than inventing one: for a signed-out visitor
+   * every term in the blend is zero except `unlock`, which would rank the
+   * catalog by how many doors each course opens *for nobody in particular* —
+   * a fact about the catalog wearing a personal pronoun (see `./index`).
+   */
+  personalized: boolean;
+  entries: CatalogRelevanceEntry[];
+}
+
+/** Ranked courses land in [RANKED_FLOOR, RANKED_CEILING]. */
+const RANKED_FLOOR = 1;
+const RANKED_CEILING = 2;
+const WITHHELD_SCORE = -1;
+const DECIDED_SCORE = -2;
+
+/**
+ * Personal relevance for every course in the active terms.
+ *
+ * This is the catalog's secondary sort key — the "then" in "query relevance
+ * first, then personal relevance". It exists as its own action rather than
+ * reusing `recommendCoursesAction` because the two want opposite things from
+ * the engine: a feed wants the best twenty courses a student can take, and a
+ * catalog must still list all 4,878 including the ones it is ordering last.
+ *
+ * So `withheldLimit` is raised to the full candidate set and nothing is
+ * dropped. A course the prerequisite filter holds back is not hidden from the
+ * catalog — it sinks, which is the honest rendering of "not yet".
+ *
+ * Cost is the same class as the home feed: one profile read, one audit, one
+ * candidate expansion, then a scoring pass over the active catalog. The client
+ * fetches it in parallel with the index download and applies it when it lands,
+ * so nothing on the Catalog screen waits for this.
+ */
+export async function catalogRelevanceAction(): Promise<CatalogRelevanceResult> {
+  /*
+   * The student is read alone and first, on purpose. Every other load here is
+   * expensive and every one of them is wasted on a visitor with no record --
+   * which, on the Catalog screen, is most of them. Answering "nothing to
+   * personalize with" costs one profile read.
+   */
+  const student = await loadStudent();
+  const personalized = student.engine.taken.length > 0 || student.outstanding.length > 0;
+  if (!personalized) return { personalized: false, entries: [] };
+
+  const [catalog, prereqs, vectors] = await Promise.all([
+    loadCatalog(ACTIVE_TERMS),
+    loadPrereqSource(),
+    loadVectorSource(),
+  ]);
+
+  const result = recommend({
+    profile: student.engine,
+    candidates: catalog.candidates,
+    outstanding: student.outstanding,
+    prereqs,
+    vectors,
+    limit: catalog.candidates.length,
+    withheldLimit: catalog.candidates.length,
+  });
+
+  const entries: CatalogRelevanceEntry[] = [];
+
+  /*
+   * Min-max over the ranked scores, not a fixed divisor.
+   *
+   * `ScoredRecommendation.score` is documented as comparable within a call and
+   * not across them, and its range genuinely moves: a student with six
+   * outstanding requirement groups tops out near 6, one with none tops out
+   * around 0.5 on taste alone. Normalizing against the call's own spread is
+   * what keeps the ranked band above the "no signal" zero for both of them.
+   */
+  const ranked = result.recommendations;
+  if (ranked.length > 0) {
+    let lowest = Infinity;
+    let highest = -Infinity;
+    for (const item of ranked) {
+      if (item.score < lowest) lowest = item.score;
+      if (item.score > highest) highest = item.score;
+    }
+    const spread = highest - lowest;
+    for (const item of ranked) {
+      // A flat spread means every candidate scored identically. Sitting them
+      // all at the ceiling is right: they are tied, and the engine's own
+      // course-number tiebreak takes it from there.
+      const position = spread > 0 ? (item.score - lowest) / spread : 1;
+      entries.push({
+        courseId: item.course.courseId,
+        score: RANKED_FLOOR + position * (RANKED_CEILING - RANKED_FLOOR),
+      });
+    }
+  }
+
+  for (const item of result.withheld) {
+    entries.push({ courseId: item.course.courseId, score: WITHHELD_SCORE });
+  }
+
+  /*
+   * Taken and planned courses appear in neither list — `recommend` drops them
+   * before scoring, because "already decided" is not a recommendation. The
+   * catalog still has to show them, and showing them first would be the worst
+   * possible answer, so they are scored here rather than left absent.
+   */
+  const decided = new Set<string>([
+    ...student.engine.taken.map((course) => course.courseId),
+    ...(student.engine.planned ?? []),
+  ]);
+  for (const candidate of catalog.candidates) {
+    if (decided.has(candidate.courseId)) {
+      entries.push({ courseId: candidate.courseId, score: DECIDED_SCORE });
+    }
+  }
+
+  return { personalized: true, entries };
+}
