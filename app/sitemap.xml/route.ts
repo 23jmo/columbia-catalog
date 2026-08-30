@@ -1,6 +1,8 @@
 import { sitemapXml } from "@/lib/marketing/crawler-files";
 import { PUBLIC_CACHE_CONTROL } from "@/lib/marketing/site";
 
+export const dynamic = "force-static";
+
 /** /sitemap.xml as application/xml. Never HTML. */
 export function GET() {
   return new Response(sitemapXml(), {

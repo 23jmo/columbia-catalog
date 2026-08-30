@@ -1,6 +1,8 @@
 import { llmsFullTxt } from "@/lib/marketing/crawler-files";
 import { PUBLIC_CACHE_CONTROL } from "@/lib/marketing/site";
 
+export const dynamic = "force-static";
+
 /** Longer llms.txt: setup steps and the transcript promise. */
 export function GET() {
   return new Response(llmsFullTxt(), {
