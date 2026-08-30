@@ -25,7 +25,7 @@ import { CourseChoices, type AnsweredChoice } from "./course-choices";
 import { CourseworkSkeleton } from "./coursework-skeleton";
 
 /**
- * "You took one of each of these — which?"
+ * "Which of these classes have you already taken?"
  *
  * ── Why this is a screen of its own, and why it comes first ─────────────────
  *

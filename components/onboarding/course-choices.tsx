@@ -129,6 +129,7 @@ export function CourseChoices({
                     isSelected={route.routeId === selectedRouteId}
                     onPress={() => onChoose(choice, route)}
                     sublabel={lines.sublabel}
+                    sublabelLines={2}
                     label={`I took ${lines.label}${lines.sublabel ? ` — ${lines.sublabel}` : ""}`}
                   >
                     {lines.label}
@@ -146,36 +147,39 @@ export function CourseChoices({
 /**
  * How one route reads on a chip.
  *
- * ── Code first, which is backwards from every other chip on this screen ─────
+ * ── The name leads; the call numbers are the subtitle ───────────────────────
  *
- * The confirmed chips and the suggestion strip lead with the title, because
- * there the title IS the identifier — a list of unrelated courses, where
- * "Operating Systems I" tells you what you are looking at and the call number
- * is a detail. The options inside one choose-one group are the opposite: they
- * are siblings by construction, and their titles are near-identical.
+ * Same rule as every other chip in onboarding, and it is the rule because a
+ * student recognises a course they took by its name. The chemistry group is
+ * what forced this back into line: its four options were rendering as their
+ * course lists, so the primary line of each button was eight call numbers
+ * joined end to end and wrapped over four lines, while the one phrase that
+ * actually told the options apart — "general chemistry then organic" — sat
+ * underneath in tertiary grey. The button said the least useful thing loudest.
  *
- * At phone width `COURSE_TITLE` truncates around eighteen characters, which
- * turned Art Hum and Music Hum into two buttons both reading "Masterpieces of
- * W…", and the two Environmental Biology options into two reading
- * "Environmental Biol…". Two controls that look the same and do different
- * things is a worse failure than an unlovely label. The call number is short,
- * never truncates, and is the only part of a sibling set guaranteed distinct —
- * so here it leads, and the title supports it.
+ * The Bulletin writes those labels as "Option 1 — general chemistry then
+ * organic". The ordinal is a numbering artefact of the source document, not a
+ * name, so `describeRoute` takes it off and the description leads.
  *
- * A sequence keeps its own name up front WHEN that name distinguishes it.
- * "Literature Humanities" and "Contemporary Civilization" are already short
- * and already distinct, and both halves go underneath because tapping confirms
- * both.
+ * ── When the codes still have to lead ───────────────────────────────────────
  *
- * The SEAS physics requirement is where that stops being true. The Bulletin
- * calls its three options "Sequence 1", "Sequence 2" and "Sequence 3", and the
- * program data is right to say so — but rendered as three buttons under the
- * question "which?", the labels answer it with an index the student has never
- * seen. The call numbers underneath were carrying the entire meaning of the
- * choice while the ordinal took the emphasis. So the single-course rule
- * extends to sequences: when the sibling labels do not tell the options apart,
- * the codes lead and the label supports — the same swap, triggered by the same
- * condition, just measured across the group instead of within one title.
+ * Some groups genuinely have no name to lead with. The Bulletin calls the SEAS
+ * physics options "Sequence 1", "Sequence 2" and "Sequence 3", and the program
+ * data is right to record that — but three buttons reading "Sequence 1/2/3"
+ * under "which of these have you taken?" answer the question with an index the
+ * student has never seen. There the call numbers ARE the distinguishing
+ * content: PHYS UN1401 and PHYS UN1601 is a choice a Columbia student can
+ * actually make, "Sequence 1 or Sequence 2" is not.
+ *
+ * Leading with the course TITLES instead was the obvious alternative and it
+ * does not work: 31 of the 46 courses named across every `sequence_choice`
+ * group in the catalog have no title at all, because we hold only the two
+ * active terms and most of these are not currently taught. Physics Sequence 3
+ * resolves to zero titles. A rule that leads with names would print blanks on
+ * exactly the groups that need help most.
+ *
+ * So: lead with the name wherever one exists, and fall back to the codes only
+ * where the source document never gave the option a name.
  */
 export function routeChipLines(
   route: GuessChoiceRoute,
@@ -193,27 +197,110 @@ export function routeChipLines(
       ? { label: lines.sublabel, sublabel: lines.label }
       : lines;
   }
-  const codes = route.courses.map((facts) => facts.code).join(" · ");
-  return labelsDistinguish(siblings)
-    ? { label: route.label, sublabel: codes }
+
+  const rawCodes = route.courses.map((facts) => facts.code);
+  const codes = formatCodeList(rawCodes);
+  const lines = labelsDistinguish(siblings)
+    ? { label: describeRoute(route.label), sublabel: codes }
+    // The label is an index ("Sequence 2") and carries nothing the codes do
+    // not, so it goes underneath rather than on top.
     : { label: codes, sublabel: route.label };
+
+  // Computer engineering labels its applied-maths routes with their own call
+  // numbers — "MATH UN2030 + APMA E3101" — so the two lines would say the same
+  // thing in two punctuations. One line, in the punctuation every other chip
+  // on the screen uses.
+  return labelIsJustCodes(lines.sublabel, rawCodes) ? { label: codes } : lines;
+}
+
+/**
+ * The route's name, with the source document's ordinal taken off.
+ *
+ * "Option 1 — general chemistry then organic" is a numbered list item, not a
+ * name; the name is what follows the dash. A label with no such tail is
+ * already a name ("Literature Humanities", "Honors Mathematics A and B") and
+ * comes back untouched.
+ */
+function describeRoute(label: string): string {
+  const tail = /^(?:option|sequence|track|path)\s+[\dA-Za-z]+\s*(?:[—–-]|,)\s*(.+)$/iu.exec(
+    label.trim(),
+  );
+  const rest = tail?.[1]?.trim();
+  if (!rest) return label;
+  return rest.charAt(0).toUpperCase() + rest.slice(1);
+}
+
+/**
+ * A route's courses as one readable line.
+ *
+ * The subject is printed once and then only while it keeps changing, so the
+ * biology chemistry option reads
+ *
+ *     CHEM UN1403, UN1404, UN1500, UN1501, UN2443, UN2444, UN2493, UN2494
+ *
+ * rather than repeating "CHEM" eight times. That repetition was most of the
+ * width of the longest option and all of why it read as a block of noise; a
+ * mixed route still names each subject as it changes ("MATH UN2030, APMA
+ * E3101"), because there the subject is the part that differs.
+ */
+function formatCodeList(codes: readonly string[]): string {
+  const parts: string[] = [];
+  let previousSubject = "";
+  for (const code of codes) {
+    const separator = code.indexOf(" ");
+    const subject = separator === -1 ? code : code.slice(0, separator);
+    const number = separator === -1 ? "" : code.slice(separator + 1);
+    if (number && subject === previousSubject) {
+      parts.push(number);
+      continue;
+    }
+    parts.push(code);
+    previousSubject = subject;
+  }
+  return parts.join(", ");
+}
+
+/**
+ * Is this label just the route's own call numbers?
+ *
+ * Compared against the RAW codes rather than the formatted line. The formatted
+ * line has already dropped the repeated subject, so "MATH UN2030 + MATH
+ * UN2010" would not match "MATH UN2030, UN2010" — and those are exactly the
+ * routes this needs to catch. Punctuation and case are ignored, because the
+ * question is whether the two lines carry the same information, not whether
+ * the Bulletin joined them with a plus and we joined them with a comma.
+ */
+function labelIsJustCodes(label: string, codes: readonly string[]): boolean {
+  const bare = (value: string) => value.replace(/[^a-z0-9]/giu, "").toLowerCase();
+  return bare(label) === codes.map(bare).join("");
 }
 
 /**
  * Do this group's labels actually tell its options apart?
  *
- * The test is what remains once the numbering comes off. "Sequence 1" and
- * "Sequence 2" both reduce to "Sequence" and collide, so the labels are an
- * index rather than a description; "Literature Humanities" and "Contemporary
- * Civilization" survive intact and stay distinct, so they are descriptions.
+ * The test runs on the DESCRIBED label, so "Option 1 — general chemistry then
+ * organic" is compared as "General chemistry then organic" and passes. What
+ * fails is a label that is only an ordinal.
  *
- * Cutting at the first digit rather than only a trailing one is deliberate:
- * mechanical engineering has a "Sequence 1, third term EEEB UN2001" route,
- * whose tail is a qualifier on the ordinal and not a name either.
+ * `isPureIndex` catches those outright, and one is enough to disqualify the
+ * whole group: a set where one button reads "Third term PHYS BC3001" and its
+ * neighbour reads "Sequence 2" is not a set of names, it is a set of names and
+ * numbers, and the student has to compare the codes anyway.
+ *
+ * The stem test then catches the rest. Cutting at the first digit rather than
+ * only a trailing one is deliberate: mechanical engineering has a "Sequence 2,
+ * third term EEEB UN2001" route, whose tail is a qualifier on the ordinal and
+ * not a name either.
  */
 function labelsDistinguish(routes: readonly GuessChoiceRoute[]): boolean {
+  if (routes.some((route) => isPureIndex(route.label))) return false;
   const stems = routes.map((route) =>
-    route.label.replace(/[\s,]*\d.*$/u, "").trim().toLowerCase(),
+    describeRoute(route.label).replace(/[\s,]*\d.*$/u, "").trim().toLowerCase(),
   );
   return new Set(stems).size === routes.length;
+}
+
+/** "Sequence 1", "Sequence A", "Option 3" — a list position, and nothing else. */
+function isPureIndex(label: string): boolean {
+  return /^(?:option|sequence|track|path)\s+[A-Za-z0-9]+$/iu.test(label.trim());
 }

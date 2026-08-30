@@ -848,7 +848,7 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
     return (
       <OnboardingScreen
         {...chrome}
-        question="You took one of each of these — which?"
+        question="Which of these classes have you already taken?"
         wide
         nextLabel="Continue"
         // Not `cyanRose` (the degree question before) or `violetRose` (the
