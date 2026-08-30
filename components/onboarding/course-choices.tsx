@@ -1,6 +1,6 @@
 "use client";
 
-import type { GuessChoice, GuessChoiceRoute } from "@/lib/onboarding/guess";
+import type { GuessChoice, GuessFacts } from "@/lib/onboarding/guess";
 import { cx } from "@/utils/cx";
 
 import { ChipWrap, OptionChip, courseChipLines } from "./chip";
@@ -25,10 +25,21 @@ import { ChipWrap, OptionChip, courseChipLines } from "./chip";
  * chips it reads as eight separate guesses, most of which we know are false,
  * since a student who did Lit Hum did not also do CC.
  *
- * ── One tap answers the whole group, and the group stays ────────────────────
+ * ── One chip per course, and the group stays ───────────────────────────────
  *
- * Picking a route confirms every course in it — both terms of a sequence — and
- * the route lights up as the answer. The group does NOT leave the screen.
+ * The underlying data models each option as a ROUTE — a whole sequence, both
+ * terms of Lit Hum together — and this screen used to render it that way, one
+ * button per route. A student who had done one term of a sequence, or who had
+ * switched sequences partway, could not answer at all, and the ones who could
+ * were being asked to recognise "Sequence 2" rather than a class they sat in.
+ *
+ * So the routes are flattened to their courses (`choiceCourses`) and each gets
+ * its own chip. Selection is free: tapping records that one course, tapping it
+ * again takes it back off. See `choiceCourses` for why that does not weaken the
+ * requirement, and `toggleCourse` in `step-choices.tsx` for why nothing else in
+ * the group is cleared.
+ *
+ * The group does NOT leave the screen once answered.
  *
  * It used to. An answered group was filtered out, which read as the question
  * being consumed, and it cost the student the two things a visible answer
@@ -36,24 +47,18 @@ import { ChipWrap, OptionChip, courseChipLines } from "./chip";
  * mis-tap meant continuing to the next screen and hunting the course down in a
  * list of twenty to remove it.
  *
- * Staying visible is also what makes switching answers correct rather than
- * additive. These are choose-ONE groups, so picking Contemporary Civilization
- * after Literature Humanities has to retract Lit Hum — otherwise the record
- * claims both, which is the one thing the group's own rule says cannot be
- * true. A vanished group had nowhere to express that.
- *
  * Hence `OptionChip` rather than `AddChip`, which is the same distinction
  * stated in components: an `AddChip` is an offer, with a leading + and no
  * pressed state, because accepting it ends it. Every other question in
  * onboarding — school, class year, major — is an `OptionChip`, and a
  * choose-one requirement is that same kind of question.
  *
- * "None yet" dismisses every route at once, which is the honest reading of a
- * student saying they have not done this requirement — and is what stops a
- * question they have already declined from coming back as suggestion chips on
- * the screen after this one. Picking a route afterwards undoes it on its own:
- * `addCourse` drops the course from `dismissedCourseIds`, since an explicit
- * add is the newer statement.
+ * "None yet" dismisses every course in the group at once, which is the honest
+ * reading of a student saying they have not done this requirement — and is what
+ * stops a question they have already declined from coming back as suggestion
+ * chips on the screen after this one. Ticking a course afterwards undoes it on
+ * its own: `addCourse` drops the course from `dismissedCourseIds`, since an
+ * explicit add is the newer statement.
  *
  * No heading of its own: the step's question IS the heading now, and repeating
  * it here would print the same sentence twice on one screen.
@@ -61,24 +66,21 @@ import { ChipWrap, OptionChip, courseChipLines } from "./chip";
 /** A group, plus what the student has already said about it. */
 export interface AnsweredChoice {
   choice: GuessChoice;
-  /** The route whose courses are on the record, if any. */
-  selectedRouteId: string | null;
-  /** They said "None yet" and have not since picked a route. */
+  /** Course ids from this group that are on the record. */
+  selectedCourseIds: readonly string[];
+  /** They said "None yet" and have not since picked a course. */
   isDeclined: boolean;
 }
 
 export function CourseChoices({
   choices,
-  onChoose,
+  onToggle,
   onDecline,
 }: {
   choices: readonly AnsweredChoice[];
-  /**
-   * Confirms every course in the route, retracts the sibling route it
-   * replaces, and un-picks it when it is already the answer.
-   */
-  onChoose: (choice: GuessChoice, route: GuessChoiceRoute) => void;
-  /** Dismisses every course in every route. */
+  /** Puts one course on the record, or takes it back off. */
+  onToggle: (course: GuessFacts) => void;
+  /** Dismisses every course in the group. */
   onDecline: (choice: GuessChoice) => void;
 }) {
   if (choices.length === 0) return null;
@@ -86,7 +88,7 @@ export function CourseChoices({
   return (
     <div className="flex flex-col gap-4">
       <ul className="flex flex-col gap-4">
-        {choices.map(({ choice, selectedRouteId, isDeclined }) => (
+        {choices.map(({ choice, selectedCourseIds, isDeclined }) => (
           <li key={choice.choiceId} className="flex flex-col gap-1">
             <div className="flex items-baseline justify-between gap-3 px-1">
               <h3 className="min-w-0 truncate text-caption-1-medium text-text-secondary">
@@ -94,8 +96,8 @@ export function CourseChoices({
               </h3>
               {/*
                 Pressed rather than hidden once chosen, for the same reason the
-                routes are: it is an answer the student gave and may want back.
-                `aria-pressed` because it toggles nothing off — picking a route
+                chips are: it is an answer the student gave and may want back.
+                `aria-pressed` because it toggles nothing off — ticking a course
                 is what clears it — so it reports state without promising a
                 second tap will undo it.
               */}
@@ -121,14 +123,15 @@ export function CourseChoices({
               different x and lose the association with the label above.
             */}
             <ChipWrap className="justify-start gap-1.5 overflow-visible px-2.5 pt-2 sm:gap-2">
-              {choice.routes.map((route) => {
-                const lines = routeChipLines(route, choice.routes);
+              {choiceCourses(choice).map((course, _index, courses) => {
+                const lines = chipLinesFor(course, courses);
                 return (
                   <OptionChip
-                    key={route.routeId}
-                    isSelected={route.routeId === selectedRouteId}
-                    onPress={() => onChoose(choice, route)}
+                    key={course.courseId}
+                    isSelected={selectedCourseIds.includes(course.courseId)}
+                    onPress={() => onToggle(course)}
                     sublabel={lines.sublabel}
+                    sublabelLines={2}
                     label={`I took ${lines.label}${lines.sublabel ? ` — ${lines.sublabel}` : ""}`}
                   >
                     {lines.label}
@@ -144,76 +147,83 @@ export function CourseChoices({
 }
 
 /**
- * How one route reads on a chip.
+ * Every course a group offers, once each, in the order the Bulletin lists them.
  *
- * ── Code first, which is backwards from every other chip on this screen ─────
+ * ── Why the sequences are flattened ─────────────────────────────────────────
  *
- * The confirmed chips and the suggestion strip lead with the title, because
- * there the title IS the identifier — a list of unrelated courses, where
- * "Operating Systems I" tells you what you are looking at and the call number
- * is a detail. The options inside one choose-one group are the opposite: they
- * are siblings by construction, and their titles are near-identical.
+ * The program data models these as ROUTES, and it is right to: `sequence_choice`
+ * exists because "one of Lit Hum I+II or CC I+II" cannot be written as a count
+ * over four courses without also accepting Lit Hum I plus CC I. That is a real
+ * constraint and the audit engine still enforces it.
  *
- * At phone width `COURSE_TITLE` truncates around eighteen characters, which
- * turned Art Hum and Music Hum into two buttons both reading "Masterpieces of
- * W…", and the two Environmental Biology options into two reading
- * "Environmental Biol…". Two controls that look the same and do different
- * things is a worse failure than an unlovely label. The call number is short,
- * never truncates, and is the only part of a sibling set guaranteed distinct —
- * so here it leads, and the title supports it.
+ * But it is a constraint on the REQUIREMENT, not on the question being asked
+ * here. This screen asks a student which classes they have already taken, and
+ * a student knows that one course at a time. Asked as routes, the Physics group
+ * offered three buttons whose meaning was "I did this whole two-term sequence",
+ * which is a bigger claim than the question needs and one a student halfway
+ * through a sequence could not answer at all. Asked as courses, it is six
+ * buttons and every one of them is a fact they can confirm on sight.
  *
- * A sequence keeps its own name up front WHEN that name distinguishes it.
- * "Literature Humanities" and "Contemporary Civilization" are already short
- * and already distinct, and both halves go underneath because tapping confirms
- * both.
+ * A course reachable by two routes appears once. Mechanical Engineering's
+ * physics routes all begin with PHYS UN1401 and differ only in the third term,
+ * so undeduplicated the group would print the same chip three times.
  *
- * The SEAS physics requirement is where that stops being true. The Bulletin
- * calls its three options "Sequence 1", "Sequence 2" and "Sequence 3", and the
- * program data is right to say so — but rendered as three buttons under the
- * question "which?", the labels answer it with an index the student has never
- * seen. The call numbers underneath were carrying the entire meaning of the
- * choice while the ordinal took the emphasis. So the single-course rule
- * extends to sequences: when the sibling labels do not tell the options apart,
- * the codes lead and the label supports — the same swap, triggered by the same
- * condition, just measured across the group instead of within one title.
+ * The cost is that a half-finished sequence can now be recorded, and that is
+ * the honest outcome: it is what the student actually took, and the audit says
+ * the requirement is unmet rather than the screen refusing to hear it.
  */
-export function routeChipLines(
-  route: GuessChoiceRoute,
-  siblings: readonly GuessChoiceRoute[],
-): {
-  label: string;
-  sublabel?: string;
-} {
-  const [only] = route.courses;
-  if (route.courses.length === 1 && only) {
-    const lines = courseChipLines(only.code, only.title);
-    // `courseChipLines` returns a bare code with no sublabel when it has no
-    // title to show; keep that rather than printing the code twice.
-    return lines.sublabel
-      ? { label: lines.sublabel, sublabel: lines.label }
-      : lines;
+export function choiceCourses(choice: GuessChoice): GuessFacts[] {
+  const seen = new Set<string>();
+  const courses: GuessFacts[] = [];
+  for (const route of choice.routes) {
+    for (const facts of route.courses) {
+      if (seen.has(facts.courseId)) continue;
+      seen.add(facts.courseId);
+      courses.push(facts);
+    }
   }
-  const codes = route.courses.map((facts) => facts.code).join(" · ");
-  return labelsDistinguish(siblings)
-    ? { label: route.label, sublabel: codes }
-    : { label: codes, sublabel: route.label };
+  return courses;
 }
 
 /**
- * Do this group's labels actually tell its options apart?
+ * How one course reads on a chip.
  *
- * The test is what remains once the numbering comes off. "Sequence 1" and
- * "Sequence 2" both reduce to "Sequence" and collide, so the labels are an
- * index rather than a description; "Literature Humanities" and "Contemporary
- * Civilization" survive intact and stay distinct, so they are descriptions.
+ * The name leads and the call number is the subtitle, which is the rule
+ * everywhere else in onboarding and the reason is that nobody recognises a
+ * class they took from its number. `courseChipLines` already returns that
+ * shape, including the known-titles fallback and the registrar-casing repair,
+ * and a course with no title anywhere comes back as a bare code rather than
+ * printing the code twice.
  *
- * Cutting at the first digit rather than only a trailing one is deliberate:
- * mechanical engineering has a "Sequence 1, third term EEEB UN2001" route,
- * whose tail is a qualifier on the ordinal and not a name either.
+ * The exception is a group where two courses carry the SAME title. Applied
+ * Mathematics lists "Partial Differential Equations" twice, as MATH UN3028 and
+ * APMA E4200, and "Probability Theory" twice, as STAT GU4203 and MATH GU4155.
+ * Name-first those are two buttons a student cannot tell apart, and there the
+ * call number is the part that differs, so it goes on top.
  */
-function labelsDistinguish(routes: readonly GuessChoiceRoute[]): boolean {
-  const stems = routes.map((route) =>
-    route.label.replace(/[\s,]*\d.*$/u, "").trim().toLowerCase(),
-  );
-  return new Set(stems).size === routes.length;
+export function chipLinesFor(
+  course: GuessFacts,
+  siblings: readonly GuessFacts[],
+): { label: string; sublabel?: string } {
+  const lines = courseChipLines(course.code, course.title);
+  if (!lines.sublabel || titlesDistinguish(siblings)) return lines;
+  return { label: lines.sublabel, sublabel: lines.label };
+}
+
+/**
+ * Whether a group's courses have names that tell them apart.
+ *
+ * Decided group-wide, so one group never mixes two chip shapes, and only on
+ * the titles that EXIST — a course with no title renders as a bare code and is
+ * never confusable with a named one. That distinction matters: the Linear
+ * Algebra group has two untitled courses among six, and blocking on those would
+ * send the whole group back to leading with call numbers.
+ */
+function titlesDistinguish(siblings: readonly GuessFacts[]): boolean {
+  const named: string[] = [];
+  for (const sibling of siblings) {
+    const lines = courseChipLines(sibling.code, sibling.title);
+    if (lines.sublabel) named.push(lines.label.toLowerCase());
+  }
+  return new Set(named).size === named.length;
 }

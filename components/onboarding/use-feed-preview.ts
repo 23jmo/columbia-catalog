@@ -5,7 +5,9 @@ import { useEffect, useState } from "react";
 import { onboardingFeedPreviewAction } from "@/app/onboarding/actions";
 import {
   feedPreviewCacheKey,
+  hasRevealedFeedPreview,
   loadFeedPreviewCached,
+  markFeedPreviewRevealed,
   peekCachedFeedPreview,
 } from "@/lib/onboarding/feed-preview-cache";
 import type { GuestOnboardingState } from "@/lib/onboarding/state";
@@ -56,17 +58,12 @@ export interface FeedPreview {
 }
 
 /**
- * How long the working screen stays up once it has been shown at all.
+ * How long the working screen stays up.
  *
- * Not a fake progress bar — it only applies when there was real work to wait
- * for, and it is shorter than the thing it protects. `TypewriterQuestion`
- * stamps a word every 88ms, so "Building your first feed." takes about 350ms
- * to finish typing; a prefetch that lands at 200ms would yank the headline
- * mid-word and read as a glitch rather than as a step. 600ms lets the sentence
- * finish and be read once.
- *
- * The common cases are both untouched by it: a warm cache never shows this
- * screen, and a cold rank takes seconds.
+ * Sized to the sentence it protects rather than to the work. `TypewriterQuestion`
+ * stamps a word every 88ms, so "Building your first feed." takes about 350ms to
+ * finish typing; anything shorter yanks the headline mid-word and reads as a
+ * glitch rather than as a step. 600ms lets the sentence finish and be read once.
  */
 const MINIMUM_WORKING_MS = 600;
 
@@ -123,26 +120,59 @@ export function useFeedPreview(
   }, [enabled, cacheKey]);
 
   /*
-   * Latched the first time we render with nothing to show, and never cleared.
+   * Latched on arrival at the last step, and scoped to the answers.
    *
-   * This is React's documented adjust-state-during-render pattern rather than
-   * an effect, and deliberately: an effect runs after the browser has painted,
-   * so the flag would arrive a frame late and the floor below would start a
-   * frame after the screen it is meant to hold. Setting it here re-renders
-   * before anything is committed to the screen. The value is a boolean and the
-   * guard makes it one-way, so the render stays pure — there is no clock read
-   * and no second write.
+   * Two things put the working screen up. The cards not being ready yet is the
+   * obvious one. The other is that this student has not seen their feed built
+   * for these answers before — which is nearly always true and nearly always
+   * fast, because the flow prefetches the ranking several screens earlier.
+   *
+   * That second condition is the point. Without it the prefetch quietly ate the
+   * reveal: the cards resolved in the same frame the step mounted, so the final
+   * headline appeared with no transition into it, and the one moment the whole
+   * flow is building toward went by unmarked. `hasRevealedFeedPreview` is what
+   * keeps it from becoming a tax — it plays once per set of answers, and a
+   * student coming back from Google SSO lands straight on their feed.
+   *
+   * ── Why the latch is keyed and not just mounted ───────────────────────────
+   *
+   * This hook is called unconditionally by `OnboardingFlow`, so it outlives
+   * every step change — `enabled` toggles, the hook does not remount. A student
+   * who reaches the feed, goes back, likes a different course and returns has a
+   * new `cacheKey`, a new ranking, and a feed they have genuinely not watched
+   * being built; but a latch scoped to the mount would still read "already
+   * seen" and settle in the same frame. The fetch effect below is already keyed
+   * this way. `prevKey` is React's documented reset-on-change pattern, and it
+   * keeps the presentation state and the data state agreeing on what "this
+   * feed" means.
+   *
+   * The write happens during render rather than in an effect, deliberately: an
+   * effect runs after the browser has painted, so the flag would arrive a frame
+   * late and the floor would start a frame after the screen it is meant to
+   * hold. Setting it here re-renders before anything is committed.
    */
+  const [prevKey, setPrevKey] = useState(cacheKey);
   const [waited, setWaited] = useState(false);
-  if (enabled && !waited && cards === null) setWaited(true);
-
   const [heldLongEnough, setHeldLongEnough] = useState(false);
+
+  if (prevKey !== cacheKey) {
+    setPrevKey(cacheKey);
+    setWaited(false);
+    setHeldLongEnough(false);
+  } else if (enabled && !waited && (cards === null || !hasRevealedFeedPreview(cacheKey))) {
+    setWaited(true);
+  }
 
   useEffect(() => {
     if (!waited || heldLongEnough) return;
-    const timer = window.setTimeout(() => setHeldLongEnough(true), MINIMUM_WORKING_MS);
+    const timer = window.setTimeout(() => {
+      setHeldLongEnough(true);
+      // Recorded when the beat has actually been served, not when it started,
+      // so a student who navigates away mid-build gets it again on return.
+      markFeedPreviewRevealed(cacheKey);
+    }, MINIMUM_WORKING_MS);
     return () => window.clearTimeout(timer);
-  }, [waited, heldLongEnough]);
+  }, [waited, heldLongEnough, cacheKey]);
 
   /*
    * An error settles the screen as surely as an answer does. A student the

@@ -12,8 +12,8 @@ import {
 import { guessDeckAction } from "@/app/onboarding/actions";
 import type {
   GuessChoice,
-  GuessChoiceRoute,
   GuessDeck,
+  GuessFacts,
 } from "@/lib/onboarding/guess";
 import {
   loadGuessDeckCached,
@@ -21,11 +21,11 @@ import {
 } from "@/lib/onboarding/guess-cache";
 import type { GuestCourse, GuestOnboardingState } from "@/lib/onboarding/state";
 
-import { CourseChoices, type AnsweredChoice } from "./course-choices";
+import { CourseChoices, choiceCourses, type AnsweredChoice } from "./course-choices";
 import { CourseworkSkeleton } from "./coursework-skeleton";
 
 /**
- * "You took one of each of these — which?"
+ * "Which of these classes have you already taken?"
  *
  * ── Why this is a screen of its own, and why it comes first ─────────────────
  *
@@ -33,9 +33,9 @@ import { CourseworkSkeleton } from "./coursework-skeleton";
  * screen. Moving them to their own step ahead of it is not a layout
  * preference; it changes what the guess deck is able to compute.
  *
- * A choose-one answer is worth far more than the one or two chips it adds. It
- * retires an entire requirement group, so nothing downstream keeps offering
- * the rails not taken. It satisfies prerequisites, so courses the engine was
+ * An answer here is worth far more than the chips it adds. It settles a
+ * requirement group, so nothing downstream keeps offering the rails not taken.
+ * It satisfies prerequisites, so courses the engine was
  * withholding as "you cannot have taken this yet" become reachable. And it
  * moves the level ceiling, because confirming a course is the evidence
  * `levelCeilingFor` uses. Asked on the same screen as the guesses, every one
@@ -136,85 +136,79 @@ export function StepChoices({
    * right at BUILD time — a question already answered before the student got
    * here should not be asked — but re-running it after a tap would delete the
    * group the moment it was answered, taking the answer and the ability to
-   * switch routes with it. The deck is the set of questions; this memo is the
+   * change it with it. The deck is the set of questions; this memo is the
    * set of answers.
    *
-   * A route counts as chosen when ANY of its courses is on the record, not all
-   * of them. Tapping adds every course in the route together, so the two agree
-   * for anything answered here; `some` additionally catches a record that
-   * already contained one half — a student who found Lit Hum through the search
-   * box on a previous visit has answered this question, and showing it blank
+   * A course counts as ticked wherever it is on the record, not only when this
+   * screen put it there. A student who found Lit Hum I through the search box
+   * on a previous visit has already told us that, and showing the chip blank
    * would invite them to answer it twice.
    */
   const choices = useMemo<AnsweredChoice[]>(() => {
     const confirmed = new Set(state.courses.map((course) => course.courseId));
     const dismissed = new Set(state.dismissedCourseIds);
     return (deck?.choices ?? []).map((choice) => {
-      const chosen = choice.routes.find((route) =>
-        route.courses.some((facts) => confirmed.has(facts.courseId)),
-      );
+      const courses = choiceCourses(choice);
+      const selectedCourseIds = courses
+        .filter((facts) => confirmed.has(facts.courseId))
+        .map((facts) => facts.courseId);
       return {
         choice,
-        selectedRouteId: chosen?.routeId ?? null,
-        // Declining is only the current answer while nothing is picked; an
-        // explicit route is the newer statement and outranks it.
+        selectedCourseIds,
+        // Declining is only the current answer while nothing is picked; a
+        // course they ticked is the newer statement and outranks it.
         isDeclined:
-          !chosen &&
-          choice.routes.every((route) =>
-            route.courses.some((facts) => dismissed.has(facts.courseId)),
-          ),
+          selectedCourseIds.length === 0 &&
+          courses.length > 0 &&
+          courses.every((facts) => dismissed.has(facts.courseId)),
       };
     });
   }, [deck, state.courses, state.dismissedCourseIds]);
 
   /**
-   * Answer one requirement. Every course in the route lands, which for a
-   * sequence is both terms — the student said "Literature Humanities", and
-   * Lit Hum is two semesters.
+   * Put one course on the record, or take it back off.
    *
    * `picker`, not `onboarding_guess`: they chose this one themselves, and the
    * profile screen shows the difference between our guess and their answer.
    *
-   * Implied prerequisites are NOT collected here, and that is not an
-   * omission. The coursework screen rebuilds the deck from this new record,
-   * and `impliedPrerequisites` runs inside `buildGuessDeck` — so anything
-   * this answer implies arrives on the very next screen as tier 1, computed
+   * ── Why nothing else is cleared ─────────────────────────────────────────
+   *
+   * The groups these come from are choose-ONE, and an earlier version of this
+   * screen enforced that: picking a route wiped every sibling route first, so
+   * tapping Contemporary Civilization after Literature Humanities read as a
+   * correction rather than a second claim.
+   *
+   * That was the right behaviour for a button meaning "I did this whole
+   * sequence", and the wrong one now that a button means "I took this class".
+   * A student who took one term of Lit Hum and then switched to CC took those
+   * courses; a screen that silently un-ticked the first one when they ticked
+   * the second would be deleting a fact they had just reported. The choose-one
+   * constraint belongs to the requirement, and `sequence_choice` still enforces
+   * it in the audit — where the answer is "this requirement is not satisfied",
+   * not "you did not take that class".
+   *
+   * Tapping a ticked course removes it, which is what the pressed state
+   * promises. `removeCourse` files it under `dismissedCourseIds`, so the deck
+   * on the next screen does not offer straight back what was just un-ticked.
+   *
+   * Implied prerequisites are NOT collected here, and that is not an omission.
+   * The coursework screen rebuilds the deck from this new record, and
+   * `impliedPrerequisites` runs inside `buildGuessDeck` — so anything this
+   * answer implies arrives on the very next screen as tier 1, computed
    * server-side against the full prerequisite graph rather than against the
    * partial map this screen happens to be holding.
    */
-  /**
-   * Answer the group — or change the answer, or take it back.
-   *
-   * The retraction is the part that matters. These groups are choose-ONE, so a
-   * student who taps Contemporary Civilization after Literature Humanities is
-   * correcting themselves, not reporting a second course, and leaving Lit Hum
-   * on the record would assert something the requirement itself rules out.
-   * Every sibling route is cleared before the new one goes on.
-   *
-   * Tapping the current answer again removes it, which is what the pressed
-   * state promises. `removeCourse` files it under `dismissedCourseIds`, so the
-   * deck on the next screen does not offer straight back what was just
-   * un-ticked.
-   */
-  const chooseRoute = useCallback(
-    (choice: GuessChoice, route: GuessChoiceRoute) => {
+  const toggleCourse = useCallback(
+    (facts: GuessFacts) => {
       const confirmed = new Set(
         stateRef.current.courses.map((course) => course.courseId),
       );
-      const isSelected = route.courses.some((facts) =>
-        confirmed.has(facts.courseId),
-      );
-
-      for (const other of choice.routes) {
-        if (other.routeId === route.routeId && !isSelected) continue;
-        for (const facts of other.courses) {
-          if (confirmed.has(facts.courseId)) removeCourse(facts.courseId);
-        }
+      if (confirmed.has(facts.courseId)) {
+        removeCourse(facts.courseId);
+        return;
       }
-      if (isSelected) return;
-
-      addCourses(
-        route.courses.map((facts) => ({
+      addCourses([
+        {
           courseId: facts.courseId,
           code: facts.code,
           title: facts.title,
@@ -223,24 +217,22 @@ export function StepChoices({
           liked: null,
           source: "picker" as const,
           inCatalog: true,
-        })),
-      );
+        },
+      ]);
     },
     [addCourses, removeCourse],
   );
 
   /**
-   * "None yet" — dismiss every route, not just the first.
+   * "None yet" — dismiss every course in the group, not just one.
    *
    * A student saying they have not done the Physics requirement has ruled out
-   * all three sequences, and recording only one would leave the other two to
-   * come back as suggestion chips on the screen after this one.
+   * all six of its courses, and recording one would leave the rest to come
+   * back as suggestion chips on the screen after this one.
    */
   const declineChoice = useCallback(
     (choice: GuessChoice) => {
-      for (const route of choice.routes) {
-        for (const facts of route.courses) removeCourse(facts.courseId);
-      }
+      for (const facts of choiceCourses(choice)) removeCourse(facts.courseId);
     },
     [removeCourse],
   );
@@ -285,7 +277,7 @@ export function StepChoices({
     <div className="flex flex-col gap-5">
       <CourseChoices
         choices={choices}
-        onChoose={chooseRoute}
+        onToggle={toggleCourse}
         onDecline={declineChoice}
       />
     </div>

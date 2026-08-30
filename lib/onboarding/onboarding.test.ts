@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { interestTagsForPrograms, knownInterestTagIds } from "@/lib/profile/interest-tags";
 import {
   CC_CORE,
+  CC_MAJOR_BIOLOGY,
   CC_MAJOR_COMPUTER_SCIENCE,
   CC_MAJOR_POLITICAL_SCIENCE,
   CC_MINOR_COMPUTER_SCIENCE,
@@ -1447,6 +1448,27 @@ describe("choose-one questions", () => {
     const built = deck({ programs: [CC_MAJOR_POLITICAL_SCIENCE], school: "CC" });
 
     expect(labels(built)).not.toContain("Research Methods");
+  });
+
+  it("counts that cap in courses, because courses are what get drawn", () => {
+    // CC Biology's Chemistry group is only four routes — under the route cap —
+    // but fifteen distinct courses, and the screen draws one chip per course.
+    // As routes it was four buttons; as courses it is a wall of call numbers
+    // above a question meant to be answered at a glance.
+    const built = deck({ programs: [CC_MAJOR_BIOLOGY], school: "CC" });
+
+    expect(labels(built)).not.toContain("Chemistry");
+  });
+
+  it("still asks the groups that stayed a reasonable size", () => {
+    // The guard against the cap being set so low it empties the screen: the
+    // Physics group is six courses across three sequences and has to survive.
+    const physics = deck().choices.find((choice) => choice.label === "Physics");
+
+    expect(physics).toBeDefined();
+    expect(
+      new Set(physics?.routes.flatMap((route) => route.courses.map((f) => f.courseId))).size,
+    ).toBe(6);
   });
 
   it("asks nothing of a first-year", () => {

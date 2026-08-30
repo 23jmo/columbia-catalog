@@ -827,6 +827,10 @@ export function buildGuessDeck(input: GuessDeckInput): GuessDeck {
         const everyCourse = routes.flatMap((route) => route.courses);
         if (everyCourse.some((id) => confirmedSet.has(id) || tier1Ids.has(id))) continue;
 
+        // The screen renders one chip per COURSE, so that is the number the
+        // "worse than the search box" cap has to count. See the constant.
+        if (new Set(everyCourse).size > MAX_CHOICE_COURSES) continue;
+
         // Declined: every route contains something they told us they did not
         // take, so there is no route left to offer.
         if (routes.every((route) => route.courses.some((id) => dismissedSet.has(id)))) continue;
@@ -981,6 +985,29 @@ function choiceRoutesOf(rule: RequirementRule): { label: string; courses: Course
  * behaviour and stay in the strip.
  */
 const MAX_CHOICE_ROUTES = 6;
+
+/**
+ * The same judgement, counted in the unit the screen actually draws.
+ *
+ * The route cap alone used to be the whole guard, and it was, while a route was
+ * one button. It is not any more: `CourseChoices` flattens the routes and gives
+ * every course its own chip, so a group's cost is its distinct COURSE count and
+ * the two numbers can diverge badly. CC Biology's Chemistry group is four
+ * routes — comfortably under the route cap — and fifteen courses, which is a
+ * wall of call numbers above a question the student is meant to answer at a
+ * glance. Applied Mathematics' Physics group is four routes and nine.
+ *
+ * Eight is where the real data separates: of the fifty-six groups that reach
+ * this screen, fifty-four are eight courses or fewer and those two are the
+ * outliers. Both caps are kept rather than replaced — the course count is the
+ * rendering cost, but a group with seven single-course routes is still a
+ * catalogue, and dropping the route cap would start ASKING questions that have
+ * never been asked rather than only narrowing what already is.
+ *
+ * Over either cap the behaviour is unchanged: no question, and the courses stay
+ * in the suggestion strip.
+ */
+const MAX_CHOICE_COURSES = 8;
 
 /** Chip-ready facts, with the same catalog-miss fallbacks used everywhere else. */
 function factsFor(
