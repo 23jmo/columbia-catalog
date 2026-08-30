@@ -61,9 +61,10 @@ function useCopy(): [boolean, (value: string) => void] {
   }, []);
 
   const copy = (value: string) => {
+    // Tick with the press. The clipboard write is async and would
+    // drop the user gesture that vibrate / iOS switch both need.
+    haptic("success");
     const finish = () => {
-      // Call-number copy is a phone-at-7am action — confirm it in the hand.
-      haptic("success");
       setCopied(true);
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => setCopied(false), 1800);

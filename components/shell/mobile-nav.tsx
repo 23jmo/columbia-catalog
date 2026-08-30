@@ -3,6 +3,7 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { RiMenuLine } from "@remixicon/react";
 
+import { HapticRoot } from "@/components/haptics/haptic-root";
 import { CatalogSidebar } from "@/components/shell/catalog-sidebar";
 import { ChatFab } from "@/components/shell/chat-fab";
 import { FeedbackPrompt } from "@/components/shell/feedback-prompt";
@@ -159,6 +160,7 @@ export function MobileShell({
         "max-xl:bg-background-secondary-default",
       )}
     >
+      <HapticRoot />
       {/*
         `fixed`, not `absolute`. Absolute is tied to this shell, and on
         mobile the shell still rides a document scroll. Fixed is the
