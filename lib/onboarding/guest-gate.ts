@@ -19,6 +19,12 @@ const CARRIED_PARAMS = ["auth_error"] as const;
  * `/api/` authorizes itself per route; a HTML-only gate must not sit in front
  * of the crawler or the agent.
  *
+ * `/about`, `/privacy`, and `/terms` are the public, no-login pages. A
+ * journalist or a Reddit thread has to be able to read what this is, and the
+ * legal pages have to render without a school picker in front of them. Home
+ * (`/`) stays gated: that is still the wizard, so a returning student who
+ * types the origin still lands on Log in.
+ *
  * ── `/course/` and `/instructor/` are open, and the rest is not ────────────
  *
  * These two are the app's shareable unit. `app/course/[courseId]/page.tsx`
@@ -58,6 +64,12 @@ export function isGuestAllowedPath(pathname: string): boolean {
   return (
     pathname === "/onboarding" ||
     pathname.startsWith("/onboarding/") ||
+    pathname === "/about" ||
+    pathname.startsWith("/about/") ||
+    pathname === "/privacy" ||
+    pathname.startsWith("/privacy/") ||
+    pathname === "/terms" ||
+    pathname.startsWith("/terms/") ||
     pathname.startsWith("/auth/") ||
     pathname.startsWith("/course/") ||
     pathname.startsWith("/instructor/") ||

@@ -29,9 +29,10 @@
  * guest" exit — that path let people skip setup, which is the thing we are
  * trying to make the default.
  *
- * APIs, the OAuth callback, and onboarding itself are not redirected. Writes
- * still authorize themselves at the point of writing; this gate is a
- * navigation default, not an authorization boundary.
+ * APIs, the OAuth callback, onboarding, and the public About / Privacy /
+ * Terms pages are not redirected. Writes still authorize themselves at the
+ * point of writing; this gate is a navigation default, not an authorization
+ * boundary.
  */
 
 import { createServerClient } from "@supabase/ssr";

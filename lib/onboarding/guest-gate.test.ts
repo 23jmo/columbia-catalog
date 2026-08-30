@@ -10,6 +10,16 @@ describe("isGuestAllowedPath", () => {
     expect(isGuestAllowedPath("/api/agent")).toBe(true);
   });
 
+  it("lets a guest read About, Privacy, and Terms", () => {
+    // These are the pages a logged-out visitor has to reach. The Chrome
+    // Web Store listing already points at /privacy/extension, so the
+    // prefix has to stay open too.
+    expect(isGuestAllowedPath("/about")).toBe(true);
+    expect(isGuestAllowedPath("/privacy")).toBe(true);
+    expect(isGuestAllowedPath("/privacy/extension")).toBe(true);
+    expect(isGuestAllowedPath("/terms")).toBe(true);
+  });
+
   it("lets a guest read a shared course or instructor link", () => {
     // These are the two URLs that get pasted into a group chat or a reddit
     // reply during registration week. A link that answers "is this class any
@@ -34,6 +44,8 @@ describe("isGuestAllowedPath", () => {
     // `/courses-i-hate` route cannot fall through the gate by accident.
     expect(isGuestAllowedPath("/coursework")).toBe(false);
     expect(isGuestAllowedPath("/instructors-admin")).toBe(false);
+    expect(isGuestAllowedPath("/about-us")).toBe(false);
+    expect(isGuestAllowedPath("/privacy-review")).toBe(false);
   });
 });
 
