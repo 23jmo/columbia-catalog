@@ -4,17 +4,19 @@ import { PublicSection } from "@/components/marketing/public-doc";
 import { publicPageMetadata } from "@/lib/marketing/site";
 
 export const metadata: Metadata = publicPageMetadata({
-  title: "Terms · LionPlan, a Columbia course planner",
+  title: "Terms · LionPlan, a Columbia and Barnard course planner",
   description:
-    "LionPlan is an unofficial student project. It is a companion to Stellic and Vergil, not a replacement, and not a substitute for CSA advising.",
+    "LionPlan is an unofficial student project. It is a companion to Stellic and Vergil, not a replacement, and not a substitute for CSA or Barnard advising.",
   path: "/terms",
 });
 
 /**
  * Terms of use. Same guest-gate requirement as /privacy: this URL has to
  * render without an account. Keep the claims aligned with the live
- * product. Columbia College and Columbia Engineering only. No user
- * counts. No official-affiliation language.
+ * product: Columbia College, Columbia Engineering and Barnard College.
+ * No user counts. No official-affiliation language, for Columbia or for
+ * Barnard — Barnard requirements come from `catalog.barnard.edu`, which
+ * makes the disclaimer apply to two institutions, not one.
  */
 export default function TermsPage() {
   return (
@@ -31,22 +33,23 @@ export default function TermsPage() {
       <PublicSection title="Unofficial project">
         <p>
           LionPlan is an unofficial student project. It is not affiliated
-          with, endorsed by, or a product of Columbia University.
+          with, endorsed by, or a product of Columbia University or Barnard
+          College.
         </p>
       </PublicSection>
 
       <PublicSection title="What the site is">
         <p>
-          The site helps Columbia College and Columbia Engineering students
-          see what their bulletin requires and what they might take next.
-          Barnard College and General Studies are listed as coming soon and
-          are not available yet.
+          The site helps Columbia College, Columbia Engineering and Barnard
+          College students see what their bulletin or catalogue requires and
+          what they might take next. General Studies is listed as coming
+          soon and is not available yet.
         </p>
         <p>
           It is not a registrar. It is not official degree-audit software.
-          It is not a substitute for Stellic, Vergil, or CSA advising.
-          Course offerings, seats, and bulletin rules change. Confirm
-          everything with your school before you register.
+          It is not a substitute for Stellic, Vergil, or advising at CSA or
+          Barnard. Course offerings, seats, and bulletin and catalogue rules
+          change. Confirm everything with your school before you register.
         </p>
       </PublicSection>
 

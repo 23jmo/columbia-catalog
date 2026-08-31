@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { interestTagsForPrograms, knownInterestTagIds } from "@/lib/profile/interest-tags";
 import {
+  interestTagsForPrograms,
+  knownInterestTagIds,
+  programsWithInterestTags,
+} from "@/lib/profile/interest-tags";
+import {
+  BC_FOUNDATIONS,
   CC_CORE,
   CC_MAJOR_BIOLOGY,
   CC_MAJOR_COMPUTER_SCIENCE,
@@ -9,7 +14,9 @@ import {
   CC_MINOR_COMPUTER_SCIENCE,
   SEAS_CORE,
   SEAS_MAJOR_COMPUTER_SCIENCE,
+  listPrograms,
 } from "@/lib/requirements/programs";
+import { toCourseId } from "@/lib/requirements/code";
 import type { PrereqSource } from "@/lib/recommend";
 import type { GroupResult, RequirementRule } from "@/lib/requirements/types";
 import { noVectorSource } from "@/lib/recommend";
@@ -1117,6 +1124,8 @@ describe("typical schedules", () => {
     expect(afterOneYear).toContain("COCI1101CC");
     expect(afterOneYear).not.toContain("COCI1102CC");
 
+    // Barnard has no hand-written band, so with no programs resolved there
+    // is nothing school-shaped to offer.
     expect(
       typicalGuesses({
         school: "BC",
@@ -1125,6 +1134,30 @@ describe("typical schedules", () => {
         programs: [],
       }),
     ).toEqual([]);
+  });
+
+  it("offers a Barnard first-year the Foundations courses that are choices", () => {
+    // The empty BC band is not "Barnard gets nothing". Foundations encodes
+    // First-Year Writing and First-Year Seminar as `n_of`, so they arrive
+    // through the program loop with the requirement's own label — which is
+    // why writing a BC band would duplicate the registry. Guard the real
+    // flow, where the Core IS resolved, not just the bare-school case above.
+    const barnard = typicalGuesses({
+      school: "BC",
+      yearsCompleted: 0,
+      ceiling: 2000,
+      programs: [BC_FOUNDATIONS],
+    });
+    const ids = barnard.map((guess) => guess.courseId);
+
+    expect(ids).toContain("FYWB1001BC");
+    expect(ids).toContain("FYWB1002BC");
+    expect(ids).toContain("FYSB1001BC");
+    expect(ids).toContain("FYSB1002BC");
+    expect(barnard.map((guess) => guess.label)).toContain("First-Year Writing");
+    // Columbia's Core must never land on a Barnard strip.
+    expect(ids).not.toContain("HUMA1001CC");
+    expect(ids).not.toContain("COCI1101CC");
   });
 
   it("does not treat the College Core as an engineering first year", () => {
@@ -1188,10 +1221,111 @@ describe("interest tags", () => {
       "seas-major-mechanical-engineering",
       "seas-major-operations-research",
       "seas-major-biomedical-engineering",
+      "bc-major-biology",
+      "bc-major-computer-science",
+      "bc-major-economics",
+      "bc-major-english",
+      "bc-major-history",
+      "bc-major-neuroscience-and-behavior",
+      "bc-major-political-economy",
+      "bc-major-political-science",
+      "bc-major-psychology",
+      "bc-major-sociology",
+      "bc-major-urban-studies",
     ]) {
       const tags = interestTagsForPrograms([programId]);
       expect(tags.length, `${programId} has no interest tags`).toBeGreaterThanOrEqual(8);
       expect(tags.length, `${programId} has too many to fit one screen`).toBeLessThanOrEqual(12);
+    }
+  });
+
+  it("offers a list for every authored Barnard major", () => {
+    /*
+     * Derived from the registry rather than listed, so adding a Barnard major
+     * without tags fails here instead of silently skipping the interest step
+     * for those students. The explicit list above is the screen-size guard;
+     * this one is the coverage guard.
+     */
+    const missing = listPrograms()
+      .filter((program) => program.school === "BC" && program.kind === "major")
+      .map((program) => program.id)
+      .filter((id) => interestTagsForPrograms([id]).length === 0);
+
+    expect(missing).toEqual([]);
+  });
+
+  it("gives Barnard its own tags rather than the College's course codes", () => {
+    /*
+     * The failure this catches is a lazy alias: pointing a Barnard major at the
+     * College's list. It typechecks and renders, and every exemplar then seeds
+     * from a course in a department the student is not in.
+     *
+     * Barnard History is the sharpest case. The College's list carries
+     * `east-asia` and `middle-east`; Barnard's department staffs neither, so
+     * their presence would mean two of ten options are dead.
+     */
+    const bcHistory = interestTagsForPrograms(["bc-major-history"]).map((tag) => tag.id);
+    expect(bcHistory).not.toContain("east-asia");
+    expect(bcHistory).not.toContain("middle-east");
+
+    // Psychology's animal-cognition group is Barnard's and has no College twin.
+    expect(interestTagsForPrograms(["bc-major-psychology"]).map((t) => t.id)).toContain(
+      "animal-cognition",
+    );
+
+    // Economics: no industrial-organisation course exists at Barnard.
+    expect(interestTagsForPrograms(["bc-major-economics"]).map((t) => t.id)).not.toContain(
+      "industrial-organization",
+    );
+  });
+
+  it("keeps one label per tag id, across every program that reuses it", () => {
+    /*
+     * The id is what `student_profiles.interest_tags` stores; the label is only
+     * how it is drawn. Two labels behind one id means the stored string no
+     * longer says what the student saw when she picked it, and
+     * `interestTagsForPrograms` — which de-duplicates by id and keeps the
+     * first — would quietly pick one of them for a student in two programs.
+     *
+     * This caught four real cases when the Barnard lists landed: `security`,
+     * `international-econ`, `behavioral-econ` and `physiology` had each been
+     * given a slightly wider Barnard label. The fix is to widen the blurb.
+     */
+    const labels = new Map<string, Set<string>>();
+    for (const programId of programsWithInterestTags()) {
+      for (const tag of interestTagsForPrograms([programId])) {
+        const seen = labels.get(tag.id) ?? new Set<string>();
+        seen.add(tag.label);
+        labels.set(tag.id, seen);
+      }
+    }
+
+    const conflicting = [...labels]
+      .filter(([, seen]) => seen.size > 1)
+      .map(([id, seen]) => `${id}: ${[...seen].join(" / ")}`);
+
+    expect(conflicting).toEqual([]);
+  });
+
+  it("writes every exemplar as a parseable Bulletin code", () => {
+    /*
+     * `toCourseId` is the bridge every requirement definition crosses, and an
+     * exemplar that does not cross it seeds an empty vector — a tag that looks
+     * fine on screen and recommends nothing, forever.
+     *
+     * This is the offline half of the check. It cannot tell an unparseable code
+     * from one that parses but names no real course; for that,
+     * `scripts/verify-interest-tag-exemplars.ts` hits the live catalog, and it
+     * currently reports 33 dead exemplars in the CC and SEAS lists that predate
+     * the Barnard work (PSYC UN1010 and BMEN E4010 among them).
+     */
+    for (const programId of programsWithInterestTags()) {
+      for (const tag of interestTagsForPrograms([programId])) {
+        expect(tag.exemplars.length, `${tag.id} has no exemplars`).toBeGreaterThan(0);
+        for (const code of tag.exemplars) {
+          expect(toCourseId(code), `${programId}/${tag.id}: unparseable "${code}"`).toBeTruthy();
+        }
+      }
     }
   });
 

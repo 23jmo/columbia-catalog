@@ -18,6 +18,18 @@
  */
 
 import type { Program, ProgramKind, School } from "../types";
+import { BC_FOUNDATIONS } from "./bc-foundations";
+import { BC_MAJOR_BIOLOGY } from "./bc-major-biology";
+import { BC_MAJOR_COMPUTER_SCIENCE } from "./bc-major-computer-science";
+import { BC_MAJOR_ECONOMICS } from "./bc-major-economics";
+import { BC_MAJOR_ENGLISH } from "./bc-major-english";
+import { BC_MAJOR_HISTORY } from "./bc-major-history";
+import { BC_MAJOR_NEUROSCIENCE_AND_BEHAVIOR } from "./bc-major-neuroscience-and-behavior";
+import { BC_MAJOR_POLITICAL_ECONOMY } from "./bc-major-political-economy";
+import { BC_MAJOR_POLITICAL_SCIENCE } from "./bc-major-political-science";
+import { BC_MAJOR_PSYCHOLOGY } from "./bc-major-psychology";
+import { BC_MAJOR_SOCIOLOGY } from "./bc-major-sociology";
+import { BC_MAJOR_URBAN_STUDIES } from "./bc-major-urban-studies";
 import { CC_CONCENTRATION_ECONOMICS } from "./cc-concentration-economics";
 import { CC_CORE } from "./cc-core";
 import { CC_MAJOR_BIOLOGY } from "./cc-major-biology";
@@ -45,9 +57,16 @@ import { SEAS_MAJOR_MECHANICAL_ENGINEERING } from "./seas-major-mechanical-engin
 import { SEAS_MAJOR_OPERATIONS_RESEARCH } from "./seas-major-operations-research";
 
 export const AUTHORED_PROGRAMS: Program[] = [
-  // The two Cores. Not electable — see `coreForSchool`.
+  // The three Cores. Not electable — see `coreForSchool`.
   CC_CORE,
   SEAS_CORE,
+  /*
+   * Barnard's general education curriculum. Read from `catalog.barnard.edu`,
+   * a different CourseLeaf install from Columbia's Bulletin with its own
+   * edition year — which is why this is the one program here stamped
+   * `2025-2026` rather than `2026-2027`. See the file's header.
+   */
+  BC_FOUNDATIONS,
 
   // Columbia College majors.
   CC_MAJOR_BIOLOGY,
@@ -91,6 +110,44 @@ export const AUTHORED_PROGRAMS: Program[] = [
   SEAS_MAJOR_ELECTRICAL_ENGINEERING,
   SEAS_MAJOR_MECHANICAL_ENGINEERING,
   SEAS_MAJOR_OPERATIONS_RESEARCH,
+
+  /*
+   * Barnard College majors, in rough order of how many students take them.
+   *
+   * The ranking is not invented: Barnard's Common Data Set 2025-2026 (section
+   * J, degrees conferred by CIP category) puts social sciences at 26% of
+   * bachelor's degrees, biological/life sciences at 13%, interdisciplinary
+   * studies at 10%, psychology at 8%, computer and information sciences at 7%,
+   * English at 5% and history at 4%. Several of those categories map to a
+   * single Barnard department, which is what makes them usable as a ranking:
+   * the 8% psychology share IS the Psychology department, and the 7% computing
+   * share is essentially the Computer Science department alone.
+   *
+   * These are genuinely different degrees from their Columbia College
+   * namesakes, not aliases — Barnard Economics is built out of `ECON BC`
+   * courses the College's major never names, Barnard Psychology classifies by
+   * named list where the College's classifies by number band, and Barnard
+   * Neuroscience and Behavior is a department where the College's is a joint
+   * programme between two others. Each file's header says where it diverges.
+   */
+  BC_MAJOR_BIOLOGY,
+  BC_MAJOR_COMPUTER_SCIENCE,
+  BC_MAJOR_ECONOMICS,
+  BC_MAJOR_ENGLISH,
+  BC_MAJOR_HISTORY,
+  BC_MAJOR_NEUROSCIENCE_AND_BEHAVIOR,
+  /*
+   * Political Economy is the Economics department's second track and a
+   * separate program rather than a variant group: it drops econometrics
+   * entirely, takes Calculus I where the Economics track takes Calculus III,
+   * and adds two interdisciplinary electives. Merging them would tell every
+   * Political Economy major she owed a course she does not.
+   */
+  BC_MAJOR_POLITICAL_ECONOMY,
+  BC_MAJOR_POLITICAL_SCIENCE,
+  BC_MAJOR_PSYCHOLOGY,
+  BC_MAJOR_SOCIOLOGY,
+  BC_MAJOR_URBAN_STUDIES,
 
   // Sub-major programs.
   CC_MINOR_COMPUTER_SCIENCE,
@@ -188,6 +245,18 @@ export function coreForSchool(school: School): Program | undefined {
 }
 
 export {
+  BC_FOUNDATIONS,
+  BC_MAJOR_BIOLOGY,
+  BC_MAJOR_COMPUTER_SCIENCE,
+  BC_MAJOR_ECONOMICS,
+  BC_MAJOR_ENGLISH,
+  BC_MAJOR_HISTORY,
+  BC_MAJOR_NEUROSCIENCE_AND_BEHAVIOR,
+  BC_MAJOR_POLITICAL_ECONOMY,
+  BC_MAJOR_POLITICAL_SCIENCE,
+  BC_MAJOR_PSYCHOLOGY,
+  BC_MAJOR_SOCIOLOGY,
+  BC_MAJOR_URBAN_STUDIES,
   CC_CONCENTRATION_ECONOMICS,
   CC_CORE,
   CC_MAJOR_BIOLOGY,

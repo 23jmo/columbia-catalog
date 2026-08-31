@@ -9,13 +9,13 @@ import { publicPageMetadata } from "@/lib/marketing/site";
 import { SCHOOL_LABEL, type Program, type School } from "@/lib/requirements/types";
 
 export const metadata: Metadata = publicPageMetadata({
-  title: "Columbia College and SEAS programs LionPlan checks",
+  title: "Columbia College, SEAS and Barnard programs LionPlan checks",
   description:
-    "Authored bulletin maps for Columbia College and Columbia Engineering majors and cores. What LionPlan checks when it recommends what to take next.",
+    "Authored bulletin maps for Columbia College, Columbia Engineering and Barnard majors and cores. What LionPlan checks when it recommends what to take next.",
   path: "/programs",
 });
 
-const SCHOOL_ORDER: School[] = ["CC", "SEAS"];
+const SCHOOL_ORDER: School[] = ["CC", "SEAS", "BC"];
 
 export default function ProgramsIndexPage() {
   const programs = listPublicPrograms();
@@ -30,17 +30,20 @@ export default function ProgramsIndexPage() {
       <JsonLd data={organizationWebsiteGraph()} />
       <header className="flex flex-col gap-4">
         <h1 className="text-display-4-semibold -tracking-[0.02em] text-balance text-text-primary">
-          What LionPlan checks for CC and SEAS
+          What LionPlan checks for CC, SEAS and Barnard
         </h1>
         <p className="text-headline-regular text-pretty text-text-secondary">
-          These pages are the authored bulletin maps for Columbia College and
-          Columbia Engineering. They are what the planner reads when it says
-          a class satisfies a requirement or unlocks another one.
+          These pages are the authored bulletin maps for Columbia College,
+          Columbia Engineering and Barnard College. They are what the planner
+          reads when it says a class satisfies a requirement or unlocks another
+          one. Barnard&rsquo;s were read from its own catalogue at
+          catalog.barnard.edu, which is a separate publication from
+          Columbia&rsquo;s Bulletin.
         </p>
         <p className="text-headline-regular text-pretty text-text-secondary">
           LionPlan is an unofficial student project. It is a companion to
           Stellic and Vergil, not a replacement, and it does not replace CSA
-          advising. Barnard College and General Studies are coming soon.
+          advising. General Studies is coming soon.
         </p>
       </header>
 
