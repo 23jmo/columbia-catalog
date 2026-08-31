@@ -26,7 +26,7 @@ export function SavedSignedOut() {
       // this the document would have an h2 and no h1 at all.
       as="h1"
       title="Sign in to see your saved classes"
-      body="Reading the catalog is free. Saving classes, filing them into folders and getting seat alerts all need a Columbia or Barnard account."
+      body="LionPlan is free to search and browse courses. Sign in to save them for later, file them into folders and get seat alerts."
     >
       <Button
         size="small"

@@ -367,9 +367,9 @@ export function CatalogSidebar({
         title={gatedLabel ? `${gatedLabel} needs an account` : "Sign in with Columbia"}
         description={
           <>
-            Browsing the catalog is free and always will be. Sign in with your Columbia
-            or Barnard Google account and we&rsquo;ll set up your degree in about a
-            minute — then Recommendations, Chat and Saved are yours.
+            LionPlan is free to search and browse courses. Sign in and we&rsquo;ll set
+            up your degree in about a minute — then Recommendations, Chat and Saved are
+            personalized to your graduation requirements and interests.
           </>
         }
         actionLabel="Continue with your UNI"
