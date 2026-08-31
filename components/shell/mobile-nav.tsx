@@ -305,7 +305,7 @@ export function MobileShell({
         viewport. Hidden on `/chat` (the page already is the box) and while
         the rail is open (the Chat row is on screen, covering this would be
         a second copy of the same door).
-      */
+      */}
       <ChatFab hidden={fabHidden} />
 
       {/*
