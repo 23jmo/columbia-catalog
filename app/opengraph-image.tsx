@@ -109,12 +109,12 @@ function WeekStrip({ days }: { days: readonly boolean[] }) {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            width: 20,
-            height: 20,
-            borderRadius: 6,
+            width: 17,
+            height: 17,
+            borderRadius: 5,
             background: days[index] ? "#2b7fff" : "#f2f4f7",
             color: days[index] ? "#ffffff" : "#98a2b3",
-            fontSize: 10,
+            fontSize: 8.5,
             fontWeight: 700,
           }}
         >
@@ -133,10 +133,10 @@ function CourseCard({ course }: { course: SocialCourse }) {
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: 6,
+        gap: 4,
         width: "100%",
-        padding: "13px 14px 11px",
-        borderRadius: 18,
+        padding: "10px 12px 8px",
+        borderRadius: 16,
         border: "1px solid #dfe3e8",
         background: "rgba(255,255,255,0.98)",
         boxShadow: "0 12px 34px rgba(16,24,40,0.10)",
@@ -148,7 +148,7 @@ function CourseCard({ course }: { course: SocialCourse }) {
           alignItems: "center",
           justifyContent: "space-between",
           color: "#667085",
-          fontSize: 12,
+          fontSize: 10,
           fontWeight: 700,
           letterSpacing: 0.45,
         }}
@@ -156,47 +156,61 @@ function CourseCard({ course }: { course: SocialCourse }) {
         <div style={{ display: "flex" }}>
           {course.code} · SEC {course.section} · FALL 2026
         </div>
-        <div
-          style={{
-            display: "flex",
-            padding: "3px 7px",
-            borderRadius: 999,
-            background: "#f2f4f7",
-            color: "#475467",
-            fontSize: 10,
-            letterSpacing: 0,
-          }}
-        >
-          {course.credits} PTS
+        <div style={{ display: "flex", alignItems: "center", gap: 5, letterSpacing: 0 }}>
+          <div
+            style={{
+              display: "flex",
+              padding: "2px 6px",
+              borderRadius: 999,
+              background: "#f2f4f7",
+              color: "#475467",
+              fontSize: 9,
+            }}
+          >
+            {course.credits} PTS
+          </div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 3,
+              padding: "2px 7px",
+              borderRadius: 999,
+              background: "#eff8ff",
+              color: "#175cd3",
+              fontSize: 9,
+            }}
+          >
+            Open in Vergil
+            <svg width="10" height="10" viewBox="0 0 12 12" aria-hidden="true">
+              <path
+                d="M3 9 9 3M4.5 3H9v4.5"
+                fill="none"
+                stroke="#2b7fff"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </div>
         </div>
       </div>
 
-      <div style={{ color: "#101828", fontSize: 21, fontWeight: 700, letterSpacing: -0.45 }}>
+      <div style={{ color: "#101828", fontSize: 19, fontWeight: 700, letterSpacing: -0.4 }}>
         {course.title}
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#175cd3", fontSize: 12 }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: 15,
-            height: 15,
-            borderRadius: 999,
-            background: "#eff8ff",
-            fontSize: 10,
-            fontWeight: 800,
-          }}
-        >
-          ✓
-        </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 5, color: "#175cd3", fontSize: 10.5 }}>
+        <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+          <circle cx="8" cy="8" r="7" fill="#eff8ff" />
+          <path d="M4.7 8.1 7 10.3l4.3-4.8" fill="none" stroke="#2b7fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
         {course.reason}
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
         <WeekStrip days={course.days} />
-        <div style={{ display: "flex", color: "#344054", fontSize: 13, fontWeight: 600 }}>
+        <div style={{ display: "flex", color: "#344054", fontSize: 11.5, fontWeight: 600 }}>
           {course.time}
         </div>
       </div>
@@ -207,35 +221,37 @@ function CourseCard({ course }: { course: SocialCourse }) {
           alignItems: "center",
           justifyContent: "space-between",
           color: "#667085",
-          fontSize: 12,
+          fontSize: 10.5,
         }}
       >
         <div style={{ display: "flex" }}>
           {course.instructor} · {course.location}
         </div>
         {course.rating ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 4, color: "#344054" }}>
-            <span style={{ color: "#f79009" }}>★</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 3, color: "#344054" }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m12 1.8 3.15 6.39 7.05 1.02-5.1 4.97 1.2 7.02L12 17.89 5.7 21.2l1.2-7.02-5.1-4.97 7.05-1.02L12 1.8Z" fill="#f79009" />
+            </svg>
             <span style={{ fontWeight: 700 }}>{course.rating}/5</span>
             <span style={{ color: "#98a2b3" }}>({course.reviews})</span>
           </div>
         ) : null}
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
         <div
           style={{
             position: "relative",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            height: 23,
+            height: 20,
             overflow: "hidden",
             padding: "0 9px",
             borderRadius: 8,
             border: "1px solid #e4e7ec",
             background: "#f9fafb",
-            fontSize: 11,
+            fontSize: 9.5,
           }}
         >
           <div
@@ -254,7 +270,7 @@ function CourseCard({ course }: { course: SocialCourse }) {
             {course.enrolled} / {course.capacity} enrolled
           </div>
         </div>
-        <div style={{ display: "flex", paddingLeft: 2, color: "#98a2b3", fontSize: 9.5 }}>
+        <div style={{ display: "flex", paddingLeft: 2, color: "#98a2b3", fontSize: 8.5 }}>
           Directory as of Aug 22, 9:00 PM
         </div>
       </div>
@@ -388,22 +404,25 @@ export default async function OpenGraphImage() {
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: 10,
+                gap: 8,
                 marginTop: "auto",
-                color: "#344054",
-                fontSize: 20,
-                fontWeight: 600,
+                color: "#175cd3",
+                fontSize: 26,
+                fontWeight: 700,
+                letterSpacing: -0.45,
               }}
             >
-              <div
-                style={{
-                  width: 9,
-                  height: 9,
-                  borderRadius: 999,
-                  background: "#2b7fff",
-                }}
-              />
               lionplan.org
+              <svg width="23" height="23" viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M7 17 17 7M9 7h8v8"
+                  fill="none"
+                  stroke="#2b7fff"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
             </div>
           </div>
 
@@ -413,7 +432,7 @@ export default async function OpenGraphImage() {
               display: "flex",
               flexDirection: "column",
               width: 450,
-              gap: 9,
+              gap: 8,
             }}
           >
             <div
@@ -447,8 +466,25 @@ export default async function OpenGraphImage() {
               </div>
             </div>
 
-            {courses.map((course) => (
-              <CourseCard key={`${course.code}-${course.section}`} course={course} />
+            {courses.map((course, index) => (
+              <div
+                key={`${course.code}-${course.section}`}
+                style={{
+                  position: "relative",
+                  display: "flex",
+                  width: "100%",
+                  marginTop: index === 0 ? 0 : -16,
+                  zIndex: index + 1,
+                  transform:
+                    index === 0
+                      ? "translateX(-5px) rotate(-1.8deg)"
+                      : index === 1
+                        ? "translateX(4px) rotate(0.6deg)"
+                        : "translateX(-1px) rotate(1.8deg)",
+                }}
+              >
+                <CourseCard course={course} />
+              </div>
             ))}
           </div>
         </div>
