@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Fragment, Suspense, useState, type ComponentType, type ReactNode } from "react";
-import { RiCloseLine, RiSideBarFill } from "@remixicon/react";
+import { RiCloseLine, RiLockLine, RiSideBarFill } from "@remixicon/react";
 
 import { ThemeToggle } from "@/components/application/theme/theme-toggle";
 import { AccountMenu } from "@/components/shell/account-menu";
@@ -10,7 +10,10 @@ import { ChatThreadList } from "@/components/shell/chat-thread-list";
 import { SHELL_NAV_ITEMS, type ShellNavKey } from "@/components/shell/nav";
 import { TermSwitcher } from "@/components/shell/term-switcher";
 import { SidebarSecondaryNav } from "@/components/shell/sidebar-secondary-nav";
+import { SignInModal } from "@/components/shell/sign-in-modal";
 import { useDrawerPush } from "@/components/shell/use-drawer-push";
+import { useSessionAccount } from "@/hooks/use-session-account";
+import { isGuestAllowedPath } from "@/lib/onboarding/guest-gate";
 import { cx } from "@/utils/cx";
 
 /**
@@ -43,37 +46,51 @@ function Collapsible({ collapsed, children }: { collapsed: boolean; children: Re
   );
 }
 
+/**
+ * A rail row — a link, or a locked button that asks for an account.
+ *
+ * `locked` is what a signed-out visitor sees on every destination except the
+ * catalog. It renders a `<button>` rather than a `<Link>` on purpose: the
+ * middleware would 307 the click to `/onboarding` anyway, and a navigation
+ * that ends somewhere other than the label promised reads as the app losing
+ * your place. Refusing the trip and explaining why, in place, is the honest
+ * version of the same rule.
+ *
+ * The row keeps its full colour rather than dimming. A greyed-out tab says
+ * "broken"; a lit tab with a padlock says "there is something here" — which is
+ * true, and is the whole reason a guest would sign in.
+ */
 function NavItem({
   icon: Icon,
   label,
   href,
   isSelected = false,
   collapsed = false,
+  locked = false,
   onNavigate,
+  onLockedClick,
 }: {
   icon: IconComponent;
   label: string;
   href: string;
   isSelected?: boolean;
   collapsed?: boolean;
+  locked?: boolean;
   onNavigate?: () => void;
+  onLockedClick?: () => void;
 }) {
-  return (
-    <Link
-      href={href}
-      onClick={onNavigate}
-      aria-current={isSelected ? "page" : undefined}
-      aria-label={collapsed ? label : undefined}
-      title={collapsed ? label : undefined}
-      className={cx(
-        "flex items-center overflow-hidden rounded-2lg p-2",
-        "transition-colors duration-150 ease-out motion-reduce:transition-none",
-        collapsed ? "size-9 justify-center" : "w-full",
-        isSelected
-          ? "bg-linear-to-b from-accent-500 to-accent-600 shadow-nav-selected"
-          : "hover:bg-background-secondary-hover",
-      )}
-    >
+  const className = cx(
+    "flex items-center overflow-hidden rounded-2lg p-2 text-left",
+    "transition-colors duration-150 ease-out motion-reduce:transition-none",
+    "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
+    collapsed ? "size-9 justify-center" : "w-full",
+    isSelected
+      ? "bg-linear-to-b from-accent-500 to-accent-600 shadow-nav-selected"
+      : "hover:bg-background-secondary-hover",
+  );
+
+  const body = (
+    <>
       <span className="flex min-w-0 items-center gap-2">
         <Icon
           className={cx("size-5 shrink-0", isSelected ? "text-white" : "text-foreground-icon-secondary")}
@@ -90,6 +107,41 @@ function NavItem({
           </span>
         </Collapsible>
       </span>
+      {locked && !collapsed ? (
+        <RiLockLine
+          className="ml-auto size-4 shrink-0 text-foreground-icon-tertiary"
+          aria-hidden
+        />
+      ) : null}
+    </>
+  );
+
+  if (locked) {
+    return (
+      <button
+        type="button"
+        onClick={onLockedClick}
+        // The padlock is decorative, so the row has to say in words that this
+        // is a sign-in prompt and not the destination it names.
+        aria-label={`${label} — sign in to open`}
+        title={collapsed ? `${label} — sign in to open` : undefined}
+        className={cx(className, "cursor-pointer")}
+      >
+        {body}
+      </button>
+    );
+  }
+
+  return (
+    <Link
+      href={href}
+      onClick={onNavigate}
+      aria-current={isSelected ? "page" : undefined}
+      aria-label={collapsed ? label : undefined}
+      title={collapsed ? label : undefined}
+      className={className}
+    >
+      {body}
     </Link>
   );
 }
@@ -144,6 +196,26 @@ export function CatalogSidebar({
       expand while the drawer is open              -> expands, that drawer only
       close and reopen                             -> collapses again
   */
+  /*
+    Which rows are locked, and why the rail is the one asking.
+
+    `/search` is open to guests (`lib/onboarding/guest-gate.ts`), and it is the
+    only app-shell route that is — so a signed-out visitor reading the catalog
+    is one click away from three tabs the middleware would bounce. Reading the
+    gate itself rather than hard-coding "everything except Catalog" is what
+    keeps this honest: open another route there and its tab unlocks in the same
+    commit, with nothing here to remember.
+
+    `isLoading` matters more than it looks. `useSessionAccount` starts null and
+    resolves in an effect, so treating "no account yet" as guest would slap a
+    padlock on every tab for a frame on every page load, for people who are
+    signed in. Locking only once the answer has actually arrived costs a beat
+    of nothing and never lies.
+  */
+  const session = useSessionAccount();
+  const isGuest = !session.isLoading && !session.account;
+  const [gatedLabel, setGatedLabel] = useState<string | null>(null);
+
   const drawerPushing = useDrawerPush();
   const [userCollapsed, setUserCollapsed] = useState(false);
   const [episodeOverride, setEpisodeOverride] = useState<boolean | null>(null);
@@ -238,7 +310,9 @@ export function CatalogSidebar({
         )}
 
         <nav className={cx("flex w-full flex-col gap-1", !collapsed && "px-0.5")} aria-label="Primary">
-          {SHELL_NAV_ITEMS.map((item) => (
+          {SHELL_NAV_ITEMS.map((item) => {
+            const locked = isGuest && !isGuestAllowedPath(item.href);
+            return (
             <Fragment key={item.key}>
               <NavItem
                 icon={item.icon}
@@ -246,7 +320,9 @@ export function CatalogSidebar({
                 href={item.href}
                 isSelected={item.key === activeNav}
                 collapsed={collapsed}
+                locked={locked}
                 onNavigate={onNavigate}
+                onLockedClick={() => setGatedLabel(item.label)}
               />
               {/*
                 Threads hang off Chat the way files hang off a folder.
@@ -262,13 +338,14 @@ export function CatalogSidebar({
                 Hidden when the rail is collapsed — five truncated titles at
                 60px wide are not a list, they are noise.
               */}
-              {item.key === "chat" && !collapsed ? (
+              {item.key === "chat" && !collapsed && !locked ? (
                 <Suspense fallback={null}>
                   <ChatThreadList onNavigate={onNavigate} />
                 </Suspense>
               ) : null}
             </Fragment>
-          ))}
+            );
+          })}
         </nav>
       </div>
 
@@ -276,6 +353,27 @@ export function CatalogSidebar({
         <SidebarSecondaryNav collapsed={collapsed} />
         {collapsed ? <ThemeToggle collapsed /> : <ThemeToggle appearance="sidebar-segmented" />}
       </div>
+
+      {/*
+        Named after the tab they reached for, so the dialog answers the click
+        instead of restating the product. `next="/onboarding"`: they have not
+        told us anything about their degree yet, and Saved, Chat and
+        Recommendations are all empty rooms until they do.
+      */}
+      <SignInModal
+        isOpen={gatedLabel !== null}
+        onClose={() => setGatedLabel(null)}
+        next="/onboarding"
+        title={gatedLabel ? `${gatedLabel} needs an account` : "Sign in with Columbia"}
+        description={
+          <>
+            Browsing the catalog is free and always will be. Sign in with your Columbia
+            or Barnard Google account and we&rsquo;ll set up your degree in about a
+            minute — then Recommendations, Chat and Saved are yours.
+          </>
+        }
+        actionLabel="Continue with your UNI"
+      />
     </aside>
   );
 }

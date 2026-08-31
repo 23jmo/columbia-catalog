@@ -9,6 +9,7 @@ import { FeedbackPrompt } from "@/components/shell/feedback-prompt";
 import { MobileHeaderSlotProvider } from "@/components/shell/mobile-header-slot";
 import { ProgressiveBlur } from "@/components/shell/progressive-blur";
 import { SHELL_NAV_ITEMS, type ShellNavKey } from "@/components/shell/nav";
+import { useSessionAccount } from "@/hooks/use-session-account";
 import { haptic } from "@/lib/haptics";
 import { cx } from "@/utils/cx";
 
@@ -138,7 +139,18 @@ export function MobileShell({
    * screen); the feedback card is stacked against that same answer so the two
    * can never disagree about whether there is a button underneath.
    */
-  const fabHidden = isOpen || activeNav === "chat";
+  /*
+   * ...and it is also hidden from a guest.
+   *
+   * `/chat` is behind the wall, so on the one page a signed-out visitor can
+   * reach — the catalog — this button is a 307 to the wizard wearing a chat
+   * icon. The rail already refuses that trip and explains itself with a
+   * padlock; a floating shortcut that quietly does the opposite would undo it.
+   * The catalog's own sign-in banner is what a guest gets in its place.
+   */
+  const session = useSessionAccount();
+  const isGuest = !session.isLoading && !session.account;
+  const fabHidden = isOpen || activeNav === "chat" || isGuest;
 
   return (
     <div

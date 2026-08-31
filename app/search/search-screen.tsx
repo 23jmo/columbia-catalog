@@ -25,6 +25,7 @@ import { getCatalogRelevanceAction } from "./relevance-actions";
 
 import { EmptyResults } from "./empty-results";
 import { FilterPopover } from "./filter-popover";
+import { GuestSignInBanner } from "./guest-sign-in-banner";
 import { IndexStatus } from "./index-status";
 import { ResultsList, type ResultRow } from "./results-list";
 import { SearchResultsSkeleton } from "./search-results-skeleton";
@@ -294,6 +295,17 @@ export function SearchScreen({ initialFilters, termCode }: SearchScreenProps) {
       </div>
 
       <div className="flex min-w-0 flex-col gap-3">
+        {/*
+          The guest offer, above the results and below the field.
+
+          Above the results because it has to be seen; below the field because
+          a visitor who arrived with a course in mind should be able to type it
+          without reading an ad first. It renders nothing for a signed-in
+          student and nothing until the session has answered, so this is the
+          only line the catalog spends on being open to strangers.
+        */}
+        <GuestSignInBanner />
+
         <ActiveFilterChips filters={filters} onChange={onFiltersChange} />
 
         <IndexStatus progress={progress} />

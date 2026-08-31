@@ -22,12 +22,17 @@
  *
  * ── Unsigned HTML goes to onboarding ───────────────────────────────────────
  *
- * A signed-out visitor hitting `/`, `/search`, `/schedule`, and so on is
+ * A signed-out visitor hitting `/`, `/chat`, `/schedule`, and so on is
  * redirected to `/onboarding` here, before the page paints. The first screen
  * has a Log in control for people who already have an account; everyone else
  * walks the wizard and signs in on the last step. There is no "browse as
  * guest" exit — that path let people skip setup, which is the thing we are
  * trying to make the default.
+ *
+ * `/search` is the exception, and it is deliberate: the catalog is the one
+ * surface that is worth something to a stranger, so a guest browses it freely
+ * and is asked for an account by the page rather than by a 307. See
+ * `lib/onboarding/guest-gate.ts` for the argument.
  *
  * APIs, the OAuth callback, onboarding, and the public About / Privacy /
  * Terms pages are not redirected. Writes still authorize themselves at the

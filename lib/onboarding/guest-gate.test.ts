@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   guestOnboardingLocation,
+  guestSignInNext,
   isGuestAllowedPath,
   isPublicMarketingPath,
   postAuthPath,
@@ -52,6 +53,13 @@ describe("isGuestAllowedPath", () => {
     expect(isPublicMarketingPath("/onboarding")).toBe(false);
   });
 
+  it("lets a guest browse the catalog", () => {
+    // The front door. A stranger who has never heard of this product can read
+    // every course before being asked anything about their degree; the rail
+    // reads this same function to decide which tabs are locked.
+    expect(isGuestAllowedPath("/search")).toBe(true);
+  });
+
   it("lets a guest read a shared course or instructor link", () => {
     // These are the two URLs that get pasted into a group chat or a reddit
     // reply during registration week. A link that answers "is this class any
@@ -66,7 +74,7 @@ describe("isGuestAllowedPath", () => {
     // Giving them away would leave nothing to sign in for.
     expect(isGuestAllowedPath("/")).toBe(false);
     expect(isGuestAllowedPath("/saved")).toBe(false);
-    expect(isGuestAllowedPath("/search")).toBe(false);
+    expect(isGuestAllowedPath("/chat")).toBe(false);
     expect(isGuestAllowedPath("/schedule")).toBe(false);
     expect(isGuestAllowedPath("/profile")).toBe(false);
   });
@@ -80,6 +88,8 @@ describe("isGuestAllowedPath", () => {
     expect(isGuestAllowedPath("/privacy-review")).toBe(false);
     expect(isGuestAllowedPath("/faq-admin")).toBe(false);
     expect(isGuestAllowedPath("/programs-admin")).toBe(false);
+    expect(isGuestAllowedPath("/search-admin")).toBe(false);
+    expect(isGuestAllowedPath("/search/saved")).toBe(false);
     // Search Console files are `/google<token>.html` only — not `/google` itself
     // and not a nested path that happens to end in that name.
     expect(isGuestAllowedPath("/google")).toBe(false);
@@ -104,6 +114,24 @@ describe("guestOnboardingLocation", () => {
     expect(dest.pathname).toBe("/onboarding");
     expect(dest.searchParams.get("auth_error")).toBe("ineligible_domain");
     expect(dest.searchParams.get("q")).toBeNull();
+  });
+});
+
+describe("guestSignInNext", () => {
+  it("sends a guest signing in from the catalog to the wizard", () => {
+    // They came for nothing in particular and have answered nothing about
+    // their degree; landing back on the same list wastes the yes.
+    expect(guestSignInNext("/search")).toBe("/onboarding");
+  });
+
+  it("leaves every other path to signIn's own default", () => {
+    // A shared course link is the case this must not break: they came for
+    // that course, so `signIn()` returns them to it.
+    expect(guestSignInNext("/course/COMS1004W")).toBeNull();
+    expect(guestSignInNext("/instructor/adam-cannon")).toBeNull();
+    expect(guestSignInNext("/onboarding")).toBeNull();
+    expect(guestSignInNext("/")).toBeNull();
+    expect(guestSignInNext("/search-admin")).toBeNull();
   });
 });
 
