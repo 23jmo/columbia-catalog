@@ -49,13 +49,40 @@ import { AppShell } from "@/components/shell/app-shell";
 import { AuthErrorNotice } from "@/components/shell/auth-error-notice";
 import { PageContent } from "@/components/shell/page-content";
 import { PageHeader } from "@/components/shell/page-header";
+import {
+  SOCIAL_DESCRIPTION,
+  SOCIAL_IMAGE_ALT,
+  SOCIAL_TITLE,
+} from "@/lib/marketing/social";
 import { HOME_FEED_LIMIT, buildFeed } from "@/lib/recommend/feed";
 import { cx } from "@/utils/cx";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://lionplan.org"),
   title: "Recommended courses — LionPlan",
   description:
     "Classes worth your next term, ranked against your own record and what past students said about them — each one saying why it is on the list.",
+  openGraph: {
+    title: SOCIAL_TITLE,
+    description: SOCIAL_DESCRIPTION,
+    url: "https://lionplan.org",
+    siteName: "LionPlan",
+    type: "website",
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: SOCIAL_IMAGE_ALT,
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SOCIAL_TITLE,
+    description: SOCIAL_DESCRIPTION,
+    images: [{ url: "/twitter-image", alt: SOCIAL_IMAGE_ALT }],
+  },
 };
 
 export default async function HomePage({

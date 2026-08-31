@@ -1882,6 +1882,182 @@ export const GOLDEN_RECORDS: GoldenRecord[] = [
     },
     verified: "2026-08-26",
   },
+
+  /* ---------------------------------------------------------------------- *
+   * Barnard — Psychology
+   *
+   * Barnard's tables are not Columbia's with different codes; they are shaped
+   * differently, and the shapes below are the three that a faithful-looking
+   * transcription still gets wrong. All read from catalog.barnard.edu, which
+   * is a different host on its own edition year.
+   * ---------------------------------------------------------------------- */
+  {
+    id: "bc-psyc-lectures-one-sided",
+    who: "Barnard Psychology major who took three lectures, all of them from Group 1.",
+    /*
+     * Barnard asks for "three lectures, at least one from each group". That is
+     * one requirement in the catalogue and three groups here — Group 1, Group 2,
+     * and a third from either — because the rule language has no way to say
+     * "spanning". This student is the reason the split has to exist: three
+     * lectures is the right COUNT and the wrong SPREAD, and an encoding that
+     * only counted to three would call her finished while she still owes a
+     * Group 2 lecture.
+     *
+     * The third-lecture group must still read satisfied. `excludeGroups`
+     * removes what Group 1 actually CONSUMED — one course — not everything
+     * Group 1 could have drawn from, so her two remaining Group 1 lectures are
+     * hers to count here. Reading this as unmet would be the mirror error:
+     * telling a student who has done three lectures that she has done one.
+     */
+    programId: "bc-major-psychology",
+    taken: ["PSYC BC2107", "PSYC BC2110", "PSYC BC2115"],
+    expect: {
+      "lecture-group-1": { status: "satisfied", completed: 1 },
+      "lecture-group-2": { status: "unmet", completed: 0 },
+      "lecture-third": { status: "satisfied", completed: 1 },
+    },
+    verified: "2026-08-30",
+  },
+  {
+    id: "bc-psyc-lectures-both-groups",
+    who: "Barnard Psychology major with two Group 1 lectures and one Group 2. The control for the record above.",
+    /*
+     * The same three-lecture count, spread the way the catalogue asks. All
+     * three groups close. If this record and the one above ever agree, the
+     * split has stopped doing its job.
+     */
+    programId: "bc-major-psychology",
+    taken: ["PSYC BC2107", "PSYC BC2110", "PSYC BC2125"],
+    expect: {
+      "lecture-group-1": { status: "satisfied", completed: 1 },
+      "lecture-group-2": { status: "satisfied", completed: 1 },
+      "lecture-third": { status: "satisfied", completed: 1 },
+    },
+    verified: "2026-08-30",
+  },
+
+  /* ---------------------------------------------------------------------- *
+   * Barnard — Computer Science
+   * ---------------------------------------------------------------------- */
+  {
+    id: "bc-cs-linear-algebra-and-probability-in-one-course",
+    who: "Barnard Computer Science major who took MATH UN2015, the one course the department lets double count.",
+    /*
+     * Barnard publishes this in its own words: "MATH UN2015 can double count
+     * for Linear Algebra and Probability requirements. This is the ONLY
+     * instance a course can double count."
+     *
+     * So the two mathematics groups deliberately carry no `excludeGroups`
+     * toward each other, and this record is what stops someone adding them
+     * back as an obvious-looking tidy-up. The guard would be right everywhere
+     * else in the major and wrong here, and its failure mode is the expensive
+     * direction: a student who has satisfied both is told she still owes a
+     * probability course, and takes a semester of one she does not need.
+     */
+    programId: "bc-major-computer-science",
+    taken: ["MATH UN2015"],
+    expect: {
+      "math-linear-algebra": { status: "satisfied", completed: 1 },
+      "math-probability": { status: "satisfied", completed: 1 },
+    },
+    verified: "2026-08-30",
+  },
+  {
+    id: "bc-cs-separate-math-courses",
+    who: "Barnard Computer Science major who took linear algebra and probability as two separate courses.",
+    /*
+     * The ordinary route, and the control that shows the record above is about
+     * UN2015 specifically rather than about the two groups being loose. One
+     * course each, both closed, nothing borrowed.
+     */
+    programId: "bc-major-computer-science",
+    taken: ["MATH UN2010", "STAT UN1201"],
+    expect: {
+      "math-linear-algebra": { status: "satisfied", completed: 1 },
+      "math-probability": { status: "satisfied", completed: 1 },
+      "math-multivariable": { status: "unmet", completed: 0 },
+    },
+    verified: "2026-08-30",
+  },
+
+  /* ---------------------------------------------------------------------- *
+   * Barnard — Economics
+   * ---------------------------------------------------------------------- */
+  {
+    id: "bc-econ-half-thesis",
+    who: "Barnard Economics major one term into the two-term senior thesis.",
+    /*
+     * The senior requirement is a choice between a year-long thesis
+     * (ECON BC3061 then BC3062) and a one-term seminar (BC3063). A student who
+     * has done the first half of the thesis has genuinely started and has
+     * finished nothing — in progress, never satisfied. Getting this wrong in
+     * the generous direction tells a senior in her last term that she is done.
+     */
+    programId: "bc-major-economics",
+    taken: ["ECON BC3061"],
+    expect: {
+      "senior-requirement": { status: "in_progress" },
+    },
+    verified: "2026-08-30",
+  },
+  {
+    id: "bc-econ-seminar-route",
+    who: "Barnard Economics major who took the one-term Senior Seminar instead of the thesis.",
+    /*
+     * The other branch, which is one course long. It must close on that one
+     * course — a `sequence_choice` that quietly required the longer branch
+     * would fail every student who chose the published shorter one.
+     *
+     * NOT shown to her by any rule: choosing the seminar also obliges an
+     * ADDITIONAL upper-level elective beyond the three the electives group
+     * counts. That is in the group's note, because the rule cannot hold a
+     * requirement whose size depends on which branch was taken.
+     */
+    programId: "bc-major-economics",
+    taken: ["ECON BC3063"],
+    expect: {
+      "senior-requirement": { status: "satisfied" },
+    },
+    verified: "2026-08-30",
+  },
+
+  /* ---------------------------------------------------------------------- *
+   * Barnard — Foundations
+   * ---------------------------------------------------------------------- */
+  {
+    id: "bc-foundations-first-year",
+    who: "Barnard first-year one term in: First-Year Writing, First-Year Seminar, and a PE class.",
+    /*
+     * The three groups of Foundations that are actually checkable. Nine of the
+     * thirteen are `attested` — the Distributionals and the six Modes of
+     * Thinking are certified by approved lists that live in a client-rendered
+     * Slate portal, and `courses.requirement_flags` holds no Barnard flag, so
+     * an `n_matching` over a Barnard flag would match zero courses forever
+     * while rendering exactly like a finished requirement.
+     *
+     * This record pins the part we do not have to apologise for. Physical
+     * Education matters more than it looks: it is `n_matching` over a subject
+     * rather than a course list, so a wrong subject string matches nothing and
+     * fails silently and permanently rather than erroring.
+     *
+     * Every code here was checked against the live `courses` table on
+     * 2026-08-30. That check earned its keep: this record first used
+     * `PHED BC1001`, which does not exist — Barnard's physical education row
+     * is `PHED BC1004`. The group still went green, because an `n_matching`
+     * over PHED cannot tell an invented PHED course from a real one. A
+     * synthetic transcript is allowed to be synthetic; it is not allowed to
+     * name courses that do not exist, or it stops being evidence.
+     */
+    programId: "bc-foundations",
+    taken: ["FYWB BC1001", "FYSB BC1001", "PHED BC1004"],
+    expect: {
+      "first-year-writing": { status: "satisfied", completed: 1 },
+      "first-year-seminar": { status: "satisfied", completed: 1 },
+      "physical-education": { status: "satisfied", completed: 1 },
+      "distributional-languages": { status: "unmet" },
+    },
+    verified: "2026-08-30",
+  },
 ];
 
 /* ==========================================================================

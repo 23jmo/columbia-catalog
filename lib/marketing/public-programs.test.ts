@@ -4,7 +4,7 @@ import { formatRule, ruleKindLabel } from "./format-rule";
 import { listPublicPrograms, programPageTitle } from "./public-programs";
 
 describe("listPublicPrograms", () => {
-  it("ships CC and SEAS cores and majors, and nothing else", () => {
+  it("ships CC, SEAS and Barnard cores and majors, and nothing else", () => {
     const programs = listPublicPrograms();
     const ids = programs.map((program) => program.id);
 
@@ -12,15 +12,43 @@ describe("listPublicPrograms", () => {
     expect(ids).toContain("seas-core");
     expect(ids).toContain("cc-major-computer-science");
     expect(ids).toContain("seas-major-computer-science");
+    // Barnard joined on 2026-08-30. The Core is the one that matters most:
+    // `coreForSchool("BC")` used to return undefined, so a Barnard student
+    // could pick her school and be audited against nothing.
+    expect(ids).toContain("bc-foundations");
+    expect(ids).toContain("bc-major-computer-science");
 
     expect(ids).not.toContain("cc-minor-computer-science");
     expect(ids).not.toContain("cc-concentration-economics");
     expect(programs.every((program) => program.origin === "authored")).toBe(true);
-    expect(programs.every((program) => program.school === "CC" || program.school === "SEAS")).toBe(
-      true,
-    );
+    expect(
+      programs.every(
+        (program) =>
+          program.school === "CC" || program.school === "SEAS" || program.school === "BC",
+      ),
+    ).toBe(true);
+    // General Studies is still uncovered, and the public pages must not imply
+    // otherwise by shipping a page for it.
+    expect(programs.some((program) => program.school === "GS")).toBe(false);
     expect(programs.every((program) => program.kind === "core" || program.kind === "major")).toBe(
       true,
+    );
+  });
+
+  it("gives Barnard its own school label, not Columbia's", () => {
+    /*
+     * Barnard majors share names with Columbia ones — there is a Computer
+     * Science, an Economics, a Psychology on both sides — so the school in the
+     * title is the only thing telling a reader which requirements they are
+     * looking at. Two pages titled "Computer Science at Columbia College" would
+     * be worse than one.
+     */
+    const bc = listPublicPrograms().find(
+      (program) => program.id === "bc-major-computer-science",
+    );
+    expect(bc).toBeDefined();
+    expect(programPageTitle(bc!)).toBe(
+      "Computer Science at Barnard College: what LionPlan checks",
     );
   });
 

@@ -63,6 +63,13 @@ const CUMULATIVE_BY_DESIGN: Record<string, string> = {
     "the six named requirements. They are the first of the thirty points, not thirty more " +
     "beside them — the six come to 21-23 points, so this block is what the other two or " +
     "three courses live in. Checked against the live Bulletin on 2026-08-26.",
+  "bc-major-history:eleven-courses":
+    'Barnard\'s catalogue reads "The History major consists of eleven courses: six in the ' +
+    'area of concentration; the other five may be either within or without", and then ' +
+    '"The eleven required courses should include:" followed by the introductory lectures, ' +
+    "the two seminars and the two-semester senior research seminar. HIST BC3391 and " +
+    "HIST BC3392 are the eleventh and tenth of the eleven, not two more beside them. " +
+    "Checked against catalog.barnard.edu on 2026-08-30.",
 };
 
 /**
@@ -81,6 +88,13 @@ const DOUBLE_COUNTED_BY_DESIGN: Record<string, string> = {
   "seas-major-computer-science:MATH UN2015":
     "The same published permission, and the same two groups — SEAS and CC share the " +
     "department's mathematics requirement verbatim.",
+  "bc-major-computer-science:MATH UN2015":
+    "Barnard publishes the permission in its own words, on its own catalogue, under the " +
+    'trackless curriculum\'s mathematics table: "MATH UN2015 can double count for Linear ' +
+    'Algebra and Probability requirements. This is the ONLY instance a course can double ' +
+    'count." Deliberately NOT excluded between the two groups, because the usual guard ' +
+    "would tell a student who took UN2015 that she still owes a probability course. " +
+    "Checked against catalog.barnard.edu on 2026-08-30.",
 };
 
 /** Courses a group requires by name — what a student must hold to satisfy it. */

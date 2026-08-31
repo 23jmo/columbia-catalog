@@ -25,6 +25,7 @@
 
 import type { User } from "@supabase/supabase-js";
 
+import { guestSignInNext } from "@/lib/onboarding/guest-gate";
 import { rememberAuthNext } from "./auth-return";
 import { createServerSupabaseClient, createServiceRoleClient, getBrowserClient } from "./client";
 
@@ -137,6 +138,13 @@ export async function deleteSignedInAccount(userId: string): Promise<{ error: st
  * slash); anything else falls back to the current location so this cannot
  * become an open redirect.
  *
+ * With no explicit `next`, `guestSignInNext()` gets a say before the current
+ * path does. Today it names exactly one route: the catalog, which is open to
+ * guests and is the one place where "put them back where they were" is the
+ * wrong answer. See that function for the argument; the rule lives there
+ * because the catalog's four sign-in doors are shared components that do not
+ * know which route they are rendering on.
+ *
  * A short-lived `cc_auth_next` cookie mirrors `next`. When Supabase's allow
  * list rejects `redirectTo` it substitutes the Site URL and drops the query;
  * the cookie is what lets the callback still return them to the wizard.
@@ -163,11 +171,12 @@ export async function signIn(options?: { next?: string }): Promise<{ error: stri
   if (!client) return { error: "Sign-in is not configured." };
 
   const current = `${window.location.pathname}${window.location.search}`;
+  const fallback = guestSignInNext(window.location.pathname) ?? current;
   const requested = options?.next;
   const next =
     requested && requested.startsWith("/") && !requested.startsWith("//")
       ? requested
-      : current;
+      : fallback;
   // Backup for when Supabase strands the code on the Site URL without `next`.
   rememberAuthNext(next);
   const { error } = await client.auth.signInWithOAuth({

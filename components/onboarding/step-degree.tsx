@@ -50,16 +50,18 @@ const SCHOOL_ORDER: School[] = ["CC", "SEAS", "GS", "BC"];
 /**
  * The schools the program registry has anything at all for.
  *
- * DERIVED from `listPrograms()`, never listed. Today that set is {CC, SEAS}:
- * `lib/requirements/programs/index.ts` holds fifteen authored programs, all of
- * them Columbia College or Engineering, and `PARSED_PROGRAMS` is empty. General
- * Studies and Barnard have zero — not just zero majors but zero Core, because
- * `coreForSchool` resolves out of the same registry.
+ * DERIVED from `listPrograms()`, never listed. Today that set is {CC, SEAS,
+ * BC}. General Studies is the one that still has zero — not just zero majors
+ * but zero Core, because `coreForSchool` resolves out of the same registry.
  *
- * That is why this is computed rather than written down. The moment somebody
- * transcribes a GS program, GS stops being uncovered here with no edit to this
- * file; a hard-coded "schools we support" list would keep lying until someone
- * remembered to come back.
+ * That is why this is computed rather than written down, and Barnard is the
+ * proof it was worth it. On 2026-08-30 somebody transcribed Foundations and
+ * eleven Barnard majors into `lib/requirements/programs/index.ts`; Barnard
+ * stopped being uncovered here, and the picker started offering it, with no
+ * edit to this function. A hard-coded "schools we support" list would have
+ * kept lying until someone remembered to come back — and note that the
+ * previous version of this very comment DID name a count, and was wrong about
+ * it by ten programs before anyone noticed. Do not write the number down.
  */
 export function schoolsWithPrograms(options: readonly ProgramOption[]): Set<string> {
   return new Set(options.map((option) => option.school));
@@ -154,23 +156,27 @@ export function hasSelectedMinor(
  * ========================================================================== */
 
 /**
- * All four schools are offered, including the two we cannot audit.
+ * All four schools are offered, including the one we cannot audit.
  *
- * Hiding General Studies and Barnard would be the tidier screen and the worse
- * product. A GS student who cannot find their school does not conclude "no
- * requirements data yet"; they conclude the site is not for them and leave —
- * and they would be wrong, because everything downstream of this step works for
- * them. The coursework guess degrades to what the taste engine can infer, the
- * love screen is unaffected, interests are unaffected, and the feed is built
- * from similarity, not from a degree audit. The only thing they lose is the
+ * Hiding General Studies would be the tidier screen and the worse product. A GS
+ * student who cannot find their school does not conclude "no requirements data
+ * yet"; they conclude the site is not for them and leave — and they would be
+ * wrong, because everything downstream of this step works for them. The
+ * coursework guess degrades to what the taste engine can infer, the love screen
+ * is unaffected, interests are unaffected, and the feed is built from
+ * similarity, not from a degree audit. The only thing they lose is the
  * requirement checking.
  *
  * So the chip stays and the limitation is stated the instant it becomes true —
  * on selection, on this screen, before they have invested anything. Telling
  * them one screen later, on an empty program list, would be asking them to pay
- * first. The spec calls Barnard out of scope and separately notes the sharp
- * edge that Barnard students can already sign in and get nothing; the screen's
- * job is to not make that worse by being coy about it.
+ * first.
+ *
+ * Barnard used to be the second such school, and the sharpest edge in the
+ * product: a Barnard student could sign in and get nothing. That is fixed as of
+ * 2026-08-30 — Foundations and eleven majors are authored, so BC now takes the
+ * covered path here. The warning copy is keyed off `schoolsWithPrograms`, not
+ * off a school name, which is why fixing the registry fixed the screen.
  */
 export function SchoolQuestion({
   school,

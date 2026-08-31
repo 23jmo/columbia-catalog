@@ -37,9 +37,21 @@ export interface TypicalBand {
  * SEAS student is a wrong transcript.
  *
  * GS borrows the College's first-year writing and a humanities sequence
- * without pretending their Core is identical. Barnard is empty on
- * purpose: we have not transcribed their Core and inventing one would
- * put the wrong courses on a Barnard student's strip.
+ * without pretending their Core is identical.
+ *
+ * Barnard is empty, and stayed empty when Foundations was transcribed on
+ * 2026-08-30. That is not an omission. This table exists for what the rule
+ * language CANNOT say: Lit Hum is an `all_of`, so the program loop below
+ * skips it, and only a hand-written band can put it on a first-year strip
+ * with the right pacing. Barnard's two universal first-year courses are
+ * genuinely choices — First-Year Writing is `FYWB BC1001` or `BC1002`,
+ * First-Year Seminar is `FYSB BC1001` or `BC1002` — so `bc-foundations`
+ * encodes them as `n_of`, and the loop below already offers all four,
+ * labelled with the requirement's own name. Verified: a BC student with
+ * Foundations resolved gets thirteen typical guesses, not zero.
+ *
+ * So do not "fix" this by writing a BC band. It would duplicate the
+ * registry, and the duplicate is the copy that goes stale.
  */
 const TYPICAL_BY_SCHOOL: Record<School, readonly TypicalBand[]> = {
   CC: [

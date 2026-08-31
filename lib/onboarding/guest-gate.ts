@@ -46,10 +46,29 @@ const CARRIED_PARAMS = ["auth_error"] as const;
  * claims no clashes. So a guest gets the catalog, the seats and the reviews —
  * every fact that is true about the course regardless of who is reading.
  *
+ * ── `/search` is open, and it is the front door ────────────────────────────
+ *
+ * The catalog is the one surface a stranger can be handed without knowing
+ * anything about them. It was gated on the grounds that "the nav no longer
+ * offers it" — but the nav does offer it now, and gating it meant the only
+ * thing a curious visitor could do with this product was answer five questions
+ * about their degree before seeing a single course. That is a lot of trust to
+ * ask for from a page they have not been shown yet.
+ *
+ * So a guest gets the whole catalog: every course, every filter, every seat
+ * count, and the course pages the rows link into. What they do NOT get is
+ * anything that answers a question about *them* — and the rail says so
+ * out loud rather than 307-ing them mid-click. `components/shell/catalog-
+ * sidebar.tsx` reads this very function to decide which tabs are locked, so
+ * opening another route here unlocks its tab in the same commit.
+ *
+ * Personal relevance degrades rather than breaks: `catalogRelevanceAction`
+ * reads the student first and returns `{ personalized: false }` when there is
+ * no record, so a guest gets course order and no re-rank announcement.
+ *
  * The feed stays behind the wall on purpose, and so do `/saved`, `/profile`
  * and `/schedule`. Those are answers about a specific student, they are what
  * the wizard is FOR, and giving them away would leave nothing to sign in for.
- * Search stays gated too — it is the catalog, and the nav no longer offers it.
  *
  * The trade is deliberate: reach over conversion rate. It is the right trade
  * for cold links arriving from Reddit at 1am during registration week, and it
@@ -106,11 +125,37 @@ export function isGuestAllowedPath(pathname: string): boolean {
     pathname.startsWith("/onboarding/") ||
     isPublicMarketingPath(pathname) ||
     pathname.startsWith("/auth/") ||
+    // Exact, not a prefix: `/search` is one route, and a future `/search-admin`
+    // must not fall through the gate because it starts with the same word.
+    pathname === "/search" ||
     pathname.startsWith("/course/") ||
     pathname.startsWith("/instructor/") ||
     pathname.startsWith("/api/") ||
     pathname.startsWith("/.well-known/")
   );
+}
+
+/**
+ * Where a guest who presses "sign in" on `pathname` should be sent, or `null`
+ * to keep `signIn()`'s default of returning them where they were.
+ *
+ * The catalog is the one guest-open route that is not about a specific thing.
+ * A student who signs in from `/course/COMS1004W` came for that course and has
+ * to get it back — dropping them into a wizard would lose the link that
+ * brought them. A student who signs in from `/search` came for nothing in
+ * particular, has answered nothing about their degree, and would otherwise
+ * arrive back at the same undifferentiated list with nothing visibly changed.
+ * Onboarding is the only landing that spends the yes.
+ *
+ * This is consulted by `signIn()` rather than passed by each caller because
+ * the catalog has four sign-in doors — the banner, the rail's padlocked tabs,
+ * the account popover, and the bookmark toast — and three of them are shared
+ * components that have no idea which route they are on. Stating the rule once,
+ * here, is what keeps the fourth door from quietly disagreeing. An explicit
+ * `next` always wins, so the wizard's own `/onboarding` is untouched.
+ */
+export function guestSignInNext(pathname: string): string | null {
+  return pathname === "/search" ? "/onboarding" : null;
 }
 
 /**

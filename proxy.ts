@@ -22,12 +22,17 @@
  *
  * ── Unsigned HTML goes to onboarding ───────────────────────────────────────
  *
- * A signed-out visitor hitting `/`, `/search`, `/schedule`, and so on is
+ * A signed-out visitor hitting `/`, `/chat`, `/schedule`, and so on is
  * redirected to `/onboarding` here, before the page paints. The first screen
  * has a Log in control for people who already have an account; everyone else
  * walks the wizard and signs in on the last step. There is no "browse as
  * guest" exit — that path let people skip setup, which is the thing we are
  * trying to make the default.
+ *
+ * `/search` is the exception, and it is deliberate: the catalog is the one
+ * surface that is worth something to a stranger, so a guest browses it freely
+ * and is asked for an account by the page rather than by a 307. See
+ * `lib/onboarding/guest-gate.ts` for the argument.
  *
  * APIs, the OAuth callback, onboarding, and the public About / Privacy /
  * Terms pages are not redirected. Writes still authorize themselves at the
@@ -161,7 +166,8 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     /**
-     * Everything except static assets, the search index, and crawler files.
+     * Everything except static assets, generated social cards, the search
+     * index, and crawler files.
      *
      * `index/` matters: the lexical artifact is ~700 KB and immutable, and
      * running an auth round trip in front of a CDN-cacheable binary would be a
@@ -170,6 +176,6 @@ export const config = {
      * are excluded so a matcher miss cannot 307 Googlebot or Search Console
      * into the wizard. The guest gate still allow-lists them as a second check.
      */
-    "/((?!_next/static|_next/image|favicon.ico|robots\\.txt|sitemap\\.xml|llms\\.txt|llms-full\\.txt|google[^/]*\\.html|index/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|woff2?)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|opengraph-image|twitter-image|robots\\.txt|sitemap\\.xml|llms\\.txt|llms-full\\.txt|google[^/]*\\.html|index/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|woff2?)$).*)",
   ],
 };
