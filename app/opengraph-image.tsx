@@ -24,13 +24,12 @@ interface SocialCourse {
   section: string;
   credits: number;
   title: string;
-  reason: string;
+  school?: "Barnard";
+  ratings: readonly string[];
   days: readonly boolean[];
   time: string;
   instructor: string;
   location: string;
-  rating?: string;
-  reviews?: number;
   seatsLabel: string;
   enrolled: number;
   capacity: number;
@@ -44,13 +43,11 @@ const courses: readonly SocialCourse[] = [
     section: "338",
     credits: 3,
     title: "University Writing",
-    reason: "Clears University Writing · Columbia Core",
+    ratings: ["Professor 4.5/5 · CULPA"],
     days: [false, true, false, true, false],
     time: "11:40am–12:55pm",
     instructor: "Emily M Suazo",
     location: "Lerner Hall",
-    rating: "4.5",
-    reviews: 9,
     seatsLabel: "Full",
     enrolled: 16,
     capacity: 16,
@@ -59,37 +56,36 @@ const courses: readonly SocialCourse[] = [
   },
   {
     code: "HUMA 1001",
-    section: "001",
+    section: "042",
     credits: 4,
     title: "Literature Humanities I",
-    reason: "Clears Literature Humanities · Columbia Core",
-    days: [true, false, true, false, false],
-    time: "8:10am–10:00am",
-    instructor: "Jilian A Pizzi",
-    location: "Hamilton 302",
-    seatsLabel: "2 seats left",
+    ratings: ["Very heavy workload", "Professor 4.3/5 · CULPA"],
+    days: [false, true, false, true, false],
+    time: "10:10am–12:00pm",
+    instructor: "Molly Murray",
+    location: "Hamilton 301",
+    seatsLabel: "1 seat left",
     enrolled: 19,
-    capacity: 21,
-    fill: 90,
+    capacity: 20,
+    fill: 95,
     tone: "tight",
   },
   {
-    code: "ECON 1105",
-    section: "002",
+    code: "ECON 1003",
+    section: "003",
     credits: 4,
-    title: "Principles of Economics",
-    reason: "Clears Principles of Economics · SEAS Core",
-    days: [true, false, true, false, false],
-    time: "2:40pm–3:55pm",
-    instructor: "Prajit K Dutta",
-    location: "Schermerhorn 501",
-    rating: "4.2",
-    reviews: 22,
-    seatsLabel: "50 seats left",
-    enrolled: 139,
-    capacity: 189,
-    fill: 74,
-    tone: "open",
+    title: "Intro to Economic Reasoning",
+    school: "Barnard",
+    ratings: ["Hard difficulty", "Professor 3.9/5 · CULPA"],
+    days: [false, true, false, true, false],
+    time: "11:40am–12:55pm",
+    instructor: "Rajiv Sethi",
+    location: "R&D Science Center",
+    seatsLabel: "3 seats left",
+    enrolled: 57,
+    capacity: 60,
+    fill: 95,
+    tone: "tight",
   },
 ];
 
@@ -109,12 +105,12 @@ function WeekStrip({ days }: { days: readonly boolean[] }) {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            width: 17,
-            height: 17,
-            borderRadius: 5,
+            width: 19,
+            height: 19,
+            borderRadius: 6,
             background: days[index] ? "#2b7fff" : "#f2f4f7",
             color: days[index] ? "#ffffff" : "#98a2b3",
-            fontSize: 8.5,
+            fontSize: 9.5,
             fontWeight: 700,
           }}
         >
@@ -133,10 +129,10 @@ function CourseCard({ course }: { course: SocialCourse }) {
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: 4,
+        gap: 5,
         width: "100%",
-        padding: "10px 12px 8px",
-        borderRadius: 16,
+        padding: "13px 15px 11px",
+        borderRadius: 18,
         border: "1px solid #dfe3e8",
         background: "rgba(255,255,255,0.98)",
         boxShadow: "0 12px 34px rgba(16,24,40,0.10)",
@@ -148,13 +144,13 @@ function CourseCard({ course }: { course: SocialCourse }) {
           alignItems: "center",
           justifyContent: "space-between",
           color: "#667085",
-          fontSize: 10,
+          fontSize: 11,
           fontWeight: 700,
           letterSpacing: 0.45,
         }}
       >
         <div style={{ display: "flex" }}>
-          {course.code} · SEC {course.section} · FALL 2026
+          {course.school ? `${course.school} · ` : ""}SEC {course.section} · FALL 2026
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 5, letterSpacing: 0 }}>
           <div
@@ -164,7 +160,7 @@ function CourseCard({ course }: { course: SocialCourse }) {
               borderRadius: 999,
               background: "#f2f4f7",
               color: "#475467",
-              fontSize: 9,
+              fontSize: 10,
             }}
           >
             {course.credits} PTS
@@ -178,11 +174,11 @@ function CourseCard({ course }: { course: SocialCourse }) {
               borderRadius: 999,
               background: "#eff8ff",
               color: "#175cd3",
-              fontSize: 9,
+              fontSize: 10,
             }}
           >
             Open in Vergil
-            <svg width="10" height="10" viewBox="0 0 12 12" aria-hidden="true">
+            <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="true">
               <path
                 d="M3 9 9 3M4.5 3H9v4.5"
                 fill="none"
@@ -196,21 +192,21 @@ function CourseCard({ course }: { course: SocialCourse }) {
         </div>
       </div>
 
-      <div style={{ color: "#101828", fontSize: 19, fontWeight: 700, letterSpacing: -0.4 }}>
+      <div style={{ color: "#101828", fontSize: 21, fontWeight: 700, letterSpacing: -0.45 }}>
         {course.title}
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 5, color: "#175cd3", fontSize: 10.5 }}>
-        <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
-          <circle cx="8" cy="8" r="7" fill="#eff8ff" />
-          <path d="M4.7 8.1 7 10.3l4.3-4.8" fill="none" stroke="#2b7fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-        {course.reason}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#475467", fontSize: 10.5 }}>
+        {course.ratings.map((rating) => (
+          <div key={rating} style={{ display: "flex" }}>
+            ({rating})
+          </div>
+        ))}
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
         <WeekStrip days={course.days} />
-        <div style={{ display: "flex", color: "#344054", fontSize: 11.5, fontWeight: 600 }}>
+        <div style={{ display: "flex", color: "#344054", fontSize: 12.5, fontWeight: 600 }}>
           {course.time}
         </div>
       </div>
@@ -221,21 +217,12 @@ function CourseCard({ course }: { course: SocialCourse }) {
           alignItems: "center",
           justifyContent: "space-between",
           color: "#667085",
-          fontSize: 10.5,
+          fontSize: 11.5,
         }}
       >
         <div style={{ display: "flex" }}>
           {course.instructor} · {course.location}
         </div>
-        {course.rating ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 3, color: "#344054" }}>
-            <svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="m12 1.8 3.15 6.39 7.05 1.02-5.1 4.97 1.2 7.02L12 17.89 5.7 21.2l1.2-7.02-5.1-4.97 7.05-1.02L12 1.8Z" fill="#f79009" />
-            </svg>
-            <span style={{ fontWeight: 700 }}>{course.rating}/5</span>
-            <span style={{ color: "#98a2b3" }}>({course.reviews})</span>
-          </div>
-        ) : null}
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -245,13 +232,13 @@ function CourseCard({ course }: { course: SocialCourse }) {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            height: 20,
+            height: 23,
             overflow: "hidden",
             padding: "0 9px",
             borderRadius: 8,
             border: "1px solid #e4e7ec",
             background: "#f9fafb",
-            fontSize: 9.5,
+            fontSize: 10.5,
           }}
         >
           <div
@@ -267,11 +254,8 @@ function CourseCard({ course }: { course: SocialCourse }) {
             {course.seatsLabel}
           </div>
           <div style={{ position: "relative", display: "flex", color: "#667085" }}>
-            {course.enrolled} / {course.capacity} enrolled
+            {course.enrolled} / {course.capacity} · Aug 22, 9 PM
           </div>
-        </div>
-        <div style={{ display: "flex", paddingLeft: 2, color: "#98a2b3", fontSize: 8.5 }}>
-          Directory as of Aug 22, 9:00 PM
         </div>
       </div>
     </div>
@@ -431,41 +415,10 @@ export default async function OpenGraphImage() {
               alignSelf: "center",
               display: "flex",
               flexDirection: "column",
-              width: 450,
+              width: 462,
               gap: 8,
             }}
           >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "0 4px 2px",
-              }}
-            >
-              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                <div style={{ color: "#667085", fontSize: 11, fontWeight: 700, letterSpacing: 1.2 }}>
-                  YOUR NEXT TERM
-                </div>
-                <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.5 }}>
-                  Recommended for you
-                </div>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  padding: "6px 10px",
-                  borderRadius: 999,
-                  background: "#ecfdf3",
-                  color: "#027a48",
-                  fontSize: 11,
-                  fontWeight: 700,
-                }}
-              >
-                LIVE
-              </div>
-            </div>
-
             {courses.map((course, index) => (
               <div
                 key={`${course.code}-${course.section}`}
