@@ -166,7 +166,8 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     /**
-     * Everything except static assets, the search index, and crawler files.
+     * Everything except static assets, generated social cards, the search
+     * index, and crawler files.
      *
      * `index/` matters: the lexical artifact is ~700 KB and immutable, and
      * running an auth round trip in front of a CDN-cacheable binary would be a
@@ -175,6 +176,6 @@ export const config = {
      * are excluded so a matcher miss cannot 307 Googlebot or Search Console
      * into the wizard. The guest gate still allow-lists them as a second check.
      */
-    "/((?!_next/static|_next/image|favicon.ico|robots\\.txt|sitemap\\.xml|llms\\.txt|llms-full\\.txt|google[^/]*\\.html|index/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|woff2?)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|opengraph-image|twitter-image|robots\\.txt|sitemap\\.xml|llms\\.txt|llms-full\\.txt|google[^/]*\\.html|index/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|woff2?)$).*)",
   ],
 };

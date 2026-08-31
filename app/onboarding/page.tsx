@@ -4,6 +4,11 @@ import { Suspense } from "react";
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
 import { OnboardingToaster } from "@/components/onboarding/onboarding-toaster";
 import { AuthErrorToast } from "@/components/onboarding/auth-error-toast";
+import {
+  SOCIAL_DESCRIPTION,
+  SOCIAL_IMAGE_ALT,
+  SOCIAL_TITLE,
+} from "@/lib/marketing/social";
 import { listPrograms } from "@/lib/requirements/programs";
 
 /**
@@ -50,9 +55,31 @@ import { listPrograms } from "@/lib/requirements/programs";
  */
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://lionplan.org"),
   title: "Get started · LionPlan",
   description:
     "Tell us your school, your major and what you've taken, and we'll work out what you should take next.",
+  openGraph: {
+    title: SOCIAL_TITLE,
+    description: SOCIAL_DESCRIPTION,
+    url: "https://lionplan.org",
+    siteName: "LionPlan",
+    type: "website",
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: SOCIAL_IMAGE_ALT,
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SOCIAL_TITLE,
+    description: SOCIAL_DESCRIPTION,
+    images: [{ url: "/twitter-image", alt: SOCIAL_IMAGE_ALT }],
+  },
 };
 
 export default function OnboardingPage() {
