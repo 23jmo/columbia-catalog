@@ -29,6 +29,13 @@ const OPTIONS: ProgramOption[] = [
     school: "SEAS",
     origin: "authored",
   },
+  {
+    id: "gs-major-medical-humanities",
+    name: "Medical Humanities",
+    kind: "major",
+    school: "GS",
+    origin: "authored",
+  },
 ];
 
 describe("electableMajorsFor", () => {
@@ -43,6 +50,12 @@ describe("electableMajorsFor", () => {
   it("drops a major from another school instead of keeping it labelled foreign", () => {
     const majors = electableMajorsFor("SEAS", OPTIONS, ["cc-major-economics"]);
     expect(majors.map((option) => option.id)).toEqual(["seas-major-computer-science"]);
+  });
+
+  it("offers Medical Humanities to General Studies students", () => {
+    expect(electableMajorsFor("GS", OPTIONS, []).map((option) => option.id)).toEqual([
+      "gs-major-medical-humanities",
+    ]);
   });
 });
 

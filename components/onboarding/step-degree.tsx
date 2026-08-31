@@ -50,9 +50,9 @@ const SCHOOL_ORDER: School[] = ["CC", "SEAS", "GS", "BC"];
 /**
  * The schools the program registry has anything at all for.
  *
- * DERIVED from `listPrograms()`, never listed. Today that set is {CC, SEAS,
- * BC}. General Studies is the one that still has zero — not just zero majors
- * but zero Core, because `coreForSchool` resolves out of the same registry.
+ * DERIVED from `listPrograms()`, never listed. General Studies joined with its
+ * Core and Medical Humanities in 2026-08; the major picker therefore shows the
+ * authored GS program without implying that every GS major is covered.
  *
  * That is why this is computed rather than written down, and Barnard is the
  * proof it was worth it. On 2026-08-30 somebody transcribed Foundations and
@@ -156,27 +156,15 @@ export function hasSelectedMinor(
  * ========================================================================== */
 
 /**
- * All four schools are offered, including the one we cannot audit.
- *
- * Hiding General Studies would be the tidier screen and the worse product. A GS
- * student who cannot find their school does not conclude "no requirements data
- * yet"; they conclude the site is not for them and leave — and they would be
- * wrong, because everything downstream of this step works for them. The
- * coursework guess degrades to what the taste engine can infer, the love screen
- * is unaffected, interests are unaffected, and the feed is built from
- * similarity, not from a degree audit. The only thing they lose is the
- * requirement checking.
- *
- * So the chip stays and the limitation is stated the instant it becomes true —
- * on selection, on this screen, before they have invested anything. Telling
- * them one screen later, on an empty program list, would be asking them to pay
- * first.
+ * All four schools are offered. A school with no authored registry entry still
+ * takes the transparent uncovered path below.
  *
  * Barnard used to be the second such school, and the sharpest edge in the
  * product: a Barnard student could sign in and get nothing. That is fixed as of
  * 2026-08-30 — Foundations and eleven majors are authored, so BC now takes the
  * covered path here. The warning copy is keyed off `schoolsWithPrograms`, not
- * off a school name, which is why fixing the registry fixed the screen.
+ * off a school name, which is why fixing the registry fixed the screen. The
+ * same is now true for GS Medical Humanities.
  */
 export function SchoolQuestion({
   school,

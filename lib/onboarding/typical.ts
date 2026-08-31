@@ -36,8 +36,10 @@ export interface TypicalBand {
  * chemistry, and The Art of Engineering. Putting the College block on a
  * SEAS student is a wrong transcript.
  *
- * GS borrows the College's first-year writing and a humanities sequence
- * without pretending their Core is identical.
+ * GS has its own `GS`-qualified versions of University Writing, Lit Hum, and
+ * Contemporary Civilization. Using the College spellings here is not a benign
+ * alias: it puts ENGL CC1010 on a GS student's inferred transcript even though
+ * the authored GS Core requires ENGL GS1010.
  *
  * Barnard is empty, and stayed empty when Foundations was transcribed on
  * 2026-08-30. That is not an omission. This table exists for what the rule
@@ -91,9 +93,9 @@ const TYPICAL_BY_SCHOOL: Record<School, readonly TypicalBand[]> = {
     },
   ],
   GS: [
-    { afterYears: 0, codes: ["ENGL CC1010", "HUMA CC1001"], label: "Typical first year" },
-    { afterYears: 1, codes: ["HUMA CC1002", "COCI CC1101"], label: "Typical Core" },
-    { afterYears: 2, codes: ["COCI CC1102"], label: "Typical Core" },
+    { afterYears: 0, codes: ["ENGL GS1010", "HUMA GS1001"], label: "Typical first year" },
+    { afterYears: 1, codes: ["HUMA GS1002", "COCI GS1101"], label: "Typical Core" },
+    { afterYears: 2, codes: ["COCI GS1102"], label: "Typical Core" },
   ],
   BC: [],
 };

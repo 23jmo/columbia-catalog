@@ -4,7 +4,7 @@ import { formatRule, ruleKindLabel } from "./format-rule";
 import { listPublicPrograms, programPageTitle } from "./public-programs";
 
 describe("listPublicPrograms", () => {
-  it("ships CC, SEAS and Barnard cores and majors, and nothing else", () => {
+  it("ships every authored school core and major, and nothing else", () => {
     const programs = listPublicPrograms();
     const ids = programs.map((program) => program.id);
 
@@ -17,6 +17,8 @@ describe("listPublicPrograms", () => {
     // could pick her school and be audited against nothing.
     expect(ids).toContain("bc-foundations");
     expect(ids).toContain("bc-major-computer-science");
+    expect(ids).toContain("gs-core");
+    expect(ids).toContain("gs-major-medical-humanities");
 
     expect(ids).not.toContain("cc-minor-computer-science");
     expect(ids).not.toContain("cc-concentration-economics");
@@ -24,14 +26,24 @@ describe("listPublicPrograms", () => {
     expect(
       programs.every(
         (program) =>
-          program.school === "CC" || program.school === "SEAS" || program.school === "BC",
+          program.school === "CC" ||
+          program.school === "SEAS" ||
+          program.school === "GS" ||
+          program.school === "BC",
       ),
     ).toBe(true);
-    // General Studies is still uncovered, and the public pages must not imply
-    // otherwise by shipping a page for it.
-    expect(programs.some((program) => program.school === "GS")).toBe(false);
     expect(programs.every((program) => program.kind === "core" || program.kind === "major")).toBe(
       true,
+    );
+  });
+
+  it("labels the first General Studies major as General Studies", () => {
+    const program = listPublicPrograms().find(
+      (candidate) => candidate.id === "gs-major-medical-humanities",
+    );
+    expect(program).toBeDefined();
+    expect(programPageTitle(program!)).toBe(
+      "Medical Humanities at General Studies: what LionPlan checks",
     );
   });
 

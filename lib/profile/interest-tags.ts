@@ -182,6 +182,51 @@ const TAGS_BY_PROGRAM: Record<string, InterestTag[]> = {
     ]),
   ],
 
+  /*
+   * Medical Humanities is intentionally organised around the kinds of inquiry
+   * the GS Bulletin names for the student's individualized nexus, not around a
+   * made-up department taxonomy. Exemplars are current ICLS offerings printed
+   * on that same Bulletin page for Fall 2026.
+   */
+  "gs-major-medical-humanities": [
+    tag(
+      "narrative-medicine",
+      "Narrative medicine",
+      "How stories shape illness, care, and the patient experience",
+      ["CPLS UN3931", "CPLS GU4227"],
+    ),
+    tag(
+      "end-of-life-care",
+      "End-of-life care",
+      "Palliative care, service, grief, and the ethics of comfort",
+      ["CPLS UN3931"],
+    ),
+    tag(
+      "literature-medicine",
+      "Literature and medicine",
+      "How fiction represents bodies, disease, anatomy, and diagnosis",
+      ["CPLS GU4227"],
+    ),
+    tag(
+      "health-justice",
+      "Health justice",
+      "Medical racism, anti-racist care, and public-health power",
+      ["CPLS GU4325"],
+    ),
+    tag(
+      "bioethics",
+      "Bioethics",
+      "The moral questions inside research, treatment, and health systems",
+      ["CPLS UN3931", "CPLS GU4325"],
+    ),
+    tag(
+      "psychoanalysis",
+      "Mind and psychoanalysis",
+      "Freud, theories of mind, and their cultural afterlives",
+      ["CLPS GU4200", "CLPS GU4202"],
+    ),
+  ],
+
   "cc-major-history": [
     tag("us-history", "United States", "Colonial through contemporary", [
       "HIST UN1501",

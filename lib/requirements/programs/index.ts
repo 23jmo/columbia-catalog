@@ -46,6 +46,8 @@ import { CC_MAJOR_PSYCHOLOGY } from "./cc-major-psychology";
 import { CC_MAJOR_SOCIOLOGY } from "./cc-major-sociology";
 import { CC_MAJOR_STATISTICS } from "./cc-major-statistics";
 import { CC_MINOR_COMPUTER_SCIENCE } from "./cc-minor-computer-science";
+import { GS_CORE } from "./gs-core";
+import { GS_MAJOR_MEDICAL_HUMANITIES } from "./gs-major-medical-humanities";
 import { SEAS_CORE } from "./seas-core";
 import { SEAS_MAJOR_APPLIED_MATHEMATICS } from "./seas-major-applied-mathematics";
 import { SEAS_MAJOR_BIOMEDICAL_ENGINEERING } from "./seas-major-biomedical-engineering";
@@ -57,9 +59,10 @@ import { SEAS_MAJOR_MECHANICAL_ENGINEERING } from "./seas-major-mechanical-engin
 import { SEAS_MAJOR_OPERATIONS_RESEARCH } from "./seas-major-operations-research";
 
 export const AUTHORED_PROGRAMS: Program[] = [
-  // The three Cores. Not electable — see `coreForSchool`.
+  // The four Cores. Not electable — see `coreForSchool`.
   CC_CORE,
   SEAS_CORE,
+  GS_CORE,
   /*
    * Barnard's general education curriculum. Read from `catalog.barnard.edu`,
    * a different CourseLeaf install from Columbia's Bulletin with its own
@@ -89,6 +92,10 @@ export const AUTHORED_PROGRAMS: Program[] = [
   CC_MAJOR_PSYCHOLOGY,
   CC_MAJOR_SOCIOLOGY,
   CC_MAJOR_STATISTICS,
+
+  // General Studies majors. Coverage starts with the requested program and is
+  // intentionally described as partial on public surfaces until more are read.
+  GS_MAJOR_MEDICAL_HUMANITIES,
 
   // SEAS majors. Note these are genuinely different programs from their College
   // namesakes rather than aliases of them: SEAS Computer Science requires all
@@ -273,6 +280,8 @@ export {
   CC_MAJOR_SOCIOLOGY,
   CC_MAJOR_STATISTICS,
   CC_MINOR_COMPUTER_SCIENCE,
+  GS_CORE,
+  GS_MAJOR_MEDICAL_HUMANITIES,
   SEAS_CORE,
   SEAS_MAJOR_APPLIED_MATHEMATICS,
   SEAS_MAJOR_BIOMEDICAL_ENGINEERING,

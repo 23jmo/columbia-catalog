@@ -35,7 +35,8 @@ describe("crawler files", () => {
   it("keeps llms.txt quotable and honest about coverage", () => {
     const body = llmsTxt();
     expect(body).toContain("Columbia College, Columbia Engineering, and Barnard College");
-    expect(body).toContain("coming soon");
+    expect(body).toContain("General Studies Core and Medical Humanities major");
+    expect(body).toContain("still being added");
     expect(body).toContain("unofficial student project");
     expect(body).toContain(`${SITE_ORIGIN}/about`);
     // Three of four. Claiming all four would be the specific lie this file
@@ -49,15 +50,15 @@ describe("FAQ answers", () => {
   /*
    * This guard used to read "without claiming Barnard is live", and it was
    * right to until 2026-08-30. It has been INVERTED rather than deleted:
-   * Barnard is now live and General Studies is not, so the same asymmetry is
-   * asserted, pointing at the school that is still uncovered.
+   * Barnard is live and General Studies is now partially live, so the copy must
+   * name the exact GS programs instead of implying every GS major is covered.
    *
    * These strings get quoted verbatim by answer engines, so both directions
    * cost something real. Understating coverage sends a Barnard student away
    * from a product that works for her; overstating it walks a GS student
    * through a setup that ends in an empty audit.
    */
-  it("covers the required questions, claims Barnard, and does not claim General Studies", () => {
+  it("covers the required questions and describes partial GS coverage exactly", () => {
     const questions = FAQ_ITEMS.map((item) => item.question);
     expect(questions).toContain("What is LionPlan?");
     expect(questions).toContain("Is LionPlan an official Columbia tool?");
@@ -72,14 +73,12 @@ describe("FAQ answers", () => {
     const schools = FAQ_ITEMS.find(
       (item) => item.question === "Which schools does LionPlan support?",
     );
-    expect(schools?.answer).toContain("coming soon");
+    expect(schools?.answer).toContain("other GS majors are still being added");
     expect(schools?.answer).toMatch(
       /live for Columbia College, Columbia Engineering, and Barnard College/i,
     );
-    // General Studies has zero authored programs — not just zero majors but
-    // zero Core, because `coreForSchool` resolves out of the same registry.
-    expect(schools?.answer).toMatch(/General Studies is coming soon/i);
-    expect(schools?.answer).not.toMatch(/live for General Studies/i);
+    expect(schools?.answer).toContain("GS Core and Medical Humanities major");
+    expect(schools?.answer).not.toMatch(/all General Studies majors/i);
   });
 
   it("does not tell a Barnard student that Barnard onboarding is unavailable", () => {

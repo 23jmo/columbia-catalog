@@ -1102,6 +1102,22 @@ describe("level ceiling", () => {
 });
 
 describe("typical schedules", () => {
+  it("uses GS-qualified Core courses for a General Studies student", () => {
+    const gs = typicalGuesses({
+      school: "GS",
+      yearsCompleted: 1,
+      ceiling: 2000,
+      programs: [],
+    }).map((guess) => guess.courseId);
+
+    expect(gs).toContain("ENGL1010GS");
+    expect(gs).toContain("HUMA1001GS");
+    expect(gs).toContain("HUMA1002GS");
+    expect(gs).toContain("COCI1101GS");
+    expect(gs).not.toContain("ENGL1010CC");
+    expect(gs).not.toContain("HUMA1001CC");
+  });
+
   it("paces College Core by year, and does not invent a Barnard Core", () => {
     const firstYear = typicalGuesses({
       school: "CC",

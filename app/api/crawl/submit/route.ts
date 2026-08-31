@@ -46,7 +46,7 @@ export const dynamic = "force-dynamic";
  * generous headroom and still small enough that a malicious client cannot use
  * this endpoint as free storage.
  */
-export const MAX_SUBMISSION_BYTES = 3 * 1024 * 1024;
+const MAX_SUBMISSION_BYTES = 3 * 1024 * 1024;
 
 /** How far `fetchedAt` may sit from server time before we distrust it. */
 const FETCHED_AT_TOLERANCE_MS = 10 * 60_000;
