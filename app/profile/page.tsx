@@ -99,6 +99,7 @@ export default async function ProfilePage() {
             <AuditTree
               programs={data.audit.programs}
               termLabels={data.termLabels}
+              candidateTitles={data.candidateTitles}
               uncounted={data.uncounted}
             />
 

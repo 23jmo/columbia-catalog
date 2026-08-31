@@ -64,6 +64,14 @@ export interface ProfilePageData {
   termLabels: Record<string, string | null>;
   /** Courses on the record that no requirement counted, resolved for display. */
   uncounted: { courseId: string; code: string; title: string | null }[];
+  /**
+   * Catalog titles for courses an outstanding requirement NAMES, keyed by
+   * course id — what the audit tree's "still needed" chips print.
+   *
+   * Separate from `titles` because that map is built from the student's own
+   * record and a candidate is by definition not on it.
+   */
+  candidateTitles: Record<string, string>;
   /** Courses named by outstanding requirements, for the picker. */
   suggestions: {
     courseId: string;
@@ -154,14 +162,34 @@ export async function loadProfilePageData(): Promise<ProfilePageData> {
   ];
 
   const offeringsTerm = NEXT_TERM;
-  const [candidateCourses, plan] = await Promise.all([
+  /*
+   * Candidates are fetched from both terms, for the same reason `loadFacts`
+   * does it: `getCoursesByIds` is term-scoped, and a requirement names the
+   * courses the Bulletin lists without regard to which term they run in. Half
+   * of them are simply not taught next spring, and the next-term query alone
+   * returned no record for those — so their chips could only ever print a bare
+   * course code.
+   *
+   * Only the NEXT_TERM records become `offerings`. Ranking a course a student
+   * cannot register for would put it in the recommendation strip, which is a
+   * list of things to enroll in.
+   */
+  const [candidateCourses, alsoOfferedNow, plan] = await Promise.all([
     candidateIds.length > 0
       ? getCoursesByIds(candidateIds, offeringsTerm)
+      : Promise.resolve([] as CourseWithSections[]),
+    candidateIds.length > 0
+      ? getCoursesByIds(candidateIds, CURRENT_TERM)
       : Promise.resolve([] as CourseWithSections[]),
     loadPrimaryPlanSnapshot(offeringsTerm),
   ]);
 
-  const offeringById = new Map(candidateCourses.map((course) => [course.courseId, course]));
+  const candidateTitles: Record<string, string> = {};
+  // Next term last, so a course taught in both is described by the record a
+  // student would actually enroll in.
+  for (const course of [...alsoOfferedNow, ...candidateCourses]) {
+    candidateTitles[course.courseId] = course.title;
+  }
 
   const offerings: Offering[] = candidateCourses.map((course) =>
     toOffering(course, plan),
@@ -178,7 +206,7 @@ export async function loadProfilePageData(): Promise<ProfilePageData> {
       requirement.candidates.map((courseId) => ({
         courseId,
         code: formatCourseId(courseId),
-        title: offeringById.get(courseId)?.title ?? null,
+        title: candidateTitles[courseId] ?? null,
         requirement: `${requirement.label} · ${requirement.programName}`,
       })),
     )
@@ -197,6 +225,7 @@ export async function loadProfilePageData(): Promise<ProfilePageData> {
     titles,
     termLabels,
     uncounted,
+    candidateTitles,
     suggestions,
     programOptions: listPrograms().map((program) => ({
       id: program.id,

@@ -111,6 +111,16 @@ export interface OptionChipProps {
   sublabel?: string;
   /** Accessible name, when the visible label is an abbreviation. */
   label?: string;
+  /**
+   * How many lines the sublabel may use before it is cut. One by default,
+   * which is right for a call number under a title.
+   *
+   * The choose-one step asks for two: a multi-course route's second line is
+   * the whole sequence — eight call numbers for the biology chemistry option —
+   * and truncating it to one line hides the courses the student is being asked
+   * to recognise. Nothing else passes this, so no other chip changes height.
+   */
+  sublabelLines?: 1 | 2;
   disabled?: boolean;
 }
 
@@ -120,6 +130,7 @@ export function OptionChip({
   children,
   sublabel,
   label,
+  sublabelLines = 1,
   disabled = false,
 }: OptionChipProps) {
   return (
@@ -146,7 +157,8 @@ export function OptionChip({
           {sublabel ? (
             <span
               className={cx(
-                "max-w-[22rem] truncate text-caption-2-regular",
+                "max-w-[22rem] text-caption-2-regular",
+                sublabelLines === 2 ? "line-clamp-2 text-left" : "truncate",
                 isSelected ? "text-accent-500" : "text-text-secondary",
               )}
             >

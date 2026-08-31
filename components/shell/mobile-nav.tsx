@@ -8,6 +8,7 @@ import { motion } from "motion/react";
 import { HapticRoot } from "@/components/haptics/haptic-root";
 import { CatalogSidebar } from "@/components/shell/catalog-sidebar";
 import { ChatFab } from "@/components/shell/chat-fab";
+import { FeedbackPrompt } from "@/components/shell/feedback-prompt";
 import { MobileHeaderSlotProvider } from "@/components/shell/mobile-header-slot";
 import { ProgressiveBlur } from "@/components/shell/progressive-blur";
 import { SHELL_NAV_ITEMS, type ShellNavKey } from "@/components/shell/nav";
@@ -122,6 +123,14 @@ export function MobileShell({
       body.style.overflow = bodyOverflow;
     };
   }, []);
+
+  /*
+   * One truth for the corner. The chat button hides on `/chat` (the page
+   * already is the box) and while the rail is open (the Chat row is on
+   * screen); the feedback card is stacked against that same answer so the two
+   * can never disagree about whether there is a button underneath.
+   */
+  const fabHidden = isOpen || activeNav === "chat";
 
   return (
     <div
@@ -296,8 +305,16 @@ export function MobileShell({
         viewport. Hidden on `/chat` (the page already is the box) and while
         the rail is open (the Chat row is on screen, covering this would be
         a second copy of the same door).
+      */
+      <ChatFab hidden={fabHidden} />
+
+      {/*
+        Same sibling position and the same reasons. `raised` rather than a
+        second copy of the hidden test: the card stacks on top of the chat
+        button when there is one, and takes the corner itself when there is
+        not, so the two are never computed from different truths.
       */}
-      <ChatFab hidden={peeking || activeNav === "chat"} />
+      <FeedbackPrompt hidden={isOpen} raised={!fabHidden} />
     </div>
   );
 }

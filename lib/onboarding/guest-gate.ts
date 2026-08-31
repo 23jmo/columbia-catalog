@@ -19,6 +19,15 @@ const CARRIED_PARAMS = ["auth_error"] as const;
  * `/api/` authorizes itself per route; a HTML-only gate must not sit in front
  * of the crawler or the agent.
  *
+ * `/about`, `/faq`, `/privacy`, `/terms`, and `/programs` are the public,
+ * no-login pages.
+ * `/robots.txt`, `/sitemap.xml`, `/llms.txt`, and `/llms-full.txt` are
+ * crawler files. If any of those 307 to /onboarding, Googlebot stores the
+ * school picker as robots.txt and the site cannot rank. `/google*.html` is
+ * the Search Console URL-prefix check: Google fetches that path and
+ * expects the verification string, not the school picker. Home (`/`) stays
+ * gated: a returning student who types the origin still lands on Log in.
+ *
  * ── `/course/` and `/instructor/` are open, and the rest is not ────────────
  *
  * These two are the app's shareable unit. `app/course/[courseId]/page.tsx`
@@ -54,10 +63,48 @@ const CARRIED_PARAMS = ["auth_error"] as const;
  * document is by definition fetched by something that has no session yet, so
  * gating it makes the endpoint useless to the only caller it has.
  */
+const CRAWLER_FILES = new Set([
+  "/robots.txt",
+  "/sitemap.xml",
+  "/llms.txt",
+  "/llms-full.txt",
+]);
+
+function exactOrChild(pathname: string, root: string): boolean {
+  return pathname === root || pathname.startsWith(`${root}/`);
+}
+
+/**
+ * Search Console URL-prefix files live at `/google<token>.html`.
+ * Google fetches the path and expects the verification line, so a 307
+ * to the wizard fails the check.
+ */
+function isGoogleSiteVerificationPath(pathname: string): boolean {
+  return /^\/google[^/]*\.html$/.test(pathname);
+}
+
+/**
+ * Public HTML and crawler files. `proxy.ts` skips the session refresh
+ * here so the response can stay `Cache-Control: public` instead of
+ * picking up `private, no-store` from `getUser()`.
+ */
+export function isPublicMarketingPath(pathname: string): boolean {
+  return (
+    CRAWLER_FILES.has(pathname) ||
+    isGoogleSiteVerificationPath(pathname) ||
+    exactOrChild(pathname, "/about") ||
+    exactOrChild(pathname, "/faq") ||
+    exactOrChild(pathname, "/privacy") ||
+    exactOrChild(pathname, "/terms") ||
+    exactOrChild(pathname, "/programs")
+  );
+}
+
 export function isGuestAllowedPath(pathname: string): boolean {
   return (
     pathname === "/onboarding" ||
     pathname.startsWith("/onboarding/") ||
+    isPublicMarketingPath(pathname) ||
     pathname.startsWith("/auth/") ||
     pathname.startsWith("/course/") ||
     pathname.startsWith("/instructor/") ||

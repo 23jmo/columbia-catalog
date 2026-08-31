@@ -2,7 +2,6 @@ import {
   RiBookMarkedLine,
   RiCheckboxCircleLine,
   RiGraduationCapLine,
-  RiListCheck3,
 } from "@remixicon/react";
 
 import { Chip } from "@/components/base/badges/chip";
@@ -214,7 +213,15 @@ export function ProfileHero({
           is worth their time. It appears once there is something to count.
         */}
         {hasSomethingToCount ? (
-          <StatStrip>
+          /*
+            Three, not four. The fourth was "Still outstanding", and its value
+            is `groups.length - satisfied.length` — the same fact the stat next
+            to it already prints as "12 · of 24", and the same fact the card
+            immediately below prints as its own headline. Three statements of
+            one number inside seven hundred pixels; the two that carry a label
+            and a list stayed.
+          */
+          <StatStrip className="sm:grid-cols-3">
           <Stat
             icon={RiBookMarkedLine}
             label="Courses on record"
@@ -237,14 +244,8 @@ export function ProfileHero({
             icon={RiCheckboxCircleLine}
             label="Requirements done"
             value={satisfied.length}
-            detail={`of ${groups.length}`}
-          />
-          <Stat
-            icon={RiListCheck3}
-            label="Still outstanding"
-            value={audit.remaining.length}
             tone={audit.remaining.length > 0 ? "accent" : "default"}
-            detail={hasPrograms ? "listed below" : "declare a program"}
+            detail={`of ${groups.length}`}
           />
           </StatStrip>
         ) : null}

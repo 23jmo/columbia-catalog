@@ -29,16 +29,22 @@
  * guest" exit — that path let people skip setup, which is the thing we are
  * trying to make the default.
  *
- * APIs, the OAuth callback, and onboarding itself are not redirected. Writes
- * still authorize themselves at the point of writing; this gate is a
- * navigation default, not an authorization boundary.
+ * APIs, the OAuth callback, onboarding, and the public About / Privacy /
+ * Terms pages are not redirected. Writes still authorize themselves at the
+ * point of writing; this gate is a navigation default, not an authorization
+ * boundary.
  */
 
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { AUTH_NEXT_COOKIE, safeSameOriginPath } from "@/lib/db/auth-return";
-import { guestOnboardingLocation, isGuestAllowedPath } from "@/lib/onboarding/guest-gate";
+import { PUBLIC_CACHE_CONTROL } from "@/lib/marketing/site";
+import {
+  guestOnboardingLocation,
+  isGuestAllowedPath,
+  isPublicMarketingPath,
+} from "@/lib/onboarding/guest-gate";
 
 /**
  * Rescue an OAuth code that Supabase dropped on the wrong path.
@@ -96,6 +102,16 @@ export async function proxy(request: NextRequest) {
   const rescued = rescueStrandedAuthCode(request);
   if (rescued) return rescued;
 
+  // Public marketing pages and crawler files do not need a session.
+  // `getUser()` writes cookies and marks the response private, no-store.
+  // That is how Googlebot fetching /robots.txt used to receive the
+  // school-picker HTML and a header that said do not cache it.
+  if (isPublicMarketingPath(request.nextUrl.pathname)) {
+    const publicResponse = NextResponse.next({ request });
+    publicResponse.headers.set("Cache-Control", PUBLIC_CACHE_CONTROL);
+    return publicResponse;
+  }
+
   let response = NextResponse.next({ request });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -145,13 +161,15 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     /**
-     * Everything except static assets and the search index.
+     * Everything except static assets, the search index, and crawler files.
      *
      * `index/` matters: the lexical artifact is ~700 KB and immutable, and
      * running an auth round trip in front of a CDN-cacheable binary would be a
      * measurable regression on the one request the whole search experience
-     * waits for.
+     * waits for. `robots.txt`, `sitemap.xml`, `llms.txt`, and `google*.html`
+     * are excluded so a matcher miss cannot 307 Googlebot or Search Console
+     * into the wizard. The guest gate still allow-lists them as a second check.
      */
-    "/((?!_next/static|_next/image|favicon.ico|index/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|woff2?)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|robots\\.txt|sitemap\\.xml|llms\\.txt|llms-full\\.txt|google[^/]*\\.html|index/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|woff2?)$).*)",
   ],
 };
