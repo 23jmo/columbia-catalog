@@ -17,14 +17,20 @@ import { signIn } from "@/lib/db/auth";
  * has to be worth the padlocks, which means it cannot be a bar that says
  * "Sign in" and leaves the reason to the reader.
  *
- * ── It leads with what is already free ─────────────────────────────────────
+ * ── It still names what is already free ────────────────────────────────────
  *
- * Saying "the catalog is free" first is not politeness, it is the credibility
- * the ask runs on. The reader can see the results underneath this card, so a
- * prompt that implies they are being shown a teaser is contradicted by the
- * page it is sitting on. Naming the free part accurately is what makes the
- * next sentence — that the ranking, the audit and the schedule are the part
- * that needs to know who they are — land as a description rather than a pitch.
+ * The headline leads with the ask and the body names the free part directly
+ * after. The order matters less than the naming: the reader can see the
+ * results underneath this card, so a prompt implying they are being shown a
+ * teaser would be contradicted by the page it is sitting on. Saying "free to
+ * search and browse" accurately is what lets the rest read as a description of
+ * what an account adds rather than as a pitch.
+ *
+ * Both things it promises are real and both are genuinely gated: saving lives
+ * in `app/saved/` and needs an account, and personalization needs a student
+ * record. Do not add a third benefit here without checking it is actually
+ * behind the sign-in — an unkept promise on this card is paid for by the
+ * padlocks in the rail, which have no other justification.
  *
  * ── It goes to `/onboarding`, not back here ────────────────────────────────
  *
@@ -135,13 +141,12 @@ export function GuestSignInBanner() {
 
           <div className="flex flex-col gap-1.5">
             <h2 className="text-title-2-medium text-text-primary">
-              The whole catalog is free. Which of it is yours isn&rsquo;t in it.
+              Sign in to get personalized results!
             </h2>
             <p className="text-body-regular text-text-secondary">
-              Every course, every section, every seat count — no account, no limit.
-              Sign in with your Columbia or Barnard Google account and LionPlan works
-              out which of these you still need, which ones fit around what you
-              already have, and what you&rsquo;re missing to graduate.
+              LionPlan is free to search and browse courses. Sign in to save them for
+              later and get personalized results based on your graduation requirements
+              and interests.
             </p>
           </div>
         </div>
