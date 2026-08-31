@@ -11,6 +11,7 @@ import { SHELL_NAV_ITEMS, type ShellNavKey } from "@/components/shell/nav";
 import { TermSwitcher } from "@/components/shell/term-switcher";
 import { SidebarSecondaryNav } from "@/components/shell/sidebar-secondary-nav";
 import { useDrawerPush } from "@/components/shell/use-drawer-push";
+import { haptic } from "@/lib/haptics";
 import { cx } from "@/utils/cx";
 
 /**
@@ -61,7 +62,11 @@ function NavItem({
   return (
     <Link
       href={href}
-      onClick={onNavigate}
+      onClick={() => {
+        haptic("selection");
+        onNavigate?.();
+      }}
+      data-haptic=""
       aria-current={isSelected ? "page" : undefined}
       aria-label={collapsed ? label : undefined}
       title={collapsed ? label : undefined}

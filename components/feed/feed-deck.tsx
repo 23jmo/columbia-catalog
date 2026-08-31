@@ -9,6 +9,7 @@ import { showSignInToast } from "@/components/bookmarks/bookmark-toasts";
 import { useBookmarks } from "@/hooks/use-bookmarks";
 import { toggleBookmark } from "@/lib/bookmarks/store";
 import { haptic } from "@/lib/haptics";
+import { bindSwipeHaptics } from "@/lib/haptics/swipe";
 import type { FeedCard } from "@/lib/recommend/feed";
 import { courseIdsFromSectionIds } from "@/lib/recommend/section-id";
 import { showToast } from "@/lib/toast/store";
@@ -268,6 +269,9 @@ export function FeedDeck({
       });
 
       if (action === "saved") {
+        // Tick with the swipe, not the round trip. After `await` the
+        // user gesture is gone and both vibrate and iOS switch no-op.
+        haptic("success");
         committing.current.add(card.courseId);
         const result = await toggleBookmark(card.best.sectionId);
         /*
@@ -285,7 +289,6 @@ export function FeedDeck({
           committing.current.delete(card.courseId);
           return false;
         }
-        haptic("success");
       } else {
         // Discards alone are written to disk; see `handled` above.
         haptic("selection");
@@ -435,7 +438,16 @@ function SwipeableCard({
   /** Resolves false when the action was refused — the card must spring back. */
   onCommit: (action: SwipeAction) => Promise<boolean>;
 }) {
+  const cardRef = useRef<HTMLDivElement | null>(null);
   const x = useMotionValue(0);
+
+  useEffect(() => {
+    const node = cardRef.current;
+    if (!node) return;
+    // Native touch, not Motion's onDragStart — that callback is a
+    // turn late and both vibrate and the iOS switch miss the gesture.
+    return bindSwipeHaptics(node);
+  }, []);
   /*
    * Direction of a committed throw, set the instant the gesture counts.
    *
@@ -507,6 +519,8 @@ function SwipeableCard({
       </div>
 
       <motion.div
+        ref={cardRef}
+        data-swipe-card=""
         className="relative flex w-full min-w-0 touch-pan-y"
         style={{ x, rotate }}
         /*
@@ -523,7 +537,11 @@ function SwipeableCard({
         dragMomentum={false}
         onDragEnd={(_event, info) => {
           const verdict = swipeVerdict(info.offset.x, info.velocity.x);
-          if (!verdict) return;
+          if (!verdict) {
+            // Released short of a commit — tick the snap back.
+            haptic("selection");
+            return;
+          }
           // Keep flying from the release point — do not wait on the parent.
           const dir: 1 | -1 = verdict === "saved" ? 1 : -1;
           setThrowDir(dir);

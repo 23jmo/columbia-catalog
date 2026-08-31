@@ -3,13 +3,16 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { RiMenuLine } from "@remixicon/react";
 
+import { motion } from "motion/react";
+
+import { HapticRoot } from "@/components/haptics/haptic-root";
 import { CatalogSidebar } from "@/components/shell/catalog-sidebar";
 import { ChatFab } from "@/components/shell/chat-fab";
 import { FeedbackPrompt } from "@/components/shell/feedback-prompt";
 import { MobileHeaderSlotProvider } from "@/components/shell/mobile-header-slot";
 import { ProgressiveBlur } from "@/components/shell/progressive-blur";
 import { SHELL_NAV_ITEMS, type ShellNavKey } from "@/components/shell/nav";
-import { haptic } from "@/lib/haptics";
+import { useRailSwipe } from "@/components/shell/use-rail-swipe";
 import { cx } from "@/utils/cx";
 
 /*
@@ -45,17 +48,12 @@ export const PAGE_NAME: Record<ShellNavKey, string> = {
   ...Object.fromEntries(SHELL_NAV_ITEMS.map((item) => [item.key, item.label])),
 };
 
-/** Matches the parked rail. Keep this in lockstep with the width class below. */
-const RAIL_PX = 260;
-
 /**
  * Desktop floating rail starts at `xl` (1280px), not `lg` (1024px).
  *
  * 1024 is iPad Pro portrait — still a tablet. Gating the push/radius on
  * `max-lg` made that size snap to the desktop rail and skip the join.
  */
-const DESKTOP_MQ = "(min-width: 1280px)";
-
 /**
  * Phone and tablet chrome — BoardUI AI Chat's slide, with a slim top bar.
  *
@@ -63,11 +61,12 @@ const DESKTOP_MQ = "(min-width: 1280px)";
  * the content column (that would reflow every card). It translates the whole
  * card right, same width, so the extra 260px just leaves the screen.
  *
- * Transform is set as `translate3d` on the element itself, both open and
- * closed. Toggling a Tailwind `translate-x-*` class (or toggling
- * `overflow-hidden` with it) goes from `transform: none` to a list, which
- * most engines cannot interpolate — that is the snap. The header gets the
- * same left radius so its opaque fill does not square off the join.
+ * Offset is a motion value, not a Tailwind translate class. Toggling
+ * `translate-x-*` goes from `transform: none` to a list, which most
+ * engines cannot interpolate — that is the snap. The same value is what
+ * the edge-swipe follows, so a hamburger tap and a thumb drag settle
+ * on one path. The header gets the same left radius so its opaque fill
+ * does not square off the join.
  *
  * The shell behind the card is the sidebar grey. That is what shows in the
  * card's left radius — a white page behind it would read as a hole, not a join.
@@ -86,8 +85,10 @@ export function MobileShell({
   className?: string;
   style?: CSSProperties;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
+  const { x, isOpen, dragging, setOpen, toggle, close, onEdgeDown, onCardDown, onRailDown } =
+    useRailSwipe();
   const pageName = PAGE_NAME[activeNav];
+  const peeking = isOpen || dragging;
 
   /*
    * The bar's own contents are owned by whichever page claims them. `Home` is
@@ -96,22 +97,13 @@ export function MobileShell({
   const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
-    const media = window.matchMedia(DESKTOP_MQ);
-    const onChange = () => {
-      if (media.matches) setIsOpen(false);
-    };
-    media.addEventListener("change", onChange);
-    return () => media.removeEventListener("change", onChange);
-  }, []);
-
-  useEffect(() => {
     if (!isOpen) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setIsOpen(false);
+      if (event.key === "Escape") setOpen(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isOpen]);
+  }, [isOpen, setOpen]);
 
   /*
    * The document must not be a scroller. A flex child with `h-dvh` still
@@ -147,6 +139,7 @@ export function MobileShell({
         "max-xl:bg-background-secondary-default",
       )}
     >
+      <HapticRoot />
       {/*
         `fixed`, not `absolute`. Absolute is tied to this shell, and on
         mobile the shell still rides a document scroll. Fixed is the
@@ -156,31 +149,44 @@ export function MobileShell({
         id="mobile-catalog-nav"
         inert={!isOpen ? true : undefined}
         aria-hidden={!isOpen}
+        onPointerDown={onRailDown}
         className="fixed inset-y-0 left-0 z-0 h-dvh w-[260px] overflow-hidden xl:hidden"
       >
         <CatalogSidebar
           activeNav={activeNav}
           mobile
           flat
-          onNavigate={() => {
-            // Tick as the rail closes behind a destination tap.
-            haptic("selection");
-            setIsOpen(false);
-          }}
+          onNavigate={close}
           className="h-full w-[260px]"
         />
       </div>
 
-      <div
+      {/*
+        Closed-only grabber. Lives below the header so the hamburger still
+        gets the tap, and only as wide as a thumb's edge so a feed swipe
+        in the middle of the page never opens the rail.
+      */}
+      {!isOpen ? (
+        <div
+          aria-hidden
+          onPointerDown={onEdgeDown}
+          className="fixed left-0 z-20 w-5 xl:hidden"
+          style={{
+            top: "calc(3.5rem + env(safe-area-inset-top, 0px))",
+            bottom: 0,
+          }}
+        />
+      ) : null}
+
+      <motion.div
+        onPointerDown={onCardDown}
         className={cx(
           "relative z-10 flex h-full min-h-0 w-full flex-col bg-background-full",
-          "transition-[transform,border-radius,box-shadow] duration-400 motion-reduce:transition-none",
+          "transition-[border-radius,box-shadow] duration-400 motion-reduce:transition-none",
           "ease-[cubic-bezier(0.32,0.72,0,1)]",
-          isOpen ? "rounded-l-3xl shadow-sidebar" : "rounded-none shadow-none",
+          peeking ? "rounded-l-3xl shadow-sidebar" : "rounded-none shadow-none",
         )}
-        style={{
-          transform: isOpen ? `translate3d(${RAIL_PX}px,0,0)` : "translate3d(0,0,0)",
-        }}
+        style={{ x }}
       >
         {/*
           Hamburger, then whatever the page put here — falling back to the page
@@ -201,7 +207,7 @@ export function MobileShell({
             "absolute inset-x-0 top-0 z-30 flex items-center gap-2 px-3 xl:hidden",
             "h-[calc(3.5rem+env(safe-area-inset-top,0px))] pt-[env(safe-area-inset-top,0px)]",
             "transition-[border-radius] duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none",
-            isOpen ? "rounded-tl-3xl" : "rounded-none",
+            peeking ? "rounded-tl-3xl" : "rounded-none",
           )}
         >
           {/*
@@ -216,12 +222,12 @@ export function MobileShell({
             className={cx(
               "absolute inset-0 -z-10",
               "bg-linear-to-b from-background-full via-background-full/72 to-transparent",
-              isOpen ? "rounded-tl-3xl" : "rounded-none",
+              peeking ? "rounded-tl-3xl" : "rounded-none",
             )}
           />
           <ProgressiveBlur
             side="top"
-            className={cx("-z-10", isOpen ? "rounded-tl-3xl" : "rounded-none")}
+            className={cx("-z-10", peeking ? "rounded-tl-3xl" : "rounded-none")}
           />
 
           <button
@@ -229,10 +235,7 @@ export function MobileShell({
             aria-label={isOpen ? "Close navigation" : "Open navigation"}
             aria-expanded={isOpen}
             aria-controls="mobile-catalog-nav"
-            onClick={() => {
-              haptic("selection");
-              setIsOpen((open) => !open);
-            }}
+            onClick={toggle}
             className={cx(
               "flex size-9 shrink-0 items-center justify-center rounded-full",
               "border border-border-button-default bg-background-primary-default shadow-xs",
@@ -294,7 +297,7 @@ export function MobileShell({
         >
           <MobileHeaderSlotProvider node={headerSlot}>{children}</MobileHeaderSlotProvider>
         </div>
-      </div>
+      </motion.div>
 
       {/*
         Sibling of the transformed card, not a child of it. `position: fixed`

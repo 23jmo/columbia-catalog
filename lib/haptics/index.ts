@@ -1,14 +1,12 @@
 /**
- * Mobile haptic feedback via the Vibration API.
+ * Haptic feedback for phone presses.
  *
- * Android Chrome and most Chromium mobile browsers honour this. iOS Safari
- * does not expose `navigator.vibrate` — every call no-ops there. That is
- * fine: the same interactions keep their visual feedback, and a silent
- * no-op is cheaper than a platform fork.
- *
- * Honour `prefers-reduced-motion`. Haptics are not visual motion, but people
- * who ask for less sensory intensity usually mean it across channels.
+ * Android Chrome: `navigator.vibrate`.
+ * iOS Safari 17.4+: Taptic Engine via the checkbox-switch side effect
+ * (see `./ios.ts`). Desktop and reduced-motion: silent no-op.
  */
+
+import { installIosOverlays, iosTick, isIos, overlayJustTicked } from "./ios";
 
 export type HapticKind =
   | "selection"
@@ -18,23 +16,28 @@ export type HapticKind =
   | "error";
 
 /**
- * Durations in milliseconds. Patterns are vibrate/pause/vibrate…
- * Keep them short — registration-week thrashing must not feel like a drum.
+ * Android vibrate/pause/vibrate… in milliseconds.
+ * 8–12 ms used to be here; most motors never spin up that fast, so the
+ * press felt like nothing even when the API accepted the call.
  */
 const PATTERNS: Record<HapticKind, number | number[]> = {
-  // Nav flips, menu open, un-save — felt, not announced.
-  selection: 8,
-  // Generic button confirm.
-  impact: 12,
-  // Completed save / add / copy.
-  success: [10, 40, 18],
-  warning: [18, 36, 18],
-  error: [40, 50, 40],
+  selection: 20,
+  impact: 32,
+  success: [24, 40, 32],
+  warning: [28, 40, 28],
+  error: [48, 50, 48],
+};
+
+/** Extra Taptic ticks after the first, for patterns that should feel like more than a tap. */
+const EXTRA_IOS_TICKS: Record<HapticKind, number> = {
+  selection: 0,
+  impact: 0,
+  success: 1,
+  warning: 1,
+  error: 2,
 };
 
 function prefersReducedMotion(): boolean {
-  // Prefer `globalThis` so Node tests (and any non-window runtime) can stub
-  // `matchMedia` the same way browsers expose it on `window`.
   const media =
     typeof globalThis.matchMedia === "function"
       ? globalThis.matchMedia.bind(globalThis)
@@ -49,23 +52,71 @@ function vibrateFn(): ((pattern: number | number[]) => boolean) | null {
   return typeof vibrate === "function" ? vibrate : null;
 }
 
-/** True when the browser can vibrate and reduced-motion is off. */
+function canIosHaptic(): boolean {
+  return isIos() && typeof document !== "undefined";
+}
+
+/** True when this device can produce a haptic and reduced-motion is off. */
 export function canHaptic(): boolean {
-  return vibrateFn() !== null && !prefersReducedMotion();
+  return (vibrateFn() !== null || canIosHaptic()) && !prefersReducedMotion();
+}
+
+function tickIos(kind: HapticKind): boolean {
+  // Overlay already fired the first tick on this press. Only add the rest.
+  let fired = overlayJustTicked();
+  if (!fired) fired = iosTick();
+  const extra = EXTRA_IOS_TICKS[kind];
+  for (let i = 0; i < extra; i += 1) {
+    globalThis.setTimeout(() => {
+      iosTick();
+    }, (i + 1) * 70);
+    fired = true;
+  }
+  return fired;
 }
 
 /**
- * Fire a haptic pulse. Returns whether the browser accepted the request.
+ * Fire a haptic pulse. Returns whether a backend accepted the request.
  * Safe during SSR and on unsupported browsers — always a no-op there.
  */
 export function haptic(kind: HapticKind = "impact"): boolean {
   if (prefersReducedMotion()) return false;
+
   const vibrate = vibrateFn();
-  if (!vibrate) return false;
+  if (vibrate) {
+    try {
+      return Boolean(vibrate(PATTERNS[kind]));
+    } catch {
+      return false;
+    }
+  }
+
+  if (!canIosHaptic()) return false;
   try {
-    return Boolean(vibrate(PATTERNS[kind]));
+    return tickIos(kind);
   } catch {
-    // Some WebViews throw rather than returning false.
     return false;
+  }
+}
+
+/**
+ * Start the iOS overlay installer. Client components that import this
+ * module also kick it off below, so most call sites do not need this.
+ */
+export function installWebHaptics(): () => void {
+  if (!isIos()) return () => {};
+  return installIosOverlays();
+}
+
+// Client bundles that import `@/lib/haptics` install overlays before the
+// first tap. Server evaluation sees no `window` and skips.
+if (typeof window !== "undefined" && isIos()) {
+  const start = () => {
+    installIosOverlays();
+  };
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start, { once: true });
+  } else {
+    queueMicrotask(start);
   }
 }

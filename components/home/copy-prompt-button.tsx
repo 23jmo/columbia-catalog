@@ -37,9 +37,11 @@ export function CopyPromptButton({
 
   const copy = async () => {
     if (resetTimer.current) clearTimeout(resetTimer.current);
+    // Confirm the press before the clipboard promise. After `await`
+    // the gesture is spent and web haptics silently drop.
+    haptic("success");
     try {
       await navigator.clipboard.writeText(value);
-      haptic("success");
       setCopyState("copied");
     } catch {
       haptic("error");
