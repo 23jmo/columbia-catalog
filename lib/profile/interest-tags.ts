@@ -70,10 +70,32 @@
  * for a double major. Where Barnard's version of a field is genuinely broader,
  * widen the BLURB, not the label.
  *
- * Every exemplar below was checked against the live `courses` table on
- * 2026-08-30. That check is not ceremonial: a code that does not exist seeds
- * an empty vector and the tag silently recommends nothing, which looks exactly
- * like a tag nobody picked.
+ * ── Every exemplar was re-derived from the catalog on 2026-08-30 ───────────
+ *
+ * The Columbia College and SEAS lists predate that audit and did not survive
+ * it. `scripts/verify-interest-tag-exemplars.ts` found 33 of 156 exemplars
+ * naming a course the catalog does not hold; reading the survivors' TITLES
+ * next to their tags found roughly as many again that resolved to the wrong
+ * course. Both classes were fixed by dumping each department's actual
+ * inventory and re-choosing, tag by tag.
+ *
+ * Two lessons are worth keeping, because both are invisible from inside this
+ * file:
+ *
+ *   - Columbia's field electives are mostly GU-coded at 4000, not UN-coded at
+ *     3000. Every one of the seven Economics fields that shared a placeholder
+ *     has a real course — `ECON GU4400` Labor Economics, `ECON GU4500`
+ *     International Trade — that an author looking only at UN 3000-level
+ *     listings will never see. The old lists have exactly that shape.
+ *   - A department does not always own its own field. Columbia teaches East
+ *     Asian history largely out of EAAS, biochemistry out of BIOL rather than
+ *     any BIOC code, and creative writing out of WRIT rather than ENGL. Three
+ *     tags were wrong for that reason alone.
+ *
+ * So: run the script before adding a tag, and print the exemplar's title next
+ * to it before believing it. A code that resolves is not a code that is right,
+ * and neither failure is visible on screen — a wrongly-seeded tag renders,
+ * gets picked, and quietly recommends the wrong things forever.
  */
 
 import type { BulletinCode } from "@/lib/requirements/code";
@@ -118,86 +140,178 @@ const TAGS_BY_PROGRAM: Record<string, InterestTag[]> = {
     tag("literary-theory", "Literary theory", "Criticism, poetics, how reading works", [
       "ENGL UN3011",
     ]),
-    tag("poetry", "Poetry", "Verse from any period, and how to read it", ["ENGL UN3230"]),
+    tag("poetry", "Poetry", "Verse from any period, and how to read it", [
+      "ENGL UN2404",
+      "ENGL UN3576",
+    ]),
     tag("fiction-novel", "The novel", "Long-form narrative, its history and its shapes", [
-      "ENGL UN3325",
+      "ENGL UN2802",
+      "ENGL UN3480",
     ]),
     tag("drama-theatre", "Drama and theatre", "Plays on the page and in performance", [
-      "ENGL UN3335",
+      "ENGL UN2702",
+      "ENGL UN2703",
     ]),
     tag("shakespeare-early-modern", "Shakespeare and early modern", "1500–1700", [
-      "ENGL UN3115",
+      "ENGL UN3335",
+      "ENGL UN3336",
     ]),
     tag("american-literature", "American literature", "From the colonial period forward", [
-      "ENGL UN3350",
+      "ENGL UN3710",
+      "ENGL UN2603",
     ]),
     tag("postcolonial-global", "Global and postcolonial", "Anglophone writing beyond Britain and the US", [
-      "ENGL UN3730",
+      "ENGL UN3438",
+      "ENGL UN3851",
     ]),
-    tag("gender-sexuality", "Gender and sexuality", "Feminist and queer readings", ["ENGL UN3700"]),
-    tag("film-media", "Film and media", "Screen texts alongside print ones", ["ENGL UN3820"]),
-    tag("creative-writing", "Creative writing", "Workshops — you write, not only read", ["ENGL UN3001"]),
+    tag("gender-sexuality", "Gender and sexuality", "Feminist and queer readings", [
+      "ENGL UN3440",
+      "ENGL UN3486",
+    ]),
+    tag("film-media", "Film and media", "Screen texts alongside print ones", [
+      "ENGL UN3985",
+      "ENGL GU4669",
+    ]),
+    // Workshops are WRIT, not ENGL. This tag used to carry `ENGL UN3001`,
+    // which is Literary Texts & Critical Methods — a criticism course, and so
+    // the seed vector for "you write, not only read" was the vector of the one
+    // thing creative writing is not.
+    tag("creative-writing", "Creative writing", "Workshops — you write, not only read", [
+      "WRIT UN2100",
+      "WRIT UN2300",
+    ]),
   ],
 
   "cc-major-history": [
-    tag("us-history", "United States", "Colonial through contemporary", ["HIST UN2410"]),
-    tag("europe", "Europe", "Medieval, early modern, and modern", ["HIST UN2611"]),
-    tag("east-asia", "East Asia", "China, Japan, Korea", ["HIST UN2110"]),
-    tag("middle-east", "Middle East", "The region and its historiography", ["HIST UN2810"]),
-    tag("africa", "Africa", "Pre-colonial through post-independence", ["HIST UN2350"]),
-    tag("latin-america", "Latin America", "Colonial and national periods", ["HIST UN2650"]),
-    tag("intellectual-history", "Intellectual history", "Ideas, and the people who argued about them", [
-      "HIST UN3600",
+    tag("us-history", "United States", "Colonial through contemporary", [
+      "HIST UN1501",
+      "HIST UN2432",
     ]),
-    tag("social-cultural", "Social and cultural", "Everyday life, class, gender, race", ["HIST UN2530"]),
+    tag("europe", "Europe", "Medieval, early modern, and modern", [
+      "HIST UN2100",
+      "HIST UN2323",
+    ]),
+    // Columbia teaches most of its East Asia history out of EAAS, not HIST;
+    // a HIST-only exemplar list for this field is why the old code was wrong.
+    tag("east-asia", "East Asia", "China, Japan, Korea", [
+      "HIST UN2851",
+      "EAAS UN3927",
+    ]),
+    tag("middle-east", "Middle East", "The region and its historiography", [
+      "HIST UN2719",
+      "HIST UN2701",
+    ]),
+    tag("africa", "Africa", "Pre-colonial through post-independence", [
+      "HIST UN2772",
+      "HIST UN2438",
+    ]),
+    tag("latin-america", "Latin America", "Colonial and national periods", [
+      "HIST UN2660",
+      "HIST UN2661",
+    ]),
+    tag("intellectual-history", "Intellectual history", "Ideas, and the people who argued about them", [
+      "HIST UN2310",
+      "HIST UN2478",
+    ]),
+    tag("social-cultural", "Social and cultural", "Everyday life, class, gender, race", [
+      "HIST UN2072",
+      "HIST UN3908",
+    ]),
     tag("empire-colonialism", "Empire and colonialism", "How empires worked and came apart", [
-      "HIST UN2860",
+      "HIST UN2342",
+      "HIST GU4394",
     ]),
     tag("science-medicine-history", "Science and medicine", "History of knowledge and of the body", [
-      "HIST UN2680",
+      "HIST UN2978",
+      "HIST UN2523",
     ]),
   ],
 
   "cc-major-political-science": [
     tag("political-theory", "Political theory", "Normative argument, ancient to contemporary", [
-      "POLS UN3001",
+      "POLS UN1101",
+      "POLS GU4134",
     ]),
-    tag("american-politics", "American politics", "Institutions, parties, elections", ["POLS UN1201"]),
+    tag("american-politics", "American politics", "Institutions, parties, elections", [
+      "POLS UN1201",
+      "POLS UN3222",
+    ]),
     tag("comparative-politics", "Comparative politics", "Regimes and states, side by side", [
       "POLS UN1501",
+      "POLS UN3534",
     ]),
     tag("international-relations", "International relations", "War, trade, and cooperation between states", [
       "POLS UN1601",
+      "POLS UN3631",
     ]),
-    tag("political-economy", "Political economy", "Where markets and states meet", ["POLS UN3245"]),
-    tag("public-policy", "Public policy", "How a decision becomes a programme", ["POLS UN3921"]),
-    tag("human-rights", "Human rights", "Norms, law, and enforcement", ["POLS UN3628"]),
+    tag("political-economy", "Political economy", "Where markets and states meet", [
+      "POLS UN3630",
+      "POLS GU4865",
+    ]),
+    // `POLS UN3921` is the American Politics Seminar, not a policy course. It
+    // resolved, so no check caught it; it just seeded the wrong field.
+    tag("public-policy", "Public policy", "How a decision becomes a programme", [
+      "POLS GU4242",
+      "POLS UN3213",
+    ]),
+    tag("human-rights", "Human rights", "Norms, law, and enforcement", [
+      "POLS UN3002",
+      "POLS UN3285",
+    ]),
     tag("quantitative-methods", "Quantitative methods", "Data, inference, and research design", [
       "POLS UN3720",
+      "POLS UN3704",
     ]),
     tag("race-ethnicity-politics", "Race and ethnicity", "Identity as a political variable", [
-      "POLS UN3283",
+      "POLS UN3255",
+      "POLS UN3516",
     ]),
-    tag("security-conflict", "Security and conflict", "Force, deterrence, and civil war", ["POLS UN3660"]),
+    tag("security-conflict", "Security and conflict", "Force, deterrence, and civil war", [
+      "POLS UN3623",
+      "POLS UN3622",
+    ]),
   ],
 
   "cc-major-psychology": [
-    tag("cognitive", "Cognition", "Attention, memory, language, reasoning", ["PSYC UN2230"]),
-    tag("neuroscience", "Neuroscience", "Brains, and what they do", ["PSYC UN1010"]),
-    tag("social-psych", "Social psychology", "People in the presence of other people", ["PSYC UN2630"]),
-    tag("developmental", "Development", "Change across the lifespan", ["PSYC UN2280"]),
+    tag("cognitive", "Cognition", "Attention, memory, language, reasoning", [
+      "PSYC UN2210",
+      "PSYC UN2235",
+    ]),
+    // Was `PSYC UN1010`, which is nothing: the College’s intro is UN1001 and
+    // `PSYC BC1010` is Barnard’s lab. The old code was a blend of the two.
+    tag("neuroscience", "Neuroscience", "Brains, and what they do", [
+      "PSYC UN2430",
+      "PSYC UN1950",
+    ]),
+    tag("social-psych", "Social psychology", "People in the presence of other people", [
+      "PSYC UN2630",
+      "PSYC UN2260",
+    ]),
+    tag("developmental", "Development", "Change across the lifespan", [
+      "PSYC UN2280",
+      "PSYC UN2481",
+    ]),
     tag("clinical-abnormal", "Clinical and abnormal", "Disorder, diagnosis, and treatment", [
       "PSYC UN2620",
+      "PSYC UN3625",
     ]),
-    tag("perception", "Perception", "Vision, hearing, and the rest of the senses", ["PSYC UN2450"]),
+    // Perception and behavioural neuroscience both pointed at `PSYC UN2450`,
+    // so two tags on one screen shared a single seed vector and could never
+    // rank a course differently.
+    tag("perception", "Perception", "Vision, hearing, and the rest of the senses", [
+      "PSYC GU4265",
+      "PSYC UN3476",
+    ]),
     tag("personality", "Personality", "Individual differences and how to measure them", [
       "PSYC UN2610",
     ]),
     tag("behavioral-neuro", "Behavioural neuroscience", "Learning, motivation, and the animal literature", [
       "PSYC UN2450",
+      "PSYC UN2460",
     ]),
     tag("psych-methods", "Methods and statistics", "Design, analysis, and what counts as evidence", [
       "PSYC UN1610",
+      "PSYC UN1420",
     ]),
     tag("psych-research", "Lab research", "Seminars and supervised research, not lectures", [
       "PSYC UN3950",
@@ -205,75 +319,183 @@ const TAGS_BY_PROGRAM: Record<string, InterestTag[]> = {
   ],
 
   "cc-major-biology": [
-    tag("molecular-cell", "Molecular and cell", "What happens inside one cell", ["BIOL UN2005"]),
+    tag("molecular-cell", "Molecular and cell", "What happens inside one cell", [
+      "BIOL UN3041",
+      "BIOL UN2005",
+    ]),
     tag("genetics-genomics", "Genetics and genomics", "Inheritance, sequence, and variation", [
       "BIOL UN3031",
+      "BIOL GU4510",
     ]),
-    tag("biochemistry", "Biochemistry", "The chemistry that biology runs on", ["BIOC UN3501"]),
+    // Biochemistry is taught in BIOL, not in a BIOC subject code — `BIOC UN3501`
+    // has never existed in this catalog.
+    tag("biochemistry", "Biochemistry", "The chemistry that biology runs on", [
+      "BIOL UN3300",
+      "BIOL GU4501",
+    ]),
     tag("neurobiology", "Neurobiology", "Nervous systems from ion channel to behaviour", [
       "BIOL UN3004",
+      "BIOL UN3005",
     ]),
     tag("ecology-evolution", "Ecology and evolution", "Populations, species, and deep time", [
       "EEEB UN2001",
+      "EEEB UN2002",
     ]),
-    tag("developmental-bio", "Developmental biology", "From one cell to an organism", ["BIOL UN3040"]),
+    tag("developmental-bio", "Developmental biology", "From one cell to an organism", [
+      "BIOL UN3022",
+    ]),
+    // `BIOL UN3320` is Regulation of Behaviors for Survival, and it was the
+    // seed for BOTH immunology and computational biology.
     tag("immunology-disease", "Immunology and disease", "Host, pathogen, and the response", [
-      "BIOL UN3320",
+      "BIOL UN3073",
+      "BIOL GU4310",
     ]),
     tag("computational-bio", "Computational biology", "Sequence and structure, computationally", [
-      "BIOL UN3320",
+      "BIOL GU4402",
+      "BIOL GU4036",
     ]),
-    tag("physiology", "Physiology", "Whole systems and how they are regulated", ["BIOL UN2006"]),
-    tag("bio-lab", "Lab research", "Bench work and independent projects", ["BIOL UN3500"]),
+    tag("physiology", "Physiology", "Whole systems and how they are regulated", [
+      "BIOL UN3006",
+    ]),
+    tag("bio-lab", "Lab research", "Bench work and independent projects", [
+      "BIOL UN3500",
+      "BIOL UN3052",
+    ]),
   ],
 
   "seas-major-mechanical-engineering": [
-    tag("thermo-fluids", "Thermal and fluids", "Heat, flow, and energy conversion", ["MECE E3311"]),
-    tag("solid-mechanics", "Solid mechanics", "Stress, strain, and why things break", ["MECE E3301"]),
-    tag("dynamics-control", "Dynamics and control", "Motion, feedback, and stability", ["MECE E3408"]),
-    tag("robotics", "Robotics", "Mechanisms that sense and act", ["MECE E4602"]),
-    tag("design-manufacturing", "Design and manufacturing", "From drawing to part", ["MECE E3410"]),
-    tag("materials", "Materials", "Choosing what to build it out of", ["MECE E3100"]),
-    tag("energy-systems", "Energy systems", "Power generation, storage, and efficiency", ["MECE E4210"]),
-    tag("mems-micro", "MEMS and micro-scale", "Engineering below the millimetre", ["MECE E4212"]),
-    tag("computational-mech", "Computational mechanics", "Simulation as the primary tool", ["MECE E4520"]),
-    tag("biomechanics", "Biomechanics", "Mechanics applied to living tissue", ["BMEN E4310"]),
+    tag("thermo-fluids", "Thermal and fluids", "Heat, flow, and energy conversion", [
+      "MECE E3311",
+      "MECE E3100",
+    ]),
+    // Every one of the four tags below used to name the course belonging to a
+    // DIFFERENT tag on this same list: solid mechanics pointed at
+    // Thermodynamics, dynamics at Computer Graphics, materials at Fluids.
+    tag("solid-mechanics", "Solid mechanics", "Stress, strain, and why things break", [
+      "MECE E3414",
+    ]),
+    tag("dynamics-control", "Dynamics and control", "Motion, feedback, and stability", [
+      "MECE E4401",
+      "MECE E4430",
+    ]),
+    tag("robotics", "Robotics", "Mechanisms that sense and act", [
+      "MECE E4602",
+      "MECE E4611",
+    ]),
+    tag("design-manufacturing", "Design and manufacturing", "From drawing to part", [
+      "MECE E3430",
+      "MECE E4606",
+    ]),
+    tag("materials", "Materials", "Choosing what to build it out of", [
+      "MECE E4461",
+      "MECE E4460",
+    ]),
+    tag("energy-systems", "Energy systems", "Power generation, storage, and efficiency", [
+      "MECE E4211",
+      "MECE E4350",
+    ]),
+    tag("mems-micro", "MEMS and micro-scale", "Engineering below the millimetre", [
+      "MECE E4212",
+      "MECE E4214",
+    ]),
+    tag("computational-mech", "Computational mechanics", "Simulation as the primary tool", [
+      "MECE E4520",
+    ]),
+    tag("biomechanics", "Biomechanics", "Mechanics applied to living tissue", [
+      "BMEN E4310",
+      "BMEN E4302",
+    ]),
   ],
 
   "seas-major-operations-research": [
-    tag("optimization", "Optimisation", "Linear, integer, and convex programming", ["IEOR E4004"]),
-    tag("stochastic-models", "Stochastic models", "Queues, Markov chains, and randomness", ["IEOR E3106"]),
+    tag("optimization", "Optimisation", "Linear, integer, and convex programming", [
+      "IEOR E4004",
+      "IEOR E3608",
+    ]),
+    tag("stochastic-models", "Stochastic models", "Queues, Markov chains, and randomness", [
+      "IEOR E3106",
+      "IEOR E4106",
+    ]),
     tag("simulation", "Simulation", "Modelling a system you cannot solve in closed form", [
       "IEOR E4404",
+      "IEOR E3404",
     ]),
-    tag("financial-engineering", "Financial engineering", "Pricing, risk, and portfolios", ["IEOR E4700"]),
-    tag("supply-chain", "Supply chain and logistics", "Inventory, routing, and networks", ["IEOR E4405"]),
+    tag("financial-engineering", "Financial engineering", "Pricing, risk, and portfolios", [
+      "IEOR E4700",
+      "IEOR E4602",
+    ]),
+    // Supply chain and revenue management both used to name Production
+    // Scheduling, and healthcare named Simulation — three tags, two seeds
+    // borrowed from their neighbours.
+    tag("supply-chain", "Supply chain and logistics", "Inventory, routing, and networks", [
+      "IEOR E4108",
+      "IEOR E4418",
+    ]),
     tag("revenue-management", "Revenue management and pricing", "Selling the right seat at the right price", [
-      "IEOR E4405",
+      "IEOR E4601",
     ]),
-    tag("machine-learning-or", "Machine learning", "Statistical learning for decisions", ["IEOR E4525"]),
-    tag("data-analytics", "Data analytics", "Getting an answer out of a real dataset", ["IEOR E4501"]),
-    tag("healthcare-or", "Healthcare operations", "Capacity, scheduling, and access", ["IEOR E4404"]),
-    tag("algorithms-or", "Algorithms and complexity", "What is tractable, and what is not", ["IEOR E4008"]),
+    tag("machine-learning-or", "Machine learning", "Statistical learning for decisions", [
+      "IEOR E4525",
+      "IEOR E4212",
+    ]),
+    tag("data-analytics", "Data analytics", "Getting an answer out of a real dataset", [
+      "IEOR E4501",
+      "IEOR E4534",
+    ]),
+    tag("healthcare-or", "Healthcare operations", "Capacity, scheduling, and access", [
+      "IEOR E4507",
+    ]),
+    tag("algorithms-or", "Algorithms and complexity", "What is tractable, and what is not", [
+      "IEOR E4008",
+    ]),
   ],
 
   "seas-major-biomedical-engineering": [
-    tag("biomechanics-bme", "Biomechanics", "Forces in and on living tissue", ["BMEN E4310"]),
-    tag("biomaterials", "Biomaterials", "Materials that have to live in a body", ["BMEN E4210"]),
-    tag("tissue-engineering", "Tissue engineering", "Growing replacements", ["BMEN E4300"]),
+    tag("biomechanics-bme", "Biomechanics", "Forces in and on living tissue", [
+      "BMEN E4310",
+      "BMEN E4302",
+    ]),
+    // The worst list in the file before 2026-08-30: five of ten tags named a
+    // BMEN number the department does not use (E4210, E4300, E4010 twice,
+    // E4438), and three of the survivors doubled up on E4001.
+    tag("biomaterials", "Biomaterials", "Materials that have to live in a body", [
+      "BMEN E4501",
+      "BMEN E4535",
+    ]),
+    tag("tissue-engineering", "Tissue engineering", "Growing replacements", [
+      "BMEN E4510",
+      "BMEN E4525",
+    ]),
     tag("medical-imaging", "Medical imaging", "MRI, CT, ultrasound, and the maths under them", [
-      "BMEN E4001",
+      "BMEN E4894",
+      "BMEN E4430",
     ]),
     tag("biosignals", "Biosignals and instrumentation", "Measuring a body without harming it", [
-      "BMEN E3810",
+      "BMEN E4420",
+      "BMEN E4470",
     ]),
     tag("cell-molecular-bme", "Cell and molecular engineering", "Engineering at the scale of a cell", [
-      "BMEN E4010",
+      "BMEN E4330",
+      "BMEN E4550",
     ]),
-    tag("neuroengineering", "Neuroengineering", "Interfaces to the nervous system", ["BMEN E4501"]),
-    tag("computational-bme", "Computational modelling", "Simulating physiology", ["BMEN E4438"]),
-    tag("medical-devices", "Medical devices", "Design under regulation", ["BMEN E4001"]),
-    tag("systems-biology", "Systems biology", "Networks rather than single molecules", ["BMEN E4010"]),
+    tag("neuroengineering", "Neuroengineering", "Interfaces to the nervous system", [
+      "BMEN E4050",
+      "BMEN E4545",
+    ]),
+    // Quantitative Physiology is the department’s modelling sequence, so it
+    // belongs here rather than under imaging and devices, where it sat.
+    tag("computational-bme", "Computational modelling", "Simulating physiology", [
+      "BMEN E4001",
+      "BMEN E4002",
+    ]),
+    tag("medical-devices", "Medical devices", "Design under regulation", [
+      "BMEN E4592",
+      "BMEN E4590",
+    ]),
+    tag("systems-biology", "Systems biology", "Networks rather than single molecules", [
+      "BMEN E4500",
+      "BMEN E4583",
+    ]),
   ],
 
   /* ======================================================================
@@ -730,9 +952,11 @@ function computerScienceTags(): InterestTag[] {
       "CSOR W4231",
       "COMS W3261",
     ]),
+    // `COMS W4995` is Topics in Computer Science, a rotating shell whose
+    // description is registrar boilerplate; it seeded security with nothing.
     tag("security", "Security", "Attacking and defending real systems", [
       "COMS W4181",
-      "COMS W4995",
+      "COMS W4261",
     ]),
     tag("graphics-vision", "Graphics and vision", "Making images, and understanding them", [
       "COMS W4160",
@@ -751,7 +975,8 @@ function computerScienceTags(): InterestTag[] {
     tag("nlp", "Natural language", "Text, speech, and language models", ["COMS W4705"]),
     tag("robotics-cs", "Robotics", "Perception and control on real hardware", ["COMS W4733"]),
     tag("computational-biology-cs", "Computational biology", "Algorithms aimed at biological data", [
-      "COMS W4761",
+      "COMS E4762",
+      "BINF GU4009",
     ]),
     tag("programming-languages", "Programming languages", "Compilers, type systems, semantics", [
       "COMS W4115",
@@ -763,25 +988,51 @@ function economicsTags(): InterestTag[] {
   return [
     tag("micro-theory", "Microeconomic theory", "Choice, markets, and equilibrium", ["ECON UN3211"]),
     tag("macro-theory", "Macroeconomic theory", "Growth, cycles, and aggregate demand", ["ECON UN3213"]),
-    tag("econometrics", "Econometrics", "Getting causal answers out of data", ["ECON UN3412"]),
-    tag("finance", "Finance", "Assets, corporate decisions, and risk", ["ECON UN3025"]),
-    tag("development", "Development", "Poverty, growth, and institutions", ["ECON UN3265"]),
-    tag("labor", "Labour", "Wages, employment, and human capital", ["ECON UN3265"]),
-    tag("international-econ", "International economics", "Trade and open-economy macro", ["ECON UN3265"]),
+    tag("econometrics", "Econometrics", "Getting causal answers out of data", [
+      "ECON UN3412",
+      "ECON GU4412",
+    ]),
+    tag("finance", "Finance", "Assets, corporate decisions, and risk", [
+      "ECON UN3025",
+      "ECON GU4280",
+    ]),
+    /*
+     * Seven of these eleven tags used to name `ECON UN3265` Money and Banking.
+     * Not a transcription slip — a placeholder that was never replaced, and
+     * one the field checker could not see, because Money and Banking is a real
+     * course. Development, labour, trade, IO, public and behavioural economics
+     * all shared one seed vector, so the recommender ranked them identically
+     * and no screen ever looked wrong. Columbia’s field electives are GU-coded
+     * at 4000, which is why looking only at UN-coded 3000-level courses — the
+     * shape of the original list — finds none of them.
+     */
+    tag("development", "Development", "Poverty, growth, and institutions", [
+      "ECON GU4321",
+      "ECON GU4301",
+    ]),
+    tag("labor", "Labour", "Wages, employment, and human capital", ["ECON GU4400"]),
+    tag("international-econ", "International economics", "Trade and open-economy macro", [
+      "ECON GU4500",
+      "ECON GU4505",
+    ]),
     tag("industrial-organization", "Industrial organisation", "Firms, competition, and regulation", [
-      "ECON UN3265",
+      "ECON GU4251",
+      "ECON GU4260",
     ]),
     tag("public-econ", "Public economics", "Taxes, spending, and what governments should do", [
-      "ECON UN3265",
+      "ECON GU4465",
+      "ECON UN3902",
     ]),
     tag("behavioral-econ", "Behavioural economics", "Where the standard model stops describing people", [
-      "ECON UN3265",
+      "ECON GU4840",
+      "ECON GU4850",
     ]),
     tag("political-economy-econ", "Political economy", "Economics of political institutions", [
-      "ECON UN3265",
+      "ECON GU4370",
     ]),
   ];
 }
+
 /**
  * Barnard Economics, both tracks.
  *
