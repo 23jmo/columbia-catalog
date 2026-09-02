@@ -22,7 +22,8 @@ import {
   loadGuessDeckCached,
   peekCachedGuessDeck,
 } from "@/lib/onboarding/guess-cache";
-import type { CourseHit, ResolvedCourse } from "@/lib/onboarding/server";
+import type { CourseHit } from "@/lib/onboarding/server";
+import { toGuestCourses } from "@/lib/onboarding/transcript";
 import {
   degreeSignature,
   RERANK_BATCH_SIZE,
@@ -560,29 +561,7 @@ export function StepCoursework({
       {isTranscriptOpen ? (
         <TranscriptImport
           onClose={() => setIsTranscriptOpen(false)}
-          onImport={(courses: ResolvedCourse[], candidates) => {
-            const termByCourse = new Map(
-              candidates.map((candidate) => [
-                candidate.courseId,
-                candidate.termLabel,
-              ]),
-            );
-            addCourses(
-              courses.map((course) => ({
-                courseId: course.courseId,
-                code: course.code,
-                title: course.title,
-                termLabel: termByCourse.get(course.courseId) ?? null,
-                points: course.points,
-                liked: null,
-                source: "transcript_pdf" as const,
-                // Carried through, never used to reject. A course our catalog
-                // does not hold is transfer credit, AP credit or an archived
-                // term — the coursework a student most needs recorded.
-                inCatalog: course.inCatalog,
-              })),
-            );
-          }}
+          onImport={(courses, candidates) => addCourses(toGuestCourses(courses, candidates))}
         />
       ) : null}
     </div>

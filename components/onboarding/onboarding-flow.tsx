@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 
+import { RiUploadCloud2Line } from "@remixicon/react";
+
 import { useSessionAccount } from "@/hooks/use-session-account";
 import {
   completeOnboardingAction,
@@ -18,6 +20,7 @@ import {
   declaredProgramIds,
   goBack,
   hasDeclinedMinors,
+  hasTranscriptCourses,
   NO_MINORS_PROGRAM_ID,
   RERANK_BATCH_SIZE,
   reconcileDegreeChange,
@@ -34,6 +37,8 @@ import {
   prefetchFeedPreview,
 } from "@/lib/onboarding/feed-preview-cache";
 import { writeOnboardingHandoff } from "@/lib/onboarding/handoff";
+import { toGuestCourses } from "@/lib/onboarding/transcript";
+import { haptic } from "@/lib/haptics";
 import type { FeedCard } from "@/lib/recommend/feed";
 import {
   ensureOnboardingHydrated,
@@ -96,6 +101,16 @@ const StepCoursework = dynamic(() => import("./step-coursework").then((m) => m.S
 const StepLove = dynamic(() => import("./step-love").then((m) => m.StepLove));
 const StepInterests = dynamic(() => import("./step-interests").then((m) => m.StepInterests));
 const StepFeed = dynamic(() => import("./step-feed").then((m) => m.StepFeed));
+/*
+ * The transcript panel is offered on the FIRST screen, and it is still behind
+ * `dynamic` — more so than anything above. It pulls the PDF text extractor and
+ * the OCR module's entry, none of which may enter the chunk that decides when
+ * the first question paints. It mounts only once the offer is pressed, so the
+ * fetch is paid by the press and by nobody else.
+ */
+const TranscriptImport = dynamic(() =>
+  import("./transcript-import").then((m) => m.TranscriptImport),
+);
 
 /**
  * Pull the later screens' chunks down once the page has finished loading.
@@ -274,12 +289,15 @@ function hasAnswersToFlush(state: GuestOnboardingState): boolean {
 function nextDegreeLabel(
   degreeQuestions: readonly DegreeQuestion[],
   from: DegreeQuestion,
+  skipsCoursework: boolean,
 ): string {
   const index = degreeQuestions.indexOf(from);
   const next = index >= 0 ? degreeQuestions[index + 1] : undefined;
   if (next === "major") return "Continue to major";
   if (next === "minors") return "Continue to minors";
-  return "Continue to coursework";
+  // Where the arrow actually goes once a transcript is on the record: see
+  // `hasTranscriptCourses` in the state module.
+  return skipsCoursework ? "Continue to what you liked" : "Continue to coursework";
 }
 
 export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
@@ -295,6 +313,7 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
     status: "idle",
   });
   const [signInError, setSignInError] = useState<string | null>(null);
+  const [isTranscriptOpen, setIsTranscriptOpen] = useState(false);
 
   /*
    * Which of the four degree questions is on screen.
@@ -649,7 +668,10 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
     // `choices` is what sits directly after the degree questions now, so it is
     // the step whose back button re-enters them — and it re-enters at the LAST
     // one, which is the question the student actually just came from.
-    if (state.step === "choices")
+    // `love` is the step directly after them for a student who handed over a
+    // transcript on the first screen — `goBack` skips the same two steps
+    // `advance` did, and this pins the same sub-question.
+    if (state.step === "choices" || (state.step === "love" && hasTranscriptCourses(state)))
       setVisitedQuestion(degreeQuestions[degreeQuestions.length - 1]);
     updateOnboardingState((current) => goBack(current));
   };
@@ -752,6 +774,9 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
     );
   }
 
+  const skipsCoursework = hasTranscriptCourses(state);
+  const transcriptCount = state.courses.filter((c) => c.source === "transcript_pdf").length;
+
   if (state.step === "school") {
     if (degreeQuestion === "school") {
       return (
@@ -761,9 +786,64 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
           canAdvance={canAdvance(state)}
           nextLabel="Continue to class year"
           hue="roseBlue"
+          // The panel is a card with a file drop and a review list; the
+          // narrow measure the chips sit in folds its rows over.
+          wide={isTranscriptOpen}
           onSignIn={showSignIn ? startFirstPageSignIn : undefined}
           signInError={signInError}
         >
+          {/*
+            ── The transcript, before anything else ─────────────────────────
+
+            First on the first screen, on purpose. The coursework screens are
+            the long part of the flow, and a student with a transcript to hand
+            can answer all of them in one file. Offering it three screens in,
+            as a footnote under a guessed deck, told that student to confirm
+            our guess at a document they were holding. Here it is the first
+            thing they can do, and doing it takes the deck and the fork
+            questions off their path — see `hasTranscriptCourses`.
+
+            Quiet styling still. It is an offer, not the gate: the school
+            question below is what the arrow actually waits on.
+          */}
+          <div className="mb-6 flex flex-col items-center gap-3">
+            {transcriptCount > 0 ? (
+              <p
+                role="status"
+                className="text-center text-caption-1-regular text-text-secondary"
+              >
+                {`${transcriptCount} ${transcriptCount === 1 ? "course" : "courses"} imported. We'll skip the coursework questions.`}
+              </p>
+            ) : (
+              <p className="text-center text-caption-1-regular text-text-tertiary">
+                Have your transcript? Import it and skip the coursework questions.
+              </p>
+            )}
+            {isTranscriptOpen ? null : (
+              <button
+                type="button"
+                onClick={() => {
+                  haptic("selection");
+                  setIsTranscriptOpen(true);
+                }}
+                className="flex cursor-pointer items-center gap-2 rounded-full border border-border-button-default px-4 py-2 text-body-medium text-text-secondary transition-colors outline-none hover:bg-background-secondary-hover hover:text-text-primary focus-visible:ring-2 focus-visible:ring-border-focus-ring pointer-coarse:py-2.5"
+              >
+                <RiUploadCloud2Line className="size-4 shrink-0" aria-hidden />
+                {transcriptCount > 0 ? "Import another" : "Import transcript"}
+              </button>
+            )}
+            {isTranscriptOpen ? (
+              <div className="w-full text-left">
+                <TranscriptImport
+                  onClose={() => setIsTranscriptOpen(false)}
+                  onImport={(courses, candidates) =>
+                    addCourses(toGuestCourses(courses, candidates))
+                  }
+                />
+              </div>
+            ) : null}
+          </div>
+
           <SchoolQuestion
             school={state.school}
             coveredSchools={coveredSchools}
@@ -791,7 +871,7 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
         hue="roseCyan"
         /* Where the arrow actually goes — which is not always the program
            question, since that one is skipped for uncovered schools. */
-        nextLabel={nextDegreeLabel(degreeQuestions, "classYear")}
+        nextLabel={nextDegreeLabel(degreeQuestions, "classYear", skipsCoursework)}
       >
           <ClassYearQuestion
             classYear={state.classYear}
@@ -809,7 +889,7 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
           wide
           hue="cyanRose"
           canAdvance={canAdvanceMajor}
-          nextLabel={nextDegreeLabel(degreeQuestions, "major")}
+          nextLabel={nextDegreeLabel(degreeQuestions, "major", skipsCoursework)}
         >
           <MajorsQuestion
             school={state.school}
@@ -830,7 +910,7 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
         wide
         hue="cyanRose"
         canAdvance={canAdvanceMinors}
-        nextLabel="Continue to coursework"
+        nextLabel={skipsCoursework ? "Continue to what you liked" : "Continue to coursework"}
       >
         <MinorsQuestion
           school={state.school}
