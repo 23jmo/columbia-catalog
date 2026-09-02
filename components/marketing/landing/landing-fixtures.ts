@@ -4,7 +4,7 @@ import type { RemainingRequirement } from "@/lib/profile/audit";
 import type { FeedCard, FeedSectionView } from "@/lib/recommend/feed";
 import { toolLabel } from "@/lib/agent/transcript";
 import type { CitedCourse, ToolActivity } from "@/lib/agent/transcript";
-import type { Meeting, ReputationSummary, ReviewDimensions } from "@/lib/types";
+import type { Meeting, ReputationSummary, ReviewDimensions, RmpSnapshot } from "@/lib/types";
 
 /**
  * What the landing page shows, typed as the real product types.
@@ -360,26 +360,52 @@ export const LANDING_ADVISOR_SOURCES: readonly CitedCourse[] = [
 /* ── The setup band ──────────────────────────────────────────────────────── */
 
 /**
- * The coursework screen's two chip decks, as `courseChipLines` wants them.
+ * The reviews band: one instructor's reputation, from every source we read.
  *
- * Step 2 of onboarding is the one worth showing, because it is the only step
- * that does something for the student before they have done anything: it
- * arrives already filled in. A picture of a school picker would be a picture
- * of a dropdown.
+ * ── No name, on purpose ────────────────────────────────────────────────────
  *
- * Ids, not printed codes. `formatCourseId` turns `HUMA1001W` into
- * `HUMA W1001`, which is the form the chip prints under the title — and
- * hardcoding the printed form is how the hero once ended up showing
- * "COMS 3134" beside "COMS W3134" on adjacent cards.
+ * The feed cards above attach illustrative reputation figures to real
+ * instructors, and the frame says so. A block titled with a real name and a
+ * RateMyProfessor score we invented is a different thing: it is a claim about
+ * a specific person on a public page, so the block is titled generically and
+ * the RMP block gets a placeholder name. The shapes are the product's own —
+ * `ReputationSummary` and `RmpSnapshot` are what the instructor page renders.
+ *
+ * The dimension figures are deliberately not all top marks. "4.9 everything"
+ * reads as a mock; a hard, well-taught course is what a review summary is for.
  */
-export const LANDING_TAKEN: readonly { code: string; title: string }[] = [
-  { code: formatCourseId("ENGL1010CC"), title: "University Writing" },
-  { code: formatCourseId("MATH1101UN"), title: "Calculus I" },
-  { code: formatCourseId("SCNC1000CC"), title: "Frontiers of Science" },
-  { code: formatCourseId("COMS1004W"), title: "Introduction to Computer Science and Programming in Java" },
-];
+export const LANDING_REPUTATION: ReputationSummary = {
+  dimensions: {
+    teachingQuality: 4.6,
+    workload: 3.8,
+    difficulty: 3.9,
+    gradingFairness: 4.2,
+    sentiment: 0.71,
+    wouldTakeAgain: true,
+  },
+  sampleSize: 88,
+  dateRange: ["2019-12-14", "2026-05-02"],
+  bySource: { culpa: 61, reddit: 27 },
+};
 
-export const LANDING_SUGGESTED: readonly { code: string; title: string }[] = [
-  { code: formatCourseId("MATH1102UN"), title: "Calculus II" },
-  { code: formatCourseId("COMS3203W"), title: "Discrete Mathematics" },
+export const LANDING_RMP: RmpSnapshot = {
+  rating: 4.5,
+  difficulty: 3.7,
+  wouldTakeAgainPercent: 86,
+  numRatings: 142,
+  profileUrl: "https://www.ratemyprofessors.com/",
+  fetchedAt: AS_OF,
+};
+
+/**
+ * The three questions the first band shows being asked.
+ *
+ * Phrased the way a student types, not the way a filter panel is labelled,
+ * because that is the point of the band: the search understands the need, and
+ * the student does not have to translate it into a department and a level.
+ */
+export const LANDING_SEARCHES: readonly string[] = [
+  "easy Global Core that meets after 11",
+  "a math class like the ones I have already taken",
+  "whatever still counts toward my graduation requirements",
 ];

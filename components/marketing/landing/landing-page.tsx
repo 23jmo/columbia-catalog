@@ -12,7 +12,7 @@ import { LandingHero } from "./landing-hero";
 import {
   LandingCatalogSplit,
   LandingHowItHelps,
-  LandingSetup,
+  LandingReviews,
 } from "./landing-sections";
 
 /**
@@ -37,12 +37,14 @@ import {
  * Hero, then proof, then mechanism, then objections, then the ask:
  *
  *   1. Hero — the claim, and a product shot that demonstrates it
- *   2. How it helps — the two things a catalog cannot do on its own
- *   3. Setup — the wizard guesses the transcript so the reader knows "Get my
- *      list" is a correction, not a form
- *   4. Advisor — one real turn of `/chat`, for the questions a ranked list
- *      cannot anticipate. This replaced a four-card capability grid; see the
- *      note at the top of `landing-advisor.tsx`.
+ *   2. Find the class — three searches as a student would type them, then
+ *      the two things a catalog cannot do on its own
+ *   3. Reviews — CULPA, Reddit and RateMyProfessor in the instructor page's
+ *      own two blocks. This replaced the setup band; nobody chooses a
+ *      planner because its wizard is short.
+ *   4. Advisor — one real turn of `/chat`, framed as the adviser you can
+ *      reach at 2am. This replaced a four-card capability grid; see the note
+ *      at the top of `landing-advisor.tsx`.
  *   5. Catalog split — the guest-open door, with the numbers behind it
  *   6. FAQ — the objections we are willing to name
  *   7. Closing CTA — the same two buttons as the hero
@@ -77,7 +79,7 @@ export function LandingPage() {
       <main className="flex flex-1 flex-col">
         <LandingHero />
         <LandingHowItHelps />
-        <LandingSetup />
+        <LandingReviews />
         <LandingAdvisor />
         <LandingCatalogSplit />
         <LandingFaq />

@@ -1,10 +1,17 @@
-import { RiArrowRightLine } from "@remixicon/react";
+import Link from "next/link";
+import { RiArrowRightLine, RiSearchLine } from "@remixicon/react";
 
+import { ReputationBlock } from "@/components/course/reputation";
+import { RmpBlock } from "@/components/course/rmp-block";
 import { OutstandingCard } from "@/components/profile/outstanding-card";
 import { cx } from "@/utils/cx";
 
-import { LANDING_OUTSTANDING } from "./landing-fixtures";
-import { LandingCourseworkShot } from "./landing-coursework-shot";
+import {
+  LANDING_OUTSTANDING,
+  LANDING_REPUTATION,
+  LANDING_RMP,
+  LANDING_SEARCHES,
+} from "./landing-fixtures";
 import { LandingReasonCard } from "./landing-product-shot";
 
 /*
@@ -91,9 +98,11 @@ export function LandingHowItHelps() {
   return (
     <section className="mx-auto flex w-full max-w-[75rem] flex-col gap-14 px-5 py-16 sm:gap-20 sm:px-8 sm:py-24">
       <SectionHeading
-        title="What a course catalog cannot tell you"
-        blurb="Vergil lists every class at Columbia. It has no idea which rules you are under, or which of those classes you are allowed to take."
+        title="Find the class you actually need"
+        blurb="Ask for it the way you would ask a friend who had read the whole Bulletin. It knows which rules you are under, what you have taken, and what is still open."
       />
+
+      <LandingSearches />
 
       {HELP_BLOCKS.map((block, index) => (
         <div
@@ -120,71 +129,99 @@ export function LandingHowItHelps() {
   );
 }
 
-/* ── Band 2: setup, as three steps ───────────────────────────────────────── */
+/* ── Band 1, the figure: three searches, as typed ────────────────────────── */
 
-const STEPS = [
-  {
-    title: "School and major",
-    body: "Columbia College, Columbia Engineering, or Barnard, plus your graduation year. Then the fork questions: Lit Hum or CC, and which physics sequence you are on.",
-  },
-  {
-    title: "What you have taken",
-    body: "It guesses your transcript first, including the classes most people with your record have already taken. Fix it inline, or import a file.",
-  },
-  {
-    title: "Your ranked list",
-    body: "Sections for next term, ranked against your own record. Each one shows what it counts for and when it meets.",
-  },
-];
+/**
+ * A search box with three real questions in it, and nothing typed for you.
+ *
+ * ── Why questions and not filters ──────────────────────────────────────────
+ *
+ * The catalog has a filter panel and so does Vergil. What a filter panel
+ * cannot take is "easy Global Core" or "like the ones I have already taken",
+ * because those are questions about the student, not about the course, and
+ * they are the questions students actually have. The three lines here are
+ * the ones a student would type, in their own words.
+ *
+ * ── Why it links to the chat and not to the catalog ────────────────────────
+ *
+ * `/search` is lexical and semantic over course text; it does not know a
+ * transcript. The questions above need the record, and the chat is the
+ * surface that reads it (see the advisor band). `/chat` takes no query
+ * parameter, so the box is a figure and the whole thing is one link.
+ */
+function LandingSearches() {
+  return (
+    <Link
+      href="/chat"
+      aria-label="Ask the chat what to take"
+      className="group mx-auto flex w-full max-w-[40rem] flex-col gap-2 rounded-[1.25rem] border border-border-table bg-background-primary-default p-2 shadow-[0_1px_3px_rgba(3,34,90,0.08),0_24px_50px_-30px_rgba(3,34,90,0.45)] outline-none transition-shadow duration-150 hover:shadow-[0_1px_3px_rgba(3,34,90,0.10),0_28px_56px_-28px_rgba(3,34,90,0.5)] focus-visible:ring-2 focus-visible:ring-border-focus-ring"
+    >
+      <div className="flex items-center gap-3 rounded-[0.875rem] bg-background-secondary-default px-4 py-3">
+        <RiSearchLine className="size-5 shrink-0 text-foreground-icon-secondary" aria-hidden />
+        <span className="text-body-regular text-text-placeholder">What are you looking for?</span>
+      </div>
+      <ul className="flex flex-col">
+        {LANDING_SEARCHES.map((query) => (
+          <li
+            key={query}
+            className="flex items-center gap-3 rounded-[0.875rem] px-4 py-3 text-body-regular text-text-primary transition-colors duration-150 group-hover:bg-background-secondary-default/60"
+          >
+            <RiSearchLine className="size-4 shrink-0 text-text-tertiary" aria-hidden />
+            <span className="text-pretty">{query}</span>
+          </li>
+        ))}
+      </ul>
+    </Link>
+  );
+}
 
-export function LandingSetup() {
+/* ── Band 2: every review, one place ─────────────────────────────────────── */
+
+/**
+ * The reviews band, built from the instructor page's own two blocks.
+ *
+ * `ReputationBlock` is what `instructor-profile.tsx` renders for CULPA and
+ * Reddit, with the same per-source count under it, and `RmpBlock` is the
+ * RateMyProfessor block with a pre-resolved snapshot — no `lookup`, so it
+ * never fetches. Together they are the claim in the heading, made by the
+ * thing itself rather than by three logos in a row.
+ *
+ * ── RMP is read live, and the band says so ─────────────────────────────────
+ *
+ * The RateMyProfessor block's compliance rules (see its header) mean we never
+ * store that data; we read it when a student opens the page. The blurb says
+ * "read live" rather than "collected" for exactly that reason, and the block
+ * itself prints its fetch time, which is the same thing said in the product's
+ * own voice.
+ *
+ * `inert` and `role="img"`: the RMP block carries a real link out and this is
+ * a figure, not a place to leave the page from.
+ */
+export function LandingReviews() {
   return (
     <section className="mx-auto flex w-full max-w-[75rem] flex-col items-center gap-12 px-5 py-16 sm:px-8 sm:py-24">
-      {/*
-        The heading used to be "Setup is three screens". That is a fact about
-        the wizard, and the note on it was "no one cares". What the reader
-        cares about is the thing the second screen actually does: it fills in
-        the transcript before they type a course, so the ask is "fix what is
-        wrong" rather than "list four semesters from memory".
-      */}
       <SectionHeading
-        title="You do not type your transcript"
-        blurb="Pick your school and major, and it fills in the courses most people with your record have already taken. Fix what it got wrong, and your list is ready."
+        title="Every review, in one place"
+        blurb="CULPA, Reddit and RateMyProfessor, read for every instructor and folded into one summary: how they teach, how much work it is, and whether people would take it again. No more six tabs per class."
       />
 
-      {/*
-        Steps on the left, the actual second screen on the right.
-
-        This band used to be three cards with a generic icon each, which is the
-        page describing a wizard rather than showing one. `LandingCourseworkShot`
-        is onboarding's own chips, so the claim in step 2 — that the transcript
-        arrives already guessed — is made by the thing itself.
-
-        The shot gets the narrower track. It is a wrap of pills and it reads
-        best at roughly the measure the wizard gives it; handed half of 75rem
-        it spreads into two long lines and stops looking like a screen.
-      */}
-      <div className="grid w-full items-center gap-10 sm:grid-cols-[minmax(0,1fr)_minmax(0,27rem)] sm:gap-14">
-        <ol className="flex flex-col gap-7">
-          {STEPS.map((step, index) => (
-            <li key={step.title} className="flex gap-4">
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-background-secondary-default text-caption-1-semibold tabular-nums text-text-secondary">
-                {index + 1}
-              </span>
-              <div className="flex flex-col gap-1.5">
-                <h3 className="text-[1.1875rem] font-medium leading-[1.3] tracking-[-0.02em] text-text-primary">
-                  {step.title}
-                </h3>
-                <p className="text-pretty text-body-medium leading-[1.5] text-text-secondary">
-                  {step.body}
-                </p>
-              </div>
-            </li>
-          ))}
-        </ol>
-
-        <LandingCourseworkShot />
-      </div>
+      <figure
+        role="img"
+        aria-label="An instructor's reviews on LionPlan: a CULPA and Reddit summary showing teaching quality, workload, difficulty and grading fairness out of five with the number of reviews behind each, beside the live RateMyProfessor rating for the same person."
+        className="w-full max-w-[46rem]"
+      >
+        <div
+          inert
+          className="grid gap-3 rounded-[1.25rem] bg-background-primary-default p-3 shadow-[0_2px_10px_rgba(3,34,90,0.10),0_36px_70px_-32px_rgba(3,34,90,0.42)] ring-1 ring-black/[0.07] sm:grid-cols-2 sm:p-4"
+        >
+          <ReputationBlock
+            title="Instructor quality"
+            subtitle="Aggregated from CULPA and Reddit reviews of this person."
+            summary={LANDING_REPUTATION}
+          />
+          <RmpBlock instructorName="this instructor" snapshot={LANDING_RMP} />
+        </div>
+      </figure>
     </section>
   );
 }

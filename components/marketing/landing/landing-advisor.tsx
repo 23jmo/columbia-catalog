@@ -82,13 +82,13 @@ export function LandingAdvisor() {
     <section className="mx-auto flex w-full max-w-[75rem] flex-col items-center gap-12 px-5 py-16 sm:px-8 sm:py-24">
       <div className="mx-auto flex max-w-[44rem] flex-col items-center gap-4 text-center">
         <h2 className="text-balance text-[clamp(2rem,4.4vw,3.5rem)] font-medium leading-[1.12] tracking-[-0.03em] text-text-primary">
-          Tell it you want Fridays free
+          Your academic advisor, available anytime
         </h2>
         <p className="max-w-[46ch] text-pretty text-[1.0625rem] leading-[1.5] tracking-[-0.011em] text-text-secondary">
-          The list ranks against your degree. It does not know you commute,
-          or that you want the Core done by junior year. Say so, and the chat
-          checks your record, the catalog and your week, and shows every
-          lookup it made before it answers.
+          No appointment, no two-week wait. Ask what to drop, what still
+          counts, or how to keep Fridays free. It reads your record and the
+          catalog, checks your week, and shows every lookup it made before it
+          answers.
         </p>
       </div>
 
