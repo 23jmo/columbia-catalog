@@ -44,6 +44,7 @@ import Link from "next/link";
 import { RiChat3Line } from "@remixicon/react";
 
 import { FeedPanel } from "@/components/feed/feed-panel";
+import { LandingPage } from "@/components/marketing/landing";
 import { FeedSkeleton } from "@/components/feed/feed-skeleton";
 import { AppShell } from "@/components/shell/app-shell";
 import { AuthErrorNotice } from "@/components/shell/auth-error-notice";
@@ -54,14 +55,25 @@ import {
   SOCIAL_IMAGE_ALT,
   SOCIAL_TITLE,
 } from "@/lib/marketing/social";
+import { getSessionUser } from "@/lib/db/auth";
 import { HOME_FEED_LIMIT, buildFeed } from "@/lib/recommend/feed";
 import { cx } from "@/utils/cx";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://lionplan.org"),
-  title: "Recommended courses — LionPlan",
+  /*
+    These describe the LANDING page, not the feed.
+    Every visitor who can see this metadata — a crawler, a link unfurler, a
+    person who has not signed in — gets `LandingPage` from the branch below.
+    The feed is only ever rendered for someone with a session, who by
+    definition arrived past the title tag. Describing the feed here advertised
+    a page the audience for the description could not reach.
+  */
+  title: "LionPlan — know what to take next, and why",
   description:
-    "Classes worth your next term, ranked against your own record and what past students said about them — each one saying why it is on the list.",
+    "A course planner for Columbia College, Columbia Engineering and Barnard College. Browse all 8,189 courses without an account, or set up once for a ranked list of the sections you can take next term.",
+  alternates: { canonical: "https://www.lionplan.org/" },
+  robots: { index: true, follow: true },
   openGraph: {
     title: SOCIAL_TITLE,
     description: SOCIAL_DESCRIPTION,
@@ -91,6 +103,28 @@ export default async function HomePage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const params = await searchParams;
+
+  /*
+    The fork this whole route exists to make.
+
+    `proxy.ts` no longer 307s `/` to the wizard (see the note in
+    `lib/onboarding/guest-gate.ts`), so a guest arrives here instead of being
+    bounced. They get the landing page; a student gets the feed. Same URL,
+    which is the point — the apex is where shared links and organic traffic
+    land, and a marketing page one redirect away is one most of its audience
+    never sees.
+
+    `getSessionUser()` and not a `buildFeed` that copes with no student:
+    the feed for nobody is the catalog in its default order, which is the
+    least persuasive thing this page could show a stranger. It is also the
+    read that makes `/` uncacheable, which is the acknowledged cost.
+
+    `auth_error` is deliberately not handled on this branch. It only arrives
+    from the OAuth callback, which sends failures to a page that can explain
+    them; a guest who has never signed in has no error to show.
+  */
+  const sessionUser = await getSessionUser();
+  if (!sessionUser) return <LandingPage />;
 
   return (
     <AppShell activeNav="home">

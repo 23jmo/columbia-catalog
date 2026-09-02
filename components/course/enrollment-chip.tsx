@@ -255,7 +255,13 @@ export function EnrollmentChip({
               {reading.remaining}
             </span>
             <span className="text-caption-1-regular text-text-secondary sm:whitespace-nowrap">
-              seats left
+              {/*
+                Singular at one. The tight tone starts at 90% full, so "1 seats
+                left" is not an edge case this chip rarely reaches — it is the
+                exact reading it exists to draw attention to, and the one a
+                student is most likely to read closely.
+              */}
+              {reading.remaining === 1 ? "seat left" : "seats left"}
             </span>
           </span>
         ) : (

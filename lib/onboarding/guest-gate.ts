@@ -25,8 +25,24 @@ const CARRIED_PARAMS = ["auth_error"] as const;
  * crawler files. If any of those 307 to /onboarding, Googlebot stores the
  * school picker as robots.txt and the site cannot rank. `/google*.html` is
  * the Search Console URL-prefix check: Google fetches that path and
- * expects the verification string, not the school picker. Home (`/`) stays
- * gated: a returning student who types the origin still lands on Log in.
+ * expects the verification string, not the school picker.
+ *
+ * ── Home (`/`) is open, and it is a landing page now ───────────────────────
+ *
+ * `/` used to 307 here on the reasoning that "a returning student who types
+ * the origin still lands on Log in". That served the returning student and
+ * bounced everyone else: a stranger arriving from a search result or a shared
+ * link was handed a five-screen wizard about their degree before being told
+ * what the site was.
+ *
+ * So `/` is allow-listed, and `app/page.tsx` branches on the session instead
+ * — the marketing page for a guest, the feed for a student. The returning
+ * student is not worse off: the landing header's first control is Get
+ * started, which is the same wizard, one click away instead of zero.
+ *
+ * Note it is NOT in `isPublicMarketingPath`. That list skips the session
+ * refresh entirely so the response can stay publicly cacheable, and `/` is
+ * the one path whose whole job is to know whether there is a session.
  *
  * ── `/course/` and `/instructor/` are open, and the rest is not ────────────
  *
@@ -121,6 +137,8 @@ export function isPublicMarketingPath(pathname: string): boolean {
 
 export function isGuestAllowedPath(pathname: string): boolean {
   return (
+    // See the note above: `/` renders marketing for a guest, not the feed.
+    pathname === "/" ||
     pathname === "/onboarding" ||
     pathname.startsWith("/onboarding/") ||
     isPublicMarketingPath(pathname) ||

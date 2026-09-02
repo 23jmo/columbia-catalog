@@ -72,11 +72,26 @@ describe("isGuestAllowedPath", () => {
   it("keeps everything about a specific student behind the wizard", () => {
     // The feed, the shortlist and the audit are what onboarding is FOR.
     // Giving them away would leave nothing to sign in for.
-    expect(isGuestAllowedPath("/")).toBe(false);
+    //
+    // `/` is NOT in this list any more. It is the one route that serves two
+    // different pages: `app/page.tsx` renders marketing for a guest and the
+    // feed for a student, so the gate lets it through and the page decides.
     expect(isGuestAllowedPath("/saved")).toBe(false);
     expect(isGuestAllowedPath("/chat")).toBe(false);
     expect(isGuestAllowedPath("/schedule")).toBe(false);
     expect(isGuestAllowedPath("/profile")).toBe(false);
+  });
+
+  it("lets a guest reach home, because home is the landing page", () => {
+    expect(isGuestAllowedPath("/")).toBe(true);
+  });
+
+  it("does not treat home as a cacheable public page", () => {
+    // `proxy.ts` skips the session refresh for `isPublicMarketingPath` and
+    // stamps a public Cache-Control. `/` must never join that list: deciding
+    // between the landing page and the feed IS a session read, and a publicly
+    // cached `/` would serve one student's feed shell to the next visitor.
+    expect(isPublicMarketingPath("/")).toBe(false);
   });
 
   it("does not open a path that merely starts with an allowed word", () => {
