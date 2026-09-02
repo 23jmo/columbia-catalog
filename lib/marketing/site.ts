@@ -9,8 +9,14 @@ import type { Metadata } from "next";
  */
 export const SITE_ORIGIN = "https://www.lionplan.org";
 
-/** HTML pages that belong in the sitemap. Crawler files are separate. */
-export const SITEMAP_PATHS = ["/about", "/faq", "/privacy", "/terms"] as const;
+/**
+ * HTML pages that belong in the sitemap. Crawler files are separate.
+ *
+ * `/` leads because it is now a real page rather than a 307 into the wizard.
+ * It was correctly absent while it redirected — listing a redirect in a
+ * sitemap tells Google the canonical URL is one it cannot index.
+ */
+export const SITEMAP_PATHS = ["/", "/about", "/faq", "/privacy", "/terms"] as const;
 
 /**
  * Files a crawler fetches before it decides whether to index anything.

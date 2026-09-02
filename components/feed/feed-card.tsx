@@ -54,7 +54,31 @@ import { cx } from "@/utils/cx";
  * delay, same charts — the rail is a search hit someone chose for you.
  */
 
-export function FeedCardView({ card, className }: { card: FeedCardData; className?: string }) {
+export function FeedCardView({
+  card,
+  className,
+  readOnly = false,
+}: {
+  card: FeedCardData;
+  className?: string;
+  /**
+   * Render the card without the save control.
+   *
+   * One caller: the landing page's product shot, which renders this component
+   * for real rather than redrawing it, so the hero can never drift from the
+   * card a student actually gets. Saving is a signed-in write, and mounting
+   * `BookmarkControls` subscribes to the bookmark store — whose first read
+   * fires a server action on mount. On `/` that round trip is guaranteed
+   * waste: the page only renders for a visitor with no session, so the answer
+   * is always `signed_out`, and it would land on the one page whose job is to
+   * paint fast for a stranger who has not decided to stay.
+   *
+   * It hides the control rather than disabling it. A disabled star on a
+   * marketing page is an affordance that teaches the visitor this page's
+   * controls are decoration, directly under the button we want them to press.
+   */
+  readOnly?: boolean;
+}) {
   const section = card.best;
 
   /*
@@ -158,12 +182,14 @@ export function FeedCardView({ card, className }: { card: FeedCardData; classNam
           the work. We never register, drop, or waitlist anyone.
         */}
         <div className="flex shrink-0 items-center gap-0.5">
-          <BookmarkControls
-            sectionId={section.sectionId}
-            sectionCode={section.sectionCode}
-            courseLabel={card.code}
-            size="xs"
-          />
+          {readOnly ? null : (
+            <BookmarkControls
+              sectionId={section.sectionId}
+              sectionCode={section.sectionCode}
+              courseLabel={card.code}
+              size="xs"
+            />
+          )}
           <a
             href={section.vergilUrl}
             target="_blank"
