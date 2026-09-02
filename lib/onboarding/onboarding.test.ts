@@ -45,6 +45,7 @@ import {
   deserialize,
   emptyGuestState,
   goBack,
+  hasTranscriptCourses,
   goToStep,
   ONBOARDING_STEPS,
   NO_MINORS_PROGRAM_ID,
@@ -379,6 +380,56 @@ describe("every step is reversible", () => {
 /* ==========================================================================
  * 3. Unmatched coursework is stored and marked, never rejected
  * ========================================================================== */
+
+describe("a transcript on the first screen skips the coursework screens", () => {
+  const withTranscript = (): GuestOnboardingState =>
+    upsertCourse(
+      { ...emptyGuestState(), school: "CC" },
+      {
+        courseId: "COMS3134W",
+        code: "COMS W3134",
+        title: "Data Structures in Java",
+        termLabel: "Fall 2024",
+        points: 3,
+        liked: null,
+        source: "transcript_pdf",
+        inCatalog: true,
+      },
+    );
+
+  it("advances from the degree questions straight to what you liked", () => {
+    expect(hasTranscriptCourses(withTranscript())).toBe(true);
+    expect(advance(withTranscript()).step).toBe("love");
+  });
+
+  it("goes back from what you liked to the degree questions", () => {
+    const atLove = advance(withTranscript());
+    expect(goBack(atLove).step).toBe("school");
+  });
+
+  it("still gates on the school answer", () => {
+    const state = { ...withTranscript(), school: null };
+    expect(advance(state).step).toBe("school");
+  });
+
+  it("does not skip when the courses came from the guess deck", () => {
+    const guessed = upsertCourse(
+      { ...emptyGuestState(), school: "CC" },
+      {
+        courseId: "COMS3134W",
+        code: "COMS W3134",
+        title: "Data Structures in Java",
+        termLabel: null,
+        points: 3,
+        liked: null,
+        source: "onboarding_guess",
+        inCatalog: true,
+      },
+    );
+    expect(hasTranscriptCourses(guessed)).toBe(false);
+    expect(advance(guessed).step).toBe("choices");
+  });
+});
 
 describe("unmatched coursework", () => {
   it("stays on the record, marked, all the way into the database payload", () => {

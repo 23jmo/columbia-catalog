@@ -402,14 +402,42 @@ export function canAdvance(state: GuestOnboardingState): boolean {
  * again must not erase the fact that the love screen was already answered.
  */
 export function advance(state: GuestOnboardingState): GuestOnboardingState {
-  const target = nextStep(state.step);
+  const target =
+    state.step === "school" && hasTranscriptCourses(state) ? "love" : nextStep(state.step);
   if (!target || !canAdvance(state)) return state;
   return goToStep(state, target);
 }
 
+/**
+ * Whether the record already holds a transcript.
+ *
+ * ── Why a transcript skips `choices` and `coursework` ───────────────────────
+ *
+ * Both of those screens exist to reconstruct what the student has taken:
+ * `choices` asks the fork questions (Lit Hum or CC, which physics sequence)
+ * and `coursework` shows a guessed deck to confirm. A transcript IS the
+ * answer to both, line by line, and asking someone who just handed it over
+ * to confirm our guess at it is the flow forgetting what it was told.
+ *
+ * Derived from the courses rather than stored as a flag, so it needs no
+ * schema field, no migration, and cannot drift: the day the last transcript
+ * row is removed, the two screens come back on their own.
+ *
+ * `love` and `interests` are NOT skipped. A transcript says what was taken,
+ * not what was enjoyed, and those two screens are the only place the ranking
+ * learns that.
+ */
+export function hasTranscriptCourses(state: GuestOnboardingState): boolean {
+  return state.courses.some((course) => course.source === "transcript_pdf");
+}
+
 /** Move back one step. A no-op on the first, which is where the button hides. */
 export function goBack(state: GuestOnboardingState): GuestOnboardingState {
-  const target = previousStep(state.step);
+  // The mirror of the skip in `advance`: a student who jumped over the
+  // coursework screens lands back on the degree questions, not on a guess
+  // deck they never saw.
+  const target =
+    state.step === "love" && hasTranscriptCourses(state) ? "school" : previousStep(state.step);
   if (!target) return state;
   // Note this does NOT lower `furthestStep`, and does not clear any answer.
   // "Everything is reversible" means a student can go back and look; it does

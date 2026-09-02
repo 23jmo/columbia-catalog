@@ -44,6 +44,7 @@ import {
   type TranscriptWarning,
 } from "@/lib/profile/transcript";
 import type { CourseId } from "@/lib/requirements/code";
+import type { GuestCourse } from "./state";
 
 /**
  * One course a transcript claims the student took.
@@ -232,4 +233,46 @@ async function fromOcr(
     candidates,
     problem: candidates.length === 0 ? emptyMessage : null,
   };
+}
+
+/**
+ * The shape `resolveCoursesAction` hands back, restated here so this module
+ * does not import `./server` — that file reaches the database and must stay
+ * out of the client bundle. Structural, so the action's own type satisfies it.
+ */
+export interface ResolvedTranscriptCourse {
+  courseId: string;
+  code: string;
+  title: string | null;
+  points: number | null;
+  inCatalog: boolean;
+}
+
+/**
+ * Resolved transcript rows as guest record rows.
+ *
+ * Shared by the two places a transcript can land — the first screen and the
+ * coursework screen — so the provenance, the term label and the `inCatalog`
+ * carry-through cannot disagree between them. A course our catalog does not
+ * hold is transfer credit, AP credit or an archived term, which is the
+ * coursework a student most needs recorded, so `inCatalog` is carried and
+ * never used to reject.
+ */
+export function toGuestCourses(
+  courses: readonly ResolvedTranscriptCourse[],
+  candidates: readonly CourseCandidate[],
+): GuestCourse[] {
+  const termByCourse = new Map(
+    candidates.map((candidate) => [candidate.courseId, candidate.termLabel]),
+  );
+  return courses.map((course) => ({
+    courseId: course.courseId,
+    code: course.code,
+    title: course.title,
+    termLabel: termByCourse.get(course.courseId) ?? null,
+    points: course.points,
+    liked: null,
+    source: "transcript_pdf" as const,
+    inCatalog: course.inCatalog,
+  }));
 }
