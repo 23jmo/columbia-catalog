@@ -465,6 +465,13 @@ describe("planned courses", () => {
     expect(plannedCourses(state)[0]?.sectionId).toBe("20263COMS4115W001");
   });
 
+  it("follow coursework and precede what you liked for a student with no transcript", () => {
+    const atCoursework = goToStep(emptyGuestState(), "coursework");
+    expect(advance(atCoursework).step).toBe("planned");
+    expect(advance(advance(atCoursework)).step).toBe("love");
+    expect(goBack(advance(atCoursework)).step).toBe("coursework");
+  });
+
   it("survive a round trip through storage without a section", () => {
     const state = upsertCourse(emptyGuestState(), planned());
     expect(deserialize(serialize(state))?.courses[0]?.source).toBe("plan");

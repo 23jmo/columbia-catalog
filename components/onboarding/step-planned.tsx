@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { plannedSectionsAction, type PlannedSection } from "@/app/onboarding/actions";
 import type { CourseHit } from "@/lib/onboarding/server";
@@ -63,9 +63,23 @@ interface Chooser {
 
 export function StepPlanned({ state, addCourse, removeCourse, setSection }: StepPlannedProps) {
   const planned = plannedCourses(state);
-  const plannedIds = new Set(planned.map((course) => course.courseId));
+  /**
+   * EVERY course on the record, not only the planned ones. A course already
+   * recorded as taken must read "added" in the search rather than be offered:
+   * `upsertCourse` replaces the row wholesale, so adding it here would turn
+   * a taken course into a planned one and drop it from the audit and the
+   * "what you liked" screen without a word.
+   */
+  const recordedIds = new Set(state.courses.map((course) => course.courseId));
+  /** Latest planned ids, for the async lookup to check against after it lands. */
+  const plannedIds = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    plannedIds.current = new Set(planned.map((course) => course.courseId));
+  });
   const [chooser, setChooser] = useState<Chooser | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Courses we looked up and found no section for this term. */
+  const [unoffered, setUnoffered] = useState<Set<string>>(() => new Set());
 
   /**
    * Look the sections up and decide whether there is a question to ask.
@@ -75,6 +89,9 @@ export function StepPlanned({ state, addCourse, removeCourse, setSection }: Step
   const resolveSections = async (courseId: string, label: string) => {
     setError(null);
     const result = await plannedSectionsAction(courseId);
+    // Removed while we were looking: a chooser for it would offer options
+    // that set a section on nothing.
+    if (!plannedIds.current.has(courseId)) return;
     if (!result.ok) {
       setError(result.error ?? "We could not look up that course's sections.");
       return;
@@ -89,6 +106,9 @@ export function StepPlanned({ state, addCourse, removeCourse, setSection }: Step
       setChooser({ courseId, label, sections });
       return;
     }
+    // Nothing this term — a transcript "Planned" row for a course that is
+    // not offered. Say so, or the chip keeps inviting a tap that does nothing.
+    setUnoffered((current) => new Set(current).add(courseId));
     setChooser(null);
   };
 
@@ -113,14 +133,16 @@ export function StepPlanned({ state, addCourse, removeCourse, setSection }: Step
         <ChipWrap className="gap-1.5 overflow-visible px-2.5 pt-2 sm:gap-2">
           {planned.map((course) => {
             const lines = courseChipLines(course.code, course.title);
-            const sectionLabel = course.sectionId
-              ? sectionCodeOf(course.sectionId)
-              : undefined;
+            const note = course.sectionId
+              ? `section ${sectionCodeOf(course.sectionId)}`
+              : unoffered.has(course.courseId)
+                ? "not offered this term"
+                : "tap to pick a section";
             return (
               <RemovableChip
                 key={course.courseId}
                 sublabel={lines.sublabel}
-                note={sectionLabel ? `section ${sectionLabel}` : "tap to pick a section"}
+                note={note}
                 onPress={() => {
                   haptic("selection");
                   void resolveSections(course.courseId, lines.label);
@@ -184,7 +206,7 @@ export function StepPlanned({ state, addCourse, removeCourse, setSection }: Step
       ) : null}
 
       <CourseSearch
-        confirmedIds={plannedIds}
+        confirmedIds={recordedIds}
         onAdd={onAdd}
         label="Search for a course you're taking"
       />

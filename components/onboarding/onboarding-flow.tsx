@@ -824,7 +824,10 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
             question below is what the arrow actually waits on.
           */}
           <div className="mb-6 flex flex-col items-center gap-3">
-            {transcriptCount > 0 ? (
+            {/* Only when the skip is real. Planned rows also arrive from the
+                planned screen's own search, and a transcript of nothing but
+                "Planned" lines does not skip coursework either. */}
+            {transcriptCount > 0 && skipsCoursework ? (
               <p
                 role="status"
                 className="text-center text-caption-1-regular text-text-secondary"

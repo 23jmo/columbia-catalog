@@ -27,6 +27,7 @@ import { toGuestCourses } from "@/lib/onboarding/transcript";
 import {
   degreeSignature,
   RERANK_BATCH_SIZE,
+  takenCourses,
   type GuestCourse,
   type GuestOnboardingState,
   type OnboardingCourseSource,
@@ -104,6 +105,7 @@ export function StepCoursework({
   removeCourse,
   onConfirmationBatch,
 }: StepCourseworkProps) {
+  const taken = takenCourses(state);
   const [deck, setDeck] = useState<GuessDeck | null>(() =>
     peekCachedGuessDeck(state),
   );
@@ -440,9 +442,12 @@ export function StepCoursework({
           the screen is making, and burying the claim under the things that ask
           for more inverts the screen.
         */}
-        {!showSkeleton && state.courses.length > 0 ? (
+        {/* Taken only. A course added on the next screen ("what are you taking
+            this term?") must not come back here, one Back press later, under
+            "what we think you've taken". */}
+        {!showSkeleton && taken.length > 0 ? (
           <ChipWrap className="gap-1.5 overflow-visible px-2.5 pt-2 sm:gap-2">
-            {state.courses.map((course) => {
+            {taken.map((course) => {
               const lines = courseChipLines(course.code, course.title);
               return (
                 <RemovableChip

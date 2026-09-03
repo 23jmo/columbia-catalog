@@ -159,9 +159,10 @@ export async function loadCatalogFacts(
  * `source` is coerced to `"picker"` because `lib/profile/types.ts`'s
  * `CourseSource` union predates migration 0032 and does not yet carry
  * `onboarding_guess`. Nothing in the audit reads `source` except to check for
- * `"plan"`, and onboarding never produces a planned course, so the coercion
- * changes no outcome — it is a type-level accommodation, and widening that
- * union belongs to whoever owns that file.
+ * `"plan"`, which is carried through as itself now that the planned screen
+ * writes it, so coercing everything else changes no outcome — it is a
+ * type-level accommodation, and widening that union belongs to whoever owns
+ * that file.
  */
 function toAuditProfile(state: GuestOnboardingState): AppStudentProfile {
   return {
