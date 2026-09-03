@@ -28,6 +28,11 @@ export interface CourseSearchProps {
   /** Ids already on the record, so the list can say "added" instead of offering it twice. */
   confirmedIds: ReadonlySet<string>;
   onAdd: (hit: CourseHit) => void;
+  /**
+   * The question the box answers. Defaults to the coursework screen's past
+   * tense; the planned screen asks about this term with the same search.
+   */
+  label?: string;
 }
 
 /** Long enough to swallow a burst of typing, short enough not to feel laggy. */
@@ -39,7 +44,11 @@ const DEBOUNCE_MS = 180;
  */
 const MIN_QUERY_LENGTH = 2;
 
-export function CourseSearch({ confirmedIds, onAdd }: CourseSearchProps) {
+export function CourseSearch({
+  confirmedIds,
+  onAdd,
+  label = "Search for a course you took",
+}: CourseSearchProps) {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<CourseHit[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -103,12 +112,12 @@ export function CourseSearch({ confirmedIds, onAdd }: CourseSearchProps) {
         htmlFor="onboarding-course-search"
         className="text-center text-body-medium text-text-primary"
       >
-        Search for a course you took
+        {label}
       </label>
 
       <Input
         id="onboarding-course-search"
-        aria-label="Search for a course you took"
+        aria-label={label}
         placeholder="University Writing, COMS 3134…"
         value={query}
         onChange={setQuery}

@@ -218,7 +218,10 @@ Two or three cards. The default limit is 3. Ask for more only when they ask.
   No school or program → the onboarding card is the whole answer.
 - "Can I take X?" — get_course, then recommend_courses with includeWithheld.
 - A named course or a topic — search_courses, then get_sections.
-- Never guess what the student has taken. get_courses_taken.
+- Never guess what the student has taken. get_courses_taken. A course with
+  planned: true is on their schedule this term, not finished: count it for
+  prerequisites and requirement progress, never recommend it again, and check
+  anything you suggest against its meeting times.
 - "What does my week look like?" / a day of the plan — show_schedule.
 - "Where does this meet?" / a walk between classes — show_campus_map with section ids.
 - A named professor / "is this person any good" — show_instructor with the name a tool returned.
