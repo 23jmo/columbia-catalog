@@ -21,6 +21,9 @@ import {
   goBack,
   hasDeclinedMinors,
   hasTranscriptCourses,
+  plannedCourses,
+  setPlannedSection,
+  takenCourses,
   NO_MINORS_PROGRAM_ID,
   RERANK_BATCH_SIZE,
   reconcileDegreeChange,
@@ -38,6 +41,8 @@ import {
 } from "@/lib/onboarding/feed-preview-cache";
 import { writeOnboardingHandoff } from "@/lib/onboarding/handoff";
 import { toGuestCourses } from "@/lib/onboarding/transcript";
+import { planStore } from "@/lib/schedule/plans";
+import { CURRENT_TERM } from "@/lib/constants";
 import { haptic } from "@/lib/haptics";
 import type { FeedCard } from "@/lib/recommend/feed";
 import {
@@ -98,6 +103,7 @@ import {
  */
 const StepChoices = dynamic(() => import("./step-choices").then((m) => m.StepChoices));
 const StepCoursework = dynamic(() => import("./step-coursework").then((m) => m.StepCoursework));
+const StepPlanned = dynamic(() => import("./step-planned").then((m) => m.StepPlanned));
 const StepLove = dynamic(() => import("./step-love").then((m) => m.StepLove));
 const StepInterests = dynamic(() => import("./step-interests").then((m) => m.StepInterests));
 const StepFeed = dynamic(() => import("./step-feed").then((m) => m.StepFeed));
@@ -144,6 +150,7 @@ function useWarmStepChunks(enabled: boolean): void {
       if (cancelled) return;
       void import("./step-choices");
       void import("./step-coursework");
+      void import("./step-planned");
       void import("./step-love");
       void import("./step-interests");
       void import("./step-feed");
@@ -297,7 +304,7 @@ function nextDegreeLabel(
   if (next === "minors") return "Continue to minors";
   // Where the arrow actually goes once a transcript is on the record: see
   // `hasTranscriptCourses` in the state module.
-  return skipsCoursework ? "Continue to what you liked" : "Continue to coursework";
+  return skipsCoursework ? "Continue to this term" : "Continue to coursework";
 }
 
 export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
@@ -517,6 +524,10 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
     updateOnboardingState((current) => setLikedIn(current, courseId, liked));
   }, []);
 
+  const setSection = useCallback((courseId: string, sectionId: string | null) => {
+    updateOnboardingState((current) => setPlannedSection(current, courseId, sectionId));
+  }, []);
+
   /**
    * One student confirmation, for the re-rank counter.
    *
@@ -671,7 +682,7 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
     // `love` is the step directly after them for a student who handed over a
     // transcript on the first screen — `goBack` skips the same two steps
     // `advance` did, and this pins the same sub-question.
-    if (state.step === "choices" || (state.step === "love" && hasTranscriptCourses(state)))
+    if (state.step === "choices" || (state.step === "planned" && hasTranscriptCourses(state)))
       setVisitedQuestion(degreeQuestions[degreeQuestions.length - 1]);
     updateOnboardingState((current) => goBack(current));
   };
@@ -725,6 +736,7 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
     const guest = getOnboardingSnapshot().state;
     const preview = cards.length > 0 ? cards : peekCachedFeedPreview(guest);
     if (preview && preview.length > 0) writeOnboardingHandoff(preview);
+    putPlannedSectionsOnSchedule(guest);
 
     if (
       session.account &&
@@ -775,7 +787,12 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
   }
 
   const skipsCoursework = hasTranscriptCourses(state);
-  const transcriptCount = state.courses.filter((c) => c.source === "transcript_pdf").length;
+  // Both rows a transcript writes: finished courses and the in-progress ones
+  // that go to this term's screen. The count is the whole import, or a
+  // three-row transcript with one "Planned" line would report two.
+  const transcriptCount = state.courses.filter(
+    (c) => c.source === "transcript_pdf" || c.source === "plan",
+  ).length;
 
   if (state.step === "school") {
     if (degreeQuestion === "school") {
@@ -910,7 +927,7 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
         wide
         hue="cyanRose"
         canAdvance={canAdvanceMinors}
-        nextLabel={skipsCoursework ? "Continue to what you liked" : "Continue to coursework"}
+        nextLabel={skipsCoursework ? "Continue to this term" : "Continue to coursework"}
       >
         <MinorsQuestion
           school={state.school}
@@ -959,7 +976,7 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
         {...chrome}
         question="Here's what we think you've taken."
         wide
-        nextLabel="Continue to what you liked"
+        nextLabel="Continue to this term"
         hue="violetRose"
       >
         <StepCoursework
@@ -968,6 +985,25 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
           addCourses={addCourses}
           removeCourse={removeCourse}
           onConfirmationBatch={onConfirmationBatch}
+        />
+      </OnboardingScreen>
+    );
+  }
+
+  if (state.step === "planned") {
+    return (
+      <OnboardingScreen
+        {...chrome}
+        question="What are you taking this term?"
+        wide
+        hue="roseCyan"
+        nextLabel="Continue to what you liked"
+      >
+        <StepPlanned
+          state={state}
+          addCourse={addCourse}
+          removeCourse={removeCourse}
+          setSection={setSection}
         />
       </OnboardingScreen>
     );
@@ -982,7 +1018,9 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
         hue="tealViolet"
         nextLabel="Continue to your interests"
       >
-        <StepLove courses={state.courses} onSetLiked={setLiked} />
+        {/* Only what has been taken. Nobody can say whether they liked a
+            course they are three weeks into. */}
+        <StepLove courses={takenCourses(state)} onSetLiked={setLiked} />
       </OnboardingScreen>
     );
   }
@@ -1094,4 +1132,38 @@ function FeedPreviewWorking() {
       ))}
     </div>
   );
+}
+
+/**
+ * Put every planned section onto the schedule for this term.
+ *
+ * The plan store is local-first: this writes to `localStorage`, and
+ * `lib/db/plan-sync.ts` claims an anonymous plan under the real account on
+ * first sign-in. So a guest who finishes onboarding, signs in, and lands on
+ * the feed has their planned sections on the same schedule the feed's clash
+ * check and the chat's schedule tools read.
+ *
+ * One known gap: a signed-in student who already has plans on the server
+ * and redoes onboarding gets the server's plans back on the next reconcile,
+ * because remote wins over local there. Their planned COURSES still land in
+ * `student_courses` through the migration; only the section-level schedule
+ * entry is lost in that case.
+ */
+function putPlannedSectionsOnSchedule(state: GuestOnboardingState): void {
+  const sectionIds = plannedCourses(state)
+    .map((course) => course.sectionId)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+  if (sectionIds.length === 0) return;
+
+  try {
+    const primary =
+      planStore.getPrimaryPlan(CURRENT_TERM) ??
+      planStore.createPlan({ name: "My schedule", termCode: CURRENT_TERM });
+    for (const sectionId of sectionIds) {
+      if (!primary.sectionIds.includes(sectionId)) planStore.addSection(primary.planId, sectionId);
+    }
+  } catch (cause) {
+    // The schedule is the bonus, not the record. Never let it block finishing.
+    console.error("onboarding: could not write planned sections to the schedule", cause);
+  }
 }

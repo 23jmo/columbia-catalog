@@ -37,7 +37,7 @@ import { likelyChoiceFor } from "./likely-choice";
 import { typicalGuesses } from "./typical";
 import { displayCourseTitle } from "./course-title";
 import { hasAnythingToMigrate, toMigrationPayload } from "./migrate";
-import { defaultCandidateSelection, parseTranscript } from "./transcript";
+import { defaultCandidateSelection, parseTranscript, toGuestCourses } from "./transcript";
 import {
   advance,
   canAdvance,
@@ -46,6 +46,9 @@ import {
   emptyGuestState,
   goBack,
   hasTranscriptCourses,
+  plannedCourses,
+  setPlannedSection,
+  takenCourses,
   goToStep,
   ONBOARDING_STEPS,
   NO_MINORS_PROGRAM_ID,
@@ -397,14 +400,14 @@ describe("a transcript on the first screen skips the coursework screens", () => 
       },
     );
 
-  it("advances from the degree questions straight to what you liked", () => {
+  it("advances from the degree questions straight to this term's courses", () => {
     expect(hasTranscriptCourses(withTranscript())).toBe(true);
-    expect(advance(withTranscript()).step).toBe("love");
+    expect(advance(withTranscript()).step).toBe("planned");
   });
 
-  it("goes back from what you liked to the degree questions", () => {
-    const atLove = advance(withTranscript());
-    expect(goBack(atLove).step).toBe("school");
+  it("goes back from this term's courses to the degree questions", () => {
+    const atPlanned = advance(withTranscript());
+    expect(goBack(atPlanned).step).toBe("school");
   });
 
   it("still gates on the school answer", () => {
@@ -428,6 +431,62 @@ describe("a transcript on the first screen skips the coursework screens", () => 
     );
     expect(hasTranscriptCourses(guessed)).toBe(false);
     expect(advance(guessed).step).toBe("choices");
+  });
+});
+
+describe("planned courses", () => {
+  const planned = (): GuestCourse => ({
+    courseId: "COMS4115W",
+    code: "COMS W4115",
+    title: "Programming Languages and Translators",
+    termLabel: "Fall 2026",
+    points: 3,
+    liked: null,
+    source: "plan",
+    inCatalog: true,
+    sectionId: null,
+  });
+
+  it("are split from taken courses", () => {
+    const state = upsertCourse(
+      upsertCourse(emptyGuestState(), planned()),
+      { ...planned(), courseId: "COMS3134W", code: "COMS W3134", source: "picker" },
+    );
+    expect(plannedCourses(state).map((c) => c.courseId)).toEqual(["COMS4115W"]);
+    expect(takenCourses(state).map((c) => c.courseId)).toEqual(["COMS3134W"]);
+  });
+
+  it("remember the section the student picked", () => {
+    const state = setPlannedSection(
+      upsertCourse(emptyGuestState(), planned()),
+      "COMS4115W",
+      "20263COMS4115W001",
+    );
+    expect(plannedCourses(state)[0]?.sectionId).toBe("20263COMS4115W001");
+  });
+
+  it("survive a round trip through storage without a section", () => {
+    const state = upsertCourse(emptyGuestState(), planned());
+    expect(deserialize(serialize(state))?.courses[0]?.source).toBe("plan");
+  });
+
+  it("come off a transcript's in-progress rows as planned, checked by default", () => {
+    const found = parseTranscript(
+      "Fall 2026\nCOMS W4115 PROGRAMMING LANG & TRANSL (001) 3 Planned\nFall 2024\nCOMS W3134 DATA STRUCTURES 3.00 A",
+    );
+    const byId = new Map(found.map((c) => [c.courseId, c]));
+    expect(byId.get("COMS4115W")?.planned).toBe(true);
+    expect(byId.get("COMS3134W")?.planned).toBe(false);
+    expect(defaultCandidateSelection(found).has("COMS4115W")).toBe(true);
+
+    const rows = toGuestCourses(
+      [
+        { courseId: "COMS4115W", code: "COMS W4115", title: null, points: 3, inCatalog: true },
+        { courseId: "COMS3134W", code: "COMS W3134", title: null, points: 3, inCatalog: true },
+      ],
+      found,
+    );
+    expect(rows.map((r) => r.source)).toEqual(["plan", "transcript_pdf"]);
   });
 });
 

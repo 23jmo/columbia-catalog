@@ -13,6 +13,9 @@ import {
   type ResolvedCourse,
 } from "@/lib/onboarding/server";
 import type { FeedCard } from "@/lib/recommend/feed";
+import { getCourse } from "@/lib/data/catalog";
+import { CURRENT_TERM } from "@/lib/constants";
+import { meetingLines } from "@/components/course/format";
 import { hasAnythingToMigrate, toMigrationPayload } from "@/lib/onboarding/migrate";
 import {
   guestOnboardingStateSchema,
@@ -124,6 +127,52 @@ export async function searchCoursesAction(query: string): Promise<SearchResult> 
   } catch (cause) {
     console.error("onboarding: course search failed:", cause);
     return { ok: false, error: "Search is not answering right now." };
+  }
+}
+
+/** One section of a course this term, labelled the way a student picks it. */
+export interface PlannedSection {
+  sectionId: string;
+  /** `Sec 001 · MW 10:10–11:25`, or `Sec 001 · times TBA`. */
+  label: string;
+  instructors: string | null;
+}
+
+export interface PlannedSectionsResult extends ActionResult {
+  sections?: PlannedSection[];
+}
+
+/**
+ * The sections a planned course has THIS term, for the section chooser.
+ *
+ * `CourseHit` deliberately carries no sections (see `searchCourses`), so this
+ * is the one extra round trip a planned course costs, paid only when one is
+ * added. `CURRENT_TERM` and not `ACTIVE_TERMS`: "what are you taking now" is
+ * a question about one term, and a section from next spring would let the
+ * clash checker compare a Tuesday in March with a Tuesday in October.
+ */
+export async function plannedSectionsAction(courseId: unknown): Promise<PlannedSectionsResult> {
+  if (typeof courseId !== "string" || courseId.length === 0) {
+    return { ok: false, error: "Pick a course first." };
+  }
+  try {
+    const course = await getCourse(courseId, CURRENT_TERM);
+    const sections = (course?.sections ?? []).map((section) => {
+      const lines = meetingLines(section.meetings);
+      const when =
+        lines.length > 0
+          ? lines.map((line) => `${line.daysLabel} ${line.timeLabel}`).join(", ")
+          : "times TBA";
+      return {
+        sectionId: section.sectionId,
+        label: `Sec ${section.sectionCode} · ${when}`,
+        instructors: section.instructors.length > 0 ? section.instructors.join(", ") : null,
+      };
+    });
+    return { ok: true, sections };
+  } catch (cause) {
+    console.error("onboarding: section lookup failed:", cause);
+    return { ok: false, error: "We could not look up that course's sections." };
   }
 }
 

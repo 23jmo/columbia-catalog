@@ -195,6 +195,7 @@ export function RemovableChip({
   note,
   onRemove,
   removeLabel,
+  onPress,
 }: {
   children: ReactNode;
   /** Call number under the title, matching `AddChip`. */
@@ -202,7 +203,22 @@ export function RemovableChip({
   note?: string;
   onRemove: () => void;
   removeLabel: string;
+  /**
+   * Makes the body a button. The planned screen uses it to reopen the
+   * section chooser; everywhere else the chip is a fact and a × and stays
+   * inert. Kept as a sibling of the × so no button nests inside another.
+   */
+  onPress?: () => void;
 }) {
+  const body = (
+    <>
+      <span className={COURSE_TITLE}>{children}</span>
+      {sublabel ? (
+        <span className={cx("text-caption-2-regular", "text-accent-500/80")}>{sublabel}</span>
+      ) : null}
+      {note ? <span className="text-caption-2-regular text-text-secondary">{note}</span> : null}
+    </>
+  );
   return (
     <li
       className={cx(
@@ -211,13 +227,17 @@ export function RemovableChip({
         sublabel && "py-1 sm:py-2",
       )}
     >
-      <span className="flex min-w-0 flex-col items-start text-left">
-        <span className={COURSE_TITLE}>{children}</span>
-        {sublabel ? (
-          <span className={cx("text-caption-2-regular", "text-accent-500/80")}>{sublabel}</span>
-        ) : null}
-        {note ? <span className="text-caption-2-regular text-text-secondary">{note}</span> : null}
-      </span>
+      {onPress ? (
+        <button
+          type="button"
+          onClick={onPress}
+          className="flex min-w-0 cursor-pointer flex-col items-start text-left outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring rounded-md"
+        >
+          {body}
+        </button>
+      ) : (
+        <span className="flex min-w-0 flex-col items-start text-left">{body}</span>
+      )}
       <button
         type="button"
         onClick={() => {

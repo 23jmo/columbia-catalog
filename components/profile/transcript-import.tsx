@@ -220,7 +220,9 @@ export function TranscriptImport({ signedIn = true, className }: TranscriptImpor
           code: candidate.courseId,
           termLabel: candidate.term,
           points: candidate.points,
-          source,
+          // A row with no grade yet is on the schedule, not the record. Same
+          // rule as onboarding's `toGuestCourses`.
+          source: candidate.warnings.includes("in_progress") ? "plan" : source,
         })),
       );
       if (!result.ok) {

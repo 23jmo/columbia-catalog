@@ -121,6 +121,12 @@ function classify(grade: string | null, line: string): TranscriptWarning[] {
   if (g === "W" || g === "WD" || g === "WF") warnings.push("withdrawn");
   if (g === "F" || g === "NC") warnings.push("failed");
   if (g === "IP" || g === "I" || g === "Y" || g === "") warnings.push("in_progress");
+  // Student Planning prints a status column. "Planned" is the one word on a
+  // transcript that says a course has NOT been taken, whatever sits in the
+  // grade slot beside it.
+  if (/\sPlanned\s*$/i.test(line) && !warnings.includes("in_progress")) {
+    warnings.push("in_progress");
+  }
   if (g === "P" || g === "CR") warnings.push("pass_fail");
   if (g === "AP" || g === "TR") warnings.push("transfer_or_ap");
 
@@ -134,7 +140,7 @@ function classify(grade: string | null, line: string): TranscriptWarning[] {
 export const WARNING_LABEL: Record<TranscriptWarning, string> = {
   withdrawn: "Withdrawn",
   failed: "Did not pass",
-  in_progress: "No grade shown",
+  in_progress: "In progress",
   transfer_or_ap: "Transfer or AP credit",
   pass_fail: "Pass/fail",
 };

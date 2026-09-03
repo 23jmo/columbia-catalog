@@ -129,6 +129,7 @@ export const ONBOARDING_STEPS = [
   "school",
   "choices",
   "coursework",
+  "planned",
   "love",
   "interests",
   "feed",
@@ -140,6 +141,7 @@ export const STEP_TITLE: Record<OnboardingStepId, string> = {
   school: "Your degree",
   choices: "Which ones you took",
   coursework: "What you've taken",
+  planned: "What you're taking now",
   love: "What you liked",
   interests: "What you're into",
   feed: "Your first feed",
@@ -198,6 +200,13 @@ export function nextStep(step: OnboardingStepId): OnboardingStepId | null {
 export const ONBOARDING_COURSE_SOURCES = [
   "onboarding_guess",
   "onboarding_confirm",
+  /**
+   * Registered for, or planning to take, and not yet taken. The same value
+   * `student_courses.source` already accepts and the audit, the recommender
+   * and the chat already read as "in progress" — nothing wrote it until the
+   * planned screen did.
+   */
+  "plan",
   "picker",
   "transcript_paste",
   "transcript_pdf",
@@ -242,6 +251,13 @@ export interface GuestCourse {
    * marked, never dropped.
    */
   inCatalog: boolean;
+  /**
+   * For a `plan` row: the section they are in this term, when they told us.
+   * This is what goes onto the schedule, so the chat and the feed can check
+   * clashes against it. `null` when the course has several sections and none
+   * was picked, or when the row came off a transcript.
+   */
+  sectionId?: string | null;
 }
 
 /* ==========================================================================
@@ -318,6 +334,8 @@ const guestCourseSchema = z.object({
   liked: z.boolean().nullable(),
   source: z.enum(ONBOARDING_COURSE_SOURCES),
   inCatalog: z.boolean(),
+  // Optional so state persisted before the planned screen existed still parses.
+  sectionId: z.string().nullable().optional(),
 });
 
 /**
@@ -403,7 +421,7 @@ export function canAdvance(state: GuestOnboardingState): boolean {
  */
 export function advance(state: GuestOnboardingState): GuestOnboardingState {
   const target =
-    state.step === "school" && hasTranscriptCourses(state) ? "love" : nextStep(state.step);
+    state.step === "school" && hasTranscriptCourses(state) ? "planned" : nextStep(state.step);
   if (!target || !canAdvance(state)) return state;
   return goToStep(state, target);
 }
@@ -423,9 +441,9 @@ export function advance(state: GuestOnboardingState): GuestOnboardingState {
  * schema field, no migration, and cannot drift: the day the last transcript
  * row is removed, the two screens come back on their own.
  *
- * `love` and `interests` are NOT skipped. A transcript says what was taken,
- * not what was enjoyed, and those two screens are the only place the ranking
- * learns that.
+ * `planned`, `love` and `interests` are NOT skipped. A transcript's
+ * in-progress rows land on the planned screen for the student to confirm and
+ * to pick sections for, and a transcript says nothing about what was enjoyed.
  */
 export function hasTranscriptCourses(state: GuestOnboardingState): boolean {
   return state.courses.some((course) => course.source === "transcript_pdf");
@@ -437,7 +455,7 @@ export function goBack(state: GuestOnboardingState): GuestOnboardingState {
   // coursework screens lands back on the degree questions, not on a guess
   // deck they never saw.
   const target =
-    state.step === "love" && hasTranscriptCourses(state) ? "school" : previousStep(state.step);
+    state.step === "planned" && hasTranscriptCourses(state) ? "school" : previousStep(state.step);
   if (!target) return state;
   // Note this does NOT lower `furthestStep`, and does not clear any answer.
   // "Everything is reversible" means a student can go back and look; it does
@@ -699,4 +717,29 @@ export function clearGuestState(): void {
   } catch {
     /* Nothing we can do, and nothing depends on it. */
   }
+}
+
+/** The courses on the record for this term that have not been taken yet. */
+export function plannedCourses(state: GuestOnboardingState): GuestCourse[] {
+  return state.courses.filter((course) => course.source === "plan");
+}
+
+/** Everything the student has actually finished — the love screen's input. */
+export function takenCourses(state: GuestOnboardingState): GuestCourse[] {
+  return state.courses.filter((course) => course.source !== "plan");
+}
+
+/** Record which section of a planned course the student is in. */
+export function setPlannedSection(
+  state: GuestOnboardingState,
+  courseId: string,
+  sectionId: string | null,
+): GuestOnboardingState {
+  return {
+    ...state,
+    courses: state.courses.map((course) =>
+      course.courseId === courseId && course.source === "plan" ? { ...course, sectionId } : course,
+    ),
+    updatedAt: new Date().toISOString(),
+  };
 }

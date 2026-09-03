@@ -177,7 +177,10 @@ function toAuditProfile(state: GuestOnboardingState): AppStudentProfile {
       termLabel: course.termLabel,
       points: course.points,
       liked: course.liked,
-      source: "picker" as const,
+      // Every guest source is "the student told us" for the audit's purposes,
+      // except the one that changes the answer: a planned course is in
+      // progress, and the requirements engine marks it rather than counts it.
+      source: course.source === "plan" ? ("plan" as const) : ("picker" as const),
       addedAt: state.updatedAt,
     })),
   };

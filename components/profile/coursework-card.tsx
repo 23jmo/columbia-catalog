@@ -111,7 +111,7 @@ export function CourseworkCard({
       <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2 px-1.5 pt-1">
         <div className="flex flex-col gap-0.5">
           <p id="coursework-heading" className="text-body-medium text-text-secondary">
-            Courses you have taken
+            Your coursework
           </p>
           <p className="text-title-2-medium tabular-nums text-text-primary">
             {courses.length} {courses.length === 1 ? "course" : "courses"}

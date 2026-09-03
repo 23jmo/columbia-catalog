@@ -69,6 +69,12 @@ export interface CourseCandidate {
    * A candidate with warnings starts unchecked; one without starts checked.
    */
   warnings: string[];
+  /**
+   * No grade yet: an in-progress row, or one Student Planning marks
+   * "Planned". Imported as `source: "plan"` — on the schedule, not the
+   * record of what was taken.
+   */
+  planned: boolean;
   /** The source line, so the student reviews our reading next to their own. */
   raw: string;
 }
@@ -91,7 +97,10 @@ export const parseTranscript: TranscriptParser = (text) => {
     title: candidate.title,
     points: candidate.points,
     termLabel: candidate.term,
-    warnings: candidate.warnings.map(labelFor),
+    // In progress is not a reason to look twice any more — it is a fact with
+    // a home. It leaves the warnings so the row starts checked.
+    warnings: candidate.warnings.filter((w) => w !== "in_progress").map(labelFor),
+    planned: candidate.warnings.includes("in_progress"),
     raw: candidate.raw,
   }));
 };
@@ -262,17 +271,19 @@ export function toGuestCourses(
   courses: readonly ResolvedTranscriptCourse[],
   candidates: readonly CourseCandidate[],
 ): GuestCourse[] {
-  const termByCourse = new Map(
-    candidates.map((candidate) => [candidate.courseId, candidate.termLabel]),
-  );
-  return courses.map((course) => ({
-    courseId: course.courseId,
-    code: course.code,
-    title: course.title,
-    termLabel: termByCourse.get(course.courseId) ?? null,
-    points: course.points,
-    liked: null,
-    source: "transcript_pdf" as const,
-    inCatalog: course.inCatalog,
-  }));
+  const byCourse = new Map(candidates.map((candidate) => [candidate.courseId, candidate]));
+  return courses.map((course) => {
+    const candidate = byCourse.get(course.courseId);
+    return {
+      courseId: course.courseId,
+      code: course.code,
+      title: course.title,
+      termLabel: candidate?.termLabel ?? null,
+      points: course.points,
+      liked: null,
+      source: candidate?.planned ? ("plan" as const) : ("transcript_pdf" as const),
+      inCatalog: course.inCatalog,
+      sectionId: null,
+    };
+  });
 }
