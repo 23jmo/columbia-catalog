@@ -55,6 +55,7 @@ import {
   loadStudent,
   loadVectorSource,
 } from "./pipeline";
+import { gateCatalogForSchool } from "./school-gate";
 import { loadSavedCourseIds } from "./saved";
 import {
   chooseSection,
@@ -265,13 +266,16 @@ export async function buildFeed(options: BuildFeedOptions = {}): Promise<FeedRes
    * Rank from a skinny listing (id, code, title, points, number). Sections
    * are loaded after `recommend()` for the shortlist only — see hydrate below.
    */
-  const [student, catalog, prereqs, vectors, savedCourseIds] = await Promise.all([
+  const [student, ungated, prereqs, vectors, savedCourseIds] = await Promise.all([
     loadStudent(),
     loadCatalog(terms),
     loadPrereqSource(),
     loadVectorSource(),
     loadSavedCourseIds(),
   ]);
+  // Another school's courses come out before anything is ranked. See the
+  // gate for why the designator is the only signal we have.
+  const catalog = gateCatalogForSchool(ungated, student.app?.school ?? null);
 
   const personalized = student.engine.taken.length > 0 || student.outstanding.length > 0;
 

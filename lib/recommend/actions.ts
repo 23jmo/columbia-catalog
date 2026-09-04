@@ -41,6 +41,7 @@ import {
   loadStudent,
   loadVectorSource,
 } from "./pipeline";
+import { gateCatalogForSchool } from "./school-gate";
 import type { ScoredRecommendation, WithheldCourse } from "./types";
 
 /* ==========================================================================
@@ -136,12 +137,13 @@ export async function recommendCoursesAction(
 ): Promise<RecommendActionResult> {
   const parsed = recommendInputSchema.parse(input);
 
-  const [student, catalog, prereqs, vectors] = await Promise.all([
+  const [student, ungated, prereqs, vectors] = await Promise.all([
     loadStudent(),
     loadCatalog(ACTIVE_TERMS),
     loadPrereqSource(),
     loadVectorSource(),
   ]);
+  const catalog = gateCatalogForSchool(ungated, student.app?.school ?? null);
 
   const wanted = parsed.subjects?.map((subject) => subject.toUpperCase());
   const candidates = wanted?.length
@@ -208,12 +210,13 @@ export async function explainCourseAction(
   const { toCourseId } = await import("@/lib/requirements/code");
   const courseId = toCourseId(parsed.courseId) ?? parsed.courseId.toUpperCase();
 
-  const [student, catalog, prereqs, vectors] = await Promise.all([
+  const [student, ungated, prereqs, vectors] = await Promise.all([
     loadStudent(),
     loadCatalog(ACTIVE_TERMS),
     loadPrereqSource(),
     loadVectorSource(),
   ]);
+  const catalog = gateCatalogForSchool(ungated, student.app?.school ?? null);
 
   const candidate = catalog.candidates.find((course) => course.courseId === courseId);
   if (!candidate) {
@@ -330,11 +333,12 @@ export async function catalogRelevanceAction(): Promise<CatalogRelevanceResult> 
   const personalized = student.engine.taken.length > 0 || student.outstanding.length > 0;
   if (!personalized) return { personalized: false, entries: [] };
 
-  const [catalog, prereqs, vectors] = await Promise.all([
+  const [ungated, prereqs, vectors] = await Promise.all([
     loadCatalog(ACTIVE_TERMS),
     loadPrereqSource(),
     loadVectorSource(),
   ]);
+  const catalog = gateCatalogForSchool(ungated, student.app?.school ?? null);
 
   const result = recommend({
     profile: student.engine,

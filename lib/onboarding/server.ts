@@ -63,6 +63,7 @@ import {
   loadVectorSource,
   toEngineProfile,
 } from "@/lib/recommend/pipeline";
+import { gateCatalogForSchool } from "@/lib/recommend/school-gate";
 import { expandCandidatesForPrograms } from "@/lib/requirements/candidates";
 import { formatCourseId, toCourseId, type CourseId } from "@/lib/requirements/code";
 import type { CourseFacts } from "@/lib/requirements/evaluate";
@@ -80,6 +81,7 @@ import {
 } from "./guess";
 import { declaredProgramIds } from "./program-ids";
 import type { GuestOnboardingState } from "./state";
+import { matchCourseHits, searchKeys, type SearchListing } from "./course-search-match";
 import { typicalGuesses } from "./typical";
 import { knownCatalogFact } from "./known-titles";
 
@@ -416,7 +418,7 @@ export async function loadGuessDeck(state: GuestOnboardingState): Promise<GuessD
 export async function loadOnboardingFeedPreview(
   state: GuestOnboardingState,
 ): Promise<FeedCard[]> {
-  const [audit, catalog, prereqs, vectors] = await Promise.all([
+  const [audit, ungated, prereqs, vectors] = await Promise.all([
     auditGuestOrFallback(state),
     loadCatalog(ACTIVE_TERMS),
     loadPrereqSource(),
@@ -426,6 +428,7 @@ export async function loadOnboardingFeedPreview(
     }),
   ]);
 
+  const catalog = gateCatalogForSchool(ungated, state.school);
   const profile = toAuditProfile(state);
   const engine = toEngineProfile(profile);
   const personalized = engine.taken.length > 0 || audit.outstanding.length > 0;
@@ -475,19 +478,8 @@ export interface CourseHit {
   points: number | null;
 }
 
-const SEARCH_LIMIT = 20;
-
 /** Same window as `getCourseListings`. One merged scan, not two term dumps. */
 const SEARCH_LISTING_TTL_MS = 5 * 60 * 1000;
-
-interface SearchListing {
-  courseId: string;
-  title: string;
-  points: number | null;
-  /** Lowercased id, spaces already gone — course codes are typed with spaces. */
-  idNorm: string;
-  titleLower: string;
-}
 
 let searchListingsCache: { expiresAt: number; listings: Promise<SearchListing[]> } | null = null;
 
@@ -542,44 +534,11 @@ async function buildSearchListings(): Promise<SearchListing[]> {
         courseId: listing.courseId,
         title: listing.title,
         points: listing.pointsMin ?? listing.pointsMax,
-        idNorm: listing.courseId.toLowerCase(),
-        titleLower: listing.title.toLowerCase(),
+        ...searchKeys(listing.courseId, listing.title),
       });
     }
   }
   return [...byId.values()];
-}
-
-function matchCourseHits(trimmed: string, listings: readonly SearchListing[]): CourseHit[] {
-  const normalized = trimmed.toLowerCase().replace(/\s+/g, "");
-  const words = trimmed.toLowerCase().split(/\s+/).filter(Boolean);
-  const hits: CourseHit[] = [];
-
-  for (const listing of listings) {
-    const idMatch = listing.idNorm.includes(normalized);
-    const titleMatch = words.every((word) => listing.titleLower.includes(word));
-    if (!idMatch && !titleMatch) continue;
-    hits.push({
-      courseId: listing.courseId,
-      code: formatCourseId(listing.courseId),
-      title: listing.title,
-      points: listing.points,
-    });
-  }
-
-  /*
-   * Code matches first, then shorter titles. Someone who typed "COMS 3134"
-   * wants that course and nothing else; someone who typed "algorithms" is
-   * browsing, and the shortest title is the least specialised course, which is
-   * the better first guess.
-   */
-  return hits
-    .sort((a, b) => {
-      const aCode = a.courseId.toLowerCase().includes(normalized) ? 0 : 1;
-      const bCode = b.courseId.toLowerCase().includes(normalized) ? 0 : 1;
-      return aCode - bCode || a.title.length - b.title.length || a.code.localeCompare(b.code);
-    })
-    .slice(0, SEARCH_LIMIT);
 }
 
 /* ==========================================================================
