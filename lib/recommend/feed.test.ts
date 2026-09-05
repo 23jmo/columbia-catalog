@@ -18,13 +18,15 @@
  *      Every one of those has to degrade rather than propagate.
  */
 
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 
 import { toCourseId, type CourseId } from "@/lib/requirements/code";
-import type { Meeting, Section, TermCode } from "@/lib/types";
+import type { CourseWithSections, Meeting, Section, TermCode } from "@/lib/types";
 
 import { loadCourseVectorSource, VECTOR_SOURCE_UNAVAILABLE } from "./course-vectors";
-import { buildFeed, GRADUATE_LEVEL_FLOOR } from "./feed";
+import { assembleFeedCards, buildFeed, GRADUATE_LEVEL_FLOOR, type FeedCard } from "./feed";
 import { recommend } from "./index";
 import {
   chooseSection,
@@ -400,5 +402,94 @@ describe("buildFeed for a signed-out visitor", () => {
       const number = Number(card.code.split(" ")[1]?.replace(/\D/g, ""));
       expect(number).toBeLessThan(GRADUATE_LEVEL_FLOOR);
     }
+  }, 30_000);
+});
+
+/* ==========================================================================
+ * Which class the card is offering
+ * ========================================================================== */
+
+/**
+ * A card names ONE section, and on a container course the section is the class.
+ *
+ * COMS 6998 is one course titled "TOPICS IN COMPUTER SCIENCE" carrying 20
+ * unrelated Fall 2026 seminars; COMS 4995 is another, and COMS 1002 splits
+ * "COMPUTING IN CONTEXT" into Economics, Art and Biology. A card for one of
+ * their sections that prints only the course title is indistinguishable from
+ * every sibling card, and the one string that would tell them apart lives on
+ * the section and nowhere else.
+ *
+ * Asserted against the real seed rather than a fixture, because the failure
+ * this guards against is the title never leaving the data layer -- which a
+ * hand-built section would hide by construction.
+ */
+describe("the class a card is actually offering", () => {
+  const seed = JSON.parse(
+    readFileSync("lib/seed/coms-fall2026.json", "utf8"),
+  ) as CourseWithSections[];
+
+  const courseFor = (courseId: string): CourseWithSections => {
+    const course = seed.find((candidate) => candidate.courseId === courseId);
+    if (!course) throw new Error(`seed has no ${courseId}`);
+    return course;
+  };
+
+  async function cardFor(courseId: string): Promise<FeedCard> {
+    const course = courseFor(courseId);
+    const cards = await assembleFeedCards({
+      recommendations: [
+        {
+          course: {
+            courseId: course.courseId,
+            code: `${course.subjectCode} ${course.number}`,
+            title: course.title,
+            points: course.pointsMin,
+          },
+          score: 1,
+          components: { requirementFit: 0, taste: 0, unlock: 0, offering: 0 },
+          reasons: [],
+          caveats: [],
+        },
+      ],
+      coursesById: new Map([[course.courseId, course]]),
+      limit: 1,
+      terms: ["20263"],
+    });
+    if (cards.length !== 1) throw new Error(`expected one card for ${courseId}`);
+    return cards[0];
+  }
+
+  it("carries the section's own topic title, not just the container's name", async () => {
+    const card = await cardFor("COMS6998E");
+
+    expect(card.title).toBe("TOPICS IN COMPUTER SCIENCE");
+    // The whole point: something other than the course title reached the card.
+    expect(card.best.title).toBeTruthy();
+    expect(card.best.title).not.toBe(card.title);
+    expect(courseFor("COMS6998E").sections.map((section) => section.title)).toContain(
+      card.best.title,
+    );
+  }, 30_000);
+
+  it("does it for 4995 too, and for every other container course", async () => {
+    for (const courseId of ["COMS4995W", "COMS1002W"]) {
+      const card = await cardFor(courseId);
+      expect(card.best.title, courseId).toBeTruthy();
+      expect(card.best.title, courseId).not.toBe(card.title);
+      // The siblings a card lists are named for the same reason it is.
+      for (const other of card.others) expect(other.title, courseId).toBeTruthy();
+    }
+  }, 30_000);
+
+  it("says null on an ordinary course rather than restating its title", async () => {
+    // Both COMS 4111 rows carry "INTRODUCTION TO DATABASES" in the directory's
+    // section field -- the header the card already prints. Repeating it beside
+    // the section code would read as though it meant something.
+    const course = courseFor("COMS4111W");
+    expect(course.sections.every((section) => Boolean(section.title))).toBe(true);
+
+    const card = await cardFor("COMS4111W");
+    expect(card.best.title).toBeNull();
+    for (const other of card.others) expect(other.title).toBeNull();
   }, 30_000);
 });

@@ -37,6 +37,7 @@
 
 import { z } from "zod";
 
+import { isDistinctSectionTitle } from "../catalog-list-types";
 import { WEEKDAYS } from "../constants";
 import type { CourseWithSections, SearchFilters, Section, TermCode, Weekday } from "../types";
 
@@ -78,14 +79,31 @@ function fail(error: string, extra: Record<string, unknown> = {}): ToolResult {
  * `meetingsKnown: false` flag rather than omitted, so an agent can tell "meets
  * at no time" apart from "we do not know when this meets" — a distinction it
  * would otherwise have to guess, and would guess wrong.
+ *
+ * ── `title` is not decoration ──────────────────────────────────────────────
+ *
+ * On a container course the section IS the class. COMS 6998 is one course
+ * called "Topics in Computer Science" whose 20 Fall 2026 sections are 20
+ * unrelated seminars — "LLM Based Generative AI", "Computation and the Brain" —
+ * and COMS 4995 is another. Without this field `get_sections` answers "what
+ * topics is 6998 running" with twenty call numbers and one repeated course
+ * title, which is not an answer, and no amount of prompting recovers a string
+ * that never left the server.
+ *
+ * `courseTitle` is required rather than optional so the decision is never
+ * skipped by omission: the section's title reaches the payload only when
+ * `isDistinctSectionTitle` says it names something the course title does not.
+ * Emitted as `null` otherwise — an explicit "this section has no name of its
+ * own", rather than an absent key an agent would have to interpret.
  */
-function serializeSection(section: Section) {
+function serializeSection(section: Section, courseTitle: string | undefined) {
   return {
     sectionId: section.sectionId,
     courseId: section.courseId,
     sectionCode: section.sectionCode,
     callNumber: section.callNumber,
     termCode: section.termCode,
+    title: isDistinctSectionTitle(section.title, courseTitle) ? section.title! : null,
     instructors: section.instructors,
     component: section.component,
     methodOfInstruction: section.methodOfInstruction,
@@ -111,6 +129,42 @@ function serializeSection(section: Section) {
   };
 }
 
+/**
+ * Course titles for a loose set of sections, keyed by course id.
+ *
+ * `list_watches`, `list_bookmarks` and the saved-class listing hold sections
+ * that arrived without their courses, and `serializeSection` cannot tell a
+ * section that names its own class from one restating the course's name without
+ * the course title to compare against. Resolving it here keeps those payloads
+ * saying the same thing as `get_course` — a student who saved COMS 6998 section
+ * 012 gets "Computation and the Brain" back, not twenty rows of "Topics in
+ * Computer Science".
+ *
+ * Grouped by term because `getCoursesByIds` is term-scoped: a watch on a Spring
+ * section would miss a Fall-only read and silently lose its title. One read per
+ * distinct term, which in practice is one or two.
+ */
+async function courseTitlesFor(
+  deps: McpDeps,
+  sections: readonly Section[],
+): Promise<Map<string, string>> {
+  const byTerm = new Map<TermCode, Set<string>>();
+  for (const section of sections) {
+    const ids = byTerm.get(section.termCode) ?? new Set<string>();
+    ids.add(section.courseId);
+    byTerm.set(section.termCode, ids);
+  }
+
+  const titles = new Map<string, string>();
+  const reads = await Promise.all(
+    [...byTerm].map(([termCode, ids]) => deps.catalog.getCoursesByIds([...ids], termCode)),
+  );
+  for (const courses of reads) {
+    for (const course of courses) titles.set(course.courseId, course.title);
+  }
+  return titles;
+}
+
 function serializeCourse(course: CourseWithSections, includeSections = true) {
   return {
     courseId: course.courseId,
@@ -126,7 +180,9 @@ function serializeCourse(course: CourseWithSections, includeSections = true) {
       .filter(([, value]) => value === true)
       .map(([key]) => key),
     sectionCount: course.sections.length,
-    ...(includeSections ? { sections: course.sections.map(serializeSection) } : {}),
+    ...(includeSections
+      ? { sections: course.sections.map((section) => serializeSection(section, course.title)) }
+      : {}),
   };
 }
 
@@ -247,9 +303,12 @@ export const TOOLS: ToolDefinition[] = [
     name: "get_sections",
     title: "Get sections of a course",
     description:
-      "Every section of one course in a term. meetingsKnown is false when Columbia does not " +
-      "publish the meeting pattern for that term — that is missing data, not a section with " +
-      "no meetings.",
+      "Every section of one course in a term. `title` is the class that section actually is " +
+      "when the course is a container — COMS 6998 and COMS 4995 are each one 'Topics in " +
+      "Computer Science' over ~20 unrelated seminars, and the section title is the only place " +
+      "those are named; it is null when the section has no name of its own, which is the usual " +
+      "case. meetingsKnown is false when Columbia does not publish the meeting pattern for that " +
+      "term — that is missing data, not a section with no meetings.",
     scopes: [],
     inputSchema: {
       courseId: z.string(),
@@ -264,7 +323,7 @@ export const TOOLS: ToolDefinition[] = [
       return ok({
         courseId: course.courseId,
         termCode: args.termCode ?? null,
-        sections: course.sections.map(serializeSection),
+        sections: course.sections.map((section) => serializeSection(section, course.title)),
       });
     },
   },
@@ -482,6 +541,7 @@ export const TOOLS: ToolDefinition[] = [
        */
       const placeable = sections.filter((section) => (section.meetings?.length ?? 0) > 0);
       const conflicts = deps.schedule.checkConflicts(placeable, []);
+      const courseTitles = await courseTitlesFor(deps, sections);
 
       return ok({
         count: entries.length,
@@ -490,7 +550,13 @@ export const TOOLS: ToolDefinition[] = [
           // A saved row we cannot resolve is surfaced below, not returned
           // hollow — it usually means the section was withdrawn.
           if (!section) return [];
-          return [{ savedAt: entry.savedAt, folderIds: entry.folderIds, ...serializeSection(section) }];
+          return [
+            {
+              savedAt: entry.savedAt,
+              folderIds: entry.folderIds,
+              ...serializeSection(section, courseTitles.get(section.courseId)),
+            },
+          ];
         }),
         conflicts,
         hardConflictCount: conflicts.filter((conflict) => conflict.severity === "hard").length,
@@ -582,6 +648,7 @@ export const TOOLS: ToolDefinition[] = [
     inputSchema: {},
     async handler(_args, { deps, auth }) {
       const watches = await deps.plans.listWatches(auth!.extra.userId);
+      const courseTitles = await courseTitlesFor(deps, watches.map((watch) => watch.section));
       return ok({
         count: watches.length,
         watches: watches.map((watch) => ({
@@ -589,7 +656,7 @@ export const TOOLS: ToolDefinition[] = [
           createdAt: watch.createdAt,
           watcherCount: watch.watcherCount,
           deltaSinceWatched: watch.deltaSinceWatched,
-          section: serializeSection(watch.section),
+          section: serializeSection(watch.section, courseTitles.get(watch.section.courseId)),
         })),
       });
     },
@@ -640,6 +707,7 @@ export const TOOLS: ToolDefinition[] = [
 
       const sections = await deps.catalog.getSections(entries.map((entry) => entry.sectionId));
       const sectionById = new Map(sections.map((section) => [section.sectionId, section]));
+      const courseTitles = await courseTitlesFor(deps, sections);
 
       return ok({
         count: entries.length,
@@ -654,7 +722,7 @@ export const TOOLS: ToolDefinition[] = [
               savedAt: entry.savedAt,
               folderIds: entry.folderIds,
               uncategorized: entry.folderIds.length === 0,
-              section: serializeSection(section),
+              section: serializeSection(section, courseTitles.get(section.courseId)),
             },
           ];
         }),

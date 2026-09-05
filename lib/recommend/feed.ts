@@ -34,6 +34,7 @@
  * for you", which is the difference between a cold start and a lie.
  */
 
+import { isDistinctSectionTitle } from "@/lib/catalog-list-types";
 import { ACTIVE_TERMS, termLabel } from "@/lib/constants";
 import { getInstructorReputations } from "@/lib/db/reputation";
 import { getTypicalMeetings } from "@/lib/db/typical-meetings";
@@ -88,7 +89,17 @@ export interface FeedSectionView {
   callNumber: string;
   termCode: TermCode;
   termLabel: string;
-  /** Distinct topic for this section, when it has one. */
+  /**
+   * The class this section actually is, when that is not the course.
+   *
+   * Null on an ordinary course, which is the common case: the directory prints
+   * a title on every section row and it is usually the course's own name in a
+   * shorter field. Set only when `isDistinctSectionTitle` says the section
+   * names something the course title does not -- COMS 6998 is one course called
+   * "Topics in Computer Science" whose sections are 20 unrelated seminars, and
+   * a card for section 012 that says only "Topics in Computer Science" has not
+   * told the reader which class it is offering them.
+   */
   title: string | null;
   instructors: string[];
   /** Times to render. Empty only when `timeKind` is `"tba"`. */
@@ -554,8 +565,10 @@ export async function assembleFeedCards(input: {
       reasons: entry.reasons,
       caveats: entry.caveats,
       instructorReputation: (primary ? reputations.get(primary) : null) ?? null,
-      best: toSectionView(choice.best),
-      others: choice.others.slice(0, OTHER_SECTIONS_SHOWN).map(toSectionView),
+      best: toSectionView(choice.best, entry.course.title),
+      others: choice.others
+        .slice(0, OTHER_SECTIONS_SHOWN)
+        .map((fit) => toSectionView(fit, entry.course.title)),
     };
   });
 }
@@ -576,7 +589,14 @@ function primaryInstructor(fit: SectionFit): string | null {
  * Helpers
  * ========================================================================== */
 
-function toSectionView(fit: SectionFit): FeedSectionView {
+/**
+ * @param courseTitle the owning course's title, so a section title that merely
+ * restates it is dropped here rather than reaching a card. See
+ * `isDistinctSectionTitle` -- the same predicate the search rows, the drawer
+ * and the sections panel ask, so a section that is a named class on one surface
+ * is a named class on all of them.
+ */
+function toSectionView(fit: SectionFit, courseTitle: string): FeedSectionView {
   const { section } = fit;
   return {
     sectionId: section.sectionId,
@@ -584,7 +604,7 @@ function toSectionView(fit: SectionFit): FeedSectionView {
     callNumber: section.callNumber,
     termCode: section.termCode,
     termLabel: termLabel(section.termCode),
-    title: section.title ?? null,
+    title: isDistinctSectionTitle(section.title, courseTitle) ? section.title! : null,
     instructors: section.instructors,
     meetings: fit.meetings,
     timeKind: fit.provenance.kind,

@@ -2,17 +2,20 @@
  * Searching for a class that only exists as a SECTION.
  *
  * Columbia publishes container courses: COMS6998 is one course titled "TOPICS
- * IN COMPUTER SCIENCE" whose 24 sections are 24 unrelated classes -- "LLM Based
- * Generative AI", "Computation and the Brain", "Adv Tpcs Competitive Prog".
- * Those names live on the section (the `<h3>` in `#section-header`), so a
- * catalog that indexes only the course has no searchable text for 24 different
- * classes beyond the same seven generic words.
+ * IN COMPUTER SCIENCE" whose 20 Fall 2026 sections are 20 unrelated classes --
+ * "LLM BASED GENERATIVE AI", "COMPUTATION AND THE BRAIN", "ADV TPCS COMPETITIVE
+ * PROG". Those names live on the section (the `<h1>` in each row's
+ * `div.course-details`), so a catalog that indexes only the course has no
+ * searchable text for 20 different classes beyond the same four generic words.
  *
  * These cases pin the read side end to end: the token reaches BOTH indexes, and
- * the hit carries the section it was about so the row can open on it. They use
- * a synthetic container course because ingest is not writing `Section.title`
- * yet -- which is the point. The moment it does, this is already correct, and
- * if it regresses these fail rather than the gap re-opening silently.
+ * the hit carries the section it was about so the row can open on it.
+ *
+ * They run against the real seed rather than a synthetic stand-in. The seed is
+ * 43 real COMS courses captured from the directory, and it now carries the
+ * section titles that page prints (`scripts/enrich-seed-section-titles.ts`), so
+ * the fixture and production data are the same thing -- which is the only way
+ * these assertions can catch the titles going missing again.
  */
 
 import { readFileSync } from "node:fs";
@@ -28,39 +31,18 @@ import type { CourseWithSections } from "@/lib/types";
 
 const seed = JSON.parse(readFileSync("lib/seed/coms-fall2026.json", "utf8")) as CourseWithSections[];
 
-/** A COMS6998-shaped course: one generic title over several distinct classes. */
-const TOPICS: CourseWithSections = (() => {
-  const donor = seed.find((course) => course.sections.length > 0)!;
-  const template = donor.sections[0];
-  const titles = [
-    "LLM BASED GENERATIVE AI",
-    "COMPUTATION AND THE BRAIN",
-    "ADV TPCS COMPETITIVE PROG",
-    null, // an untitled sibling: the common shape, and it must stay unmatched
-  ];
-  return {
-    ...donor,
-    courseId: "COMS6998E",
-    subjectCode: "COMS",
-    number: 6998,
-    qualifier: "E",
-    title: "TOPICS IN COMPUTER SCIENCE",
-    description: null,
-    sections: titles.map((title, index) => ({
-      ...template,
-      sectionId: `20263COMS6998E00${index + 1}`,
-      courseId: "COMS6998E",
-      sectionCode: `00${index + 1}`,
-      callNumber: `9000${index + 1}`,
-      title,
-    })),
-  };
-})();
+/** The container course: one generic title over 20 unrelated classes. */
+const TOPICS = seed.find((course) => course.courseId === "COMS6998E")!;
+/** An ordinary course: every section row restates the course's own name. */
+const ORDINARY = seed.find((course) => course.courseId === "COMS4111W")!;
+
+/** "COMPUTATION AND THE BRAIN" -- the section the `brain` queries are about. */
+const BRAIN = TOPICS.sections.find((section) => /BRAIN/i.test(section.title ?? ""))!;
 
 // Course ordinal is courseId order, and the DISP block is indexed by ordinal --
 // so the display array has to be sorted the same way scripts/build-index.ts
 // sorts it, or `getCourse` returns a different course's sections.
-const catalog = [...seed, TOPICS].sort((a, b) => a.courseId.localeCompare(b.courseId));
+const catalog = [...seed].sort((a, b) => a.courseId.localeCompare(b.courseId));
 const local = createLocalSearchSource(catalog.map(projectCourse));
 const built = buildIndex(catalog, {
   indexVersion: "section-title",
@@ -97,7 +79,7 @@ describe("section titles are searchable", () => {
 
   it("names the section the query was about, so the row opens on it", () => {
     const hit = local.search({ q: "brain" }).hits.find((h) => h.courseId === "COMS6998E")!;
-    expect(hit.matchedSectionIds).toEqual(["20263COMS6998E002"]);
+    expect(hit.matchedSectionIds).toEqual([BRAIN.sectionId]);
   });
 
   it("names the same section on the engine path, which is what renders", () => {
@@ -105,7 +87,7 @@ describe("section titles are searchable", () => {
     // a user actually hits. If only the local source singled out the section,
     // the row would open correctly for one frame and then collapse.
     const hit = engine.search({ q: "brain" }).hits.find((h) => h.courseId === "COMS6998E")!;
-    expect(hit.matchedSectionIds).toEqual(["20263COMS6998E002"]);
+    expect(hit.matchedSectionIds).toEqual([BRAIN.sectionId]);
   });
 
   it("carries the section title into the index display record", () => {
@@ -113,20 +95,29 @@ describe("section titles are searchable", () => {
     // that reached the postings but not the DISP block would be findable and
     // invisible.
     const course = engine.getCourse("COMS6998E")!;
-    expect(course.sections.map((section) => section.title)).toEqual([
-      "LLM BASED GENERATIVE AI",
-      "COMPUTATION AND THE BRAIN",
-      "ADV TPCS COMPETITIVE PROG",
-      undefined,
-    ]);
+    const titles = course.sections.map((section) => section.title);
+    expect(titles).toContain("LLM BASED GENERATIVE AI");
+    expect(titles).toContain("COMPUTATION AND THE BRAIN");
+    // Every section of a container course names its own class, so none of the
+    // 20 may be dropped as a restatement of "TOPICS IN COMPUTER SCIENCE".
+    expect(titles.filter(Boolean)).toHaveLength(course.sections.length);
+  });
+
+  it("drops the restated titles an ordinary course carries", () => {
+    // The directory prints a title on every section row. On COMS 4111 both rows
+    // say "INTRODUCTION TO DATABASES", which is the header they already sit
+    // under -- shipping it would put a meaningless caption on every section.
+    const course = engine.getCourse(ORDINARY.courseId)!;
+    expect(ORDINARY.sections.every((section) => Boolean(section.title))).toBe(true);
+    expect(course.sections.every((section) => section.title === undefined)).toBe(true);
   });
 
   it("uses the best-covered section rather than any token overlap", () => {
-    // "computation" hits section 002 only; "6998" hits no section title at all.
+    // "computation" hits one section only; "6998" hits no section title at all.
     // Counting per section keeps the useful token from being cancelled by the
     // one that was never going to match a title.
     const hit = local.search({ q: "computation 6998" }).hits.find((h) => h.courseId === "COMS6998E");
-    expect(hit?.matchedSectionIds).toEqual(["20263COMS6998E002"]);
+    expect(hit?.matchedSectionIds).toEqual([BRAIN.sectionId]);
   });
 
   it("leaves matchedSectionIds null when the query is about the course", () => {
@@ -190,6 +181,35 @@ describe("isDistinctSectionTitle — registrar truncation", () => {
     expect(isDistinctSectionTitle("GLOBAL MASTERS ESSAY I", "Global Master's Essay I")).toBe(
       false,
     );
+  });
+
+  it("rejects a section title the registrar ABBREVIATED rather than clipped", () => {
+    /*
+     * The shape a prefix test cannot see. The registrar shortens words from the
+     * inside and drops vowels, so neither string is a prefix or a subsequence of
+     * the other -- and printing "Clin Pract Impl Dntrty II" as though it named a
+     * class is worse than printing the course's own complete name.
+     */
+    expect(
+      isDistinctSectionTitle("Clin Pract Impl Dntrty II", "Clin Practice Implant Dentistry II"),
+    ).toBe(false);
+  });
+
+  it("still lets a vowel-dropped abbreviation through, knowingly", () => {
+    /*
+     * The bounded gap in the stem test, pinned so it is a decision rather than
+     * a surprise: "MODLNG" stems to `modl` and "MODELING" to `mode`, so the two
+     * strings share too few stems to be called one name. Closing it needs fuzzy
+     * matching, which would start guessing about real container courses -- and a
+     * wrong guess THERE hides the actual name of a class, which is the more
+     * expensive mistake. Costs a clipped headline on a handful of rows.
+     */
+    expect(
+      isDistinctSectionTitle(
+        "PREDICT MODLNG IN FIN & INSRNC",
+        "PREDICTIVE MODELING IN FINANCE & INSURAN",
+      ),
+    ).toBe(true);
   });
 
   it("keeps a section that genuinely names a different class", () => {

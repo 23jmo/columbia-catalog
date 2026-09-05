@@ -85,7 +85,26 @@ export function FeedCardView({
    * `displayCourseTitle`, not `prettyTitle`: the latter renders "CALCULUS III"
    * as "Calculus Iii" and "INTRODUCTION TO AI" as "Introduction to Ai".
    */
-  const title = displayCourseTitle(card.title);
+  const courseTitle = displayCourseTitle(card.title);
+
+  /*
+   * On a container course the SECTION is the class, and the course title names
+   * the container rather than anything the student would recognise.
+   *
+   * COMS 6998 is one course called "Topics in Computer Science" carrying 20
+   * unrelated seminars; a card for section 012 headed "Topics in Computer
+   * Science" is indistinguishable from the other nineteen, and the one string
+   * that would tell them apart -- "Computation and the Brain" -- is on the
+   * section. So the section's own name leads when it has one, exactly as it
+   * does in the search table and the course drawer, and the course title drops
+   * to the context line below so the reader still knows what it is part of.
+   *
+   * `card.best.title` is already null unless the feed decided the section names
+   * a class of its own (see `toSectionView`), so this is a presence check
+   * rather than a second opinion about the same string.
+   */
+  const ownTitle = section.title ? displayCourseTitle(section.title) : null;
+  const title = ownTitle ?? courseTitle;
   const sectionHref = `/course/${card.courseId}?section=${encodeURIComponent(section.sectionCode)}`;
 
   return (
@@ -163,6 +182,19 @@ export function FeedCardView({
               {title}
             </Link>
           </h3>
+
+          {/*
+            Only rendered when the headline above is the section's own name, and
+            deliberately quiet: it is context for a title the reader has already
+            read, not a second title. "Part of" rather than the bare course name
+            because "Topics in Computer Science" sitting alone under "Computation
+            and the Brain" reads as a contradiction rather than a containment.
+          */}
+          {ownTitle ? (
+            <p className="truncate text-caption-2-regular text-text-tertiary sm:text-caption-1-regular">
+              Part of {courseTitle}
+            </p>
+          ) : null}
 
           {/* The why moved out of the header — see `Why` below. */}
         </div>

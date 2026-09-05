@@ -6,6 +6,7 @@
  * comes from `@/lib/constants`.
  */
 
+import { isDistinctSectionTitle } from "@/lib/catalog-list-types";
 import { minutesToLabel, WEEKDAY_SHORT } from "@/lib/constants";
 import type { CampusZone, Meeting, Section, Weekday } from "@/lib/types";
 
@@ -33,75 +34,26 @@ export function prettyTitle(title: string): string {
 /**
  * The name to print for a section, given the course it belongs to.
  *
- * ── The problem ────────────────────────────────────────────────────────────
+ * The *decision* -- does this section name a class the course title does not --
+ * is `isDistinctSectionTitle` in `@/lib/catalog-list-types`, which every other
+ * surface asks too. This is the display half: it picks the string to render and
+ * says whether that string is the section's own, so a caller can demote the
+ * course title to a context line when it is.
  *
- * `section.title` exists for container courses: COMS6998 is one course called
- * "Topics in Computer Science" whose sections are 24 different classes, and
- * those names live on the section. Leading with it is right there.
- *
- * But the registrar also stores a ~25-character abbreviation of the COURSE's
- * own name in that same field, for courses that have no distinct sections at
- * all. Preferring `section.title` unconditionally means the bold headline is
- * the clipped string while the complete one is demoted to grey underneath:
- *
- *     Preparation-College Chemi                  ← section.title
- *     Preparation-College Chemistry · CHEM 1     ← the real name
- *
- * That was 6 of the first 12 rows on an unfiltered search.
- *
- * ── The test ───────────────────────────────────────────────────────────────
- *
- * We cannot detect the abbreviation by prefix: the registrar abbreviates
- * word-internally too ("Clin Practice Implant Dentistry II" → "Clin Pract Impl
- * Dntrty II"), and it drops vowels, so neither prefix nor subsequence survives.
- *
- * What DOES survive is the first few letters of each word — abbreviation
- * shortens words, it does not reorder or replace them. So compare 4-character
- * word stems and ask how much of the section's name is already in the course's:
- *
- *     "Clin Pract Impl Dntrty II"  → clin prac impl dntr ii
- *     "Clin Practice Implant …"    → clin prac impl dent ii    → 4/5 shared
- *     "LLM Based Generative AI"    → llm base gene ai
- *     "Topics in Computer Science" → topi in comp scie         → 0/4 shared
- *
- * Above the threshold the two strings are the same name and we print whichever
- * is more complete. Below it, the section genuinely names a different class and
- * leads. The threshold is deliberately loose: a false "same name" costs a
- * slightly shorter headline, a false "different name" prints an abbreviation as
- * a title, which is the bug we are fixing.
+ * The distinction matters on container courses. COMS 6998 is one course called
+ * "Topics in Computer Science" whose sections are 20 unrelated seminars --
+ * "LLM Based Generative AI", "Computation and the Brain" -- and those names live
+ * only on the section. When the predicate says no, the section is repeating the
+ * course's name in the registrar's shorter field ("Preparation-College Chemi"
+ * for "Preparation-College Chemistry") and the course's own string is both more
+ * complete and the one to show.
  */
-const STEM_LENGTH = 4;
-const SAME_NAME_RATIO = 0.7;
-
-function stems(title: string): string[] {
-  return title
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter(Boolean)
-    .map((word) => word.slice(0, STEM_LENGTH));
-}
-
 export function sectionHeadline(
   sectionTitle: string | null | undefined,
   courseTitle: string,
 ): { headline: string; isOwnName: boolean } {
-  const own = sectionTitle ? prettyTitle(sectionTitle) : null;
-  if (!own) return { headline: courseTitle, isOwnName: false };
-
-  const ownStems = stems(own);
-  if (ownStems.length === 0) return { headline: courseTitle, isOwnName: false };
-
-  const courseStems = new Set(stems(courseTitle));
-  const shared = ownStems.filter((stem) => courseStems.has(stem)).length;
-
-  if (shared / ownStems.length < SAME_NAME_RATIO) {
-    return { headline: own, isOwnName: true };
-  }
-
-  // Same name, two spellings — print the one that says more. Usually the
-  // course's, but a section that appends a subtitle to it wins on length.
-  return own.length > courseTitle.length
-    ? { headline: own, isOwnName: true }
+  return isDistinctSectionTitle(sectionTitle, courseTitle)
+    ? { headline: prettyTitle(sectionTitle!), isOwnName: true }
     : { headline: courseTitle, isOwnName: false };
 }
 

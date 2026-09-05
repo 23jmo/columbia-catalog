@@ -11,6 +11,8 @@
  * authorization-code flow actually produce a token this server will accept.
  */
 
+import { readFileSync } from "node:fs";
+
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { POST as mcpPost } from "@/app/api/mcp/route";
@@ -34,7 +36,7 @@ import { createInMemoryProposalStore } from "@/lib/mcp/proposals";
 import { createInMemoryRateLimiter } from "@/lib/mcp/ratelimit";
 import { runTool, TOOLS } from "@/lib/mcp/tools";
 import type { McpDeps } from "@/lib/mcp/contracts";
-import type { Section, TermCode } from "@/lib/types";
+import type { CourseWithSections, Section, TermCode } from "@/lib/types";
 
 const BASE_URL = "http://localhost:3000";
 const REDIRECT_URI = "http://127.0.0.1:51000/callback";
@@ -431,6 +433,10 @@ function sectionStub() {
     courseId: "COMS4118",
     sectionCode: "001",
     termCode: "20263",
+    // The directory prints a title on every section row; on an ordinary course
+    // it is the course's own name in the registrar's shorter field. It must not
+    // reach the payload as though the section named a class of its own.
+    title: "OPERATING SYSTEMS I",
     instructors: [],
     meetings: [],
     enrollmentCount: 40,
@@ -441,12 +447,28 @@ function sectionStub() {
   } as unknown as Section;
 }
 
+function courseStub() {
+  return {
+    courseId: "COMS4118",
+    subjectCode: "COMS",
+    number: 4118,
+    qualifier: "W",
+    title: "OPERATING SYSTEMS I",
+    requirementFlags: {},
+    sections: [sectionStub()],
+  } as unknown as CourseWithSections;
+}
+
 function bookmarkDeps(saved: string[] = []): McpDeps {
   const deps = testDeps();
   const savedSet = new Set(saved);
   deps.catalog = {
     getSection: async (id: string) => (id === SECTION_ID ? sectionStub() : null),
     getSections: async (ids: string[]) => ids.filter((id) => id === SECTION_ID).map(sectionStub),
+    // A bookmark arrives as a bare section id, so the tool resolves the owning
+    // course to decide whether the section names a class of its own.
+    getCoursesByIds: async (ids: string[]) =>
+      ids.filter((id) => id === "COMS4118").map(courseStub),
   } as unknown as McpDeps["catalog"];
   deps.bookmarks = {
     listFolders: async () => [
@@ -574,5 +596,77 @@ describe("the bookmark tools", () => {
     );
     const names = (parseToolPayload(folders).folders as { name: string }[]).map((f) => f.name);
     expect(names).not.toContain("Uncategorized");
+  });
+});
+
+/**
+ * What `get_sections` answers when the sections are the classes.
+ *
+ * COMS 6998 is one course called "TOPICS IN COMPUTER SCIENCE" whose 20 Fall
+ * 2026 sections are 20 unrelated seminars, and COMS 4995 is another. Without
+ * `title` on the section the tool answers "what topics is 6998 running" with
+ * twenty call numbers and one repeated course title -- an answer no amount of
+ * prompting can recover, because the string never left the server.
+ *
+ * Run against the checked-in seed through the real adapter path, so what is
+ * asserted is what an agent actually receives.
+ */
+describe("sections that name their own class", () => {
+  const seed = JSON.parse(
+    readFileSync("lib/seed/coms-fall2026.json", "utf8"),
+  ) as CourseWithSections[];
+
+  const courseFor = (courseId: string) => {
+    const course = seed.find((candidate) => candidate.courseId === courseId);
+    if (!course) throw new Error(`seed has no ${courseId}`);
+    return course;
+  };
+
+  function catalogDeps(): McpDeps {
+    const deps = testDeps();
+    deps.catalog = {
+      getCourse: async (courseId: string) =>
+        seed.find((course) => course.courseId === courseId) ?? null,
+    } as unknown as McpDeps["catalog"];
+    return deps;
+  }
+
+  async function sectionsOf(courseId: string) {
+    const result = await runTool(
+      "get_sections",
+      { courseId },
+      { deps: catalogDeps(), auth: null, callerKey: `test-${courseId}` },
+    );
+    expect(result.isError).toBeFalsy();
+    return parseToolPayload(result).sections as { sectionCode: string; title: string | null }[];
+  }
+
+  it("names every topic of a container course", async () => {
+    for (const courseId of ["COMS6998E", "COMS4995W"]) {
+      const sections = await sectionsOf(courseId);
+      expect(sections.length, courseId).toBeGreaterThan(1);
+
+      const titles = sections.map((section) => section.title);
+      expect(titles.every(Boolean), courseId).toBe(true);
+      // Twenty rows repeating the container's name would not be an answer.
+      expect(new Set(titles).size, courseId).toBe(titles.length);
+      expect(titles, courseId).not.toContain(courseFor(courseId).title);
+    }
+  });
+
+  it("names the one the student would search for", async () => {
+    const sections = await sectionsOf("COMS6998E");
+    expect(sections.map((section) => section.title)).toContain("COMPUTATION AND THE BRAIN");
+  });
+
+  it("says null on an ordinary course rather than restating the course title", async () => {
+    // Both COMS 4111 rows carry "INTRODUCTION TO DATABASES" in the directory's
+    // section field. Echoing the course title back per section would read as a
+    // distinction the catalog is not making.
+    expect(courseFor("COMS4111W").sections.every((section) => Boolean(section.title))).toBe(true);
+
+    const sections = await sectionsOf("COMS4111W");
+    expect(sections.length).toBeGreaterThan(0);
+    expect(sections.every((section) => section.title === null)).toBe(true);
   });
 });
