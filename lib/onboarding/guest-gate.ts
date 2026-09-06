@@ -147,6 +147,8 @@ export function isGuestAllowedPath(pathname: string): boolean {
     // must not fall through the gate because it starts with the same word.
     pathname === "/search" ||
     pathname.startsWith("/course/") ||
+    // A shared schedule is a link handed to someone who may have no account.
+    pathname.startsWith("/schedule/s/") ||
     pathname.startsWith("/instructor/") ||
     pathname.startsWith("/api/") ||
     pathname.startsWith("/.well-known/")
