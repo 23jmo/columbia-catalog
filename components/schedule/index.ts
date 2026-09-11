@@ -6,17 +6,16 @@
  *
  *   <CourseDetail integrations={{ weekGrid: WeekGrid }} />
  *
- * Everything else here is composed from it. Nothing in this directory owns
+ * `ScheduleWeek` is the recurring five-column canvas every schedule surface
+ * draws — the `/schedule` page, the shared read-only page, the chat card and
+ * the course page's "on your week" preview. Nothing in this directory owns
  * scheduling logic — that lives in `lib/schedule` and is imported, never
  * reimplemented.
  */
 
 export { WeekGrid } from "./week-grid";
 export { AgendaList, type AgendaListProps } from "./agenda-list";
-export { PlanSummary, type PlanSummaryProps } from "./plan-summary";
-export { ScheduleView, PlanSnapshotView, type ScheduleViewProps } from "./schedule-view";
-export { CalendarShell } from "./calendar-shell";
-export { CalendarWeekPreview, type CalendarWeekPreviewProps } from "./calendar-week-preview";
+export { ScheduleWeek, type ScheduleWeekProps } from "./schedule-week";
 
 export {
   blockIdFor,
@@ -28,6 +27,7 @@ export {
   toWeekGridBlocks,
   gridWeekdays,
   gridBounds,
+  fitGridBounds,
   hourMarks,
   layoutDay,
   layoutWeek,

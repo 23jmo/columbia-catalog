@@ -1,42 +1,32 @@
 /**
- * `/schedule` loading state.
- *
- * Mirrors the calendar chrome (rail + month canvas) so the layout does not
- * jump when the planner hydrates.
+ * `/schedule` loading state — the same header line and five-column canvas
+ * the page draws, so nothing jumps when the week hydrates.
  */
 
 import { AppShell } from "@/components/shell/app-shell";
+import { PageContent } from "@/components/shell/page-content";
 import { cx } from "@/utils/cx";
 
 function Shimmer({ className }: { className?: string }) {
-  return (
-    <div
-      className={cx("animate-pulse rounded-lg bg-background-tertiary-default", className)}
-      aria-hidden
-    />
-  );
+  return <div className={cx("animate-pulse rounded-lg bg-background-tertiary-default", className)} aria-hidden />;
 }
 
 export default function ScheduleLoading() {
   return (
-    <AppShell activeNav="schedule" contentClassName="flex min-h-0 flex-col px-0 py-0">
-      <span role="status" aria-live="polite" className="sr-only">
-        Loading your schedule.
-      </span>
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        <aside className="hidden w-64 shrink-0 flex-col gap-4 border-r border-border-table p-4 lg:flex">
-          <Shimmer className="h-9 w-full" />
-          <Shimmer className="h-24 w-full" />
-          <Shimmer className="h-40 w-full" />
-        </aside>
-        <div className="flex min-w-0 flex-1 flex-col gap-3 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <Shimmer className="h-10 w-48" />
-            <Shimmer className="h-9 w-40" />
+    <AppShell activeNav="schedule">
+      <PageContent className="max-w-[1100px] gap-4 sm:gap-5">
+        <span role="status" aria-live="polite" className="sr-only">
+          Loading your schedule.
+        </span>
+        <div className="flex items-center justify-between gap-3">
+          <Shimmer className="h-5 w-40" />
+          <div className="flex gap-2">
+            <Shimmer className="h-8 w-8 sm:w-24" />
+            <Shimmer className="h-8 w-28" />
           </div>
-          <Shimmer className="min-h-0 flex-1 w-full" />
         </div>
-      </div>
+        <Shimmer className="h-[480px] w-full rounded-2xl" />
+      </PageContent>
     </AppShell>
   );
 }
