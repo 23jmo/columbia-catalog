@@ -37,6 +37,7 @@ export function ChatFab({ hidden }: { hidden?: boolean }) {
     <Link
       href={CHAT_PATH}
       aria-label="Open chat"
+      data-haptic=""
       onClick={() => haptic("selection")}
       className={cx(
         // z-40: above the page card (z-10) and its header (z-30 inside that

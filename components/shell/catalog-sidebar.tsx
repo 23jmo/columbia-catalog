@@ -13,6 +13,7 @@ import { SidebarSecondaryNav } from "@/components/shell/sidebar-secondary-nav";
 import { SignInModal } from "@/components/shell/sign-in-modal";
 import { useDrawerPush } from "@/components/shell/use-drawer-push";
 import { useSessionAccount } from "@/hooks/use-session-account";
+import { haptic } from "@/lib/haptics";
 import { isGuestAllowedPath } from "@/lib/onboarding/guest-gate";
 import { cx } from "@/utils/cx";
 
@@ -120,7 +121,10 @@ function NavItem({
     return (
       <button
         type="button"
-        onClick={onLockedClick}
+        onClick={() => {
+          haptic("selection");
+          onLockedClick?.();
+        }}
         // The padlock is decorative, so the row has to say in words that this
         // is a sign-in prompt and not the destination it names.
         aria-label={`${label} — sign in to open`}
@@ -135,7 +139,11 @@ function NavItem({
   return (
     <Link
       href={href}
-      onClick={onNavigate}
+      onClick={() => {
+        haptic("selection");
+        onNavigate?.();
+      }}
+      data-haptic=""
       aria-current={isSelected ? "page" : undefined}
       aria-label={collapsed ? label : undefined}
       title={collapsed ? label : undefined}
