@@ -131,7 +131,10 @@ export function isPublicMarketingPath(pathname: string): boolean {
     exactOrChild(pathname, "/faq") ||
     exactOrChild(pathname, "/privacy") ||
     exactOrChild(pathname, "/terms") ||
-    exactOrChild(pathname, "/programs")
+    exactOrChild(pathname, "/programs") ||
+    // Temporary: the before/after slider for the landing redesign. Marketing
+    // for a guest, exactly like `/`. Remove with `app/landing-compare`.
+    exactOrChild(pathname, "/landing-compare")
   );
 }
 
