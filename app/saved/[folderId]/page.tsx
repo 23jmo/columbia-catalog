@@ -28,7 +28,8 @@ export default async function SavedFolderPage({
 
   return (
     <AppShell activeNav="saved">
-      <PageContent className="max-w-4xl">
+      {/* Same measure as `/saved` and `/` — see the note there. */}
+      <PageContent className="max-w-[720px]">
         <SavedFolderView folderId={folderId} />
       </PageContent>
     </AppShell>

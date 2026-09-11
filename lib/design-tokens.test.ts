@@ -131,19 +131,46 @@ function knownColourTokens(): Set<string> {
 }
 
 /**
+ * Whole classes the theme defines itself with `@utility`, e.g.
+ * `@utility bg-button-primary { … }`.
+ *
+ * These are the one place the scan below is wrong rather than merely crude.
+ * `bg-button-primary` looks exactly like `bg-` plus a token named
+ * `button-primary`, and no such token exists — the theme paints it with a
+ * *gradient* (`--gradient-button-primary-default`) because CSS cannot
+ * interpolate `background-image`, so the hover state needs a pseudo-element
+ * and therefore a hand-written utility rather than a colour.
+ *
+ * Read as a colour class it is a typo; read as what it is, it is the
+ * sanctioned way to paint a primary button, and `components/base/buttons`
+ * uses it. Reporting it taught readers that a red line here means nothing,
+ * which is the exact failure mode the comment at the top of this file says a
+ * test like this exists to avoid.
+ */
+function knownUtilityClasses(): Set<string> {
+  const css = readFileSync(THEME_FILE, "utf8");
+  const names = new Set<string>();
+  for (const match of css.matchAll(/@utility\s+([a-z0-9-]+)/g)) {
+    names.add(match[1]);
+  }
+  return names;
+}
+
+/**
  * Pull candidate colour classes out of a source file.
  *
  * Deliberately crude — it reads string literals, not JSX semantics — because
  * the failure being guarded against is a typo in a string literal, and a
  * cleverer parser would not catch more of them.
  */
-function colourClassesIn(source: string): string[] {
+function colourClassesIn(source: string, utilities: Set<string>): string[] {
   const found: string[] = [];
   for (const match of source.matchAll(/["'`]([^"'`\n]*)["'`]/g)) {
     for (const raw of match[1].split(/\s+/)) {
       let token = raw;
       while (VARIANT_PREFIX.test(token)) token = token.replace(VARIANT_PREFIX, "");
       if (!token || token.includes("[")) continue; // arbitrary value — not a token
+      if (utilities.has(token)) continue; // the theme defines this class whole
       const separator = token.indexOf("-");
       if (separator === -1) continue;
       const utility = token.slice(0, separator);
@@ -157,6 +184,7 @@ function colourClassesIn(source: string): string[] {
 
 describe("BoardUI colour tokens", () => {
   const tokens = knownColourTokens();
+  const utilities = knownUtilityClasses();
 
   // Families present in the theme, e.g. "background", "text", "border".
   const families = new Set([...tokens].map((token) => token.split("-")[0]));
@@ -167,6 +195,9 @@ describe("BoardUI colour tokens", () => {
     expect(tokens.size).toBeGreaterThan(100);
     expect(tokens.has("background-secondary-default")).toBe(true);
     expect(tokens.has("background-secondary")).toBe(false);
+    // Same guard for the utility sweep: an empty set would silently restore
+    // the false positive this exemption exists to remove.
+    expect(utilities.has("bg-button-primary")).toBe(true);
   });
 
   it("every colour class in our code resolves to a real token", () => {
@@ -175,7 +206,7 @@ describe("BoardUI colour tokens", () => {
     for (const root of SOURCE_ROOTS) {
       for (const file of collectFiles(root)) {
         const source = withoutComments(readFileSync(file, "utf8"));
-        for (const name of colourClassesIn(source)) {
+        for (const name of colourClassesIn(source, utilities)) {
           const [family, ...restOfName] = name.split("-");
           if (TAILWIND_PALETTE.has(family)) {
             // `bg-neutral-500` — fine; `bg-neutral-mid` — not a shade.

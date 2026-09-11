@@ -1,20 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DefaultChatTransport } from "ai";
 import { useChat } from "@ai-sdk/react";
 import {
+  RiCalendarScheduleLine,
   RiChat1Line,
   RiErrorWarningLine,
+  RiGraduationCapLine,
   RiLockLine,
+  RiMapPin2Line,
   RiQuillPenLine,
+  RiStarLine,
 } from "@remixicon/react";
 
 import { describeFailure, planSubmission, type Gate } from "@/lib/agent/gate";
 import {
   announceHistoryChanged,
   fetchConversation,
+  CHAT_PATH,
   threadHref,
 } from "@/lib/agent/history";
 import { Composer } from "@/components/assistant/composer";
@@ -97,23 +102,11 @@ export interface AssistantHomeProps {
    */
   greetingName?: string | null;
   /**
-   * Thread to reopen, from `/?c=`. Null on a fresh home visit. Changing this
+   * Thread to reopen, from `/chat?c=`. Null on a fresh visit. Changing this
    * (sidebar click) loads that thread; minting a new id writes the same param
    * back so the rail can highlight it.
    */
   initialConversationId?: string | null;
-  /**
-   * The recommendation feed, rendered on the server and handed down as an
-   * element.
-   *
-   * It has to arrive this way. `buildFeed` reads the student's record through
-   * the cookie-scoped Supabase client and pages the active catalog, none of
-   * which can happen in a `"use client"` module — but a server component passed
-   * as a prop is rendered by the server and slotted in here, so the feed stays
-   * server-rendered inside a client shell. That is also what lets `/` stream
-   * it: the `<Suspense>` boundary lives around the element, not around this.
-   */
-  feed?: ReactNode;
 }
 
 export function AssistantHome({
@@ -122,7 +115,6 @@ export function AssistantHome({
   promptsUsed: initialPromptsUsed,
   promptsLimit,
   greetingName,
-  feed,
   initialConversationId = null,
 }: AssistantHomeProps) {
   const router = useRouter();
@@ -246,7 +238,7 @@ export function AssistantHome({
       if (cancelled) return;
       if (!loaded) {
         skipFetchId.current = null;
-        router.replace("/", { scroll: false });
+        router.replace(CHAT_PATH, { scroll: false });
         return;
       }
       skipFetchId.current = loaded.conversationId;
@@ -294,29 +286,33 @@ export function AssistantHome({
     setGate(null);
     clearError();
     setInput("");
-    router.replace("/", { scroll: false });
+    router.replace(CHAT_PATH, { scroll: false });
   }, [clearError, router, setMessages]);
 
   const hasThread = messages.length > 0;
 
   /*
-   * Going Home puts the feed back.
+   * Clicking Chat while already reading a thread starts a new one.
    *
-   * `/` is already the current route, so every nav link to it — the sidebar
-   * item, the hamburger Home row, the wordmark — is a soft navigation onto the page it
-   * is already on. React reconciles the same tree, this component never
-   * unmounts, and the thread would sit there unchanged while the student's
-   * click did visibly nothing. That is the worst kind of dead control: it looks
-   * like the app ignored them.
+   * `/chat` is already the current route, so the nav item and the hamburger
+   * Chat row are soft navigations onto the page they are already on. React
+   * reconciles the same tree, this component never unmounts, and the thread
+   * would sit there unchanged while the student's click did visibly nothing.
+   * That is the worst kind of dead control: it looks like the app ignored them.
+   *
+   * This used to watch for `/` for the same reason, back when the assistant
+   * WAS the home page. It follows the box: Home is now a different route, so
+   * clicking it is a real navigation that unmounts this component and no
+   * listener is needed to clear anything.
    *
    * A delegated listener rather than a signal threaded through the shell. The
    * alternative is making `ShellNav`, `CatalogSidebar` and `MobileShell` — all
-   * three of which render the Home link, and two of which are server components
+   * three of which render the Chat link, and two of which are server components
    * today — aware that one page has state worth clearing. That is a lot of
    * shared surface bent around one screen. This asks a narrower and more honest
    * question instead: did the student just click something that means "take me
-   * home"? Anything that answers yes gets the feed back, including links this
-   * component has never heard of.
+   * back to an empty box"? Anything that answers yes gets one, including links
+   * this component has never heard of.
    */
   useEffect(() => {
     if (!hasThread) return;
@@ -333,11 +329,11 @@ export function AssistantHome({
       if (!href) return;
 
       const destination = new URL(href, window.location.href);
-      const isHome =
+      const isBareChat =
         destination.origin === window.location.origin &&
-        destination.pathname === "/" &&
+        destination.pathname === CHAT_PATH &&
         destination.search === "";
-      if (isHome) startNewThread();
+      if (isBareChat) startNewThread();
     }
 
     document.addEventListener("click", onDocumentClick);
@@ -358,7 +354,7 @@ export function AssistantHome({
         On a phone it goes into the shell's top bar, beside the hamburger,
         because that bar is already the place a reader looks to find out where
         they are — and while a thread is open the answer is the thread, not
-        "Home". Above `xl` that bar is display:none and the desktop rail takes
+        "Chat". Above `xl` that bar is display:none and the desktop rail takes
         over, so the header renders inline instead and sticks to the top of the
         scroller on its own.
       */}
@@ -370,40 +366,48 @@ export function AssistantHome({
 
           <div
             className={cx(
-              "sticky top-0 z-20 -mx-1 hidden px-1 pt-1 pb-3 xl:block",
+              "sticky top-0 z-20 -mx-1 hidden px-1 pt-1 pb-5 xl:block",
             )}
           >
             <span
               aria-hidden
               className="absolute inset-0 -z-10 bg-linear-to-b from-background-full via-background-full/75 to-transparent"
             />
-            <ProgressiveBlur side="top" className="-z-10" />
+            <ProgressiveBlur side="top" strength="strong" className="-z-10" />
             <ThreadHeader variant="inline" messages={messages} onNewThread={startNewThread} />
           </div>
         </>
       ) : null}
 
       {/*
-        Two states, one column.
+        Two states, one column, and each anchors what it has to the box.
 
-        With a thread, the messages hang off the bottom of the region
-        (`justify-end`) so the newest turn sits against the composer and the
-        conversation grows upward out of it. With no thread, the greeting and
-        the feed start at the top and the empty space falls below them, which
-        is what keeps the box on the bottom edge in both states.
+        With a thread, `justify-end` puts the newest turn against the composer
+        so the conversation grows upward out of it.
+
+        Without one, the greeting and the starters are one block at the top.
+
+        The greeting alone was at the top once, and it was moved to the bottom
+        because a two-line heading over an empty `flex-1` left roughly 500px of
+        nothing on a 390×844 phone. The starters are what that space was
+        missing, so the greeting can go back to being a heading.
+
+        They are pinned together, and that is the part worth stating. Hanging
+        the starters off the bottom (`mt-auto`) puts them within a thumb's
+        reach of the box, which is the better answer on a phone — but it opens
+        the same hole again on a desktop, this time BETWEEN two blocks of
+        content, and a gap between two things that are both visibly content
+        reads as something failing to load. A gap below all of it just reads as
+        an empty page, which is what this is. So the block stays whole and the
+        slack falls at the bottom, where a slack space is supposed to be.
       */}
-      <div
-        className={cx(
-          "flex flex-1 flex-col",
-          hasThread ? "justify-end pt-8" : "gap-7 pt-6 sm:pt-10",
-        )}
-      >
+      <div className={cx("flex flex-1 flex-col", hasThread ? "justify-end pt-8" : "pt-6 sm:pt-10")}>
         {hasThread ? (
           <Conversation messages={messages} status={status} onAsk={ask} />
         ) : (
           <>
             <Hero name={greetingName ?? null} />
-            {feed}
+            <PromptStarters onPick={ask} className="pt-8" />
           </>
         )}
       </div>
@@ -436,7 +440,11 @@ export function AssistantHome({
       <div
         data-assistant-dock
         className={cx(
-          "sticky bottom-0 z-10 -mx-1 px-1 pt-6",
+          // `pt-8`, not `pt-6`: the padding IS the visible ramp, since the
+          // blur covers this box and the composer fills everything below it.
+          // A taller band is the half of "softer" that a bigger radius cannot
+          // buy — a hard blur over 24px still ends 24px up.
+          "sticky bottom-0 z-10 -mx-1 px-1 pt-8",
           "pb-[max(0.25rem,env(safe-area-inset-bottom,0px))]",
         )}
       >
@@ -444,7 +452,7 @@ export function AssistantHome({
           aria-hidden
           className="absolute inset-0 -z-10 bg-linear-to-t from-background-full via-background-full/70 to-transparent"
         />
-        <ProgressiveBlur side="bottom" className="-z-10" />
+        <ProgressiveBlur side="bottom" strength="strong" className="-z-10" />
 
         {/*
           The sign-in bar sits inside the sticky wrapper, above the box, so it
@@ -573,6 +581,129 @@ function Hero({ name }: { name: string | null }) {
         {name ? "What should you take next semester?" : "Ask below, or start from what is on offer."}
       </p>
     </header>
+  );
+}
+
+/**
+ * Four questions, as boxes, sitting on top of the box.
+ *
+ * ── Why an empty chat needs these at all ───────────────────────────────────
+ *
+ * An empty field is the worst answer to "what should I take", which is why the
+ * recommendations became their own page. This page is what is left: the
+ * questions a ranked list cannot anticipate. But "ask me anything" is not a
+ * prompt, it is a blank exam paper, and a student who does not already know
+ * what this thing can do will type something small to find out — or leave.
+ *
+ * So the opening move is four things it can actually do, each written as the
+ * sentence the student would have had to compose. Clicking one sends it
+ * verbatim: what you read is what gets asked, so the first answer can never be
+ * a surprise. The composer's rotating placeholder does a version of this job
+ * already, but a placeholder is a hint you cannot act on — it vanishes when you
+ * type and it can only ever show one thing at a time.
+ *
+ * ── The order is not arbitrary ─────────────────────────────────────────────
+ *
+ * The first two are the two answers that come back as something drawn rather
+ * than written — a campus map, and a week grid with the classes laid into it.
+ * Those are the least guessable things here: nothing about a chat box suggests
+ * it will hand back a map of Morningside with your walk on it, and nobody asks
+ * a question they do not believe can be answered. The two below are the ones a
+ * student would think to ask anyway, and they earn their place by being the
+ * ones most often asked, not by being a surprise.
+ *
+ * `caption` names the shape of the answer for the same reason: "answers with a
+ * campus map" is a promise about the output, and it is the half of the pitch a
+ * question alone does not make.
+ *
+ * ── Sending goes through `ask` ─────────────────────────────────────────────
+ *
+ * Not `setInput`. `ask` carries the signed-out gate and the prompt budget with
+ * it, so a visitor clicking a starter gets the same sign-in prompt they would
+ * get from typing it — and, per `lib/agent/gate.ts`, still causes zero LLM
+ * calls. Loading the text into the box instead would have made these the one
+ * path into the agent that skipped the gate.
+ */
+const PROMPT_STARTERS = [
+  {
+    icon: RiMapPin2Line,
+    prompt: "Where on campus do my classes meet?",
+    caption: "Answers with a campus map",
+  },
+  {
+    icon: RiCalendarScheduleLine,
+    prompt: "Show me how these classes fit into one week",
+    caption: "Answers with your week, laid out",
+  },
+  {
+    icon: RiGraduationCapLine,
+    prompt: "What is the fastest way to finish my degree?",
+    caption: "Reads your record against the requirements",
+  },
+  {
+    icon: RiStarLine,
+    prompt: "Which professors teaching next term are worth taking?",
+    caption: "Reads what past students said",
+  },
+] as const;
+
+function PromptStarters({
+  onPick,
+  className,
+}: {
+  onPick: (prompt: string) => void;
+  className?: string;
+}) {
+  return (
+    <div className={cx("px-1", className)}>
+      {/*
+        A label, not a heading. The page already has one `h1` in the greeting,
+        and these are an aside to it — a screen reader that meets a second
+        heading here would be told the page changed subject when it has not.
+      */}
+      <p className="px-1 pb-2 text-caption-1-medium tracking-[0.06em] text-text-tertiary uppercase">
+        Try asking
+      </p>
+
+      {/*
+        Two columns from `sm`, one below it. Four boxes in a single phone column
+        is most of a screen and would push the composer off it; two rows of two
+        is the same content in half the height.
+      */}
+      <ul role="list" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {PROMPT_STARTERS.map((starter) => (
+          <li key={starter.prompt} className="flex">
+            <button
+              type="button"
+              onClick={() => {
+                haptic("selection");
+                onPick(starter.prompt);
+              }}
+              className={cx(
+                // `rounded-2xl` is the surface's container radius — the same one
+                // the box, the bubbles and every card in a thread use.
+                "flex w-full min-w-0 items-start gap-2.5 rounded-2xl p-3 text-left",
+                "border border-border-table bg-background-primary-default",
+                "transition-colors duration-150 motion-reduce:transition-none",
+                "hover:bg-background-primary-hover hover:border-border-button-hover",
+                "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
+              )}
+            >
+              <starter.icon
+                aria-hidden
+                className="mt-0.5 size-4 shrink-0 text-foreground-icon-tertiary"
+              />
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="text-body-medium text-text-primary">{starter.prompt}</span>
+                <span className="text-caption-1-regular text-text-tertiary">
+                  {starter.caption}
+                </span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

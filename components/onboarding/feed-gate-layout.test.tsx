@@ -1,11 +1,18 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { emptyGuestState } from "@/lib/onboarding/state";
-
 import { FeedPreviewGate } from "./feed-preview-gate";
 import { FeedSignInPanel } from "./feed-sign-in-panel";
 import { OnboardingScreen } from "./screen";
+import type { FeedPreview } from "./use-feed-preview";
+
+/** A settled preview with nothing in it — the gate's empty case. */
+const EMPTY_PREVIEW: FeedPreview = {
+  status: "ready",
+  cards: [],
+  error: null,
+  watched: false,
+};
 
 /**
  * The last onboarding screen used to pin `h-dvh overflow-hidden` and park
@@ -41,7 +48,7 @@ describe("onboarding feed gate layout", () => {
   it("puts the sign-in card in flow between the first card and the rest", () => {
     const html = renderToStaticMarkup(
       <FeedPreviewGate
-        state={emptyGuestState()}
+        preview={EMPTY_PREVIEW}
         signedIn={false}
         migration={{ status: "idle" }}
         onSignIn={() => undefined}
@@ -67,13 +74,16 @@ describe("onboarding feed gate layout", () => {
     // `bottom-0` dissolve painted a panel-sized blank between cards.
     expect(html).toContain("h-24");
     expect(html).not.toContain("inset-x-0 -top-16 bottom-0");
-    expect(html).toContain("relative z-10 flex w-full min-w-0 max-w-md");
+    // Full-width like the cards (main): `max-w-md` left empty flanks at
+    // desktop. `z-10` keeps the panel above the tuck wash.
+    expect(html).toContain("relative z-10 flex w-full min-w-0");
+    expect(html).not.toContain("max-w-md flex-col items-center gap-4");
   });
 
   it("stacks cards evenly once the gate is unlocked", () => {
     const html = renderToStaticMarkup(
       <FeedPreviewGate
-        state={emptyGuestState()}
+        preview={EMPTY_PREVIEW}
         signedIn
         migration={{ status: "idle" }}
         onSignIn={() => undefined}
@@ -81,7 +91,8 @@ describe("onboarding feed gate layout", () => {
       />,
     );
     expect(html).not.toContain("Sign in with Columbia");
-    expect(html).toContain("Take me to the catalog");
+    // Scroll-to-finish copy from FeedFinishControl — not the old button.
+    expect(html).toContain("Keep scrolling for your full feed");
     // One list, not first-card + rest with a missing gate between them.
     expect(html).not.toContain("-mt-6");
     expect(html).toContain("flex min-w-0 flex-col gap-3.5");

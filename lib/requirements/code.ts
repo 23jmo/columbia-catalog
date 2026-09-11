@@ -214,3 +214,89 @@ export function levelOf(courseId: CourseId): number | null {
   if (!match) return null;
   return Math.floor(Number(match[1]) / 1000) * 1000;
 }
+
+/* ==========================================================================
+ * Retired school letters
+ * ========================================================================== */
+
+/**
+ * What each retired school letter became.
+ *
+ * ── Why this table has to exist ────────────────────────────────────────────
+ *
+ * Columbia's old course numbers carried a single letter naming the SCHOOL that
+ * issued the course, not its level. The registrar's own "Key to Columbia Course
+ * Listings" spells them out: `C` Columbia College, `V` interschool course with
+ * Barnard, `W` interfaculty, `X` Barnard College, `F` General Studies, `G`
+ * GSAS, `E` Engineering. Those were replaced by the two-letter level codes
+ * (`UN`, `GU`, `GR`) plus the school codes (`CC`, `BC`, `GS`) still in use.
+ *
+ * A transcript does not get reissued when the registrar renumbers. A junior's
+ * record legitimately says `MATH V2010`, and the catalog legitimately says
+ * `MATH UN2010`, and `build()` composes the qualifier straight into the
+ * `courseId` — so `MATH2010V` and `MATH2010UN` are different keys for one
+ * course. Every consumer that looks a record up by id therefore reports real
+ * Columbia coursework as unknown: verified on 2026-08-27 against the live
+ * catalog, where `V`, `X`, `C` and `F` have ZERO rows and their courses are all
+ * filed under `UN`, `BC`, `CC` and `GS`.
+ *
+ * ── Why a preference order rather than a single successor ──────────────────
+ *
+ * One old code can land on more than one modern row, and the letter is what
+ * disambiguates. `PSYC X1001` and `PSYC UN1001` are different courses at
+ * different colleges — `X` says Barnard, so `PSYC BC1001` is the right answer
+ * and `PSYC UN1001` is the wrong one. `ENGL C1010` is University Writing, which
+ * exists as both `ENGL CC1010` and `ENGL GS1010`; `C` says Columbia College.
+ *
+ * ── What is deliberately NOT in here ───────────────────────────────────────
+ *
+ * `W`, `E` and `G` are missing on purpose. All three are still live in the
+ * catalog — 72, 740 and 119 rows respectively — so they are not retired and
+ * must never be rewritten. Exact-id matching runs first and unconditionally, so
+ * a live `COMS W4901` resolves to itself and never reaches this table.
+ */
+export const LEGACY_QUALIFIER_SUCCESSORS: Readonly<Record<string, readonly string[]>> = {
+  C: ["CC", "UN"],
+  V: ["UN", "CC"],
+  X: ["BC"],
+  F: ["GS"],
+};
+
+/**
+ * The order to prefer modern qualifiers in when the old code gives no steer.
+ *
+ * Undergraduate first, because every caller of this is reading a student's
+ * transcript rather than a graduate bulletin.
+ */
+export const DEFAULT_QUALIFIER_PREFERENCE: readonly string[] = [
+  "UN",
+  "CC",
+  "GU",
+  "BC",
+  "GS",
+  "GR",
+];
+
+/**
+ * Rank the modern qualifiers for a code that carried `legacy`.
+ *
+ * The legacy letter's own successors come first — that is the whole point of
+ * keeping the letter — then the general order, so a subject that renumbered
+ * somewhere unexpected still resolves rather than failing closed.
+ */
+export function qualifierPreference(legacy: string | null): readonly string[] {
+  const named = legacy ? (LEGACY_QUALIFIER_SUCCESSORS[legacy] ?? []) : [];
+  const rest = DEFAULT_QUALIFIER_PREFERENCE.filter((q) => !named.includes(q));
+  return [...named, ...rest];
+}
+
+/**
+ * True when `qualifier` is a school letter the registrar has retired.
+ *
+ * Callers use this to decide whether a miss is worth a second query. A miss on
+ * a live qualifier is a course we do not have; a miss on a retired one is
+ * probably a renumbering.
+ */
+export function isRetiredQualifier(qualifier: string | null): boolean {
+  return qualifier != null && qualifier in LEGACY_QUALIFIER_SUCCESSORS;
+}

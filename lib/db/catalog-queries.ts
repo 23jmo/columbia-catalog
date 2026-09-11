@@ -803,3 +803,120 @@ export async function getInstructorNames(): Promise<string[]> {
 }
 
 export type { CourseWithSections, Section };
+
+/* ==========================================================================
+ * Term-independent course facts
+ * ========================================================================== */
+
+const COURSE_FACT_SELECT =
+  "course_id, subject_code, course_number, qualifier, title, points_min, points_max, requirement_flags";
+
+interface CourseFactRowRaw {
+  course_id: string;
+  subject_code: string;
+  course_number: number;
+  qualifier: string | null;
+  title: string;
+  points_min: number | null;
+  points_max: number | null;
+  requirement_flags: Json | null;
+}
+
+/** A course row with no section attached. See `getCourseFactsByIds`. */
+export interface CourseFactRow {
+  courseId: string;
+  subjectCode: string;
+  number: number;
+  qualifier: string | null;
+  title: string;
+  pointsMin: number | null;
+  pointsMax: number | null;
+  /** Core / Global Core / Science flags. The audit selects on these. */
+  requirementFlags: RequirementFlags;
+}
+
+function toFactRow(row: CourseFactRowRaw): CourseFactRow {
+  return {
+    courseId: row.course_id,
+    subjectCode: row.subject_code,
+    number: row.course_number,
+    qualifier: row.qualifier,
+    title: row.title,
+    pointsMin: row.points_min,
+    pointsMax: row.points_max,
+    requirementFlags: parseRequirementFlags(row.requirement_flags),
+  };
+}
+
+/**
+ * Course rows by id, with NO term filter and NO sections.
+ *
+ * ── Why this exists next to `getCoursesByIds` ──────────────────────────────
+ *
+ * `getCoursesByIds` selects `sections!inner(...)` filtered to one term, so a
+ * course with no section in that term comes back as nothing at all. That is
+ * correct for the feed, which may only ever show a class a student can register
+ * for — but it is wrong for the question "is this thing on the student's
+ * transcript a real course, and what is it called".
+ *
+ * `courses` is a term-independent table; `sections` is where terms live. Asking
+ * the first question through a section join means a real course drops out of
+ * the answer for the accident of not running this term. `COMS W4901 Projects in
+ * Computer Science` is the case that found this: it is in our catalog under
+ * exactly the id its transcript spelling parses to, has sections only in
+ * Fall 2024, and was reported to the student as "not in our catalog".
+ */
+export async function getCourseFactsByIds(courseIds: string[]): Promise<CourseFactRow[]> {
+  if (courseIds.length === 0) return [];
+  const client = readClient();
+  const out: CourseFactRow[] = [];
+
+  for (const ids of chunk([...new Set(courseIds)], IN_CHUNK)) {
+    const { data, error } = await client
+      .from("courses")
+      .select(COURSE_FACT_SELECT)
+      .in("course_id", ids)
+      .overrideTypes<CourseFactRowRaw[], { merge: false }>();
+
+    if (error) fail("getCourseFactsByIds", error);
+    for (const row of data ?? []) out.push(toFactRow(row));
+  }
+
+  return out;
+}
+
+/**
+ * Course rows by `(subject, number)`, ignoring the qualifier entirely.
+ *
+ * The second half of resolving a renumbered code: the caller has already missed
+ * on the exact id and wants every qualifier this subject and number were ever
+ * filed under, so it can pick with `qualifierPreference`.
+ *
+ * Fetched as two `in` lists and filtered to real pairs in JS rather than as an
+ * `or` of `and`s. The cartesian over-fetch is bounded by the size of the
+ * student's record — a few dozen codes — and PostgREST's `or` syntax nests
+ * badly enough that the query string becomes the bug.
+ */
+export async function getCourseFactsByNumber(
+  pairs: readonly { subjectCode: string; number: number }[],
+): Promise<CourseFactRow[]> {
+  if (pairs.length === 0) return [];
+  const client = readClient();
+
+  const subjects = [...new Set(pairs.map((pair) => pair.subjectCode))];
+  const numbers = [...new Set(pairs.map((pair) => pair.number))];
+  const wanted = new Set(pairs.map((pair) => `${pair.subjectCode}:${pair.number}`));
+
+  const { data, error } = await client
+    .from("courses")
+    .select(COURSE_FACT_SELECT)
+    .in("subject_code", subjects)
+    .in("course_number", numbers)
+    .overrideTypes<CourseFactRowRaw[], { merge: false }>();
+
+  if (error) fail("getCourseFactsByNumber", error);
+
+  return (data ?? [])
+    .map(toFactRow)
+    .filter((row) => wanted.has(`${row.subjectCode}:${row.number}`));
+}

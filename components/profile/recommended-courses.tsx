@@ -64,8 +64,20 @@ export function RecommendedCourses({
         <p id="recommended-heading" className="text-body-medium text-text-secondary">
           Offered in {termLabel}, and it would clear something
         </p>
-        <p className="text-title-2-medium tabular-nums text-text-primary">
-          {recommendations.length} {recommendations.length === 1 ? "course" : "courses"}
+        {/*
+          A headline reading "0 courses" is a count of nothing dressed as a
+          finding. When there is nothing to offer the headline says so in words
+          and the strip underneath explains why.
+        */}
+        <p
+          className={cx(
+            "text-title-2-medium text-text-primary",
+            recommendations.length > 0 && "tabular-nums",
+          )}
+        >
+          {recommendations.length === 0
+            ? "Nothing this term"
+            : `${recommendations.length} ${recommendations.length === 1 ? "course" : "courses"}`}
         </p>
       </div>
 

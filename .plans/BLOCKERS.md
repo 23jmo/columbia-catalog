@@ -871,3 +871,142 @@ by the daily-cron limit in item 8, whose designed mitigation is the browser
 worker path. Nothing here needs code.
 
 ---
+
+---
+
+## 19. Google's sign-in screen says `wwqtflgwpukwzfysnncv.supabase.co`
+
+Verified against the live endpoints rather than assumed, the same way item 6 was.
+
+`GET /auth/v1/authorize?provider=google` 302s to Google carrying:
+
+```
+redirect_uri = https://wwqtflgwpukwzfysnncv.supabase.co/auth/v1/callback
+app_domain   = https://wwqtflgwpukwzfysnncv.supabase.co
+```
+
+and Google's page renders that host verbatim — pulled from the response HTML:
+
+```html
+<h1 id="headingText">Sign in</h1>
+<div id="headingSubtext">to continue to
+  <button … data-app-name="wwqtflgwpukwzfysnncv.supabase.co">
+```
+
+**No code change can reach this.** `lib/db/auth.ts` sets `redirectTo`, `hd` and
+`prompt`, and all three are forwarded intact. But `redirectTo` is where Supabase
+sends the student *after* Google — a different parameter from `redirect_uri`,
+which is the URL Google calls back, and which Supabase builds from the project's
+own API URL. Nothing on the client can change it.
+
+**It does not follow that the screen has to show that host.** An earlier draft of
+this entry claimed Google will only show branding once the *redirect URI's*
+domain is in Authorized domains, that `supabase.co` can never be verified, and
+that the custom-domain add-on was therefore the only way out. That was wrong, and
+it would have cost a paid upgrade to fix something that is free. Authorized
+domains governs the **branding links** — home page, privacy policy, terms — not
+the redirect URI. Those links are ours, on a domain we own. What actually makes
+Google print the raw host is that the app is **unverified / still in Testing**;
+publish it with branding filled in and the App name replaces the host.
+
+### Route A — free, do this first
+
+Our scopes are exactly the non-sensitive set, measured off the live authorize
+redirect: `scope = email profile`. That is the case Google waves through, so
+publishing should be effectively instant with no review queue.
+
+1. **Verify `lionplan.org` in Google Search Console.** DNS TXT at name.com, or
+   an HTML file — we serve the app, so either works.
+2. **Google Cloud Console → the OAuth project → Branding.** App name
+   `LionPlan`, support email, and:
+   - Home page → `https://www.lionplan.org/about`, **not** `/`. The root 307s
+     signed-out visitors to `/onboarding` (the guest gate in `proxy.ts`), and a
+     home page that bounces into a signup wizard is the kind of thing a reviewer
+     stops on. `/about` returns a clean 200 anonymously — verified.
+   - Privacy → `https://www.lionplan.org/privacy`, Terms →
+     `https://www.lionplan.org/terms`. Both 200 anonymously, both already listed
+     in `isPublicMarketingPath`, so Google's fetcher reaches them without a
+     session.
+   - Authorized domains → `lionplan.org`.
+3. **Audience → Publishing status → Publish app**, moving it out of Testing.
+   Branding does not reliably show while an app is in Testing.
+4. **Only upload a logo if you want to trigger verification.** A logo forces the
+   review; skipping it keeps the fast path. If review does get triggered and
+   Google emails asking you to verify a domain you do not own — `supabase.co`,
+   if it is sitting in Authorized domains — reply that it belongs to a
+   third-party service used for the OAuth integration. That is the documented
+   answer and it is accepted; it is not a dead end.
+
+### Route B — custom domain, optional, only if Route A is not enough
+
+Gets the screen to `auth.lionplan.org` rather than to `LionPlan`, so it is
+strictly weaker branding than Route A for money. Worth it only for the other
+reasons the docs list — portable API URLs, project migration. Order matters:
+step 3 before step 4, or every sign-in breaks.
+
+1. **Enable the add-on**, then **Supabase Dashboard → Project Settings →
+   General**, where the *Custom Domains* section lives (not a page of its own).
+   Enter `auth.lionplan.org`. There is a CLI path too — `supabase domains
+   create / reverify / activate --project-ref <ref> --custom-hostname
+   auth.lionplan.org`.
+2. **Add the CNAME and TXT records Supabase hands you, at name.com.**
+   `lionplan.org` is on the registrar's nameservers (`ns[1-4]….name.com`), not
+   Vercel DNS, so `vercel dns add` is the wrong tool.
+   - CNAME `auth` → `wwqtflgwpukwzfysnncv.supabase.co.`
+   - TXT `_acme-challenge.auth` → the value Supabase gives you
+   - **Enter the host as `auth`, not `auth.lionplan.org`.** Supabase's own docs
+     warn that registrars append the domain themselves, which silently creates
+     `auth.lionplan.org.lionplan.org`. Keep the TTL low while testing.
+3. **Google Cloud Console → Credentials → the OAuth client → Authorized
+   redirect URIs:** add `https://auth.lionplan.org/auth/v1/callback`
+   **in addition to** the existing `supabase.co` one. Do not remove the old one.
+4. **Only now activate.** Supabase's docs are explicit that Auth switches the
+   moment the domain is activated: "OAuth flows will advertise the custom
+   domain as a callback URL." Activate before step 3 and every sign-in fails
+   `redirect_uri_mismatch` until Google catches up.
+5. **`NEXT_PUBLIC_SUPABASE_URL` → `https://auth.lionplan.org`** in Vercel
+   (production and preview) and in `.env.local`. Not urgent — the docs confirm
+   the `supabase.co` domain keeps serving after activation.
+
+### 19a. RESOLVED — `www.lionplan.org/auth/callback` was not on the allow list
+
+Supabase validates `redirect_to` at callback time, so item 6 could not probe it
+from the authorize response. `/auth/v1/verify` with a bogus token does exercise
+it — where it sends you reveals whether the entry exists:
+
+```
+www.lionplan.org/auth/callback         -> https://lionplan.org/          ← REJECTED
+lionplan.org/auth/callback (apex)      -> https://lionplan.org/auth/callback
+columbia-catalog.vercel.app/auth/…     -> https://columbia-catalog.vercel.app/auth/callback
+evil.example.com/steal (control)       -> https://lionplan.org/          ← rejected, as it should be
+```
+
+The `www` host — the one production actually serves on, since the apex 308s to
+it — is treated exactly like the hostile control. So every student signing in on
+production has their code stranded on `https://lionplan.org/?code=…`.
+
+**Sign-in still works**, because `rescueStrandedAuthCode` in `proxy.ts` catches
+a stranded `code` on any path and forwards it to `/auth/callback`, and
+`cc_auth_next` carries the destination Supabase dropped. That is the net doing
+its job. It is still worth fixing, for the reason written above the function:
+it is a safety net, not a substitute for the allow list, and email confirmations
+and password resets have no `redirectTo` at all and always use the Site URL.
+
+Supabase → Authentication → URL Configuration:
+
+- **Site URL** → `https://www.lionplan.org`
+- **Redirect URLs** → add `https://www.lionplan.org/auth/callback`; drop
+  `https://columbia-catalog.vercel.app/auth/callback` once nothing points there
+
+**Done, and re-probed.** `www.lionplan.org/auth/callback` is honoured, with and
+without a `next` query; the apex still resolves; `evil.example.com` is still
+rejected and now falls back to `https://www.lionplan.org/`, which confirms the
+Site URL moved to `www` as well. Production is on the happy path rather than the
+`rescueStrandedAuthCode` net.
+
+The trap, for next time: an allow-list entry of `https://lionplan.org/**` does
+**not** cover `www.lionplan.org`. The glob matches the host literally, so the
+`www` host lands in the same bucket as a hostile URL. Any new host needs its own
+entry. The discriminating probe is `https://lionplan.org/some/other/path` — if
+that is allowed while `www` is not, the path glob is fine and it is the host
+that is failing to match.

@@ -17,12 +17,16 @@
  * path between them, rather than one function with a `kind` argument that
  * someone could later be tempted to sum over.
  *
- * ── Nothing is ingested yet ────────────────────────────────────────────────
+ * ── Coverage is the thing to keep in mind here ─────────────────────────────
  *
- * By decision, v1 ships with the pipeline built and no review data (see
- * .plans/BLOCKERS.md). Both functions therefore return `null` today, which is
- * the same answer they will return for a course nobody has ever reviewed —
- * and the UI already renders that state honestly rather than as a zero.
+ * The corpus is real now — ~30.7k reviews over ~4.6k instructors — but it is
+ * lopsided in a way every caller has to respect. Roughly a third of the
+ * sections offered in an upcoming term have an instructor we can say anything
+ * about, and course-level coverage is nearer 2%: 126 courses out of 10,582.
+ *
+ * So `null` is the COMMON answer, not the error case, and it means exactly one
+ * thing: nobody has reviewed this. It never means zero, never means bad, and a
+ * surface that renders it as either is lying. See `lib/reviews/coverage.ts`.
  */
 
 import { summarizeCourse, summarizeInstructor } from "@/lib/reviews/aggregate";
@@ -33,6 +37,9 @@ import { createAnonServerClient, getBrowserClient, isConfigured } from "./client
 
 /** Enough to make an aggregate stable; far more than any course will have. */
 const MAX_REVIEWS = 400;
+
+/** A whole feed's worth of instructors. See `getInstructorReputations`. */
+const MAX_BATCH_REVIEWS = 2000;
 
 function readClient() {
   if (!isConfigured()) return null;
@@ -134,6 +141,79 @@ export async function getInstructorReputation(
   const reviews = (data as unknown as RawRow[]).map(toRecord);
   if (reviews.length === 0) return null;
   return summarizeInstructor(reviews, instructorName);
+}
+
+/**
+ * The same read, for a whole screen of instructors at once.
+ *
+ * ── Why this exists next to `getInstructorReputation` ──────────────────────
+ *
+ * The single-instructor read is shaped for a hover card: one person, opened
+ * deliberately, `%name%` so a middle initial or a suffix cannot cost a match.
+ * A leading wildcard cannot use an index, which is fine once and ruinous
+ * twelve times — a feed calling it per card would issue twelve sequential
+ * scans before the first pixel.
+ *
+ * So the feed gets its own read: one query, exact names, `in`. That trade is
+ * only acceptable because it turns out to cost nothing. `instructors.full_name`
+ * and `reviews_raw.subject_ref` are already written in the same form, and an
+ * exact match over the upcoming terms covers 6,047 sections — the identical
+ * number the fuzzy match finds. We are buying a round trip, not accuracy.
+ *
+ * ── The cap is a backstop, not a budget ────────────────────────────────────
+ *
+ * The busiest instructor in the corpus has 131 reviews; the median has 4. A
+ * dozen names therefore land near 100 rows and could not plausibly reach 2,000.
+ * The limit exists so a future corpus cannot turn one feed render into an
+ * unbounded read, and the ordering is newest-first so that if it ever does
+ * bite, what survives is the recent half rather than an arbitrary half.
+ *
+ * Returns a map keyed by the name that was ASKED for, so a caller can look up
+ * with the string it already holds and never has to know how we matched.
+ */
+export async function getInstructorReputations(
+  instructorNames: readonly string[],
+): Promise<Map<string, ReputationSummary>> {
+  const out = new Map<string, ReputationSummary>();
+
+  const db = readClient();
+  if (!db) return out;
+
+  // Deduplicate before asking: a feed routinely repeats an instructor across
+  // two sections of the same course, and `in` with the same value twice is a
+  // wider query for an identical answer.
+  const names = [...new Set(instructorNames.map((name) => name.trim()).filter(Boolean))];
+  if (names.length === 0) return out;
+
+  const { data, error } = await db
+    .from("reviews_raw")
+    .select(SELECT)
+    .in("subject_ref", names)
+    .order("posted_at", { ascending: false })
+    .limit(MAX_BATCH_REVIEWS);
+
+  // A failed read is not "nobody has been reviewed". It returns an empty map
+  // for the same reason the single read returns null: the card renders as
+  // unrated, which is the honest reading of "we do not know".
+  if (error || !data) return out;
+
+  const byName = new Map<string, ReviewRecord[]>();
+  for (const row of data as unknown as RawRow[]) {
+    const key = row.subject_ref?.trim();
+    if (!key) continue;
+    const bucket = byName.get(key);
+    if (bucket) bucket.push(toRecord(row));
+    else byName.set(key, [toRecord(row)]);
+  }
+
+  for (const name of names) {
+    const reviews = byName.get(name);
+    if (!reviews || reviews.length === 0) continue;
+    // Same aggregator as every other surface. This file still does no maths.
+    out.set(name, summarizeInstructor(reviews, name));
+  }
+
+  return out;
 }
 
 /**

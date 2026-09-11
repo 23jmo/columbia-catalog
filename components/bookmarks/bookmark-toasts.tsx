@@ -80,7 +80,7 @@ export function announceRemoval(
 export function showSignInToast(): void {
   toast.info({
     title: "Sign in to save classes",
-    description: "Reading the catalog is free — saving needs a Columbia or Barnard account.",
+    description: "LionPlan is free to search and browse. Sign in to save classes for later.",
     dedupeKey: "bookmark-signed-out",
     action: {
       label: "Sign in with Columbia",

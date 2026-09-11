@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
+
+import { RiUploadCloud2Line } from "@remixicon/react";
 
 import { useSessionAccount } from "@/hooks/use-session-account";
 import {
@@ -17,6 +20,10 @@ import {
   declaredProgramIds,
   goBack,
   hasDeclinedMinors,
+  hasTranscriptCourses,
+  plannedCourses,
+  setPlannedSection,
+  takenCourses,
   NO_MINORS_PROGRAM_ID,
   RERANK_BATCH_SIZE,
   reconcileDegreeChange,
@@ -27,13 +34,16 @@ import {
   type GuestOnboardingState,
 } from "@/lib/onboarding/state";
 import { canPrefetchGuessDeck, prefetchGuessDeck } from "@/lib/onboarding/guess-cache";
-import { signIn } from "@/lib/db/auth";
 import {
   canPrefetchFeedPreview,
   peekCachedFeedPreview,
   prefetchFeedPreview,
 } from "@/lib/onboarding/feed-preview-cache";
 import { writeOnboardingHandoff } from "@/lib/onboarding/handoff";
+import { toGuestCourses } from "@/lib/onboarding/transcript";
+import { planStore } from "@/lib/schedule/plans";
+import { CURRENT_TERM } from "@/lib/constants";
+import { haptic } from "@/lib/haptics";
 import type { FeedCard } from "@/lib/recommend/feed";
 import {
   ensureOnboardingHydrated,
@@ -48,7 +58,8 @@ import type { School } from "@/lib/requirements/types";
 import { OrnamentAvatar } from "@/components/ornament/ornament-avatar";
 
 import { OnboardingScreen } from "./screen";
-import { StepCoursework } from "./step-coursework";
+import { useFeedPreview } from "./use-feed-preview";
+import { FeedPreviewCardSkeleton } from "./feed-teaser-cards";
 import {
   ClassYearQuestion,
   MajorsQuestion,
@@ -61,9 +72,115 @@ import {
   schoolsWithPrograms,
   type ProgramOption,
 } from "./step-degree";
-import { StepFeed } from "./step-feed";
-import { StepInterests } from "./step-interests";
-import { StepLove } from "./step-love";
+
+/* ==========================================================================
+ * The steps after the degree questions, split out of the first load
+ * ========================================================================== */
+
+/**
+ * Only the degree questions are imported outright. Everything after them is
+ * behind `dynamic`, and the reason is a bandwidth argument rather than a
+ * parse-time one.
+ *
+ * This route's document is render-blocked by one stylesheet, and that
+ * stylesheet shares an HTTP/2 connection with every script tag Next emits.
+ * Statically importing all seven screens put the transcript importer, the
+ * course search box, the feed card and everything the feed card reaches —
+ * bookmark controls, the week strip, instructor links, enrolment chips — into
+ * the entry chunk, so 2.1 MB of JavaScript competed with a 36 KB stylesheet for
+ * a throttled connection and first paint waited on the loser. Splitting the
+ * later screens out does not make the parse cheaper for a student who walks the
+ * whole flow; it takes their bytes off the wire during the seconds that decide
+ * when the first question appears.
+ *
+ * `ssr` stays on. These chunks still render on the server for whoever they
+ * belong to, and a student who resumes mid-flow gets their screen's markup in
+ * the document rather than a hole.
+ *
+ * The trade — a chunk fetch at the moment the student advances — is paid off by
+ * `useWarmStepChunks` below, which fetches them on an idle callback once the
+ * first question is up and the connection is quiet.
+ */
+const StepChoices = dynamic(() => import("./step-choices").then((m) => m.StepChoices));
+const StepCoursework = dynamic(() => import("./step-coursework").then((m) => m.StepCoursework));
+const StepPlanned = dynamic(() => import("./step-planned").then((m) => m.StepPlanned));
+const StepLove = dynamic(() => import("./step-love").then((m) => m.StepLove));
+const StepInterests = dynamic(() => import("./step-interests").then((m) => m.StepInterests));
+const StepFeed = dynamic(() => import("./step-feed").then((m) => m.StepFeed));
+/*
+ * The transcript panel is offered on the FIRST screen, and it is still behind
+ * `dynamic` — more so than anything above. It pulls the PDF text extractor and
+ * the OCR module's entry, none of which may enter the chunk that decides when
+ * the first question paints. It mounts only once the offer is pressed, so the
+ * fetch is paid by the press and by nobody else.
+ */
+const TranscriptImport = dynamic(() =>
+  import("./transcript-import").then((m) => m.TranscriptImport),
+);
+
+/**
+ * Pull the later screens' chunks down once the page has finished loading.
+ *
+ * Ordered the way the flow is walked, so the screen the student reaches next is
+ * the one already in cache.
+ *
+ * ── Why `load` and not an idle callback ────────────────────────────────────
+ *
+ * An idle callback was the first attempt and it undid the split. The main
+ * thread goes idle constantly while a page is still fetching — it is idle every
+ * time it is waiting on the network, which on a throttled connection is most of
+ * the first two seconds — so `requestIdleCallback` fired long before the entry
+ * chunk had landed and put all five chunks back into contention with it.
+ * Measured on this route it cancelled the entire gain: the same 580 KB crossed
+ * the wire before first paint, just in a different order.
+ *
+ * `load` is the event that actually means "the things that decide first paint
+ * are done". Idle is still the right moment *after* that, so the two are used
+ * together rather than one instead of the other.
+ */
+function useWarmStepChunks(enabled: boolean): void {
+  useEffect(() => {
+    if (!enabled) return;
+
+    let cancelled = false;
+    let idleHandle: number | undefined;
+    let timeoutHandle: number | undefined;
+
+    const warm = () => {
+      if (cancelled) return;
+      void import("./step-choices");
+      void import("./step-coursework");
+      void import("./step-planned");
+      void import("./step-love");
+      void import("./step-interests");
+      void import("./step-feed");
+    };
+
+    const scheduleWarm = () => {
+      if (cancelled) return;
+      // Safari has no `requestIdleCallback`. A short timeout is the same
+      // intent: not in this frame, but soon.
+      if (typeof window.requestIdleCallback === "function") {
+        idleHandle = window.requestIdleCallback(warm, { timeout: 2000 });
+      } else {
+        timeoutHandle = window.setTimeout(warm, 300);
+      }
+    };
+
+    if (document.readyState === "complete") {
+      scheduleWarm();
+    } else {
+      window.addEventListener("load", scheduleWarm, { once: true });
+    }
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("load", scheduleWarm);
+      if (idleHandle !== undefined) window.cancelIdleCallback(idleHandle);
+      if (timeoutHandle !== undefined) window.clearTimeout(timeoutHandle);
+    };
+  }, [enabled]);
+}
 
 /**
  * The onboarding wizard.
@@ -179,12 +296,15 @@ function hasAnswersToFlush(state: GuestOnboardingState): boolean {
 function nextDegreeLabel(
   degreeQuestions: readonly DegreeQuestion[],
   from: DegreeQuestion,
+  skipsCoursework: boolean,
 ): string {
   const index = degreeQuestions.indexOf(from);
   const next = index >= 0 ? degreeQuestions[index + 1] : undefined;
   if (next === "major") return "Continue to major";
   if (next === "minors") return "Continue to minors";
-  return "Continue to coursework";
+  // Where the arrow actually goes once a transcript is on the record: see
+  // `hasTranscriptCourses` in the state module.
+  return skipsCoursework ? "Continue to this term" : "Continue to coursework";
 }
 
 export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
@@ -200,6 +320,7 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
     status: "idle",
   });
   const [signInError, setSignInError] = useState<string | null>(null);
+  const [isTranscriptOpen, setIsTranscriptOpen] = useState(false);
 
   /*
    * Which of the four degree questions is on screen.
@@ -259,13 +380,38 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
   }, []);
 
   /*
-   * Warm course listings as soon as the flow is up. The coursework search used
-   * to cold-load the full catalog-with-sections dump on the first keystroke.
+   * Warm course listings once the flow is up. The coursework search used to
+   * cold-load the full catalog-with-sections dump on the first keystroke.
+   *
+   * After `load` rather than straight out of the effect. This is a server
+   * action, so it is a POST that carries an RSC render of the route back with
+   * it, and it used to fire the instant hydration finished — which is the same
+   * instant the first question finally paints. Priming a cache the student
+   * cannot reach for another three screens is not worth contending with that.
    */
   useEffect(() => {
     if (!isHydrated) return;
-    void warmCourseSearchAction();
+    let cancelled = false;
+    const warm = () => {
+      if (!cancelled) void warmCourseSearchAction();
+    };
+    if (document.readyState === "complete") {
+      const handle = window.setTimeout(warm, 300);
+      return () => {
+        cancelled = true;
+        window.clearTimeout(handle);
+      };
+    }
+    window.addEventListener("load", warm, { once: true });
+    return () => {
+      cancelled = true;
+      window.removeEventListener("load", warm);
+    };
   }, [isHydrated]);
+
+  // The screens after the degree questions, fetched while the connection is
+  // quiet so advancing never waits on a chunk. See `useWarmStepChunks`.
+  useWarmStepChunks(isHydrated);
 
   /*
    * Warm the guess deck and feed preview while the student finishes degree
@@ -301,6 +447,16 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
     state.interestTags,
     programOptions,
   ]);
+
+  /*
+   * The last screen's cards, ranked here rather than inside the gate.
+   *
+   * `enabled` is what keeps this from firing a rank on the school question:
+   * the hook mounts with the flow and does nothing until the student is
+   * actually on the last step. The prefetch above usually means the answer is
+   * already sitting in the cache by then, and this resolves in the same frame.
+   */
+  const feedPreview = useFeedPreview(state, isHydrated && state.step === "feed");
 
   /* ── Guest → account ──────────────────────────────────────────────────── */
 
@@ -366,6 +522,10 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
 
   const setLiked = useCallback((courseId: string, liked: boolean | null) => {
     updateOnboardingState((current) => setLikedIn(current, courseId, liked));
+  }, []);
+
+  const setSection = useCallback((courseId: string, sectionId: string | null) => {
+    updateOnboardingState((current) => setPlannedSection(current, courseId, sectionId));
   }, []);
 
   /**
@@ -507,8 +667,8 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
    *
    * Stepping back INTO the degree step lands on its last question rather than
    * its first, because that is the one the student just came from — arriving at
-   * "which school?" after pressing back from the coursework screen would read
-   * as having lost the two answers in between.
+   * "which school?" after pressing back through the coursework screen would
+   * read as having lost the two answers in between.
    */
   const back = () => {
     setDirection(-1);
@@ -516,7 +676,13 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
       if (degreeIndex > 0) setVisitedQuestion(degreeQuestions[degreeIndex - 1]);
       return;
     }
-    if (state.step === "coursework")
+    // `choices` is what sits directly after the degree questions now, so it is
+    // the step whose back button re-enters them — and it re-enters at the LAST
+    // one, which is the question the student actually just came from.
+    // `love` is the step directly after them for a student who handed over a
+    // transcript on the first screen — `goBack` skips the same two steps
+    // `advance` did, and this pins the same sub-question.
+    if (state.step === "choices" || (state.step === "planned" && hasTranscriptCourses(state)))
       setVisitedQuestion(degreeQuestions[degreeQuestions.length - 1]);
     updateOnboardingState((current) => goBack(current));
   };
@@ -535,6 +701,16 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
 
   const startFirstPageSignIn = async () => {
     setSignInError(null);
+    /*
+     * `signIn` is reached through `import()` rather than a static import for
+     * the same reason `use-session-account.ts` defers its client: the module
+     * behind it is the whole Supabase SDK, and a static import here would put
+     * it back in this route's entry chunk — in front of hydration, and so in
+     * front of the first question — to serve a control most students never
+     * press. Here it is loaded by the press itself, which is already a
+     * navigation away from the page.
+     */
+    const { signIn } = await import("@/lib/db/auth");
     // Stay on this path so a returning student who is not done with setup
     // keeps walking the wizard, now with their photo in the corner.
     const { error } = await signIn({ next: "/onboarding" });
@@ -560,6 +736,7 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
     const guest = getOnboardingSnapshot().state;
     const preview = cards.length > 0 ? cards : peekCachedFeedPreview(guest);
     if (preview && preview.length > 0) writeOnboardingHandoff(preview);
+    putPlannedSectionsOnSchedule(guest);
 
     if (
       session.account &&
@@ -609,6 +786,14 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
     );
   }
 
+  const skipsCoursework = hasTranscriptCourses(state);
+  // Both rows a transcript writes: finished courses and the in-progress ones
+  // that go to this term's screen. The count is the whole import, or a
+  // three-row transcript with one "Planned" line would report two.
+  const transcriptCount = state.courses.filter(
+    (c) => c.source === "transcript_pdf" || c.source === "plan",
+  ).length;
+
   if (state.step === "school") {
     if (degreeQuestion === "school") {
       return (
@@ -618,9 +803,64 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
           canAdvance={canAdvance(state)}
           nextLabel="Continue to class year"
           hue="roseBlue"
+          // The panel is a card with a file drop and a review list; the
+          // narrow measure the chips sit in folds its rows over.
+          wide={isTranscriptOpen}
           onSignIn={showSignIn ? startFirstPageSignIn : undefined}
           signInError={signInError}
         >
+          {/*
+            ── The transcript, before anything else ─────────────────────────
+
+            First on the first screen, on purpose. The coursework screens are
+            the long part of the flow, and a student with a transcript to hand
+            can answer all of them in one file. Offering it three screens in,
+            as a footnote under a guessed deck, told that student to confirm
+            our guess at a document they were holding. Here it is the first
+            thing they can do, and doing it takes the deck and the fork
+            questions off their path — see `hasTranscriptCourses`.
+
+            Quiet styling still. It is an offer, not the gate: the school
+            question below is what the arrow actually waits on.
+          */}
+          <div className="mb-6 flex flex-col items-center gap-3">
+            {transcriptCount > 0 ? (
+              <p
+                role="status"
+                className="text-center text-caption-1-regular text-text-secondary"
+              >
+                {`${transcriptCount} ${transcriptCount === 1 ? "course" : "courses"} imported. We'll skip the coursework questions.`}
+              </p>
+            ) : (
+              <p className="text-center text-caption-1-regular text-text-tertiary">
+                Have your transcript? Import it and skip the coursework questions.
+              </p>
+            )}
+            {isTranscriptOpen ? null : (
+              <button
+                type="button"
+                onClick={() => {
+                  haptic("selection");
+                  setIsTranscriptOpen(true);
+                }}
+                className="flex cursor-pointer items-center gap-2 rounded-full border border-border-button-default px-4 py-2 text-body-medium text-text-secondary transition-colors outline-none hover:bg-background-secondary-hover hover:text-text-primary focus-visible:ring-2 focus-visible:ring-border-focus-ring pointer-coarse:py-2.5"
+              >
+                <RiUploadCloud2Line className="size-4 shrink-0" aria-hidden />
+                {transcriptCount > 0 ? "Import another" : "Import transcript"}
+              </button>
+            )}
+            {isTranscriptOpen ? (
+              <div className="w-full text-left">
+                <TranscriptImport
+                  onClose={() => setIsTranscriptOpen(false)}
+                  onImport={(courses, candidates) =>
+                    addCourses(toGuestCourses(courses, candidates))
+                  }
+                />
+              </div>
+            ) : null}
+          </div>
+
           <SchoolQuestion
             school={state.school}
             coveredSchools={coveredSchools}
@@ -648,7 +888,7 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
         hue="roseCyan"
         /* Where the arrow actually goes — which is not always the program
            question, since that one is skipped for uncovered schools. */
-        nextLabel={nextDegreeLabel(degreeQuestions, "classYear")}
+        nextLabel={nextDegreeLabel(degreeQuestions, "classYear", skipsCoursework)}
       >
           <ClassYearQuestion
             classYear={state.classYear}
@@ -666,7 +906,7 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
           wide
           hue="cyanRose"
           canAdvance={canAdvanceMajor}
-          nextLabel={nextDegreeLabel(degreeQuestions, "major")}
+          nextLabel={nextDegreeLabel(degreeQuestions, "major", skipsCoursework)}
         >
           <MajorsQuestion
             school={state.school}
@@ -687,7 +927,7 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
         wide
         hue="cyanRose"
         canAdvance={canAdvanceMinors}
-        nextLabel="Continue to coursework"
+        nextLabel={skipsCoursework ? "Continue to this term" : "Continue to coursework"}
       >
         <MinorsQuestion
           school={state.school}
@@ -701,17 +941,43 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
     );
   }
 
+  if (state.step === "choices") {
+    return (
+      <OnboardingScreen
+        {...chrome}
+        question="Which of these classes have you already taken?"
+        wide
+        nextLabel="Continue"
+        // Not `cyanRose` (the degree question before) or `violetRose` (the
+        // coursework screen after): the ornament changes hue per screen so
+        // the flow reads as moving, and a repeat next to its own neighbour is
+        // the one place that stops working.
+        hue="blueRose"
+      >
+        <StepChoices
+          state={state}
+          addCourses={addCourses}
+          removeCourse={removeCourse}
+          /*
+            Nothing to ask — a first-year, most often, whose deck carries no
+            choose-one questions at all. Skip in whatever direction the student
+            was already travelling, so a back press from the coursework screen
+            does not bounce off an empty screen straight back forward again.
+          */
+          onNothingToAsk={direction === 1 ? forward : back}
+        />
+      </OnboardingScreen>
+    );
+  }
+
   if (state.step === "coursework") {
     return (
       <OnboardingScreen
         {...chrome}
         question="Here's what we think you've taken."
         wide
-        nextLabel="Continue to what you liked"
+        nextLabel="Continue to this term"
         hue="violetRose"
-        // The only screen that raises the transcript toast, and so the only one
-        // whose advance arrow would otherwise end up underneath it.
-        hasPinnedToast
       >
         <StepCoursework
           state={state}
@@ -719,6 +985,25 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
           addCourses={addCourses}
           removeCourse={removeCourse}
           onConfirmationBatch={onConfirmationBatch}
+        />
+      </OnboardingScreen>
+    );
+  }
+
+  if (state.step === "planned") {
+    return (
+      <OnboardingScreen
+        {...chrome}
+        question="What are you taking this term?"
+        wide
+        hue="roseCyan"
+        nextLabel="Continue to what you liked"
+      >
+        <StepPlanned
+          state={state}
+          addCourse={addCourse}
+          removeCourse={removeCourse}
+          setSection={setSection}
         />
       </OnboardingScreen>
     );
@@ -733,7 +1018,9 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
         hue="tealViolet"
         nextLabel="Continue to your interests"
       >
-        <StepLove courses={state.courses} onSetLiked={setLiked} />
+        {/* Only what has been taken. Nobody can say whether they liked a
+            course they are three weeks into. */}
+        <StepLove courses={takenCourses(state)} onSetLiked={setLiked} />
       </OnboardingScreen>
     );
   }
@@ -759,6 +1046,47 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
   }
 
   /*
+   * ── The beat before the feed ───────────────────────────────────────────
+   *
+   * Ranking a cold feed pages the active catalog and builds a prerequisite
+   * graph over every course in it, which is measured in seconds. Rendering the
+   * final screen through that wait meant the headline announced "Here's your
+   * first feed." above four pulsing placeholders — the app claiming a thing it
+   * did not have, on the one screen the whole flow has been building toward.
+   *
+   * So the wait gets its own question. The ornament switches to `thinking`,
+   * which is the mood written for exactly this (it reads as work happening
+   * rather than as a progress bar lying about progress), and the placeholders
+   * stay, because they are the shape of what is coming and an empty ground
+   * would be a worse wait than a busy one.
+   *
+   * The transition needs no new motion. `OnboardingScreen` keys its
+   * `AnimatePresence` on the question, so changing the question IS the reveal
+   * — the same 240ms crossfade every other step gets, followed by the cards'
+   * own stagger underneath it. Two beats the student watches instead of one
+   * they miss.
+   *
+   * A warm cache skips this screen entirely rather than flashing it; see
+   * `useFeedPreview`.
+   */
+  if (feedPreview.status === "loading") {
+    return (
+      <OnboardingScreen
+        onBack={back}
+        direction={direction}
+        question="Building your first feed."
+        wide
+        hue="cyanViolet"
+        mood="thinking"
+        lockViewport={session.account === null}
+        account={session.account}
+      >
+        <FeedPreviewWorking />
+      </OnboardingScreen>
+    );
+  }
+
+  /*
    * The last screen advances by leaving the flow, so it has no arrow. Guests
    * sign in; signed-in students take the catalog button. There is no guest
    * browse exit — unsigned visitors stay here until they have an account.
@@ -774,11 +1102,68 @@ export function OnboardingFlow({ programOptions }: OnboardingFlowProps) {
       account={session.account}
     >
       <StepFeed
-        state={state}
+        preview={feedPreview}
         signedIn={session.account !== null}
         migration={migration}
         onFinish={finish}
       />
     </OnboardingScreen>
   );
+}
+
+/**
+ * What the last screen looks like while its cards are still being ranked.
+ *
+ * The same four placeholders and the same column the gate uses, so the swap
+ * into the real feed changes what is in the cards and not where they are.
+ * `aria-busy` and a live label carry the same information to a screen reader
+ * that the ornament carries visually; the placeholders themselves are
+ * `aria-hidden` and say nothing.
+ */
+function FeedPreviewWorking() {
+  return (
+    <div
+      className="relative flex w-full min-w-0 max-w-full flex-col gap-3.5 pt-2"
+      aria-busy="true"
+      aria-label="Ranking your first recommendations"
+    >
+      {Array.from({ length: 4 }, (_, index) => (
+        <FeedPreviewCardSkeleton key={index} />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Put every planned section onto the schedule for this term.
+ *
+ * The plan store is local-first: this writes to `localStorage`, and
+ * `lib/db/plan-sync.ts` claims an anonymous plan under the real account on
+ * first sign-in. So a guest who finishes onboarding, signs in, and lands on
+ * the feed has their planned sections on the same schedule the feed's clash
+ * check and the chat's schedule tools read.
+ *
+ * One known gap: a signed-in student who already has plans on the server
+ * and redoes onboarding gets the server's plans back on the next reconcile,
+ * because remote wins over local there. Their planned COURSES still land in
+ * `student_courses` through the migration; only the section-level schedule
+ * entry is lost in that case.
+ */
+function putPlannedSectionsOnSchedule(state: GuestOnboardingState): void {
+  const sectionIds = plannedCourses(state)
+    .map((course) => course.sectionId)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+  if (sectionIds.length === 0) return;
+
+  try {
+    const primary =
+      planStore.getPrimaryPlan(CURRENT_TERM) ??
+      planStore.createPlan({ name: "My schedule", termCode: CURRENT_TERM });
+    for (const sectionId of sectionIds) {
+      if (!primary.sectionIds.includes(sectionId)) planStore.addSection(primary.planId, sectionId);
+    }
+  } catch (cause) {
+    // The schedule is the bonus, not the record. Never let it block finishing.
+    console.error("onboarding: could not write planned sections to the schedule", cause);
+  }
 }

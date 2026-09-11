@@ -178,11 +178,23 @@ export const SEAS_MAJOR_COMPUTER_SCIENCE: Program = {
      * requirements, roughly 17 points, that simply never appeared.
      *
      * Transcribed from the Degree Track table on the same page as the rest of
-     * this file and verified against the catalog on 2026-08-24. Every course
-     * below resolves to a real row except `EEEB UN2005`, which the Bulletin
-     * lists but which is not in our catalog — kept, because a named course that
-     * never matches costs nothing, and silently dropping an option the Bulletin
-     * offers would tell a student who took it that it did not count.
+     * this file and verified against the catalog on 2026-08-24.
+     *
+     * `EEEB UN2005` is NOT an ordinary catalog gap, which is what this comment
+     * said until 2026-08-26. It is dead on the Bulletin's own page: every other
+     * code in the table renders as a hyperlink with a title, and that one
+     * renders as bare text with an empty title cell — the signature of a code
+     * CourseLeaf could not resolve against the registrar. The Bulletin's course
+     * endpoint returns an empty record for it too.
+     *
+     * The probable intent is `BIOL UN2005` (Intro Bio I, 4 pt), which IS in our
+     * catalog, which `seas-major-biomedical-engineering` already requires, and
+     * which the two APAM pages print for this same requirement. It is
+     * deliberately NOT added to the rule: that substitution is an inference, and
+     * accepting a course the department may not accept is the over-counting
+     * direction — a student sent to the registrar after add/drop rather than to
+     * an adviser before it. Named in the group note instead, so a student who
+     * took Intro Bio I can see why we cannot tick it and go and ask.
      */
     {
       id: "physics",
@@ -213,7 +225,7 @@ export const SEAS_MAJOR_COMPUTER_SCIENCE: Program = {
        * do not. Copying their group wholesale would have refused a course this
        * degree explicitly accepts.
        */
-      note: "One lecture course, taken in semester I or II. EEEB UN2005 is listed by the Bulletin but is not in our catalog, so it will not match automatically.",
+      note: "One lecture course, taken in semester I or II. EEEB UN2005 does not exist: the Bulletin prints it with no title and no link, and its own course endpoint has no record of it, so nothing can ever match it. If you took Intro Biology I (BIOL UN2005) for this requirement, it is almost certainly what the Bulletin means — but we cannot confirm that, so ask your adviser to tick this rather than trusting us.",
       rule: {
         kind: "n_of",
         n: 1,
@@ -256,7 +268,7 @@ export const SEAS_MAJOR_COMPUTER_SCIENCE: Program = {
     {
       id: "linear-algebra",
       label: "Linear Algebra",
-      note: "Choose one. MATH UN2015 may satisfy this and the probability/statistics requirement at the same time — the department says so explicitly.",
+      note: "Choose one. COMS W3251 and MATH UN2020 are not in our catalog, so those two routes will show as unmet — a gap in what we hold, not a judgement about your record. MATH UN2015 may satisfy this and the probability/statistics requirement at the same time — the department says so explicitly.",
       rule: {
         kind: "n_of",
         n: 1,
@@ -285,14 +297,14 @@ export const SEAS_MAJOR_COMPUTER_SCIENCE: Program = {
     {
       id: "intro-programming",
       label: "Introductory Programming",
-      note: "COMS W1004, or COMS W1007 for students with prior experience. A 4 or 5 on the CS AP exam exempts you from this and leaves nothing on your record to match.",
+      note: "COMS W1004, or COMS W1007 for students with prior experience. COMS W1007 is not in our catalog, so taking it will leave this requirement showing as unmet — that is a gap in what we hold, not a judgement about your record. A 4 or 5 on the CS AP exam exempts you from this and leaves nothing on your record to match either.",
       rule: { kind: "n_of", n: 1, courses: ["COMS W1004", "COMS W1007"] },
       sourceUrl: SOURCE,
     },
     {
       id: "data-structures",
       label: "Data Structures",
-      note: "COMS W3134, or the honors course COMS W3137.",
+      note: "COMS W3134, or the honors course COMS W3137. COMS W3137 is not in our catalog, so the honors route will show as unmet — that is a gap in what we hold, not a judgement about your record.",
       rule: { kind: "n_of", n: 1, courses: ["COMS W3134", "COMS W3137"] },
       sourceUrl: SOURCE,
     },

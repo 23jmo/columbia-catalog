@@ -33,7 +33,11 @@ export function formatRecommendationReason(reason: RecommendationReason | undefi
     case "because_you_took":
       return `Like ${andMore(reason.similarTo)}`;
     case "unlocks":
-      return `Opens up ${andMore(reason.courseIds)}`;
+      // `andMore` would render the three-course sample as "COMS W3134 +2" and
+      // claim two when there may be forty. The total is the honest number.
+      return reason.unlockedCount === 1
+        ? "Opens up 1 more course"
+        : `Opens up ${reason.unlockedCount} more courses`;
   }
 }
 

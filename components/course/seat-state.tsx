@@ -124,7 +124,11 @@ export function SeatState({ section, className }: { section: SeatSection; classN
           {reading.remaining != null ? reading.remaining : "—"}
         </span>
         <span className="text-body-regular text-text-secondary">
-          {reading.remaining != null ? "seats left" : "seats left unknown"}
+          {reading.remaining == null
+            ? "seats left unknown"
+            : reading.remaining === 1
+              ? "seat left"
+              : "seats left"}
         </span>
         <span className="ml-auto text-caption-1-regular tabular-nums text-text-secondary">
           {reading.enrolled != null && reading.capacity != null

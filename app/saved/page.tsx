@@ -37,7 +37,13 @@ export default async function SavedPage() {
 
   return (
     <AppShell activeNav="saved">
-      <PageContent className="max-w-5xl gap-5">
+      {/*
+        720px, the same measure as `/` and the last onboarding screen. These
+        are the same cards as the feed's, and a card stretched to 1024px is a
+        1024px-wide seat meter — the reason `max-w-5xl` had to go with the
+        folder gallery it was sized for.
+      */}
+      <PageContent className="max-w-[720px] gap-5">
         {/* The bookmark half of the agent inbox. `/schedule` renders the plan
             half; neither page shows the other's cards, so a proposal is only
             ever answerable in one place. Renders nothing when empty. */}

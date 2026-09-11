@@ -65,23 +65,25 @@
  * comment on `upper-level-electives`; the rule is now `n_matching` over the
  * same enumeration with `excludeGroups: ["core-courses"]`.
  *
- * ── Coverage: eleven named courses have no row in our catalog ──────────────
+ * ── Coverage: five named courses have no row in our catalog ────────────────
  *
- * Checked against the live catalog on 2026-08-24 with `npm run dump:program
- * cc-major-biology`. All eleven are on the elective list and all eleven are
- * printed by the Bulletin exactly as they are written here, so none is a
- * transcription error — they are courses that were not offered in any of the
- * four terms our catalog covers (20243, 20251, 20263, 20271; note the hole at
- * Fall 2025 / Spring 2026). Each was probed for an alternate school qualifier
- * and none has one:
+ * Re-checked 2026-08-26. **This count shrinks as the catalog backfills, so it
+ * is a measurement with a date on it, not a fact about the Bulletin.** It read
+ * eleven on 2026-08-24 and reads five today; six of the original eleven now
+ * resolve. Anyone editing this file should re-measure rather than trust the
+ * number, and `dump-program` will NOT do it for you — these codes live in the
+ * selector's `include`, which its not-in-catalog pass does not walk.
  *
- *   BIOL UN3019, BIOL UN3560, BIOL UN3799, BIOL GU4002, BIOL GU4035,
- *   BIOL GU4075, BIOL GU4193, BIOL GU4402, BIOL GU4600, BIOL GU4777,
- *   CHEM GU4324
+ * All five are on the elective list and all five are printed by the Bulletin
+ * exactly as they are written here, so none is a transcription error — they are
+ * courses that were not offered in any term our catalog covers. Each was probed
+ * for an alternate school qualifier and none has one:
  *
- * BIOL UN3560 and BIOL UN3799 are the undergraduate numbers of BIOL GU4560 and
- * BIOL GU4799, both of which DO resolve; the Bulletin prints the pair joined by
- * "or" and only the GU half has appeared in a covered term.
+ *   BIOL UN3560, BIOL GU4002, BIOL GU4035, BIOL GU4193, BIOL GU4600
+ *
+ * BIOL UN3560 is the undergraduate number of BIOL GU4560, which DOES resolve;
+ * the Bulletin prints the pair joined by "or" and only the GU half has appeared
+ * in a covered term.
  *
  * They are kept rather than dropped. A named course that never matches costs a
  * student nothing; silently removing an option the Bulletin offers tells a
@@ -100,6 +102,59 @@ import type { Program } from "../types";
 
 const SOURCE =
   "https://bulletin.columbia.edu/columbia-college/departments-instruction/biological-sciences/#requirementstextcontainer";
+
+/**
+ * The Bulletin's Upper-Level Elective enumeration, all 37, in its own order.
+ *
+ * Exported because `cc-major-neuroscience-and-behavior` incorporates this exact
+ * list by reference — the Biological Sciences page tells an N&B student to draw
+ * their two biology electives "from the list of Upper Level Electives under the
+ * Biology Major". Two literal copies of one Bulletin table is the drift this
+ * directory's seventh trap warns about: the copies rot apart, and only one of
+ * them gets fixed when the department revises the list.
+ *
+ * Thirty-four printed rows; `BIOL UN3073`/`GU4073`, `UN3560`/`GU4560` and
+ * `UN3799`/`GU4799` are printed as "or" pairs, which is why the count is 37.
+ */
+export const BIOLOGY_UPPER_LEVEL_ELECTIVES = [
+  "BIOL UN3004",
+  "BIOL UN3005",
+  "BIOL UN3006",
+  "BIOL UN3019",
+  "BIOL UN3022",
+  "BIOL UN3025",
+  "BIOL UN3031",
+  "BIOL UN3041",
+  "BIOL UN3073",
+  "BIOL GU4073",
+  "BIOL UN3300",
+  "BIOL UN3320",
+  "BIOL UN3404",
+  "BIOL UN3560",
+  "BIOL GU4560",
+  "BIOL UN3799",
+  "BIOL GU4799",
+  "BIOL GU4001",
+  "BIOL GU4002",
+  "BIOL GU4034",
+  "BIOL GU4035",
+  "BIOL GU4036",
+  "BIOL GU4075",
+  "BIOL GU4080",
+  "BIOL GU4193",
+  "BIOL GU4290",
+  "BIOL GU4300",
+  "BIOL GU4310",
+  "BIOL GU4323",
+  "CHEM GU4324",
+  "BIOL GU4402",
+  "BIOL GU4501",
+  "BIOL GU4510",
+  "BIOL GU4512",
+  "BIOL GU4551",
+  "BIOL GU4600",
+  "BIOL GU4777",
+];
 
 export const CC_MAJOR_BIOLOGY: Program = {
   id: "cc-major-biology",
@@ -190,7 +245,7 @@ export const CC_MAJOR_BIOLOGY: Program = {
        * with "Any course not listed below must be approved by a biology
        * adviser to count toward the major", so the set genuinely moves.
        */
-      note: "Two additional 3000- or 4000-level lecture courses of at least 3 points each, on top of the two core courses. BIOL UN3500 cannot be used. Anything not on this list needs a biology adviser's approval. SCNC, HPSC and BIOT courses never count, and neither do Barnard courses. Eleven of the courses named below are not in our catalog, so they will not match automatically — see the note at the top of this file.",
+      note: "Two additional 3000- or 4000-level lecture courses of at least 3 points each, on top of the two core courses. BIOL UN3500 cannot be used. Anything not on this list needs a biology adviser's approval. SCNC, HPSC and BIOT courses never count, and neither do Barnard courses. Five of the courses named below are not in our catalog, so they will not match automatically — see the note at the top of this file.",
       rule: {
         kind: "n_matching",
         n: 2,
@@ -201,45 +256,7 @@ export const CC_MAJOR_BIOLOGY: Program = {
            * UN2501, UN3040) are on this list; neither are BIOL UN2005/UN2006.
            */
           excludeGroups: ["core-courses"],
-          include: [
-            "BIOL UN3004",
-            "BIOL UN3005",
-            "BIOL UN3006",
-            "BIOL UN3019",
-            "BIOL UN3022",
-            "BIOL UN3025",
-            "BIOL UN3031",
-            "BIOL UN3041",
-            "BIOL UN3073",
-            "BIOL GU4073",
-            "BIOL UN3300",
-            "BIOL UN3320",
-            "BIOL UN3404",
-            "BIOL UN3560",
-            "BIOL GU4560",
-            "BIOL UN3799",
-            "BIOL GU4799",
-            "BIOL GU4001",
-            "BIOL GU4002",
-            "BIOL GU4034",
-            "BIOL GU4035",
-            "BIOL GU4036",
-            "BIOL GU4075",
-            "BIOL GU4080",
-            "BIOL GU4193",
-            "BIOL GU4290",
-            "BIOL GU4300",
-            "BIOL GU4310",
-            "BIOL GU4323",
-            "CHEM GU4324",
-            "BIOL GU4402",
-            "BIOL GU4501",
-            "BIOL GU4510",
-            "BIOL GU4512",
-            "BIOL GU4551",
-            "BIOL GU4600",
-            "BIOL GU4777",
-          ],
+          include: BIOLOGY_UPPER_LEVEL_ELECTIVES,
         },
       },
       sourceUrl: SOURCE,

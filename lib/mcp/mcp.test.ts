@@ -138,7 +138,9 @@ describe("tool authorization", () => {
 
     expect(result.isError).toBe(true);
     const payload = parseToolError(result);
-    expect(payload.requiredScopes).toContain("schedule:read");
+    // `get_my_schedule` reads the saved list now, so the scope it names is the
+    // one that actually guards that data — see the tool's own note.
+    expect(payload.requiredScopes).toContain("bookmarks:rw");
     // The remedy travels with the refusal. Without it the agent reports a bare
     // failure and the student has no next step.
     expect(String(payload.howToFix)).toMatch(/OAuth/i);

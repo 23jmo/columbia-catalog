@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useRef, useState, type ComponentProps, type ReactNode, type RefObject } from "react";
+import Link from "next/link";
 import {
   Button as AriaButton,
   Dialog as AriaDialog,
@@ -184,6 +185,15 @@ export interface DropdownItemProps {
   /** Highlights the row like the hover state (current selection). */
   selected?: boolean;
   onSelect?: () => void;
+  /**
+   * Makes the row a link rather than a button.
+   *
+   * A menu row that navigates should be an anchor, not a button with a
+   * `router.push` in it: only a real href gives the reader cmd-click, middle
+   * click, "open in new tab" and a status-bar preview of where they are about
+   * to go. `onSelect` still fires — a controlled menu uses it to close itself.
+   */
+  href?: string;
   /** Row padding defaults to p-2 — override for denser rows (px-2 py-1.5). */
   className?: string;
   children: ReactNode;
@@ -193,18 +203,27 @@ export interface DropdownItemProps {
  * A menu row. Content is free-form — icon + label, avatar + name, label +
  * trailing badge — laid out in a gap-2 flex row.
  */
-export function DropdownItem({ selected, onSelect, className, children }: DropdownItemProps) {
+export function DropdownItem({ selected, onSelect, href, className, children }: DropdownItemProps) {
+  const classes = cx(MENU_ITEM, selected ? MENU_ITEM_ACTIVE : MENU_ITEM_INTERACTIVE, className);
+
+  if (href) {
+    return (
+      // `aria-current`, not `aria-pressed`: a link is somewhere you go, not a
+      // control you toggle, and `pressed` on an anchor is a lie to a screen
+      // reader about what the row does.
+      <Link
+        href={href}
+        onClick={onSelect}
+        aria-current={selected ? "page" : undefined}
+        className={classes}
+      >
+        {children}
+      </Link>
+    );
+  }
+
   return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      onClick={onSelect}
-      className={cx(
-        MENU_ITEM,
-        selected ? MENU_ITEM_ACTIVE : MENU_ITEM_INTERACTIVE,
-        className,
-      )}
-    >
+    <button type="button" aria-pressed={selected} onClick={onSelect} className={classes}>
       {children}
     </button>
   );

@@ -4,12 +4,14 @@ import { useSyncExternalStore } from "react";
 import { RiCloseLine } from "@remixicon/react";
 
 import { NotificationViewport } from "@/components/base/notification/notification";
+import { HapticRoot } from "@/components/haptics/haptic-root";
 import {
   dismiss,
   getToastServerSnapshot,
   getToastSnapshot,
   subscribeToasts,
 } from "@/lib/toast/store";
+import { haptic } from "@/lib/haptics";
 import { cx } from "@/utils/cx";
 
 /**
@@ -43,7 +45,9 @@ export function OnboardingToaster() {
   );
 
   return (
-    <NotificationViewport position="bottom-center" aria-label="Notifications">
+    <>
+      <HapticRoot />
+      <NotificationViewport position="bottom-center" aria-label="Notifications">
       {toasts.map((toast) => (
         <div
           key={toast.id}
@@ -74,6 +78,7 @@ export function OnboardingToaster() {
               <button
                 type="button"
                 onClick={() => {
+                  haptic("selection");
                   toast.action?.onPress?.();
                   // The offer has been taken; leaving it on screen would sit
                   // over the panel it just opened.
@@ -88,7 +93,10 @@ export function OnboardingToaster() {
 
           <button
             type="button"
-            onClick={() => dismiss(toast.id)}
+            onClick={() => {
+              haptic("selection");
+              dismiss(toast.id);
+            }}
             aria-label="Dismiss"
             className="absolute top-3 right-3 flex size-8 cursor-pointer items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-background-secondary-hover hover:text-text-primary"
           >
@@ -96,6 +104,7 @@ export function OnboardingToaster() {
           </button>
         </div>
       ))}
-    </NotificationViewport>
+      </NotificationViewport>
+    </>
   );
 }

@@ -155,6 +155,20 @@ export const WEIGHTS = {
    */
   unlock: 0.3,
   offering: 0.2,
+  /**
+   * How hard we push remaining candidates away from courses the student just
+   * discarded. Below requirement fit on purpose: skipping two systems electives
+   * should not hide the Global Core they still need. Above taste, because a
+   * clear "not like those" should beat "you liked a similar class" for the
+   * neighbours of what they just skipped.
+   *
+   * This is a penalty against similarity to the discarded set, not a subtraction
+   * from the taste vector. LSA space is not oriented so that "away from
+   * databases" means humanities — see `taste.ts`. Comparing each candidate to
+   * the rejected courses themselves is a real claim: this looks like something
+   * you just said no to.
+   */
+  rejection: 0.6,
 } as const;
 
 /**
@@ -168,6 +182,22 @@ export const WEIGHTS = {
  */
 export function unlockScore(unlockedCount: number): number {
   return Math.log1p(Math.max(0, unlockedCount));
+}
+
+/**
+ * How much this candidate looks like the set of discarded courses.
+ *
+ * Max rather than mean: discarding one systems course should demote other
+ * systems courses even if the student also skipped something unrelated. A mean
+ * would let the unrelated skip wash the signal out.
+ */
+function maxCosine(candidate: Float32Array, against: readonly Float32Array[]): number {
+  let highest = 0;
+  for (const vector of against) {
+    const similarity = cosine(candidate, vector);
+    if (similarity > highest) highest = similarity;
+  }
+  return highest;
 }
 
 /* ==========================================================================
@@ -187,6 +217,11 @@ export interface RecommendInput {
    * help with were the ones the engine could say nothing about.
    */
   outstanding?: readonly GroupResult[];
+  /**
+   * Courses the student has discarded from the feed. Excluded from the ranked
+   * list, and used to demote remaining candidates that look like them.
+   */
+  rejected?: readonly CourseId[];
   limit?: number;
   /**
    * Cap on `withheld`. Separate from `limit` because the two answer different
@@ -226,6 +261,10 @@ export function recommend(input: RecommendInput): RecommendResult {
   ]);
 
   const alreadyDecided = new Set<string>(completed);
+  const rejected = new Set<string>(input.rejected ?? []);
+  const rejectedVectors = [...rejected]
+    .map((courseId) => vectors.vectorFor(courseId as CourseId))
+    .filter((vector): vector is Float32Array => vector != null);
 
   const taste = buildTasteVector(profile.taken, vectors);
   const requirementIndex = indexOutstanding(input.outstanding ?? []);
@@ -234,8 +273,10 @@ export function recommend(input: RecommendInput): RecommendResult {
   const withheld: WithheldCourse[] = [];
 
   for (const course of candidates) {
-    // A student cannot be recommended what they have already taken or planned.
-    if (alreadyDecided.has(course.courseId)) continue;
+    // A student cannot be recommended what they have already taken, planned,
+    // or just swiped away. Saving is handled by the feed's skip set — a
+    // bookmark is not "taken" and must not count toward prerequisites.
+    if (alreadyDecided.has(course.courseId) || rejected.has(course.courseId)) continue;
 
     const prereq = prereqs.statusFor(course.courseId, completed);
 
@@ -279,6 +320,9 @@ export function recommend(input: RecommendInput): RecommendResult {
 
     const tasteSimilarity =
       taste.vector && courseVector ? cosine(taste.vector, courseVector) : 0;
+    const rejectionSimilarity = courseVector
+      ? maxCosine(courseVector, rejectedVectors)
+      : 0;
 
     const groups = requirementIndex.get(course.courseId) ?? [];
     const unlocked = prereqs.newlyUnlockedBy(course.courseId, completed);
@@ -295,7 +339,12 @@ export function recommend(input: RecommendInput): RecommendResult {
 
     scored.push({
       course,
-      score: components.requirementFit + components.taste + components.unlock + components.offering,
+      score:
+        components.requirementFit +
+        components.taste +
+        components.unlock +
+        components.offering -
+        WEIGHTS.rejection * rejectionSimilarity,
       components,
       reasons: reasonsFor({
         groups,
@@ -383,10 +432,25 @@ function reasonsFor(args: {
     reasons.push({ kind: "because_you_took", similarTo: similar });
   }
 
-  if (unlocked.length >= UNLOCK_REASON_THRESHOLD) {
+  /*
+   * "Opens up" is a claim about the student, not about the course.
+   *
+   * `unlocked` is computed against `profile.taken`: it is the set of courses
+   * that become reachable BECAUSE this one is done. With an empty record that
+   * degenerates — every 1000-level course "unlocks" whatever sits behind it,
+   * for everyone, which is a fact about the catalog wearing a personal
+   * pronoun. The signed-out feed proved it: eight cards, eight identical rows.
+   *
+   * So it is only said to a student whose record can make it true. A guest
+   * gets no reason row at all, and the feed says why in one line above the
+   * cards ("Broadly what is on offer") rather than eight times inside them.
+   */
+  if (profile.taken.length > 0 && unlocked.length >= UNLOCK_REASON_THRESHOLD) {
     reasons.push({
       kind: "unlocks",
+      // Three to name, and the real total beside them. See the type.
       courseIds: unlocked.slice(0, 3) as CourseId[],
+      unlockedCount: unlocked.length,
     });
   }
 
@@ -407,9 +471,35 @@ function indexOutstanding(
 ): Map<string, { id: string; label: string }[]> {
   const index = new Map<string, { id: string; label: string }[]>();
 
+  /*
+   * Course id → exclusion clusters already credited to it.
+   *
+   * `requirementFit` is `WEIGHTS.requirement * groups.length`, so this list's
+   * length is the score, and a course listed under two groups that cannot both
+   * count it scores as though it advanced two requirements. Chemistry carries
+   * both `scienceB` and `scienceC` and so lands in the Science Requirement's
+   * Category B and Category C lists at once — 2.0 on the dominant term, more
+   * than any single-requirement course can reach, which is why the feed opened
+   * with chemistry for students who had shown no interest in it. Taking it
+   * closes exactly one of the two.
+   *
+   * Held per course rather than as one global set: the same cluster legitimately
+   * credits DIFFERENT courses. Two 3000-level COMS courses each advance the CS
+   * elective block, and the student needs both.
+   */
+  const creditedClusters = new Map<string, Set<string>>();
+
   for (const result of groups) {
     if (result.status === "satisfied") continue;
     for (const courseId of result.candidates) {
+      const cluster = result.exclusionKey;
+      if (cluster !== undefined) {
+        const credited = creditedClusters.get(courseId) ?? new Set<string>();
+        // First group in the cluster wins, which is program-declaration order.
+        if (credited.has(cluster)) continue;
+        credited.add(cluster);
+        creditedClusters.set(courseId, credited);
+      }
       const list = index.get(courseId) ?? [];
       list.push({ id: result.group.id, label: result.group.label });
       index.set(courseId, list);

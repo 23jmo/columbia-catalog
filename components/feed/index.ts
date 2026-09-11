@@ -1,14 +1,12 @@
 /**
  * The home feed's rendering surface.
  *
- * Every component here is a SERVER component and the feed ships no JavaScript
- * of its own, so a rail of twelve cards is meaningful markup on first paint.
- * The client leaves that appear inside it — `SignInPrompt`, `BookmarkControls`,
- * `InstructorChip`, `EnrollmentChip` — were already client components and are
- * shared with the section drawer, which is the point: a recommendation is a
- * search hit someone chose for you, and it should be the same object on screen.
+ * `FeedCardView` and `FeedSkeleton` are safe to import from client islands —
+ * the chat thread renders the same card. `FeedPanel` is not: it is a server
+ * component that owns the live ranking session, and re-exporting it here would
+ * pull that session (and its server action) into every client that only wanted
+ * the card. Import it from `./feed-panel` on a server page.
  */
 
-export { FeedPanel } from "./feed-panel";
 export { FeedCardView } from "./feed-card";
 export { FeedSkeleton } from "./feed-skeleton";

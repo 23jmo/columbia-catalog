@@ -35,7 +35,7 @@ describe("recommendationClears", () => {
 
   it("drops taste-only and unlock reasons — they do not name a requirement", () => {
     const taste: RecommendationReason = { kind: "because_you_took", similarTo: [] };
-    const unlock: RecommendationReason = { kind: "unlocks", courseIds: [] };
+    const unlock: RecommendationReason = { kind: "unlocks", courseIds: [], unlockedCount: 0 };
     expect(recommendationClears([taste, unlock], "Global Core")).toBe(false);
   });
 });

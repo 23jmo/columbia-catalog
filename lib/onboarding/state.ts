@@ -59,6 +59,26 @@ export const ONBOARDING_COOKIE_VALUE = "1";
 /** A year. Onboarding is a once-per-student event, not a session. */
 export const ONBOARDING_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
+/**
+ * Drop the "has finished the wizard" flag in the browser.
+ *
+ * `httpOnly` is false on purpose (see `completeOnboardingAction`), so the
+ * client can clear it when the student deletes their account or chooses
+ * Redo. Leaving it set is what made a re-sign-in after delete skip the
+ * first feed: the auth callback treated them as already done.
+ */
+export function clearOnboardingCompleteCookie(): void {
+  if (typeof document === "undefined") return;
+  const secure =
+    typeof window !== "undefined" && window.location.protocol === "https:" ? "; Secure" : "";
+  try {
+    document.cookie =
+      `${ONBOARDING_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax` + secure;
+  } catch {
+    /* Private mode: the next `completeOnboardingAction` will overwrite it. */
+  }
+}
+
 /* ==========================================================================
  * Re-rank cadence
  * ========================================================================== */
@@ -89,20 +109,39 @@ export function shouldRerank(confirmationsSinceRerank: number): boolean {
  * ========================================================================== */
 
 /**
- * The five steps, in order.
+ * The steps, in order.
  *
  * `feed` is the last one and it is still part of onboarding: the spec's step 5
  * is "first feed, rendered for a guest", and the sign-in gate (step 6) is a
  * condition ON that screen rather than a screen of its own — there is nothing
  * to look at on a gate.
+ *
+ * `choices` comes BEFORE `coursework`, and the order is the point. It asks the
+ * questions with definite answers — which physics sequence, Lit Hum or CC —
+ * and everything the guess deck does afterwards is better for having them.
+ * A choose-one answer is not just two more chips on the record: it unblocks
+ * prerequisite chains, retires whole requirement groups, and changes what the
+ * engine ranks. Asking it on the same screen as the guesses meant the guesses
+ * were computed without it, so the student answered a question whose whole
+ * value was in what came before.
  */
-export const ONBOARDING_STEPS = ["school", "coursework", "love", "interests", "feed"] as const;
+export const ONBOARDING_STEPS = [
+  "school",
+  "choices",
+  "coursework",
+  "planned",
+  "love",
+  "interests",
+  "feed",
+] as const;
 
 export type OnboardingStepId = (typeof ONBOARDING_STEPS)[number];
 
 export const STEP_TITLE: Record<OnboardingStepId, string> = {
   school: "Your degree",
+  choices: "Which ones you took",
   coursework: "What you've taken",
+  planned: "What you're taking now",
   love: "What you liked",
   interests: "What you're into",
   feed: "Your first feed",
@@ -138,13 +177,36 @@ export function nextStep(step: OnboardingStepId): OnboardingStepId | null {
  * generated is weaker evidence than one they searched for by name, and the
  * profile screen displays the difference.
  *
+ * ── Why `onboarding_confirm` is separate from `onboarding_guess` ────────────
+ *
+ * They come off the same screen and they are not the same claim.
+ * `onboarding_guess` is written by `applyDeck` the instant a deck lands, before
+ * the student has looked at it — our claim about their transcript.
+ * `onboarding_confirm` is a chip in the "usually taken too" strip that they
+ * read and pressed — their claim, and the only thing separating it from
+ * `picker` is that they found the course in a list instead of a search box.
+ *
+ * The distinction is load-bearing rather than cosmetic: `isStudentAsserted`
+ * reads it to decide what survives a change of degree. While both were spelled
+ * `onboarding_guess`, switching major silently deleted every chip the student
+ * had personally tapped — no notice, no undo, and no way for them to tell it
+ * had happened. Migration 0036 has the longer argument.
+ *
  * Deliberately NOT imported from `lib/profile/types.ts`. That module's
- * `CourseSource` union does not yet include `onboarding_guess`, and widening it
- * would mean editing a file another lane owns. The database constraint is the
- * real contract and both unions answer to it.
+ * `CourseSource` union does not yet include either onboarding value, and
+ * widening it would mean editing a file another lane owns. The database
+ * constraint is the real contract and both unions answer to it.
  */
 export const ONBOARDING_COURSE_SOURCES = [
   "onboarding_guess",
+  "onboarding_confirm",
+  /**
+   * Registered for, or planning to take, and not yet taken. The same value
+   * `student_courses.source` already accepts and the audit, the recommender
+   * and the chat already read as "in progress" — nothing wrote it until the
+   * planned screen did.
+   */
+  "plan",
   "picker",
   "transcript_paste",
   "transcript_pdf",
@@ -189,6 +251,13 @@ export interface GuestCourse {
    * marked, never dropped.
    */
   inCatalog: boolean;
+  /**
+   * For a `plan` row: the section they are in this term, when they told us.
+   * This is what goes onto the schedule, so the chat and the feed can check
+   * clashes against it. `null` when the course has several sections and none
+   * was picked, or when the row came off a transcript.
+   */
+  sectionId?: string | null;
 }
 
 /* ==========================================================================
@@ -265,6 +334,8 @@ const guestCourseSchema = z.object({
   liked: z.boolean().nullable(),
   source: z.enum(ONBOARDING_COURSE_SOURCES),
   inCatalog: z.boolean(),
+  // Optional so state persisted before the planned screen existed still parses.
+  sectionId: z.string().nullable().optional(),
 });
 
 /**
@@ -349,14 +420,42 @@ export function canAdvance(state: GuestOnboardingState): boolean {
  * again must not erase the fact that the love screen was already answered.
  */
 export function advance(state: GuestOnboardingState): GuestOnboardingState {
-  const target = nextStep(state.step);
+  const target =
+    state.step === "school" && hasTranscriptCourses(state) ? "planned" : nextStep(state.step);
   if (!target || !canAdvance(state)) return state;
   return goToStep(state, target);
 }
 
+/**
+ * Whether the record already holds a transcript.
+ *
+ * ── Why a transcript skips `choices` and `coursework` ───────────────────────
+ *
+ * Both of those screens exist to reconstruct what the student has taken:
+ * `choices` asks the fork questions (Lit Hum or CC, which physics sequence)
+ * and `coursework` shows a guessed deck to confirm. A transcript IS the
+ * answer to both, line by line, and asking someone who just handed it over
+ * to confirm our guess at it is the flow forgetting what it was told.
+ *
+ * Derived from the courses rather than stored as a flag, so it needs no
+ * schema field, no migration, and cannot drift: the day the last transcript
+ * row is removed, the two screens come back on their own.
+ *
+ * `planned`, `love` and `interests` are NOT skipped. A transcript's
+ * in-progress rows land on the planned screen for the student to confirm and
+ * to pick sections for, and a transcript says nothing about what was enjoyed.
+ */
+export function hasTranscriptCourses(state: GuestOnboardingState): boolean {
+  return state.courses.some((course) => course.source === "transcript_pdf");
+}
+
 /** Move back one step. A no-op on the first, which is where the button hides. */
 export function goBack(state: GuestOnboardingState): GuestOnboardingState {
-  const target = previousStep(state.step);
+  // The mirror of the skip in `advance`: a student who jumped over the
+  // coursework screens lands back on the degree questions, not on a guess
+  // deck they never saw.
+  const target =
+    state.step === "planned" && hasTranscriptCourses(state) ? "school" : previousStep(state.step);
   if (!target) return state;
   // Note this does NOT lower `furthestStep`, and does not clear any answer.
   // "Everything is reversible" means a student can go back and look; it does
@@ -479,13 +578,20 @@ export function degreeSignature(state: GuestOnboardingState): string {
  *
  * Two ways to qualify, and the second one matters as much as the first:
  *
- *  - `source !== "onboarding_guess"` — they searched it up, or it came off a
- *    transcript. That is their statement about their own history and no answer
- *    they give about their degree can make it untrue.
+ *  - the source is anything but `onboarding_guess` — they searched it up, it
+ *    came off a transcript, or they pressed the chip themselves
+ *    (`onboarding_confirm`). That is their statement about their own history
+ *    and no answer they give about their degree can make it untrue.
  *  - `liked !== null` — we guessed it, but they then told the love screen how
  *    they felt about it. Answering a question about a course is an implicit
  *    confirmation that they took it, and it is a stronger signal than the guess
  *    that put it there. Dropping it would also silently discard the opinion.
+ *
+ * `onboarding_guess` is therefore the ONLY source this function retires, and
+ * the exclusion is written as a negation on purpose: a source added later is
+ * kept by default. Retiring a student's answer is unrecoverable and silent,
+ * while keeping one guess too many costs a glance at a chip with an × on it, so
+ * the default has to fall on the side that is visible when it is wrong.
  */
 function isStudentAsserted(course: GuestCourse): boolean {
   return course.source !== "onboarding_guess" || course.liked !== null;
@@ -611,4 +717,29 @@ export function clearGuestState(): void {
   } catch {
     /* Nothing we can do, and nothing depends on it. */
   }
+}
+
+/** The courses on the record for this term that have not been taken yet. */
+export function plannedCourses(state: GuestOnboardingState): GuestCourse[] {
+  return state.courses.filter((course) => course.source === "plan");
+}
+
+/** Everything the student has actually finished — the love screen's input. */
+export function takenCourses(state: GuestOnboardingState): GuestCourse[] {
+  return state.courses.filter((course) => course.source !== "plan");
+}
+
+/** Record which section of a planned course the student is in. */
+export function setPlannedSection(
+  state: GuestOnboardingState,
+  courseId: string,
+  sectionId: string | null,
+): GuestOnboardingState {
+  return {
+    ...state,
+    courses: state.courses.map((course) =>
+      course.courseId === courseId && course.source === "plan" ? { ...course, sectionId } : course,
+    ),
+    updatedAt: new Date().toISOString(),
+  };
 }

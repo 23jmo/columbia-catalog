@@ -19,7 +19,7 @@ import { createPortal } from "react-dom";
  *
  * ── Why the bar has no idea whether it was claimed ─────────────────────────
  *
- * A claimed bar has to hide its centred page name — "Home" is wrong once you
+ * A claimed bar has to hide its centred page name — "Chat" is wrong once you
  * are reading a thread. The obvious way to arrange that is a refcount in
  * context, and it is wrong twice over: React writes portal children outside the
  * provider's render, so the flag can only be set from an effect, and an effect

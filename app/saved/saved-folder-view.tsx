@@ -19,11 +19,11 @@ import {
 import { CURRENT_TERM } from "@/lib/constants";
 import { SYNTHETIC_FOLDER_IDS } from "@/lib/bookmarks/folder-art";
 import type { TermCode } from "@/lib/types";
-import { cx } from "@/utils/cx";
 
 import { DeleteFolderDialog } from "./delete-folder-dialog";
 import { SavedEmpty, SavedSignedOut } from "./saved-states";
-import { SavedSectionRow } from "./saved-section-row";
+import { SavedList } from "./saved-list";
+import { SavedSkeleton } from "./saved-skeleton";
 import { SelectBar } from "./select-bar";
 import { TermFilter } from "./term-filter";
 
@@ -82,6 +82,16 @@ export function SavedFolderView({ folderId }: SavedFolderViewProps) {
   );
 
   if (snapshot.status === "signed_out") return <SavedSignedOut />;
+
+  /*
+   * Same two waits as `/saved`, and the same reason the empty state cannot be
+   * trusted to speak for either — see `SavedGallery`. A folder page is if
+   * anything worse to get wrong: "This folder is empty" about a folder the
+   * reader filled themselves reads as data loss, not as a slow request.
+   */
+  const isLoadingBookmarks = snapshot.status !== "ready";
+  const isLoadingCatalog = isResolving && groups.length === 0;
+  const isLoading = isLoadingBookmarks || isLoadingCatalog;
 
   // A folder id that is neither synthetic nor one of yours: either it was just
   // deleted in another tab, or somebody pasted a link to somebody else's. Both
@@ -169,47 +179,22 @@ export function SavedFolderView({ folderId }: SavedFolderViewProps) {
 
       <TermFilter terms={terms} value={term} onChange={setTermFilter} />
 
-      {sectionIds.length === 0 ? (
+      {isLoading ? (
+        <SavedSkeleton cards={isLoadingBookmarks ? undefined : Math.min(sectionIds.length, 6)} />
+      ) : sectionIds.length === 0 ? (
         <SavedEmpty scope={folderId} />
-      ) : isResolving && groups.length === 0 ? (
-        <p className="text-body-regular text-text-tertiary">Loading your saved classes…</p>
       ) : (
-        <div className="flex flex-col gap-5">
-          {groups.map((group) => (
-            <section key={group.course.courseId} className="flex flex-col gap-1">
-              <div className="flex flex-wrap items-baseline gap-x-2 px-3">
-                <Link
-                  href={`/course/${group.course.courseId}`}
-                  className="text-body-semibold tabular-nums text-text-primary outline-none hover:text-accent-600 focus-visible:ring-2 focus-visible:ring-border-focus-ring"
-                >
-                  {group.course.subjectCode}
-                  {group.course.number}
-                </Link>
-                <span className="min-w-0 truncate text-caption-1-regular text-text-secondary">
-                  {group.course.title}
-                </span>
-              </div>
-
-              <ul className={cx("flex flex-col", isSelecting ? "gap-1" : "gap-0")}>
-                {group.sections.map((section) => (
-                  <SavedSectionRow
-                    key={section.sectionId}
-                    section={section}
-                    courseLabel={`${group.course.subjectCode}${group.course.number}`}
-                    selection={
-                      isSelecting
-                        ? {
-                            isSelected: selected.has(section.sectionId),
-                            onChange: (next) => toggleSelected(section.sectionId, next),
-                          }
-                        : undefined
-                    }
-                  />
-                ))}
-              </ul>
-            </section>
-          ))}
-        </div>
+        /*
+         * Grouped by course, and staged in — both live in `SavedList`, which
+         * `/saved` renders too. See its header comment for why the group
+         * markup is one component rather than a copy on each page.
+         */
+        <SavedList
+          groups={groups}
+          selection={
+            isSelecting ? { selectedIds: selected, onToggle: toggleSelected } : undefined
+          }
+        />
       )}
 
       {isSelecting ? (
@@ -217,10 +202,6 @@ export function SavedFolderView({ folderId }: SavedFolderViewProps) {
           selected={[...selected]}
           folders={snapshot.folders}
           currentFolder={folder}
-          // Bulk "add to schedule" needs one term. With "All terms" showing,
-          // the current term is the only defensible target — and the toast
-          // says what happened either way.
-          termCode={term ?? CURRENT_TERM}
           onDone={leaveSelectMode}
         />
       ) : null}

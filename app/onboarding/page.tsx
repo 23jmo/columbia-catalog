@@ -1,8 +1,14 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
 import { OnboardingToaster } from "@/components/onboarding/onboarding-toaster";
 import { AuthErrorToast } from "@/components/onboarding/auth-error-toast";
+import {
+  SOCIAL_DESCRIPTION,
+  SOCIAL_IMAGE_ALT,
+  SOCIAL_TITLE,
+} from "@/lib/marketing/social";
 import { listPrograms } from "@/lib/requirements/programs";
 
 /**
@@ -12,8 +18,16 @@ import { listPrograms } from "@/lib/requirements/programs";
  *
  * The only thing this page does on the server is read the program registry,
  * which lives in code and is the same for every visitor. Guest answers live
- * in the browser until sign-in flushes them. Failed OAuth lands here with
- * `auth_error`, which is why this page reads search params at all.
+ * in the browser until sign-in flushes them.
+ *
+ * That makes the whole route prerenderable, and it is — but only because it
+ * takes no dynamic input. It used to `await searchParams` to pick up the
+ * `auth_error` a failed OAuth lands here with, and awaiting search params is
+ * enough on its own to force a server render on every single visit. The
+ * document then came from the function region rather than the CDN edge, and
+ * carried `cache-control: private, no-store`, for a query param that is absent
+ * from all but a handful of visits. `AuthErrorToast` reads it from the browser
+ * now; its header has the argument.
  *
  * Unsigned visitors are sent here by `proxy.ts`. This route itself never
  * bounces anyone away: a signed-in student who wants to redo setup follows a
@@ -41,17 +55,34 @@ import { listPrograms } from "@/lib/requirements/programs";
  */
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://lionplan.org"),
   title: "Get started · LionPlan",
   description:
     "Tell us your school, your major and what you've taken, and we'll work out what you should take next.",
+  openGraph: {
+    title: SOCIAL_TITLE,
+    description: SOCIAL_DESCRIPTION,
+    url: "https://lionplan.org",
+    siteName: "LionPlan",
+    type: "website",
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: SOCIAL_IMAGE_ALT,
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SOCIAL_TITLE,
+    description: SOCIAL_DESCRIPTION,
+    images: [{ url: "/twitter-image", alt: SOCIAL_IMAGE_ALT }],
+  },
 };
 
-export default async function OnboardingPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
-}) {
-  const params = await searchParams;
+export default function OnboardingPage() {
   /*
    * `listPrograms()` reads authored + parsed programs from the registry. Cores
    * are filtered out inside the step: a Columbia College student cannot elect
@@ -69,7 +100,15 @@ export default async function OnboardingPage({
     <>
       {/* The one toast surface on this route. Same store, bottom edge. */}
       <OnboardingToaster />
-      {params.auth_error ? <AuthErrorToast reason={params.auth_error} /> : null}
+      {/*
+        `useSearchParams` makes its subtree client-rendered, which Next requires
+        a Suspense boundary for. Both this boundary's fallback and its child
+        render nothing — the toast is raised from an effect — so the boundary is
+        a formality rather than a hole in the page.
+      */}
+      <Suspense fallback={null}>
+        <AuthErrorToast />
+      </Suspense>
       <OnboardingFlow programOptions={programOptions} />
     </>
   );

@@ -41,9 +41,11 @@ describe("isConversationId", () => {
 });
 
 describe("threadHref", () => {
-  it("opens a thread as a query on home", () => {
+  it("opens a thread as a query on the chat page", () => {
+    // Not `/`. Home is the recommendation feed and does not read `?c=`, so a
+    // thread link that pointed there would open a feed and lose the thread.
     expect(threadHref("2c1a0f7e-9b4d-4c8a-a123-9f0e1d2c3b4a")).toBe(
-      "/?c=2c1a0f7e-9b4d-4c8a-a123-9f0e1d2c3b4a",
+      "/chat?c=2c1a0f7e-9b4d-4c8a-a123-9f0e1d2c3b4a",
     );
   });
 });

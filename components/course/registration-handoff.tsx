@@ -61,9 +61,10 @@ function useCopy(): [boolean, (value: string) => void] {
   }, []);
 
   const copy = (value: string) => {
+    // Tick with the press. The clipboard write is async and would
+    // drop the user gesture that vibrate / iOS switch both need.
+    haptic("success");
     const finish = () => {
-      // Call-number copy is a phone-at-7am action — confirm it in the hand.
-      haptic("success");
       setCopied(true);
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => setCopied(false), 1800);
@@ -153,16 +154,13 @@ export function RegistrationHandoff({
           Call number
         </span>
         <CallNumberCopy callNumber={section.callNumber} />
-        <ButtonLink
-          size="xs"
-          variant="secondary"
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
-          trailingIcon={RiArrowRightUpLine}
-        >
-          Open in Vergil
-        </ButtonLink>
+        {/*
+          No Vergil link in `compact`. Its only caller — the section drawer's
+          header — now carries the hand-off as its primary action, and a second
+          copy of the same link two rows below it read as two different places
+          to go. The call number stays: it is for SSOL, which is a different
+          errand from clicking through.
+        */}
         {actions}
       </div>
     );

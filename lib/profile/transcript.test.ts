@@ -27,6 +27,25 @@ COMS W4115 PROGRAMMING LANG & TRANSL (001) 3 Planned
     expect(defaultSelection(parse.candidates).has("CSOR4231W")).toBe(true);
   });
 
+  it("drops the dotted rule a scan turns into tildes", () => {
+    /*
+     * Real tesseract output for a Georgia-set transcript, verbatim: the leader
+     * dots between the title and the credits column come back as `~~`. It only
+     * shows on the review screen — the catalog title wins once the code
+     * resolves — but a student reading "ADVANCED PROGRAMMING ~~" next to their
+     * own transcript has no way to know that is our noise and not our reading.
+     */
+    const parse = parseTranscriptText(`
+Fall 2024
+COMS W3134 DATA STRUCTURES IN JAVA ~~ 3.00 A
+COMS W3157 ADVANCED PROGRAMMING -- 4.00 A
+`);
+    expect(parse.candidates.map((row) => row.title)).toEqual([
+      "DATA STRUCTURES IN JAVA",
+      "ADVANCED PROGRAMMING",
+    ]);
+  });
+
   it("reads directory-shaped codes from a Vergil unofficial record", () => {
     const parse = parseTranscriptText(`
 Fall 2024

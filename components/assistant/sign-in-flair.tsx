@@ -64,7 +64,20 @@ export function SignInFlair({ className }: { className?: string }) {
         className,
       )}
     >
-      <SignInPromptArt />
+      {/*
+        Dimmed on a phone, because there the copy has to cross it.
+
+        The plate ramps in at 51% of the card and is at full density by 80%
+        (`ART_LEFT` plus the `smoothstep(0.30, 0.72)` clearing in the shader).
+        From `sm` this box is a row and `sm:max-w-[26rem]` keeps the paragraph
+        entirely to the left of that ramp — the cap below says as much. Below
+        `sm` the box stacks, the paragraph is full width by necessity, and
+        capping it to half of a 352px card would leave ~176px for two
+        sentences. So the art yields instead of the words: the flourish is
+        still there, and "get a feed built from what you have actually taken"
+        is no longer set over a dither.
+      */}
+      <SignInPromptArt className="max-sm:opacity-35" />
 
       <div
         className={cx(

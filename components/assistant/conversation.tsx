@@ -1,6 +1,7 @@
 "use client";
 
 import type { ChatStatus, UIMessage } from "ai";
+import { AnimatePresence, motion } from "motion/react";
 
 import {
   citedCourses,
@@ -17,6 +18,7 @@ import { CampusMapArtifactView, InstructorArtifactView, OnboardingArtifactView, 
 import { JumpToLatest, useStickToBottom } from "@/components/assistant/jump-to-latest";
 import { SourceList } from "@/components/assistant/source-list";
 import { ThinkingLine, ToolActivityCard } from "@/components/assistant/tool-activity-card";
+import { useTurnMotion } from "@/components/assistant/turn-motion";
 import { cx } from "@/utils/cx";
 
 /**
@@ -139,6 +141,7 @@ function AssistantTurn({
   showFollowUps: boolean;
   onAsk: (text: string) => void;
 }) {
+  const { enter, swap } = useTurnMotion();
   const activity = toolActivity(message);
   const blocks = turnBlocks(message, alreadyShown);
   const followUps = showFollowUps ? suggestedFollowUps(message) : [];
@@ -172,24 +175,66 @@ function AssistantTurn({
         stops the moment there is real output to read, because the prose and the
         activity card are better evidence of work than any indicator.
       */}
-      {isRunning && !hasBody && activity.length === 0 ? (
-        <ThinkingLine label="Thinking" />
-      ) : null}
+      {/*
+        `popLayout` is the whole trick here. This line is not dismissed — it is
+        SUPERSEDED, by the first token or the first tool row, both of which
+        mount in the same commit that unmounts it. Under the default mode the
+        exiting line would hold its 40px row for 140ms, the real output would
+        render below it, and then everything would jump up when the row
+        finally collapsed — a worse jolt than the hard cut this replaces.
+        Popping it out of flow lets the answer take the slot immediately while
+        the indicator dissolves over it.
+      */}
+      <AnimatePresence mode="popLayout" initial={false}>
+        {isRunning && !hasBody && activity.length === 0 ? (
+          <ThinkingLine key="thinking" label="Thinking" />
+        ) : null}
+      </AnimatePresence>
 
       {activity.length > 0 ? (
         <ToolActivityCard activity={activity} isRunning={isRunning} />
       ) : null}
 
+      {/*
+        No stagger. These already arrive one at a time — prose, then a
+        schedule, then more prose, in the order the turn actually happened —
+        so a delay per index would be inventing a sequence on top of a real
+        one and holding back a card that is ready to be read.
+      */}
       {blocks.map((block, index) => (
-        <TurnBeat key={`${block.kind}-${index}`} block={block} />
+        <motion.div key={`${block.kind}-${index}`} {...enter} className="min-w-0">
+          <TurnBeat block={block} />
+        </motion.div>
       ))}
 
-      {courses.length > 0 ? <SourceList courses={courses} /> : null}
+      {courses.length > 0 ? (
+        <motion.div {...enter}>
+          <SourceList courses={courses} />
+        </motion.div>
+      ) : null}
 
-      {followUps.length > 0 ? (
-        <ul className="flex flex-wrap gap-1.5">
-          {followUps.map((question) => (
-            <li key={question}>
+      {/*
+        The one place a stagger is right.
+
+        Unlike the blocks above, these arrive as a BATCH — the turn finishes
+        and four chips exist at once — so without one they land as a single
+        grey slab. 40ms is enough to read as a row assembling left to right
+        and short enough that the last chip is up before the eye reaches it;
+        the whole set is seated in under 300ms.
+
+        They leave, too: asking the next question unmounts them, and chips
+        that vanish mid-fade while the new turn opens above is exactly the
+        jarring change the rest of this file is avoiding.
+      */}
+      <AnimatePresence mode="popLayout" initial={false}>
+        {followUps.length > 0 ? (
+          <motion.ul key="follow-ups" className="flex flex-wrap gap-1.5" {...swap}>
+            {followUps.map((question, index) => (
+            <motion.li
+              key={question}
+              {...swap}
+              transition={{ ...swap.transition, delay: index * 0.04 }}
+            >
               <button
                 type="button"
                 onClick={() => onAsk(question)}
@@ -202,10 +247,11 @@ function AssistantTurn({
               >
                 {question}
               </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
+            </motion.li>
+            ))}
+          </motion.ul>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

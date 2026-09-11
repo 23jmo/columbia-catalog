@@ -89,7 +89,7 @@ const TOOL_LABELS: Record<string, string> = {
   get_ratings: "Reading reviews",
   check_conflicts: "Checking your schedule for clashes",
   check_requirements: "Checking this against your degree",
-  get_my_schedule: "Reading your schedule",
+  get_my_schedule: "Reading your saved classes",
   add_section: "Drafting a change to your plan",
   remove_section: "Drafting a change to your plan",
   watch_section: "Setting up a seat alert",

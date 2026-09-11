@@ -32,12 +32,14 @@
 
 import {
   clearGuestState,
+  clearOnboardingCompleteCookie,
   emptyGuestState,
   readGuestState,
   writeGuestState,
   type GuestOnboardingState,
 } from "./state";
 import { clearFeedPreviewCache } from "./feed-preview-cache";
+import { clearGuessDeckCache } from "./guess-cache";
 import { clearOnboardingHandoff } from "./handoff";
 
 export interface OnboardingSnapshot {
@@ -155,7 +157,15 @@ export function markOnboardingMigrated(): void {
  */
 export function restartOnboarding(): void {
   hasMigrated = false;
+  // A prior completion left `cc_onboarded=1`. Clear it or the next Google
+  // round-trip treats them as finished and skips the first feed.
+  clearOnboardingCompleteCookie();
   clearFeedPreviewCache();
+  // The deck is keyed by the degree it was built for, so a restarted student
+  // would never match it — but the module-level cache outlives the wizard, and
+  // leaving a stale one resident is how a second pass ends up warm with the
+  // first pass's answers if that key is ever loosened.
+  clearGuessDeckCache();
   clearOnboardingHandoff();
   emit({ state: emptyGuestState(), isHydrated: true });
 }

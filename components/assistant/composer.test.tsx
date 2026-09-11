@@ -41,7 +41,30 @@ describe("Composer, folded", () => {
     // media query, so their presence is what guarantees that.
     expect(html).toContain("sm:min-h-[7rem]");
     expect(html).toContain("sm:flex-col");
-    expect(html).toContain("sm:rounded-3xl");
+    expect(html).toContain("sm:rounded-2xl");
+  });
+
+  it("leaves no unscoped class for the desktop branch to inherit", () => {
+    /*
+     * The bug this exists for: the folded shape carried a bare `items-center`
+     * that nothing above `sm` overrode, so at desktop width the box was
+     * `sm:flex-col` AND `items-center` — a column centring its children. The
+     * `w-full` textarea was unaffected, but the `shrink-0` control row
+     * collapsed to its own width and floated to the middle, so `+`, the term
+     * and send sat in the centre of the box instead of spanning it. It
+     * corrected itself on click, because focus ends the folded state, which is
+     * why it read as a flicker rather than as broken layout.
+     *
+     * The rule that prevents the next one: a class in the folded branch either
+     * has an `sm:` counterpart or is scoped `max-sm:` itself. Alignment is
+     * checked here because it is the property that had no counterpart; the
+     * shape classes are covered by the test above.
+     */
+    const shell = html.match(/<div class="relative flex gap-2[^"]*"/)?.[0] ?? "";
+    expect(shell).not.toBe("");
+    expect(shell).toContain("max-sm:items-center");
+    // The unscoped form is the bug, verbatim.
+    expect(shell).not.toMatch(/(^|\s)items-center/);
   });
 
   it("drops the controls that have nowhere to sit in one row", () => {

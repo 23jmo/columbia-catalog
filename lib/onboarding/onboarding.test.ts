@@ -1,24 +1,43 @@
 import { describe, expect, it } from "vitest";
 
-import { interestTagsForPrograms, knownInterestTagIds } from "@/lib/profile/interest-tags";
-import { CC_CORE, CC_MAJOR_COMPUTER_SCIENCE, SEAS_CORE, SEAS_MAJOR_COMPUTER_SCIENCE } from "@/lib/requirements/programs";
+import {
+  interestTagsForPrograms,
+  knownInterestTagIds,
+  programsWithInterestTags,
+} from "@/lib/profile/interest-tags";
+import {
+  BC_FOUNDATIONS,
+  CC_CORE,
+  CC_MAJOR_BIOLOGY,
+  CC_MAJOR_COMPUTER_SCIENCE,
+  CC_MAJOR_POLITICAL_SCIENCE,
+  CC_MINOR_COMPUTER_SCIENCE,
+  SEAS_CORE,
+  SEAS_MAJOR_COMPUTER_SCIENCE,
+  listPrograms,
+} from "@/lib/requirements/programs";
+import { toCourseId } from "@/lib/requirements/code";
 import type { PrereqSource } from "@/lib/recommend";
+import type { GroupResult, RequirementRule } from "@/lib/requirements/types";
 import { noVectorSource } from "@/lib/recommend";
 
 import {
   buildGuessDeck,
   expectedLevelCeiling,
   impliedPrerequisites,
+  levelCeilingFor,
   namedCoursesOf,
+  satisfiedOnlyCourseIds,
   unambiguousPrereqChain,
   unambiguousPrereqsOf,
   yearsCompleted,
 } from "./guess";
 import { sameIds, stabilizeStrip } from "./stable-strip";
+import { likelyChoiceFor } from "./likely-choice";
 import { typicalGuesses } from "./typical";
 import { displayCourseTitle } from "./course-title";
 import { hasAnythingToMigrate, toMigrationPayload } from "./migrate";
-import { defaultCandidateSelection, parseTranscript } from "./transcript";
+import { defaultCandidateSelection, parseTranscript, toGuestCourses } from "./transcript";
 import {
   advance,
   canAdvance,
@@ -26,9 +45,14 @@ import {
   deserialize,
   emptyGuestState,
   goBack,
+  hasTranscriptCourses,
+  plannedCourses,
+  setPlannedSection,
+  takenCourses,
   goToStep,
   ONBOARDING_STEPS,
   NO_MINORS_PROGRAM_ID,
+  nextStep,
   previousStep,
   reconcileDegreeChange,
   removeCourse,
@@ -40,6 +64,7 @@ import {
   upsertCourse,
   type GuestCourse,
   type GuestOnboardingState,
+  type OnboardingStepId,
 } from "./state";
 
 /* ==========================================================================
@@ -280,16 +305,30 @@ describe("every step is reversible", () => {
   it("walks forward to the last step and back to the first, losing nothing", () => {
     let state: GuestOnboardingState = { ...emptyGuestState(), school: "CC" };
 
-    // Forward, accumulating an answer at each stop so the back walk has
-    // something to lose if it is going to lose anything.
-    state = advance(state);
-    state = upsertCourse(state, course({ courseId: "COMS1004W", code: "COMS W1004" }));
-    state = advance(state);
-    state = setLiked(state, "COMS1004W", true);
-    state = advance(state);
-    state = { ...state, interestTags: ["ai-ml"] };
-    state = advance(state);
+    /*
+     * Forward, accumulating an answer at each stop so the back walk has
+     * something to lose if it is going to lose anything.
+     *
+     * Driven by the step list rather than a fixed run of `advance` calls.
+     * Inserting a step used to break this on the COUNT — it stopped one short
+     * and failed on `state.step`, which says nothing about whether the walk is
+     * still lossless and buries the real assertions below an arithmetic edit.
+     */
+    const answerOn: Partial<
+      Record<OnboardingStepId, (current: GuestOnboardingState) => GuestOnboardingState>
+    > = {
+      coursework: (current) =>
+        upsertCourse(current, course({ courseId: "COMS1004W", code: "COMS W1004" })),
+      love: (current) => setLiked(current, "COMS1004W", true),
+      interests: (current) => ({ ...current, interestTags: ["ai-ml"] }),
+    };
 
+    while (nextStep(state.step)) {
+      state = answerOn[state.step]?.(state) ?? state;
+      state = advance(state);
+    }
+
+    expect(state.step).toBe(ONBOARDING_STEPS[ONBOARDING_STEPS.length - 1]);
     expect(state.step).toBe("feed");
     expect(state.furthestStep).toBe("feed");
 
@@ -344,6 +383,112 @@ describe("every step is reversible", () => {
 /* ==========================================================================
  * 3. Unmatched coursework is stored and marked, never rejected
  * ========================================================================== */
+
+describe("a transcript on the first screen skips the coursework screens", () => {
+  const withTranscript = (): GuestOnboardingState =>
+    upsertCourse(
+      { ...emptyGuestState(), school: "CC" },
+      {
+        courseId: "COMS3134W",
+        code: "COMS W3134",
+        title: "Data Structures in Java",
+        termLabel: "Fall 2024",
+        points: 3,
+        liked: null,
+        source: "transcript_pdf",
+        inCatalog: true,
+      },
+    );
+
+  it("advances from the degree questions straight to this term's courses", () => {
+    expect(hasTranscriptCourses(withTranscript())).toBe(true);
+    expect(advance(withTranscript()).step).toBe("planned");
+  });
+
+  it("goes back from this term's courses to the degree questions", () => {
+    const atPlanned = advance(withTranscript());
+    expect(goBack(atPlanned).step).toBe("school");
+  });
+
+  it("still gates on the school answer", () => {
+    const state = { ...withTranscript(), school: null };
+    expect(advance(state).step).toBe("school");
+  });
+
+  it("does not skip when the courses came from the guess deck", () => {
+    const guessed = upsertCourse(
+      { ...emptyGuestState(), school: "CC" },
+      {
+        courseId: "COMS3134W",
+        code: "COMS W3134",
+        title: "Data Structures in Java",
+        termLabel: null,
+        points: 3,
+        liked: null,
+        source: "onboarding_guess",
+        inCatalog: true,
+      },
+    );
+    expect(hasTranscriptCourses(guessed)).toBe(false);
+    expect(advance(guessed).step).toBe("choices");
+  });
+});
+
+describe("planned courses", () => {
+  const planned = (): GuestCourse => ({
+    courseId: "COMS4115W",
+    code: "COMS W4115",
+    title: "Programming Languages and Translators",
+    termLabel: "Fall 2026",
+    points: 3,
+    liked: null,
+    source: "plan",
+    inCatalog: true,
+    sectionId: null,
+  });
+
+  it("are split from taken courses", () => {
+    const state = upsertCourse(
+      upsertCourse(emptyGuestState(), planned()),
+      { ...planned(), courseId: "COMS3134W", code: "COMS W3134", source: "picker" },
+    );
+    expect(plannedCourses(state).map((c) => c.courseId)).toEqual(["COMS4115W"]);
+    expect(takenCourses(state).map((c) => c.courseId)).toEqual(["COMS3134W"]);
+  });
+
+  it("remember the section the student picked", () => {
+    const state = setPlannedSection(
+      upsertCourse(emptyGuestState(), planned()),
+      "COMS4115W",
+      "20263COMS4115W001",
+    );
+    expect(plannedCourses(state)[0]?.sectionId).toBe("20263COMS4115W001");
+  });
+
+  it("survive a round trip through storage without a section", () => {
+    const state = upsertCourse(emptyGuestState(), planned());
+    expect(deserialize(serialize(state))?.courses[0]?.source).toBe("plan");
+  });
+
+  it("come off a transcript's in-progress rows as planned, checked by default", () => {
+    const found = parseTranscript(
+      "Fall 2026\nCOMS W4115 PROGRAMMING LANG & TRANSL (001) 3 Planned\nFall 2024\nCOMS W3134 DATA STRUCTURES 3.00 A",
+    );
+    const byId = new Map(found.map((c) => [c.courseId, c]));
+    expect(byId.get("COMS4115W")?.planned).toBe(true);
+    expect(byId.get("COMS3134W")?.planned).toBe(false);
+    expect(defaultCandidateSelection(found).has("COMS4115W")).toBe(true);
+
+    const rows = toGuestCourses(
+      [
+        { courseId: "COMS4115W", code: "COMS W4115", title: null, points: 3, inCatalog: true },
+        { courseId: "COMS3134W", code: "COMS W3134", title: null, points: 3, inCatalog: true },
+      ],
+      found,
+    );
+    expect(rows.map((r) => r.source)).toEqual(["plan", "transcript_pdf"]);
+  });
+});
 
 describe("unmatched coursework", () => {
   it("stays on the record, marked, all the way into the database payload", () => {
@@ -788,8 +933,15 @@ describe("guess deck", () => {
       now: new Date("2026-09-15T00:00:00Z"),
     });
 
+    // The standard intro route is no longer on the strip: a student with a year
+    // behind them gets it pre-checked instead — see "choose-one defaults".
+    expect(deck.tier1.map((candidate) => candidate.courseId)).toContain("COMS1004W");
+
+    // The honours alternative is the intro option still in the strip, and the
+    // ordering rule under test is unchanged: something they plausibly HAVE
+    // taken outranks a 3000-level requirement they have not reached.
     const strip = deck.tier2.map((candidate) => candidate.courseId);
-    const introAt = strip.indexOf("COMS1004W");
+    const introAt = strip.indexOf("COMS1007W");
     const futureCoreAt = strip.indexOf("COMS3157W");
     expect(introAt).toBeGreaterThanOrEqual(0);
     expect(futureCoreAt).toBeGreaterThanOrEqual(0);
@@ -858,7 +1010,15 @@ describe("guess deck", () => {
     });
 
     const tier1 = new Set(deck.tier1.map((candidate) => candidate.courseId));
-    const offered = new Set([...deck.tier1, ...deck.tier2].map((candidate) => candidate.courseId));
+    // "Offered" spans all three surfaces. The Core sequence and the physics
+    // sequences are choose-one requirements, so they are put as a question
+    // above the strip rather than as chips in it — see "choose-one questions".
+    const offered = new Set([
+      ...[...deck.tier1, ...deck.tier2].map((candidate) => candidate.courseId),
+      ...deck.choices.flatMap((choice) =>
+        choice.routes.flatMap((route) => route.courses.map((facts) => facts.courseId)),
+      ),
+    ]);
 
     expect(tier1.has("ENGL1010CC")).toBe(true);
     expect(tier1.has("ECON1105UN")).toBe(true);
@@ -879,7 +1039,195 @@ describe("guess deck", () => {
   });
 });
 
+/* ==========================================================================
+ * A finished requirement stops making suggestions
+ * ========================================================================== */
+
+describe("finished requirements", () => {
+  const catalog = new Map<string, { code: string; title: string | null; points: number | null }>();
+
+  /** A `GroupResult` with only the fields the suppression logic reads. */
+  function group(
+    label: string,
+    rule: RequirementRule,
+    status: "satisfied" | "partial" | "unmet",
+    candidates: string[] = [],
+  ) {
+    return {
+      group: { id: label, label, rule },
+      status,
+      verification: "catalog",
+      matched: [],
+      completed: 0,
+      required: 1,
+      unit: "courses",
+      candidates,
+    } as unknown as GroupResult;
+  }
+
+  it("stops offering the other rails of a sequence the student has finished", () => {
+    /*
+     * The exact shape that put straight physics on a CS junior's strip. The
+     * SEAS physics requirement is one `sequence_choice` with three rails; a
+     * student who finished rail one has finished the requirement, and rails
+     * two and three are not courses they might also have taken.
+     */
+    const physics = group(
+      "Physics",
+      {
+        kind: "sequence_choice",
+        sequences: [
+          { label: "Sequence 1", courses: ["PHYS UN1401", "PHYS UN1402"] },
+          { label: "Sequence 3", courses: ["PHYS UN2801", "PHYS UN2802"] },
+        ],
+      },
+      "satisfied",
+    );
+
+    const suppressed = satisfiedOnlyCourseIds([physics]);
+    expect(suppressed.has("PHYS2801UN")).toBe(true);
+    expect(suppressed.has("PHYS2802UN")).toBe(true);
+  });
+
+  it("keeps a course that a still-open requirement also names", () => {
+    /*
+     * MATH UN2015 satisfies both Linear Algebra and Probability/Statistics.
+     * Finishing one of those must not hide it while the other is open —
+     * "only" is the load-bearing word in the function's name, and a plain
+     * "belongs to a satisfied group" test would fail this.
+     */
+    const linear = group(
+      "Linear Algebra",
+      { kind: "n_of", n: 1, courses: ["MATH UN2010", "MATH UN2015"] },
+      "satisfied",
+    );
+    const probability = group(
+      "Probability / Statistics",
+      { kind: "n_of", n: 1, courses: ["MATH UN2015", "STAT UN1201"] },
+      "unmet",
+    );
+
+    const suppressed = satisfiedOnlyCourseIds([linear, probability]);
+    expect(suppressed.has("MATH2015UN")).toBe(false);
+    // The option only the finished group named is still suppressed.
+    expect(suppressed.has("MATH2010UN")).toBe(true);
+  });
+
+  it("keeps a course an open-ended group expanded onto", () => {
+    // `n_matching` names nothing, so its reach arrives as `candidates`. A
+    // course a satisfied group named and an open elective group can still
+    // count belongs on the strip.
+    const finished = group(
+      "Chemistry or Biology",
+      { kind: "n_of", n: 1, courses: ["CHEM UN1403", "EEEB UN2005"] },
+      "satisfied",
+    );
+    const electives = group(
+      "Science electives",
+      { kind: "n_matching", n: 2, match: {} } as unknown as RequirementRule,
+      "unmet",
+      ["EEEB2005UN"],
+    );
+
+    expect(satisfiedOnlyCourseIds([finished, electives]).has("EEEB2005UN")).toBe(false);
+  });
+
+  it("drops the dead option from the deck, and only from the guessing passes", () => {
+    const physics = group(
+      "Physics",
+      {
+        kind: "sequence_choice",
+        sequences: [
+          { label: "Sequence 1", courses: ["PHYS UN1401", "PHYS UN1402"] },
+          { label: "Sequence 3", courses: ["PHYS UN2801", "PHYS UN2802"] },
+        ],
+      },
+      "satisfied",
+    );
+
+    const base = {
+      programs: [SEAS_MAJOR_COMPUTER_SCIENCE],
+      school: "SEAS" as const,
+      classYear: "2027",
+      confirmed: [
+        course({ courseId: "PHYS1401UN", code: "PHYS UN1401" }),
+        course({ courseId: "PHYS1402UN", code: "PHYS UN1402" }),
+      ],
+      catalog,
+      prereqs: fakePrereqs({}),
+      vectors: noVectorSource(),
+      outstanding: [],
+      now: new Date("2026-09-15T00:00:00Z"),
+    };
+
+    const before = buildGuessDeck(base);
+    const after = buildGuessDeck({
+      ...base,
+      satisfiedOnly: satisfiedOnlyCourseIds([physics]),
+    });
+
+    const idsOf = (deck: ReturnType<typeof buildGuessDeck>) =>
+      [...deck.tier1, ...deck.tier2].map((candidate) => candidate.courseId);
+
+    expect(idsOf(before)).toContain("PHYS2801UN");
+    expect(idsOf(after)).not.toContain("PHYS2801UN");
+
+    // Nothing else moved: the suppression is scoped to the two passes that
+    // read requirement tables blind, not a blanket filter over the deck.
+    expect(idsOf(after).length).toBeLessThan(idsOf(before).length);
+    expect(idsOf(after)).toContain("COMS3261W");
+  });
+});
+
+/* ==========================================================================
+ * Seniority, and the students who outrun it
+ * ========================================================================== */
+
+describe("level ceiling", () => {
+  it("falls back to the year-based prior when there is nothing to go on", () => {
+    expect(levelCeilingFor(2, [])).toBe(expectedLevelCeiling(2));
+    expect(levelCeilingFor(null, [])).toBe(1000);
+  });
+
+  it("lets a sophomore who has taken a 4000-level course say so", () => {
+    /*
+     * The prior gives a second-year 3000, which is right for a student whose
+     * program paces that way and wrong for engineering, where 4000-level
+     * major requirements are normal in year two. Rather than a per-program
+     * table of expected paces, the record overrides the estimate.
+     */
+    expect(expectedLevelCeiling(2)).toBe(3000);
+    expect(levelCeilingFor(2, ["COMS4111W"])).toBe(4000);
+  });
+
+  it("never lets the record lower the ceiling", () => {
+    // A senior who has only confirmed Intro is still a senior. Evidence
+    // raises the estimate; its absence does not lower it.
+    expect(levelCeilingFor(3, ["COMS1004W"])).toBe(4000);
+  });
+
+  it("ignores ids it cannot read a level out of", () => {
+    expect(levelCeilingFor(1, ["not-a-course-id"])).toBe(2000);
+  });
+});
+
 describe("typical schedules", () => {
+  it("uses GS-qualified Core courses for a General Studies student", () => {
+    const gs = typicalGuesses({
+      school: "GS",
+      yearsCompleted: 1,
+      ceiling: 2000,
+      programs: [],
+    }).map((guess) => guess.courseId);
+
+    expect(gs).toContain("ENGL1010GS");
+    expect(gs).toContain("HUMA1001GS");
+    expect(gs).toContain("HUMA1002GS");
+    expect(gs).toContain("COCI1101GS");
+    expect(gs).not.toContain("ENGL1010CC");
+    expect(gs).not.toContain("HUMA1001CC");
+  });
+
   it("paces College Core by year, and does not invent a Barnard Core", () => {
     const firstYear = typicalGuesses({
       school: "CC",
@@ -902,6 +1250,8 @@ describe("typical schedules", () => {
     expect(afterOneYear).toContain("COCI1101CC");
     expect(afterOneYear).not.toContain("COCI1102CC");
 
+    // Barnard has no hand-written band, so with no programs resolved there
+    // is nothing school-shaped to offer.
     expect(
       typicalGuesses({
         school: "BC",
@@ -910,6 +1260,30 @@ describe("typical schedules", () => {
         programs: [],
       }),
     ).toEqual([]);
+  });
+
+  it("offers a Barnard first-year the Foundations courses that are choices", () => {
+    // The empty BC band is not "Barnard gets nothing". Foundations encodes
+    // First-Year Writing and First-Year Seminar as `n_of`, so they arrive
+    // through the program loop with the requirement's own label — which is
+    // why writing a BC band would duplicate the registry. Guard the real
+    // flow, where the Core IS resolved, not just the bare-school case above.
+    const barnard = typicalGuesses({
+      school: "BC",
+      yearsCompleted: 0,
+      ceiling: 2000,
+      programs: [BC_FOUNDATIONS],
+    });
+    const ids = barnard.map((guess) => guess.courseId);
+
+    expect(ids).toContain("FYWB1001BC");
+    expect(ids).toContain("FYWB1002BC");
+    expect(ids).toContain("FYSB1001BC");
+    expect(ids).toContain("FYSB1002BC");
+    expect(barnard.map((guess) => guess.label)).toContain("First-Year Writing");
+    // Columbia's Core must never land on a Barnard strip.
+    expect(ids).not.toContain("HUMA1001CC");
+    expect(ids).not.toContain("COCI1101CC");
   });
 
   it("does not treat the College Core as an engineering first year", () => {
@@ -973,10 +1347,111 @@ describe("interest tags", () => {
       "seas-major-mechanical-engineering",
       "seas-major-operations-research",
       "seas-major-biomedical-engineering",
+      "bc-major-biology",
+      "bc-major-computer-science",
+      "bc-major-economics",
+      "bc-major-english",
+      "bc-major-history",
+      "bc-major-neuroscience-and-behavior",
+      "bc-major-political-economy",
+      "bc-major-political-science",
+      "bc-major-psychology",
+      "bc-major-sociology",
+      "bc-major-urban-studies",
     ]) {
       const tags = interestTagsForPrograms([programId]);
       expect(tags.length, `${programId} has no interest tags`).toBeGreaterThanOrEqual(8);
       expect(tags.length, `${programId} has too many to fit one screen`).toBeLessThanOrEqual(12);
+    }
+  });
+
+  it("offers a list for every authored Barnard major", () => {
+    /*
+     * Derived from the registry rather than listed, so adding a Barnard major
+     * without tags fails here instead of silently skipping the interest step
+     * for those students. The explicit list above is the screen-size guard;
+     * this one is the coverage guard.
+     */
+    const missing = listPrograms()
+      .filter((program) => program.school === "BC" && program.kind === "major")
+      .map((program) => program.id)
+      .filter((id) => interestTagsForPrograms([id]).length === 0);
+
+    expect(missing).toEqual([]);
+  });
+
+  it("gives Barnard its own tags rather than the College's course codes", () => {
+    /*
+     * The failure this catches is a lazy alias: pointing a Barnard major at the
+     * College's list. It typechecks and renders, and every exemplar then seeds
+     * from a course in a department the student is not in.
+     *
+     * Barnard History is the sharpest case. The College's list carries
+     * `east-asia` and `middle-east`; Barnard's department staffs neither, so
+     * their presence would mean two of ten options are dead.
+     */
+    const bcHistory = interestTagsForPrograms(["bc-major-history"]).map((tag) => tag.id);
+    expect(bcHistory).not.toContain("east-asia");
+    expect(bcHistory).not.toContain("middle-east");
+
+    // Psychology's animal-cognition group is Barnard's and has no College twin.
+    expect(interestTagsForPrograms(["bc-major-psychology"]).map((t) => t.id)).toContain(
+      "animal-cognition",
+    );
+
+    // Economics: no industrial-organisation course exists at Barnard.
+    expect(interestTagsForPrograms(["bc-major-economics"]).map((t) => t.id)).not.toContain(
+      "industrial-organization",
+    );
+  });
+
+  it("keeps one label per tag id, across every program that reuses it", () => {
+    /*
+     * The id is what `student_profiles.interest_tags` stores; the label is only
+     * how it is drawn. Two labels behind one id means the stored string no
+     * longer says what the student saw when she picked it, and
+     * `interestTagsForPrograms` — which de-duplicates by id and keeps the
+     * first — would quietly pick one of them for a student in two programs.
+     *
+     * This caught four real cases when the Barnard lists landed: `security`,
+     * `international-econ`, `behavioral-econ` and `physiology` had each been
+     * given a slightly wider Barnard label. The fix is to widen the blurb.
+     */
+    const labels = new Map<string, Set<string>>();
+    for (const programId of programsWithInterestTags()) {
+      for (const tag of interestTagsForPrograms([programId])) {
+        const seen = labels.get(tag.id) ?? new Set<string>();
+        seen.add(tag.label);
+        labels.set(tag.id, seen);
+      }
+    }
+
+    const conflicting = [...labels]
+      .filter(([, seen]) => seen.size > 1)
+      .map(([id, seen]) => `${id}: ${[...seen].join(" / ")}`);
+
+    expect(conflicting).toEqual([]);
+  });
+
+  it("writes every exemplar as a parseable Bulletin code", () => {
+    /*
+     * `toCourseId` is the bridge every requirement definition crosses, and an
+     * exemplar that does not cross it seeds an empty vector — a tag that looks
+     * fine on screen and recommends nothing, forever.
+     *
+     * This is the offline half of the check. It cannot tell an unparseable code
+     * from one that parses but names no real course; for that,
+     * `scripts/verify-interest-tag-exemplars.ts` hits the live catalog, and it
+     * currently reports 33 dead exemplars in the CC and SEAS lists that predate
+     * the Barnard work (PSYC UN1010 and BMEN E4010 among them).
+     */
+    for (const programId of programsWithInterestTags()) {
+      for (const tag of interestTagsForPrograms([programId])) {
+        expect(tag.exemplars.length, `${tag.id} has no exemplars`).toBeGreaterThan(0);
+        for (const code of tag.exemplars) {
+          expect(toCourseId(code), `${programId}/${tag.id}: unparseable "${code}"`).toBeTruthy();
+        }
+      }
     }
   });
 
@@ -1064,5 +1539,243 @@ describe("displayCourseTitle", () => {
     expect(displayCourseTitle("EARTH'S ENVIRO SYST: CLIM SYST")).toBe(
       "Earth's Enviro Syst: Clim Syst",
     );
+  });
+});
+
+describe("choose-one defaults", () => {
+  // A 2026 graduate, in August 2026: four years behind them, ceiling 4000.
+  const NOW = new Date("2026-08-26T12:00:00Z");
+
+  /*
+   * The CS spine as the Bulletin gates it. Every link but the last is a choice
+   * of two, which is the whole reason this mechanism exists: without a default
+   * nothing in the chain is ever confirmed, so the prerequisite filter withholds
+   * the two courses at the end that the major flatly requires.
+   */
+  const CS_CHAIN = {
+    COMS3134W: [["COMS1004W", "COMS1007W"]],
+    COMS3137W: [["COMS1004W", "COMS1007W"]],
+    COMS3157W: [["COMS3134W", "COMS3137W"]],
+    COMS3261W: [["COMS3134W", "COMS3137W"]],
+  };
+
+  function deck(overrides: Partial<Parameters<typeof buildGuessDeck>[0]> = {}) {
+    return buildGuessDeck({
+      programs: [CC_MAJOR_COMPUTER_SCIENCE],
+      classYear: "2026",
+      confirmed: [],
+      catalog: new Map(),
+      prereqs: fakePrereqs(CS_CHAIN),
+      vectors: noVectorSource(),
+      now: NOW,
+      ...overrides,
+    });
+  }
+
+  const idsIn = (candidates: { courseId: string }[]) => candidates.map((c) => c.courseId);
+
+  it("names a default only for an option set on the allowlist", () => {
+    expect(likelyChoiceFor(["COMS1004W", "COMS1007W"])).toEqual({
+      courseId: "COMS1004W",
+      alternatives: ["COMS1007W"],
+    });
+    // Order is not part of the key — the same pair spelled the other way round
+    // is the same requirement.
+    expect(likelyChoiceFor(["COMS1007W", "COMS1004W"])?.courseId).toBe("COMS1004W");
+
+    // Linear Algebra offers six routes and no one of them dominates, so it is
+    // not on the table and gets no default.
+    expect(likelyChoiceFor(["MATH2010UN", "MATH2015UN", "MATH2020UN"])).toBeNull();
+    expect(likelyChoiceFor([])).toBeNull();
+  });
+
+  it("pre-checks the standard route through a choose-one requirement", () => {
+    const tier1 = idsIn(deck().tier1);
+
+    expect(tier1).toContain("COMS1004W");
+    expect(tier1).toContain("COMS3134W");
+    // The honours alternatives are still offered, just not claimed on the
+    // student's behalf.
+    expect(tier1).not.toContain("COMS1007W");
+    expect(idsIn(deck().tier2)).toContain("COMS1007W");
+  });
+
+  it("unblocks the required courses that were gated on the ambiguous one", () => {
+    // The regression this exists for: COMS W3157 and COMS W3261 are `all_of`
+    // requirements of the major, and both used to fall out of tier 1 because
+    // the engine withheld anything gated on a Data Structures nobody had
+    // confirmed. One coin flip in the middle blanked out the whole chain.
+    const tier1 = idsIn(deck().tier1);
+
+    expect(tier1).toContain("COMS3157W");
+    expect(tier1).toContain("COMS3261W");
+  });
+
+  it("leaves first-years alone, who have not had time to finish either option", () => {
+    // Defaulting compounds two guesses — that they finished the requirement at
+    // all, and which way. The level ceiling stops the second half of the chain
+    // on its own; this is what stops the 1000-level half.
+    const tier1 = idsIn(deck({ classYear: "2030" }).tier1);
+
+    expect(tier1).not.toContain("COMS1004W");
+    expect(tier1).not.toContain("COMS3134W");
+  });
+
+  it("does not default a group the student has already answered themselves", () => {
+    // They ticked the honours course. Adding the standard one too would put two
+    // courses on the record for a requirement that takes one — and the invented
+    // one is the likelier of the two to be wrong.
+    const tier1 = idsIn(
+      deck({ confirmed: [course({ courseId: "COMS3137W", code: "COMS W3137" })] }).tier1,
+    );
+
+    expect(tier1).not.toContain("COMS3134W");
+    // The rest of the chain still resolves: their own confirmation clears the
+    // same gate the default would have.
+    expect(tier1).toContain("COMS3157W");
+  });
+
+  it("does not bring a removed default back, or swap it for the alternative", () => {
+    // Being corrected once is a correction. Coming back with the other option
+    // would be an argument.
+    const dismissed = deck({ dismissed: ["COMS1004W"] });
+
+    expect(idsIn(dismissed.tier1)).not.toContain("COMS1004W");
+    expect(idsIn(dismissed.tier1)).not.toContain("COMS1007W");
+  });
+
+  it("keeps defaults out of the implication map, which states facts", () => {
+    // `impliesTaken` drives "confirming this means you also took that". It is
+    // read off the raw prerequisite graph, so an assumption we made cannot
+    // launder itself into something the student is told they took.
+    const built = deck();
+
+    expect(built.impliesTaken["COMS3157W"] ?? []).toEqual([]);
+  });
+});
+
+describe("choose-one questions", () => {
+  const NOW = new Date("2026-08-26T12:00:00Z");
+  const PROGRAMS = [SEAS_CORE, SEAS_MAJOR_COMPUTER_SCIENCE];
+
+  function deck(overrides: Partial<Parameters<typeof buildGuessDeck>[0]> = {}) {
+    return buildGuessDeck({
+      programs: PROGRAMS,
+      school: "SEAS",
+      classYear: "2026",
+      confirmed: [],
+      catalog: new Map(),
+      prereqs: fakePrereqs({}),
+      vectors: noVectorSource(),
+      now: NOW,
+      ...overrides,
+    });
+  }
+
+  const labels = (built: { choices: { label: string }[] }) =>
+    built.choices.map((choice) => choice.label);
+
+  it("asks about a requirement it knows was satisfied exactly one way", () => {
+    expect(labels(deck())).toContain("Physics");
+    expect(labels(deck())).toContain("Linear Algebra");
+    expect(labels(deck())).toContain("Chemistry or Biology");
+  });
+
+  it("carries every course in a sequence route, not just the first term", () => {
+    // "I took Lit Hum" is a claim about two semesters. A route that named only
+    // HUMA CC1001 would silently drop the second half of the requirement.
+    const core = deck().choices.find((choice) => choice.label === "Core sequence");
+    const litHum = core?.routes.find((route) => route.label === "Literature Humanities");
+
+    expect(litHum?.courses.map((facts) => facts.courseId)).toEqual(["HUMA1001CC", "HUMA1002CC"]);
+  });
+
+  it("does not ask what it already defaulted", () => {
+    // `likely-choice.ts` puts COMS W1004 and COMS W3134 in tier 1. Asking as
+    // well would put the same question on the screen twice, once answered.
+    expect(labels(deck())).not.toContain("Introductory Programming");
+    expect(labels(deck())).not.toContain("Data Structures");
+  });
+
+  it("does not ask about a menu the student worked through rather than forked at", () => {
+    // Area Foundation is four courses chosen from twenty-one. The student did
+    // not take one of them, and we could not guess which four regardless.
+    expect(labels(deck())).not.toContain("Area Foundation Courses");
+  });
+
+  it("declines to render a picker that would be worse than the search box", () => {
+    // CC Political Science offers seventeen routes through Research Methods.
+    const built = deck({ programs: [CC_MAJOR_POLITICAL_SCIENCE], school: "CC" });
+
+    expect(labels(built)).not.toContain("Research Methods");
+  });
+
+  it("counts that cap in courses, because courses are what get drawn", () => {
+    // CC Biology's Chemistry group is only four routes — under the route cap —
+    // but fifteen distinct courses, and the screen draws one chip per course.
+    // As routes it was four buttons; as courses it is a wall of call numbers
+    // above a question meant to be answered at a glance.
+    const built = deck({ programs: [CC_MAJOR_BIOLOGY], school: "CC" });
+
+    expect(labels(built)).not.toContain("Chemistry");
+  });
+
+  it("still asks the groups that stayed a reasonable size", () => {
+    // The guard against the cap being set so low it empties the screen: the
+    // Physics group is six courses across three sequences and has to survive.
+    const physics = deck().choices.find((choice) => choice.label === "Physics");
+
+    expect(physics).toBeDefined();
+    expect(
+      new Set(physics?.routes.flatMap((route) => route.courses.map((f) => f.courseId))).size,
+    ).toBe(6);
+  });
+
+  it("asks nothing of a first-year", () => {
+    expect(deck({ classYear: "2030" }).choices).toEqual([]);
+  });
+
+  it("stops asking once the student answers, and once they decline", () => {
+    const answered = deck({
+      confirmed: [course({ courseId: "PHYS1401UN", code: "PHYS UN1401" })],
+    });
+    expect(labels(answered)).not.toContain("Physics");
+
+    // "None yet" dismisses every route, which is what has to be true before the
+    // question stops being asked — one dismissed sequence is not an answer.
+    const partly = deck({ dismissed: ["PHYS1401UN", "PHYS1601UN"] });
+    expect(labels(partly)).toContain("Physics");
+
+    const declined = deck({
+      dismissed: ["PHYS1401UN", "PHYS1402UN", "PHYS1601UN", "PHYS1602UN", "PHYS2801UN", "PHYS2802UN"],
+    });
+    expect(labels(declined)).not.toContain("Physics");
+  });
+
+  it("takes the courses it asks about out of the suggestion strip", () => {
+    // The strip has eight slots. Leaving the options in would spend four of
+    // them on the Core sequence alone, which is the whole reason these moved.
+    const built = deck();
+    const asked = new Set(
+      built.choices.flatMap((choice) =>
+        choice.routes.flatMap((route) => route.courses.map((facts) => facts.courseId)),
+      ),
+    );
+    const strip = built.tier2.map((candidate) => candidate.courseId);
+
+    expect(asked.size).toBeGreaterThan(0);
+    expect(strip.filter((courseId) => asked.has(courseId))).toEqual([]);
+  });
+
+  it("asks a requirement two declared programs both name only once", () => {
+    // The CS major and the CS minor spell Intro identically. Keyed on the
+    // routes, so it is one question however many programs mention it.
+    const built = deck({
+      programs: [CC_MAJOR_COMPUTER_SCIENCE, CC_MINOR_COMPUTER_SCIENCE],
+      school: "CC",
+    });
+    const linearAlgebra = labels(built).filter((label) => label === "Linear Algebra");
+
+    expect(linearAlgebra.length).toBeLessThanOrEqual(1);
   });
 });

@@ -1,60 +1,100 @@
 /**
- * Home — a greeting, the feed, and the box.
+ * Home — the recommendations.
  *
- * ── The two halves answer different halves of the question ─────────────────
+ * ── Why this page exists ───────────────────────────────────────────────────
  *
- * This page has been through four shapes: a planner; a feed above the planner;
- * the assistant above the feed; then the assistant alone. The fourth was a
- * correction to the third and overshot. An empty box is the right thing to land
- * on only if the student already has a question — and "what should I take" is
- * precisely the state of not having one yet.
+ * The home page has been a planner, a feed above a planner, an assistant above
+ * a feed, the assistant alone, and then the assistant with a feed rail on top
+ * of it. Every one of those shapes made the same bet: that the student arrives
+ * with a question. They do not. "What should I take" is the state of not
+ * having formed a question yet, and an empty box answers it with homework.
  *
- * So the feed comes back, but as a rail rather than a column, and above the box
- * rather than below it. The feed answers the one question every student has, in
- * cards they can act on without typing anything. The box answers everything the
- * feed cannot anticipate — "which of these leaves Friday free", "what is the
- * fastest way to finish my Core". Neither is the page; the pair is.
+ * So the split is now down the middle. This page is the answer we can give
+ * without being asked — a ranked list of specific sections, each one saying in
+ * its own words why it is on the list. `/chat` is the box, one nav item over,
+ * for everything a ranked list cannot anticipate ("which of these leaves
+ * Friday free", "fastest way to finish the Core"). Two pages rather than two
+ * halves of one, because a conversation and a set of recommendations both want
+ * to be the thing on screen, and stacking them made the student choose which
+ * to read before either had said anything.
  *
- * The moment a student types, the greeting and the rail give way to the thread.
- * That is not a layout trick: a conversation and a set of recommendations are
- * both trying to be the answer on screen, and showing them at once would make
- * the student decide which one to read.
+ * The rail is gone with it. A rail was the right compromise while the box had
+ * to stay above the fold; it put eleven of twelve recommendations off the
+ * right edge and squeezed the reason for each one into a single clamped grey
+ * line. Nothing about that survives contact with "the main value add is
+ * showing recommended courses."
  *
- * Nothing was deleted. `/schedule`, `/progression` and `/saved` are unchanged
- * and reachable from the nav; the watchlist rail lives on `/saved` with the
- * rest of a student's saved work.
+ * Nothing was deleted. `/search`, `/schedule` and `/progression` still exist
+ * and still work — they are just no longer in the nav, because a student who
+ * wanted to browse a catalog would already be in Vergil.
  *
- * ── This page stays a server component ─────────────────────────────────────
+ * ── The streaming boundary is the whole reason for `HomeFeed` ──────────────
  *
- * `AssistantHome` is the client island, and everything it needs to know that
- * only the server can answer is resolved here and passed in: whether there is a
- * session, and how much of the prompt budget is already spent.
- *
- * The budget is read, never spent. `checkPromptBudget` is a select; the write
- * lives in `recordPrompt`, which only `/api/agent` calls. Rendering the counter
- * from the same source the route enforces from is what stops the number under
- * the box from disagreeing with the refusal the student eventually gets.
+ * `buildFeed` pages the active catalog and builds a prerequisite graph over
+ * 8,189 courses; cold, that is seconds, and even memoised it is a database
+ * round trip. `<Suspense>` boundaries wrap COMPONENTS, so the await has to
+ * live in a child — a promise awaited in `HomePage` itself suspends
+ * `HomePage`, and the header, the shell and the nav would wait behind the
+ * engine for no reason.
  */
 
 import { Suspense } from "react";
 import type { Metadata } from "next";
+import Link from "next/link";
+import { RiChat3Line } from "@remixicon/react";
 
+import { FeedPanel } from "@/components/feed/feed-panel";
+import { LandingPage } from "@/components/marketing/landing";
+import { FeedSkeleton } from "@/components/feed/feed-skeleton";
 import { AppShell } from "@/components/shell/app-shell";
-import { PageContent } from "@/components/shell/page-content";
 import { AuthErrorNotice } from "@/components/shell/auth-error-notice";
-import { AssistantHome } from "@/components/assistant";
-import { FeedPanel, FeedSkeleton } from "@/components/feed";
-import { buildFeed } from "@/lib/recommend/feed";
-import { CURRENT_TERM, buildTerm } from "@/lib/constants";
-import { isConversationId } from "@/lib/agent/history-format";
-import { PROMPT_LIMIT, checkPromptBudget } from "@/lib/agent/usage";
+import { PageContent } from "@/components/shell/page-content";
+import { PageHeader } from "@/components/shell/page-header";
+import {
+  SOCIAL_DESCRIPTION,
+  SOCIAL_IMAGE_ALT,
+  SOCIAL_TITLE,
+} from "@/lib/marketing/social";
 import { getSessionUser } from "@/lib/db/auth";
-import { createServiceRoleClient } from "@/lib/db/client";
+import { HOME_FEED_LIMIT, buildFeed } from "@/lib/recommend/feed";
+import { cx } from "@/utils/cx";
 
 export const metadata: Metadata = {
-  title: "LionPlan",
+  metadataBase: new URL("https://lionplan.org"),
+  /*
+    These describe the LANDING page, not the feed.
+    Every visitor who can see this metadata — a crawler, a link unfurler, a
+    person who has not signed in — gets `LandingPage` from the branch below.
+    The feed is only ever rendered for someone with a session, who by
+    definition arrived past the title tag. Describing the feed here advertised
+    a page the audience for the description could not reach.
+  */
+  title: "LionPlan — know what to take next, and why",
   description:
-    "Ask what to take next term. Answers are read out of the catalog and your own coursework, never recalled.",
+    "A course planner for Columbia College, Columbia Engineering and Barnard College. Browse all 8,189 courses without an account, or set up once for a ranked list of the sections you can take next term.",
+  alternates: { canonical: "https://www.lionplan.org/" },
+  robots: { index: true, follow: true },
+  openGraph: {
+    title: SOCIAL_TITLE,
+    description: SOCIAL_DESCRIPTION,
+    url: "https://lionplan.org",
+    siteName: "LionPlan",
+    type: "website",
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: SOCIAL_IMAGE_ALT,
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SOCIAL_TITLE,
+    description: SOCIAL_DESCRIPTION,
+    images: [{ url: "/twitter-image", alt: SOCIAL_IMAGE_ALT }],
+  },
 };
 
 export default async function HomePage({
@@ -63,109 +103,147 @@ export default async function HomePage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const params = await searchParams;
-  const requestedId = typeof params.c === "string" ? params.c : null;
-  const initialConversationId =
-    requestedId && isConversationId(requestedId) ? requestedId : null;
 
-  const account = await getSessionUser();
-  const term = buildTerm(CURRENT_TERM);
-  const budget = await readPromptBudget(account?.userId ?? null);
+  /*
+    The fork this whole route exists to make.
+
+    `proxy.ts` no longer 307s `/` to the wizard (see the note in
+    `lib/onboarding/guest-gate.ts`), so a guest arrives here instead of being
+    bounced. They get the landing page; a student gets the feed. Same URL,
+    which is the point — the apex is where shared links and organic traffic
+    land, and a marketing page one redirect away is one most of its audience
+    never sees.
+
+    `getSessionUser()` and not a `buildFeed` that copes with no student:
+    the feed for nobody is the catalog in its default order, which is the
+    least persuasive thing this page could show a stranger. It is also the
+    read that makes `/` uncacheable, which is the acknowledged cost.
+
+    `auth_error` is deliberately not handled on this branch. It only arrives
+    from the OAuth callback, which sends failures to a page that can explain
+    them; a guest who has never signed in has no error to show.
+  */
+  const sessionUser = await getSessionUser();
+  if (!sessionUser) return <LandingPage />;
 
   return (
     <AppShell activeNav="home">
       {/*
-        Narrower than the rest of the app on purpose. Everywhere else on this
-        site is dense tabular data that wants the width; a conversation is prose,
-        and prose at 1180px is a worse read than prose at 1030px.
+        720px, which is the width these same cards already render at on the
+        last onboarding screen — the first feed a student sees and every feed
+        after it are the same object, so they should not be two different
+        shapes. `max-w-5xl` was sized for two columns; left alone under a
+        single column it would stretch one card, and its seat meter, to 1024px.
       */}
-      <PageContent className="max-w-[1030px] gap-0">
+      <PageContent className="max-w-[720px] gap-5">
         <AuthErrorNotice reason={params.auth_error} />
-        <AssistantHome
-          isSignedIn={Boolean(account)}
-          termLabel={term.label}
-          promptsUsed={budget.used}
-          promptsLimit={budget.limit}
-          greetingName={firstName(account?.name)}
-          initialConversationId={initialConversationId}
-          /*
-           * Passed as an element, not awaited here.
-           *
-           * `HomeFeed` is an async server component, so the `<Suspense>` around
-           * it is a real streaming boundary: the shell, the greeting and the
-           * composer paint immediately and the rail arrives when the engine is
-           * done. Awaiting `buildFeed` in this function instead would hold the
-           * whole document — including the box — behind a prerequisite graph
-           * over 8,189 courses.
-           */
-          feed={
-            <Suspense fallback={<FeedSkeleton />}>
-              <HomeFeed />
-            </Suspense>
-          }
-        />
+
+        {/*
+          A title and nothing else.
+
+          The eyebrow said "Fall 2026 & Spring 2027" and the description
+          explained how the ranking works. Both were cut, and the cut is right:
+          the terms are printed on every card already, and a paragraph about
+          the ranking is the page arguing for itself before the reader has seen
+          a single recommendation. The cards make that argument better — each
+          one now says why it is there, in its own words, which is what the
+          description was standing in for.
+        */}
+        <PageHeader title="Recommendations" hideTitleOnMobile />
+
+        <Suspense fallback={<FeedSkeleton />}>
+          <HomeFeed />
+        </Suspense>
+
+        <AskInstead />
       </PageContent>
     </AppShell>
   );
 }
 
 /**
- * How many questions are already spent in the current window.
+ * The feed, awaited behind the boundary. See the note at the top of the file.
  *
- * A signed-out visitor has spent none, and the counter under the box reads
- * `0/20` — accurate, and the honest thing to show beside a box that will ask
- * them to sign in rather than pretending the limit is the reason they cannot
- * ask. A database that is unreachable degrades the same way: a wrong-but-low
- * counter is recoverable, and the route re-checks the real budget before it
- * spends anything, so nothing can be over-spent by trusting this.
- */
-async function readPromptBudget(userId: string | null) {
-  const fallback = { used: 0, limit: PROMPT_LIMIT };
-  if (!userId) return fallback;
-
-  const db = createServiceRoleClient();
-  if (!db) return fallback;
-
-  try {
-    const budget = await checkPromptBudget(db, userId);
-    return { used: budget.used, limit: budget.limit };
-  } catch (cause) {
-    console.error("home: the prompt budget could not be read:", cause);
-    return fallback;
-  }
-}
-
-/**
- * The feed, isolated so it can suspend on its own.
- *
- * It must be its own component rather than an inline `await`: `<Suspense>`
- * boundaries wrap components, and a promise awaited in `HomePage` suspends
- * `HomePage`. Splitting it is what moves the boundary from the whole document
- * to the rail.
- *
- * `buildFeed` reads the student's own record through the cookie-scoped Supabase
- * client, which is why this is rendered inside the request rather than at build
- * time, and why the same call from a script comes back as a guest.
+ * Asks for `HOME_FEED_LIMIT` rather than taking the default: the default is
+ * sized for the agent's tool call, where every extra card is tokens spent on
+ * something the reader may never ask about. Here the cards ARE the page and
+ * the cost of one more is a scroll.
  */
 async function HomeFeed() {
-  const feed = await buildFeed();
-  return <FeedPanel feed={feed} />;
+  const feed = await buildFeed({ limit: HOME_FEED_LIMIT });
+  return <FeedPanel feed={feed} limit={HOME_FEED_LIMIT} />;
 }
 
 /**
- * A name to greet, or nothing.
+ * The way out to `/chat`, at the bottom, on purpose.
  *
- * `toSessionAccount` never returns an empty name — it falls back through
- * `full_name` → `name` → the local part of the email → the literal
- * `"Signed in"`. Only the first two of those are a name a person would answer
- * to, and greeting someone as `2023johnathanmo` or as `Signed in` is worse than
- * not greeting them, so anything that looks like a fallback returns null and
- * the page opens on the feed's own heading instead.
+ * The box is the long tail — genuinely useful, and useful precisely to the
+ * student who has already read the list and found it did not cover their case.
+ * Putting it above the cards would ask a question of someone who came here to
+ * be handed an answer; putting it below is where the reader who exhausted the
+ * list actually is.
+ *
+ * ── Still a door, and now shaped like one ──────────────────────────────────
+ *
+ * This was one sentence with an inline link in it, and the constraint that
+ * produced it is right and is kept: it must not read as an eleventh
+ * recommendation. But "not a card" had been implemented as "not anything" —
+ * a bare line of text left-aligned under a column of bordered cards, which
+ * reads as a caption belonging to the card above rather than as its own
+ * offer, gives no sign the list has ended, and puts the only tap target on a
+ * run of inline text about four words wide.
+ *
+ * Three cheap things fix all of that without turning it into a destination.
+ * A hairline that fades out at both ends punctuates the end of the list —
+ * a full-strength rule would read as a table divider, and the taper says
+ * "this is the edge of the content" instead. Centring breaks the column's
+ * left-aligned rhythm, which is what stops it reading as more card. And the
+ * link becomes an outline pill: a real target, and the same shape the
+ * transcript control in onboarding uses, so the app has one way of drawing
+ * "a secondary action you may not need".
+ *
+ * Outline rather than filled accent specifically because the chat FAB is
+ * filled accent and floats over this same corner below `xl`. Two identical
+ * loud buttons to one destination, one of them a hundred pixels from the
+ * other, is a duplicate rather than a choice — so the persistent shortcut
+ * stays the loud one and the contextual explanation stays quiet.
  */
-function firstName(name: string | undefined): string | null {
-  if (!name) return null;
-  const first = name.trim().split(/\s+/)[0] ?? "";
-  if (!first || first === "Signed" || first.includes("@")) return null;
-  // An email local part that became the name: digits, dots, no capital.
-  if (/\d/.test(first) || first.includes(".")) return null;
-  return first;
+function AskInstead() {
+  return (
+    <div className="flex flex-col items-center gap-5 px-1 pb-2">
+      {/*
+        Held at full strength across the middle and tapered only at the ends.
+        A linear fade from the centre — the obvious `via-` gradient — peaked at
+        the one hairline value the cards already use and averaged well under
+        it, so the rule was fainter than every border above it and stopped
+        reading as a boundary at all.
+      */}
+      <div
+        aria-hidden
+        className="h-px w-full bg-[linear-gradient(to_right,transparent,var(--color-border-table)_20%,var(--color-border-table)_80%,transparent)]"
+      />
+      <div className="flex flex-col items-center gap-2.5">
+        <p className="text-center text-pretty text-headline-regular text-text-secondary">
+          Something here not covered?
+        </p>
+        <Link
+          href="/chat"
+          className={cx(
+            "inline-flex items-center gap-2 rounded-full border border-border-button-default",
+            "px-4 py-2 text-body-medium text-text-secondary outline-none",
+            "transition-colors duration-150",
+            "hover:bg-background-secondary-hover hover:text-text-primary",
+            "focus-visible:ring-2 focus-visible:ring-border-focus-ring",
+            "pointer-coarse:py-2.5",
+          )}
+        >
+          <RiChat3Line
+            className="size-[1.125rem] shrink-0 text-accent-600"
+            aria-hidden
+          />
+          Ask about your own case
+        </Link>
+      </div>
+    </div>
+  );
 }

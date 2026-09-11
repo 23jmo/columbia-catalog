@@ -16,6 +16,7 @@ import {
 } from "@/lib/agent/history-format";
 
 export {
+  CHAT_PATH,
   SIDEBAR_THREAD_CAP,
   SEARCH_THREAD_LIMIT,
   THREAD_QUERY_PARAM,

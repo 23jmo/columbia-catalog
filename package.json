@@ -33,6 +33,7 @@
     "@tanstack/react-virtual": "^3.14.10",
     "@types/three": "^0.185.4",
     "@vercel/analytics": "^2.0.1",
+    "@vercel/speed-insights": "^2.0.0",
     "@xyflow/react": "^12.11.3",
     "agentation": "^3.0.2",
     "ai": "^7.0.78",
@@ -48,6 +49,7 @@
     "react-dom": "19.2.8",
     "recharts": "^3.10.1",
     "tailwind-merge": "^3.6.0",
+    "tesseract.js": "^7.0.0",
     "three": "^0.185.1",
     "zod": "^4.4.3"
   },

@@ -12,6 +12,7 @@ import {
   readTranscriptFile,
   type CourseCandidate,
 } from "@/lib/onboarding/transcript";
+import type { OcrProgress } from "@/lib/onboarding/transcript-ocr";
 // Type-only: `server.ts` reaches the database and must not enter this bundle.
 import type { ResolvedCourse } from "@/lib/onboarding/server";
 import { haptic } from "@/lib/haptics";
@@ -66,6 +67,12 @@ export function TranscriptImport({ onImport, onClose }: TranscriptImportProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [problem, setProblem] = useState<string | null>(null);
   const [pasted, setPasted] = useState("");
+  /*
+   * Non-null only while a scan is being read. The text-layer path finishes in
+   * a frame and never sets this, so the bar appears exactly when there is a
+   * multi-second wait to explain — which is the only time it is not noise.
+   */
+  const [progress, setProgress] = useState<OcrProgress | null>(null);
   const [isPending, startTransition] = useTransition();
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -78,9 +85,16 @@ export function TranscriptImport({ onImport, onClose }: TranscriptImportProps) {
   const onFile = (file: File | undefined) => {
     if (!file) return;
     haptic("impact");
+    setProblem(null);
     startTransition(async () => {
-      const result = await readTranscriptFile(file);
-      accept(result.candidates, result.problem);
+      try {
+        const result = await readTranscriptFile(file, setProgress);
+        accept(result.candidates, result.problem);
+      } finally {
+        // Cleared in a `finally` so a thrown read cannot strand the bar at 60%
+        // with no error and no way back.
+        setProgress(null);
+      }
     });
   };
 
@@ -155,8 +169,9 @@ export function TranscriptImport({ onImport, onClose }: TranscriptImportProps) {
           <div className="min-w-0">
             <p className="text-body-medium text-text-primary">Upload your transcript</p>
             <p className="mt-0.5 text-caption-1-regular text-text-secondary">
-              PDF or plain text. It is read in this browser and never uploaded — we store course
-              codes, never the file, and never a grade.
+              PDF, screenshot, or plain text. A scan or photo is read with OCR, which takes a
+              few seconds. It all happens in this browser and nothing is uploaded — we store
+              course codes, never the file, and never a grade.
             </p>
           </div>
         </div>
@@ -164,7 +179,14 @@ export function TranscriptImport({ onImport, onClose }: TranscriptImportProps) {
           <input
             ref={fileInput}
             type="file"
-            accept=".pdf,.txt,text/plain,application/pdf"
+            /*
+              Images are accepted because the Vergil unofficial record is a
+              picture and a phone photo of a paper transcript is the other
+              thing students actually have. Leaving them out of `accept` greyed
+              those files out in the picker, which is indistinguishable from
+              the upload being broken.
+            */
+            accept=".pdf,.txt,.png,.jpg,.jpeg,.webp,text/plain,application/pdf,image/*"
             className="sr-only"
             onChange={(event) => onFile(event.target.files?.[0])}
           />
@@ -180,6 +202,35 @@ export function TranscriptImport({ onImport, onClose }: TranscriptImportProps) {
             Choose a file
           </Button>
         </div>
+
+        {/*
+          Determinate, because OCR is slow enough that a spinner stops being
+          reassuring — several seconds of an unmoving spinner reads as a hang,
+          where a bar that is visibly moving reads as work. The label names the
+          page being read so a three-page transcript does not look stuck on the
+          same step three times.
+        */}
+        {progress ? (
+          <div
+            role="status"
+            aria-live="polite"
+            className="flex flex-col gap-1.5"
+          >
+            <p className="text-caption-1-regular text-text-secondary">{progress.label}</p>
+            <div
+              className="h-1 w-full overflow-hidden rounded-full bg-background-secondary-hover"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(progress.ratio * 100)}
+            >
+              <div
+                className="h-full rounded-full bg-accent-500 transition-[width] duration-300 ease-out"
+                style={{ width: `${Math.round(progress.ratio * 100)}%` }}
+              />
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div className="flex flex-col gap-2">

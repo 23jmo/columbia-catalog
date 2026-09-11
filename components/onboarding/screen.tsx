@@ -6,7 +6,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { RiArrowLeftLine, RiArrowRightLine } from "@remixicon/react";
 
 import { Avatar } from "@/components/base/avatar/avatar";
-import { OrnamentAvatar } from "@/components/ornament/ornament-avatar";
+import { OrnamentAvatar, type OrnamentMood } from "@/components/ornament/ornament-avatar";
 import { haptic } from "@/lib/haptics";
 import { cx } from "@/utils/cx";
 
@@ -85,16 +85,6 @@ export interface OnboardingScreenProps {
   footer?: ReactNode;
   /** Widens the column for the screens that hold more than a row of chips. */
   wide?: boolean;
-  /**
-   * Reserves room at the bottom of the column for a toast pinned to the
-   * viewport's bottom edge.
-   *
-   * Without it the advance arrow — the last thing in the column and the only
-   * way forward — comes to rest UNDER the toast card at full scroll, and a tap
-   * on it hits the toast instead. The student is then stuck on a screen whose
-   * only exit is invisible, which is the worst failure this flow can have.
-   */
-  hasPinnedToast?: boolean;
   /** Which two-hue pairing the ornament wears. One per screen, so the flow
    *  shifts colour as it advances without ever animating. */
   hue?: OrnamentHue;
@@ -128,6 +118,12 @@ export interface OnboardingScreenProps {
   signInError?: string | null;
   /** Signed-in student. Replaces Log in on the first screen with their photo. */
   account?: { name: string; avatarUrl?: string } | null;
+  /**
+   * What the ornament is doing. `tracking` on every screen that asks the
+   * student something, which is nearly all of them; `thinking` on the one
+   * screen where the app is the one working and the student is waiting.
+   */
+  mood?: OrnamentMood;
 }
 
 export function OnboardingScreen({
@@ -139,13 +135,13 @@ export function OnboardingScreen({
   nextLabel = "Continue",
   footer,
   wide = false,
-  hasPinnedToast = false,
   hue,
   lockViewport = false,
   direction = 1,
   onSignIn,
   signInError,
   account,
+  mood = "tracking",
 }: OnboardingScreenProps) {
   /*
    * Reduced motion keeps the crossfade and drops the horizontal travel. The
@@ -220,20 +216,16 @@ export function OnboardingScreen({
           // to push it under Safari chrome. sm keeps the original air.
           lockViewport ? "pt-14 sm:pt-[15vh]" : "pt-[13vh] sm:pt-[15vh]",
           wide ? "max-w-[760px]" : "max-w-[620px]",
-          // Deep enough to clear the toast card at its two-line worst, which is
-          // what a 390px viewport gives it. The locked feed has no advance
-          // arrow and no toast — `pb-24` there was empty space under the
-          // button. Extra cards now live below the gate, so leave room to
-          // scroll past the last one.
-          hasPinnedToast
-            ? "pb-44"
-            : lockViewport
-              ? "pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]"
-              : "pb-24",
+          // The locked feed has no advance arrow — `pb-24` there was empty
+          // space under the button. Extra cards now live below the gate, so
+          // leave room to scroll past the last one.
+          lockViewport
+            ? "pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]"
+            : "pb-24",
           "min-h-0 flex-none",
         )}
       >
-        <OrnamentAvatar hue={hue} mood="tracking" />
+        <OrnamentAvatar hue={hue} mood={mood} />
 
         {/*
           Keyed on the question rather than on the flow's step: the degree step
@@ -435,7 +427,7 @@ function SignInChip({ onClick, error }: { onClick: () => void; error?: string | 
       <button
         type="button"
         onClick={() => {
-          haptic("impact");
+          haptic("selection");
           onClick();
         }}
         className="flex h-10 cursor-pointer items-center rounded-xl border border-border-button-default bg-background-full px-3.5 text-body-medium text-text-secondary transition-colors hover:bg-background-secondary-hover hover:text-text-primary pointer-coarse:h-11"
@@ -511,8 +503,8 @@ function AdvanceArrow({
     <button
       type="button"
       onClick={() => {
-        // Advancing is the completed beat of each screen.
-        haptic("success");
+        // Same tick as the answer chips — forward, not a saved write.
+        haptic("selection");
         onClick();
       }}
       disabled={disabled}

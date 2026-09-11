@@ -41,7 +41,9 @@ export function buildAgentTasks(): AgentTask[] {
       id: "schedule",
       title: "Read my schedule",
       example: "get_my_schedule",
-      prompt: "Read my saved LionPlan plans with get_my_schedule.",
+      prompt:
+        "Read my LionPlan classes with get_my_schedule — it returns my saved list with the " +
+        "meeting times resolved, which is the same thing as my schedule.",
     },
     {
       id: "watch",

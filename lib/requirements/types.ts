@@ -213,6 +213,36 @@ export interface GroupResult {
   candidates: string[];
   /** Set by `attested` groups the student has ticked. */
   attestedAt?: string | null;
+  /**
+   * Identifies the set of groups a SINGLE course cannot close more than one of.
+   *
+   * `excludeGroups` says a course consumed by one group cannot also count in
+   * another, and `evaluateProgram` enforces that backwards, against courses the
+   * student has already taken. Forwards it has no teeth: `compileSelector`
+   * drops `excludeGroups` — it is a group reference, not a shape — so a course
+   * that matches two mutually exclusive groups is expanded as a candidate for
+   * both, and anything counting candidate memberships sees it advance two
+   * requirements when it can only ever advance one. A chemistry course carries
+   * both `scienceB` and `scienceC`, and that is the whole reason the feed used
+   * to open with chemistry for students who had never expressed any interest
+   * in it.
+   *
+   * Groups joined by `excludeGroups` — in either direction, transitively —
+   * share one key; groups bound by nothing carry `undefined` and are always
+   * counted separately. Two groups that merely OVERLAP are not clustered:
+   * cross-counting one course toward both the Core and a major is legitimate,
+   * and the audit reports it rather than preventing it.
+   *
+   * Qualified by program id, because group ids are unique only within a
+   * program — `data-structures`, `research-methods` and twenty others are
+   * reused across programs, and a student with two majors would otherwise have
+   * unrelated groups collapse into one.
+   *
+   * Stamped by `expandCandidates`, the last point at which program scope still
+   * exists: callers flatten `ProgramResult[]` to `GroupResult[]` immediately
+   * afterwards and the association is gone.
+   */
+  exclusionKey?: string;
 }
 
 export interface ProgramResult {

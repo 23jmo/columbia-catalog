@@ -3,24 +3,51 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { RiMenuLine } from "@remixicon/react";
 
+import { motion } from "motion/react";
+
+import { HapticRoot } from "@/components/haptics/haptic-root";
 import { CatalogSidebar } from "@/components/shell/catalog-sidebar";
+import { ChatFab } from "@/components/shell/chat-fab";
+import { FeedbackPrompt } from "@/components/shell/feedback-prompt";
 import { MobileHeaderSlotProvider } from "@/components/shell/mobile-header-slot";
 import { ProgressiveBlur } from "@/components/shell/progressive-blur";
-import type { ShellNavKey } from "@/components/shell/nav";
-import { haptic } from "@/lib/haptics";
+import { SHELL_NAV_ITEMS, type ShellNavKey } from "@/components/shell/nav";
+import { useRailSwipe } from "@/components/shell/use-rail-swipe";
+import { useSessionAccount } from "@/hooks/use-session-account";
 import { cx } from "@/utils/cx";
 
-const PAGE_NAME: Record<ShellNavKey, string> = {
-  home: "Home",
-  search: "Search",
+/*
+ * What the bar calls each page.
+ *
+ * This used to be seven hand-written strings, and it drifted the first time
+ * one of them was renamed: the rail and the page heading both became
+ * "Recommendations" while the phone's bar went on saying "Home" — on the very
+ * screen where `hideTitleOnMobile` suppresses the heading BECAUSE the bar is
+ * supposed to be printing it. The phone was the only surface still showing the
+ * old name, so nothing on desktop could catch it.
+ *
+ * The spread is what stops that happening again: for anything in the rail,
+ * `SHELL_NAV_ITEMS` is the only source of the word. Those four keys are still
+ * written out below — TypeScript cannot see that `Object.fromEntries` covers
+ * them, so without a literal the object does not satisfy the `Record` — but
+ * the spread comes last and wins, and editing one of those four values here
+ * does nothing. Rename in `SHELL_NAV_ITEMS`.
+ *
+ * The other three are real. They are deliberately NOT in the rail (see the
+ * note there), so they have no label to borrow and this is where they live.
+ */
+export const PAGE_NAME: Record<ShellNavKey, string> = {
+  // Overridden by the spread — see above.
+  home: "Recommendations",
+  chat: "Chat",
+  search: "Catalog",
   saved: "Saved",
+  // Not in the rail; these are the live values.
   schedule: "Schedule",
   progression: "Progression",
   profile: "Profile",
+  ...Object.fromEntries(SHELL_NAV_ITEMS.map((item) => [item.key, item.label])),
 };
-
-/** Matches the parked rail. Keep this in lockstep with the width class below. */
-const RAIL_PX = 260;
 
 /**
  * Desktop floating rail starts at `xl` (1280px), not `lg` (1024px).
@@ -28,8 +55,6 @@ const RAIL_PX = 260;
  * 1024 is iPad Pro portrait — still a tablet. Gating the push/radius on
  * `max-lg` made that size snap to the desktop rail and skip the join.
  */
-const DESKTOP_MQ = "(min-width: 1280px)";
-
 /**
  * Phone and tablet chrome — BoardUI AI Chat's slide, with a slim top bar.
  *
@@ -37,11 +62,12 @@ const DESKTOP_MQ = "(min-width: 1280px)";
  * the content column (that would reflow every card). It translates the whole
  * card right, same width, so the extra 260px just leaves the screen.
  *
- * Transform is set as `translate3d` on the element itself, both open and
- * closed. Toggling a Tailwind `translate-x-*` class (or toggling
- * `overflow-hidden` with it) goes from `transform: none` to a list, which
- * most engines cannot interpolate — that is the snap. The header gets the
- * same left radius so its opaque fill does not square off the join.
+ * Offset is a motion value, not a Tailwind translate class. Toggling
+ * `translate-x-*` goes from `transform: none` to a list, which most
+ * engines cannot interpolate — that is the snap. The same value is what
+ * the edge-swipe follows, so a hamburger tap and a thumb drag settle
+ * on one path. The header gets the same left radius so its opaque fill
+ * does not square off the join.
  *
  * The shell behind the card is the sidebar grey. That is what shows in the
  * card's left radius — a white page behind it would read as a hole, not a join.
@@ -60,8 +86,10 @@ export function MobileShell({
   className?: string;
   style?: CSSProperties;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
+  const { x, isOpen, dragging, setOpen, toggle, close, onEdgeDown, onCardDown, onRailDown } =
+    useRailSwipe();
   const pageName = PAGE_NAME[activeNav];
+  const peeking = isOpen || dragging;
 
   /*
    * The bar's own contents are owned by whichever page claims them. `Home` is
@@ -70,22 +98,13 @@ export function MobileShell({
   const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
-    const media = window.matchMedia(DESKTOP_MQ);
-    const onChange = () => {
-      if (media.matches) setIsOpen(false);
-    };
-    media.addEventListener("change", onChange);
-    return () => media.removeEventListener("change", onChange);
-  }, []);
-
-  useEffect(() => {
     if (!isOpen) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setIsOpen(false);
+      if (event.key === "Escape") setOpen(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isOpen]);
+  }, [isOpen, setOpen]);
 
   /*
    * The document must not be a scroller. A flex child with `h-dvh` still
@@ -106,6 +125,25 @@ export function MobileShell({
     };
   }, []);
 
+  /*
+   * One truth for the corner. The chat button hides on `/chat` (the page
+   * already is the box) and while the rail is open (the Chat row is on
+   * screen); the feedback card is stacked against that same answer so the two
+   * can never disagree about whether there is a button underneath.
+   */
+  /*
+   * ...and it is also hidden from a guest.
+   *
+   * `/chat` is behind the wall, so on the one page a signed-out visitor can
+   * reach — the catalog — this button is a 307 to the wizard wearing a chat
+   * icon. The rail already refuses that trip and explains itself with a
+   * padlock; a floating shortcut that quietly does the opposite would undo it.
+   * The catalog's own sign-in banner is what a guest gets in its place.
+   */
+  const session = useSessionAccount();
+  const isGuest = !session.isLoading && !session.account;
+  const fabHidden = isOpen || activeNav === "chat" || isGuest;
+
   return (
     <div
       className={cx(
@@ -113,6 +151,7 @@ export function MobileShell({
         "max-xl:bg-background-secondary-default",
       )}
     >
+      <HapticRoot />
       {/*
         `fixed`, not `absolute`. Absolute is tied to this shell, and on
         mobile the shell still rides a document scroll. Fixed is the
@@ -122,31 +161,44 @@ export function MobileShell({
         id="mobile-catalog-nav"
         inert={!isOpen ? true : undefined}
         aria-hidden={!isOpen}
+        onPointerDown={onRailDown}
         className="fixed inset-y-0 left-0 z-0 h-dvh w-[260px] overflow-hidden xl:hidden"
       >
         <CatalogSidebar
           activeNav={activeNav}
           mobile
           flat
-          onNavigate={() => {
-            // Tick as the rail closes behind a destination tap.
-            haptic("selection");
-            setIsOpen(false);
-          }}
+          onNavigate={close}
           className="h-full w-[260px]"
         />
       </div>
 
-      <div
+      {/*
+        Closed-only grabber. Lives below the header so the hamburger still
+        gets the tap, and only as wide as a thumb's edge so a feed swipe
+        in the middle of the page never opens the rail.
+      */}
+      {!isOpen ? (
+        <div
+          aria-hidden
+          onPointerDown={onEdgeDown}
+          className="fixed left-0 z-20 w-5 xl:hidden"
+          style={{
+            top: "calc(3.5rem + env(safe-area-inset-top, 0px))",
+            bottom: 0,
+          }}
+        />
+      ) : null}
+
+      <motion.div
+        onPointerDown={onCardDown}
         className={cx(
           "relative z-10 flex h-full min-h-0 w-full flex-col bg-background-full",
-          "transition-[transform,border-radius,box-shadow] duration-400 motion-reduce:transition-none",
+          "transition-[border-radius,box-shadow] duration-400 motion-reduce:transition-none",
           "ease-[cubic-bezier(0.32,0.72,0,1)]",
-          isOpen ? "rounded-l-3xl shadow-sidebar" : "rounded-none shadow-none",
+          peeking ? "rounded-l-3xl shadow-sidebar" : "rounded-none shadow-none",
         )}
-        style={{
-          transform: isOpen ? `translate3d(${RAIL_PX}px,0,0)` : "translate3d(0,0,0)",
-        }}
+        style={{ x }}
       >
         {/*
           Hamburger, then whatever the page put here — falling back to the page
@@ -167,7 +219,7 @@ export function MobileShell({
             "absolute inset-x-0 top-0 z-30 flex items-center gap-2 px-3 xl:hidden",
             "h-[calc(3.5rem+env(safe-area-inset-top,0px))] pt-[env(safe-area-inset-top,0px)]",
             "transition-[border-radius] duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none",
-            isOpen ? "rounded-tl-3xl" : "rounded-none",
+            peeking ? "rounded-tl-3xl" : "rounded-none",
           )}
         >
           {/*
@@ -182,12 +234,12 @@ export function MobileShell({
             className={cx(
               "absolute inset-0 -z-10",
               "bg-linear-to-b from-background-full via-background-full/72 to-transparent",
-              isOpen ? "rounded-tl-3xl" : "rounded-none",
+              peeking ? "rounded-tl-3xl" : "rounded-none",
             )}
           />
           <ProgressiveBlur
             side="top"
-            className={cx("-z-10", isOpen ? "rounded-tl-3xl" : "rounded-none")}
+            className={cx("-z-10", peeking ? "rounded-tl-3xl" : "rounded-none")}
           />
 
           <button
@@ -195,10 +247,7 @@ export function MobileShell({
             aria-label={isOpen ? "Close navigation" : "Open navigation"}
             aria-expanded={isOpen}
             aria-controls="mobile-catalog-nav"
-            onClick={() => {
-              haptic("selection");
-              setIsOpen((open) => !open);
-            }}
+            onClick={toggle}
             className={cx(
               "flex size-9 shrink-0 items-center justify-center rounded-full",
               "border border-border-button-default bg-background-primary-default shadow-xs",
@@ -249,13 +298,35 @@ export function MobileShell({
             // unchanged and only the scrolled-under state differs. Zeroed at
             // `xl`, where the bar is hidden and the desktop rail takes over.
             "pt-[calc(3.5rem+env(safe-area-inset-top,0px))] xl:pt-0",
+            // Room to scroll the last card out from under the FAB. Only below
+            // `xl`: at desktop the button sits in the empty margin beside a
+            // centred column, and padding here would be a hole under it.
+            activeNav !== "chat" &&
+              "max-xl:pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))]",
             className,
           )}
           style={style}
         >
           <MobileHeaderSlotProvider node={headerSlot}>{children}</MobileHeaderSlotProvider>
         </div>
-      </div>
+      </motion.div>
+
+      {/*
+        Sibling of the transformed card, not a child of it. `position: fixed`
+        inside that card would ride the rail's `translate3d` and leave the
+        viewport. Hidden on `/chat` (the page already is the box) and while
+        the rail is open (the Chat row is on screen, covering this would be
+        a second copy of the same door).
+      */}
+      <ChatFab hidden={fabHidden} />
+
+      {/*
+        Same sibling position and the same reasons. `raised` rather than a
+        second copy of the hidden test: the card stacks on top of the chat
+        button when there is one, and takes the corner itself when there is
+        not, so the two are never computed from different truths.
+      */}
+      <FeedbackPrompt hidden={isOpen} raised={!fabHidden} />
     </div>
   );
 }

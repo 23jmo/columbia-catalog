@@ -41,6 +41,15 @@ import * as db from "@/lib/db/catalog-queries";
 import { isConfigured } from "@/lib/db/client";
 import seed from "@/lib/seed/coms-fall2026.json";
 
+import {
+  formatCourseId,
+  isRetiredQualifier,
+  parseBulletinCode,
+  qualifierPreference,
+  type CourseId,
+  type ParsedCode,
+} from "@/lib/requirements/code";
+
 import { instructorSlug } from "./instructor-slug";
 
 const SEED = seed as unknown as CourseWithSections[];
@@ -411,3 +420,150 @@ export function isLiveCatalog(): boolean {
 }
 
 export type { Course, CourseWithSections, Section };
+
+/* ==========================================================================
+ * Resolving a student's own spelling to a catalog row
+ * ========================================================================== */
+
+/** How a requested code found its catalog row. */
+export type CourseMatchKind =
+  /** The id on the record is the id in the catalog. */
+  | "exact"
+  /** The record carries a retired school letter; the row is the renumbered one. */
+  | "renumbered";
+
+export interface ResolvedCourseFact {
+  /** The id as the student's record spells it — what was asked for. */
+  requestedId: CourseId;
+  /** The id the catalog actually files it under. Use this for matching. */
+  courseId: CourseId;
+  /** Readable canonical code, e.g. `"MATH UN2010"`. */
+  code: string;
+  title: string;
+  points: number | null;
+  /** Core / Global Core / Science flags, as the audit's selectors read them. */
+  requirementFlags: RequirementFlags;
+  matchedVia: CourseMatchKind;
+}
+
+/**
+ * Resolve course ids to catalog rows, across every term and across the
+ * registrar's renumbering.
+ *
+ * ── Exact first, always ────────────────────────────────────────────────────
+ *
+ * The first pass is a plain id lookup and it is unconditional. That ordering is
+ * the safety property: `W`, `E` and `G` are retired-LOOKING letters that are
+ * still live in the catalog, and a live `COMS W4901` must resolve to itself and
+ * never be rewritten into something else. Only ids that miss outright are
+ * eligible for the second pass, so no live course can be aliased away.
+ *
+ * ── Then, only for retired letters, by subject and number ──────────────────
+ *
+ * A miss on `MATH V2010` is almost certainly a renumbering, because `V` has no
+ * rows at all any more. A miss on `COMS UN3998` is just a course we do not
+ * have. `isRetiredQualifier` is what separates those, so the second query is
+ * asked only when it can plausibly succeed and a genuine absence stays an
+ * absence rather than becoming a fuzzy match.
+ *
+ * ── The result names both ids ──────────────────────────────────────────────
+ *
+ * `requestedId` and `courseId` are both returned rather than the caller being
+ * handed a silent substitution. A student who typed `PSYC X1001` should be able
+ * to see that we matched it to `PSYC BC1001`, because that is a claim about
+ * their transcript and they are the only one who can tell us it is wrong.
+ */
+export async function resolveCourseFacts(
+  courseIds: readonly CourseId[],
+): Promise<Map<CourseId, ResolvedCourseFact>> {
+  const resolved = new Map<CourseId, ResolvedCourseFact>();
+  const wanted = [...new Set(courseIds)];
+  if (wanted.length === 0) return resolved;
+
+  const exact = isConfigured()
+    ? await db.getCourseFactsByIds(wanted)
+    : factRowsFromSeed((course) => wanted.includes(course.courseId as CourseId));
+
+  const byId = new Map(exact.map((row) => [row.courseId, row]));
+  for (const requestedId of wanted) {
+    const row = byId.get(requestedId);
+    if (!row) continue;
+    resolved.set(requestedId, toResolvedFact(requestedId, row, "exact"));
+  }
+
+  const renumbered = wanted
+    .filter((requestedId) => !resolved.has(requestedId))
+    .map((requestedId) => ({ requestedId, parsed: parseBulletinCode(formatCourseId(requestedId)) }))
+    .filter(
+      (entry): entry is { requestedId: CourseId; parsed: ParsedCode } =>
+        entry.parsed !== null && isRetiredQualifier(entry.parsed.qualifier),
+    );
+  if (renumbered.length === 0) return resolved;
+
+  const pairs = renumbered.map((entry) => ({
+    subjectCode: entry.parsed.subjectCode,
+    number: entry.parsed.number,
+  }));
+  const candidates = isConfigured()
+    ? await db.getCourseFactsByNumber(pairs)
+    : factRowsFromSeed((course) =>
+        pairs.some(
+          (pair) => course.subjectCode === pair.subjectCode && course.number === pair.number,
+        ),
+      );
+
+  for (const { requestedId, parsed } of renumbered) {
+    const forCode = candidates.filter(
+      (row) => row.subjectCode === parsed.subjectCode && row.number === parsed.number,
+    );
+    if (forCode.length === 0) continue;
+
+    const preference = qualifierPreference(parsed.qualifier);
+    const best = [...forCode].sort((a, b) => {
+      const rank = (row: db.CourseFactRow) => {
+        const index = row.qualifier ? preference.indexOf(row.qualifier) : -1;
+        // An unranked qualifier sorts after every ranked one rather than
+        // before it, which `indexOf`'s -1 would otherwise do.
+        return index === -1 ? preference.length : index;
+      };
+      return rank(a) - rank(b) || a.courseId.localeCompare(b.courseId);
+    })[0];
+
+    resolved.set(requestedId, toResolvedFact(requestedId, best, "renumbered"));
+  }
+
+  return resolved;
+}
+
+function toResolvedFact(
+  requestedId: CourseId,
+  row: db.CourseFactRow,
+  matchedVia: CourseMatchKind,
+): ResolvedCourseFact {
+  return {
+    requestedId,
+    courseId: row.courseId as CourseId,
+    code: formatCourseId(row.courseId as CourseId),
+    title: row.title,
+    // `pointsMin`, matching the audit — a variable-credit course counted at its
+    // maximum would let a points requirement look satisfied on credit the
+    // student may not have earned.
+    points: row.pointsMin ?? row.pointsMax,
+    requirementFlags: row.requirementFlags,
+    matchedVia,
+  };
+}
+
+/** The seed catalog in `CourseFactRow` shape, for local runs with no database. */
+function factRowsFromSeed(predicate: (course: CourseWithSections) => boolean): db.CourseFactRow[] {
+  return SEED.filter(predicate).map((course) => ({
+    courseId: course.courseId,
+    subjectCode: course.subjectCode,
+    number: course.number,
+    qualifier: course.qualifier ?? null,
+    title: course.title,
+    pointsMin: course.pointsMin,
+    pointsMax: course.pointsMax,
+    requirementFlags: course.requirementFlags,
+  }));
+}

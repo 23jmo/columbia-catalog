@@ -22,11 +22,23 @@ import { CC_CONCENTRATION_ECONOMICS } from "./cc-concentration-economics";
 import { CC_MAJOR_BIOLOGY } from "./cc-major-biology";
 import { CC_MAJOR_ENGLISH } from "./cc-major-english";
 import { CC_MAJOR_HISTORY } from "./cc-major-history";
+import { CC_MAJOR_MATHEMATICS } from "./cc-major-mathematics";
+import { CC_MAJOR_NEUROSCIENCE_AND_BEHAVIOR } from "./cc-major-neuroscience-and-behavior";
+import { CC_MAJOR_PHILOSOPHY } from "./cc-major-philosophy";
+import { CC_MAJOR_PHYSICS } from "./cc-major-physics";
 import { CC_MAJOR_POLITICAL_SCIENCE } from "./cc-major-political-science";
 import { CC_MAJOR_PSYCHOLOGY } from "./cc-major-psychology";
+import { CC_MAJOR_SOCIOLOGY } from "./cc-major-sociology";
+import { CC_MAJOR_STATISTICS } from "./cc-major-statistics";
 import { CC_MINOR_COMPUTER_SCIENCE } from "./cc-minor-computer-science";
+import { GS_CORE } from "./gs-core";
+import { GS_MAJOR_MEDICAL_HUMANITIES } from "./gs-major-medical-humanities";
+import { SEAS_MAJOR_APPLIED_MATHEMATICS } from "./seas-major-applied-mathematics";
 import { SEAS_MAJOR_BIOMEDICAL_ENGINEERING } from "./seas-major-biomedical-engineering";
+import { SEAS_MAJOR_CHEMICAL_ENGINEERING } from "./seas-major-chemical-engineering";
+import { SEAS_MAJOR_COMPUTER_ENGINEERING } from "./seas-major-computer-engineering";
 import { SEAS_MAJOR_COMPUTER_SCIENCE } from "./seas-major-computer-science";
+import { SEAS_MAJOR_ELECTRICAL_ENGINEERING } from "./seas-major-electrical-engineering";
 import { SEAS_MAJOR_MECHANICAL_ENGINEERING } from "./seas-major-mechanical-engineering";
 import { SEAS_MAJOR_OPERATIONS_RESEARCH } from "./seas-major-operations-research";
 
@@ -43,6 +55,18 @@ const TRANSCRIBED_PROGRAMS: Program[] = [
   SEAS_MAJOR_BIOMEDICAL_ENGINEERING,
   CC_MINOR_COMPUTER_SCIENCE,
   CC_CONCENTRATION_ECONOMICS,
+  CC_MAJOR_SOCIOLOGY,
+  CC_MAJOR_MATHEMATICS,
+  CC_MAJOR_PHYSICS,
+  CC_MAJOR_STATISTICS,
+  CC_MAJOR_PHILOSOPHY,
+  CC_MAJOR_NEUROSCIENCE_AND_BEHAVIOR,
+  SEAS_MAJOR_ELECTRICAL_ENGINEERING,
+  SEAS_MAJOR_COMPUTER_ENGINEERING,
+  SEAS_MAJOR_CHEMICAL_ENGINEERING,
+  SEAS_MAJOR_APPLIED_MATHEMATICS,
+  GS_CORE,
+  GS_MAJOR_MEDICAL_HUMANITIES,
 ];
 
 /**
@@ -294,6 +318,32 @@ describe("the computer science minor's sixth slot is a union, not half of one", 
 });
 
 describe("programs whose Bulletin page cannot be checked say so", () => {
+  it("keeps the director-approved Medical Humanities blocks attested", () => {
+    for (const id of [
+      "comparative-literature",
+      "language-readings",
+      "disciplinary-nexus",
+      "medical-humanities-core",
+      "human-biology",
+      "program-approval",
+    ]) {
+      const group = GS_MAJOR_MEDICAL_HUMANITIES.groups.find(
+        (candidate) => candidate.id === id,
+      );
+      expect(group, id).toBeDefined();
+      expect(group?.rule.kind, id).toBe("attested");
+    }
+  });
+
+  it("only exact-matches the two fixed Medical Humanities courses", () => {
+    const exact = GS_MAJOR_MEDICAL_HUMANITIES.groups
+      .filter((group) => group.rule.kind === "all_of")
+      .flatMap((group) =>
+        group.rule.kind === "all_of" ? group.rule.courses.map(toCourseId) : [],
+      );
+    expect(exact).toEqual(["CPLS3900UN", "CPLS3991UN"]);
+  });
+
   it("leaves the Psychology distribution groups attested", () => {
     // Group I is 2200s/3200s/4200s — three non-contiguous bands, and
     // CourseSelector.numberRange is one. Approximated as [2200, 4299] it would

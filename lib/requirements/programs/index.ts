@@ -18,6 +18,18 @@
  */
 
 import type { Program, ProgramKind, School } from "../types";
+import { BC_FOUNDATIONS } from "./bc-foundations";
+import { BC_MAJOR_BIOLOGY } from "./bc-major-biology";
+import { BC_MAJOR_COMPUTER_SCIENCE } from "./bc-major-computer-science";
+import { BC_MAJOR_ECONOMICS } from "./bc-major-economics";
+import { BC_MAJOR_ENGLISH } from "./bc-major-english";
+import { BC_MAJOR_HISTORY } from "./bc-major-history";
+import { BC_MAJOR_NEUROSCIENCE_AND_BEHAVIOR } from "./bc-major-neuroscience-and-behavior";
+import { BC_MAJOR_POLITICAL_ECONOMY } from "./bc-major-political-economy";
+import { BC_MAJOR_POLITICAL_SCIENCE } from "./bc-major-political-science";
+import { BC_MAJOR_PSYCHOLOGY } from "./bc-major-psychology";
+import { BC_MAJOR_SOCIOLOGY } from "./bc-major-sociology";
+import { BC_MAJOR_URBAN_STUDIES } from "./bc-major-urban-studies";
 import { CC_CONCENTRATION_ECONOMICS } from "./cc-concentration-economics";
 import { CC_CORE } from "./cc-core";
 import { CC_MAJOR_BIOLOGY } from "./cc-major-biology";
@@ -25,19 +37,39 @@ import { CC_MAJOR_COMPUTER_SCIENCE } from "./cc-major-computer-science";
 import { CC_MAJOR_ECONOMICS } from "./cc-major-economics";
 import { CC_MAJOR_ENGLISH } from "./cc-major-english";
 import { CC_MAJOR_HISTORY } from "./cc-major-history";
+import { CC_MAJOR_MATHEMATICS } from "./cc-major-mathematics";
+import { CC_MAJOR_NEUROSCIENCE_AND_BEHAVIOR } from "./cc-major-neuroscience-and-behavior";
+import { CC_MAJOR_PHILOSOPHY } from "./cc-major-philosophy";
+import { CC_MAJOR_PHYSICS } from "./cc-major-physics";
 import { CC_MAJOR_POLITICAL_SCIENCE } from "./cc-major-political-science";
 import { CC_MAJOR_PSYCHOLOGY } from "./cc-major-psychology";
+import { CC_MAJOR_SOCIOLOGY } from "./cc-major-sociology";
+import { CC_MAJOR_STATISTICS } from "./cc-major-statistics";
 import { CC_MINOR_COMPUTER_SCIENCE } from "./cc-minor-computer-science";
+import { GS_CORE } from "./gs-core";
+import { GS_MAJOR_MEDICAL_HUMANITIES } from "./gs-major-medical-humanities";
 import { SEAS_CORE } from "./seas-core";
+import { SEAS_MAJOR_APPLIED_MATHEMATICS } from "./seas-major-applied-mathematics";
 import { SEAS_MAJOR_BIOMEDICAL_ENGINEERING } from "./seas-major-biomedical-engineering";
+import { SEAS_MAJOR_CHEMICAL_ENGINEERING } from "./seas-major-chemical-engineering";
+import { SEAS_MAJOR_COMPUTER_ENGINEERING } from "./seas-major-computer-engineering";
 import { SEAS_MAJOR_COMPUTER_SCIENCE } from "./seas-major-computer-science";
+import { SEAS_MAJOR_ELECTRICAL_ENGINEERING } from "./seas-major-electrical-engineering";
 import { SEAS_MAJOR_MECHANICAL_ENGINEERING } from "./seas-major-mechanical-engineering";
 import { SEAS_MAJOR_OPERATIONS_RESEARCH } from "./seas-major-operations-research";
 
 export const AUTHORED_PROGRAMS: Program[] = [
-  // The two Cores. Not electable — see `coreForSchool`.
+  // The four Cores. Not electable — see `coreForSchool`.
   CC_CORE,
   SEAS_CORE,
+  GS_CORE,
+  /*
+   * Barnard's general education curriculum. Read from `catalog.barnard.edu`,
+   * a different CourseLeaf install from Columbia's Bulletin with its own
+   * edition year — which is why this is the one program here stamped
+   * `2025-2026` rather than `2026-2027`. See the file's header.
+   */
+  BC_FOUNDATIONS,
 
   // Columbia College majors.
   CC_MAJOR_BIOLOGY,
@@ -45,18 +77,84 @@ export const AUTHORED_PROGRAMS: Program[] = [
   CC_MAJOR_ECONOMICS,
   CC_MAJOR_ENGLISH,
   CC_MAJOR_HISTORY,
+  CC_MAJOR_MATHEMATICS,
+  /*
+   * One file for a program two departments run jointly. Biological Sciences and
+   * Psychology each publish their own half of it and the halves disagree — the
+   * Psychology page says "seven" biology courses in the same sentence that says
+   * "eleven courses" — so it is transcribed from both pages at once rather than
+   * assembled from either.
+   */
+  CC_MAJOR_NEUROSCIENCE_AND_BEHAVIOR,
+  CC_MAJOR_PHILOSOPHY,
+  CC_MAJOR_PHYSICS,
   CC_MAJOR_POLITICAL_SCIENCE,
   CC_MAJOR_PSYCHOLOGY,
+  CC_MAJOR_SOCIOLOGY,
+  CC_MAJOR_STATISTICS,
+
+  // General Studies majors. Coverage starts with the requested program and is
+  // intentionally described as partial on public surfaces until more are read.
+  GS_MAJOR_MEDICAL_HUMANITIES,
 
   // SEAS majors. Note these are genuinely different programs from their College
   // namesakes rather than aliases of them: SEAS Computer Science requires all
   // three of MATH UN1101 / UN1102 / APMA E2000 where the College's
   // identically-named requirement is a choice of one, and SEAS additionally
   // requires ENGI E1006 that the College only recommends.
+  SEAS_MAJOR_APPLIED_MATHEMATICS,
   SEAS_MAJOR_BIOMEDICAL_ENGINEERING,
+  SEAS_MAJOR_CHEMICAL_ENGINEERING,
+  /*
+   * Computer Engineering is its own program, not a track of Electrical
+   * Engineering or of Computer Science. The Bulletin gives it a department-level
+   * node of its own and both parent departments defer to it — and the degrees
+   * genuinely differ, in physics, probability, computing, the laboratory set and
+   * the elective total.
+   */
+  SEAS_MAJOR_COMPUTER_ENGINEERING,
   SEAS_MAJOR_COMPUTER_SCIENCE,
+  SEAS_MAJOR_ELECTRICAL_ENGINEERING,
   SEAS_MAJOR_MECHANICAL_ENGINEERING,
   SEAS_MAJOR_OPERATIONS_RESEARCH,
+
+  /*
+   * Barnard College majors, in rough order of how many students take them.
+   *
+   * The ranking is not invented: Barnard's Common Data Set 2025-2026 (section
+   * J, degrees conferred by CIP category) puts social sciences at 26% of
+   * bachelor's degrees, biological/life sciences at 13%, interdisciplinary
+   * studies at 10%, psychology at 8%, computer and information sciences at 7%,
+   * English at 5% and history at 4%. Several of those categories map to a
+   * single Barnard department, which is what makes them usable as a ranking:
+   * the 8% psychology share IS the Psychology department, and the 7% computing
+   * share is essentially the Computer Science department alone.
+   *
+   * These are genuinely different degrees from their Columbia College
+   * namesakes, not aliases — Barnard Economics is built out of `ECON BC`
+   * courses the College's major never names, Barnard Psychology classifies by
+   * named list where the College's classifies by number band, and Barnard
+   * Neuroscience and Behavior is a department where the College's is a joint
+   * programme between two others. Each file's header says where it diverges.
+   */
+  BC_MAJOR_BIOLOGY,
+  BC_MAJOR_COMPUTER_SCIENCE,
+  BC_MAJOR_ECONOMICS,
+  BC_MAJOR_ENGLISH,
+  BC_MAJOR_HISTORY,
+  BC_MAJOR_NEUROSCIENCE_AND_BEHAVIOR,
+  /*
+   * Political Economy is the Economics department's second track and a
+   * separate program rather than a variant group: it drops econometrics
+   * entirely, takes Calculus I where the Economics track takes Calculus III,
+   * and adds two interdisciplinary electives. Merging them would tell every
+   * Political Economy major she owed a course she does not.
+   */
+  BC_MAJOR_POLITICAL_ECONOMY,
+  BC_MAJOR_POLITICAL_SCIENCE,
+  BC_MAJOR_PSYCHOLOGY,
+  BC_MAJOR_SOCIOLOGY,
+  BC_MAJOR_URBAN_STUDIES,
 
   // Sub-major programs.
   CC_MINOR_COMPUTER_SCIENCE,
@@ -154,6 +252,18 @@ export function coreForSchool(school: School): Program | undefined {
 }
 
 export {
+  BC_FOUNDATIONS,
+  BC_MAJOR_BIOLOGY,
+  BC_MAJOR_COMPUTER_SCIENCE,
+  BC_MAJOR_ECONOMICS,
+  BC_MAJOR_ENGLISH,
+  BC_MAJOR_HISTORY,
+  BC_MAJOR_NEUROSCIENCE_AND_BEHAVIOR,
+  BC_MAJOR_POLITICAL_ECONOMY,
+  BC_MAJOR_POLITICAL_SCIENCE,
+  BC_MAJOR_PSYCHOLOGY,
+  BC_MAJOR_SOCIOLOGY,
+  BC_MAJOR_URBAN_STUDIES,
   CC_CONCENTRATION_ECONOMICS,
   CC_CORE,
   CC_MAJOR_BIOLOGY,
@@ -161,12 +271,24 @@ export {
   CC_MAJOR_ECONOMICS,
   CC_MAJOR_ENGLISH,
   CC_MAJOR_HISTORY,
+  CC_MAJOR_MATHEMATICS,
+  CC_MAJOR_NEUROSCIENCE_AND_BEHAVIOR,
+  CC_MAJOR_PHILOSOPHY,
+  CC_MAJOR_PHYSICS,
   CC_MAJOR_POLITICAL_SCIENCE,
   CC_MAJOR_PSYCHOLOGY,
+  CC_MAJOR_SOCIOLOGY,
+  CC_MAJOR_STATISTICS,
   CC_MINOR_COMPUTER_SCIENCE,
+  GS_CORE,
+  GS_MAJOR_MEDICAL_HUMANITIES,
   SEAS_CORE,
+  SEAS_MAJOR_APPLIED_MATHEMATICS,
   SEAS_MAJOR_BIOMEDICAL_ENGINEERING,
+  SEAS_MAJOR_CHEMICAL_ENGINEERING,
+  SEAS_MAJOR_COMPUTER_ENGINEERING,
   SEAS_MAJOR_COMPUTER_SCIENCE,
+  SEAS_MAJOR_ELECTRICAL_ENGINEERING,
   SEAS_MAJOR_MECHANICAL_ENGINEERING,
   SEAS_MAJOR_OPERATIONS_RESEARCH,
 };
