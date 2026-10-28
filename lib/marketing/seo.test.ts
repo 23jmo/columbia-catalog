@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { catalogSitemapPaths } from "./catalog-sitemap";
 import { llmsTxt, robotsTxt, sitemapXml } from "./crawler-files";
 import { FAQ_ITEMS } from "./faq";
 import { SITEMAP_PATHS, SITE_ORIGIN } from "./site";
@@ -30,6 +31,33 @@ describe("crawler files", () => {
     expect(body).toContain(`<loc>${SITE_ORIGIN}/programs/seas-core</loc>`);
     expect(body).not.toContain("cc-minor-computer-science");
     expect(body.startsWith("<?xml")).toBe(true);
+  });
+
+  it("lists course and instructor pages at their canonical URLs", () => {
+    const paths = catalogSitemapPaths(
+      [
+        { courseId: "COMS4118W", sections: [{ termCode: "20263", sectionCode: "001" }] },
+        {
+          courseId: "MATH1101UN",
+          sections: [
+            { termCode: "20263", sectionCode: "001" },
+            { termCode: "20263", sectionCode: "002" },
+          ],
+        },
+        { courseId: "OLD1000X", sections: [{ termCode: "20261", sectionCode: "001" }] },
+      ],
+      [{ slug: "adam-h-cannon" }],
+      "20263",
+    );
+    expect(paths).toEqual([
+      "/course/COMS4118W?section=001",
+      "/course/MATH1101UN",
+      "/instructor/adam-h-cannon",
+    ]);
+    const body = sitemapXml(paths);
+    expect(body).toContain(`<loc>${SITE_ORIGIN}/course/COMS4118W?section=001</loc>`);
+    expect(body).toContain(`<loc>${SITE_ORIGIN}/instructor/adam-h-cannon</loc>`);
+    expect(body).not.toContain("OLD1000X");
   });
 
   it("keeps llms.txt quotable and honest about coverage", () => {
