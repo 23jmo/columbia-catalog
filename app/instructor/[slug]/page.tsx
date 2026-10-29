@@ -90,8 +90,8 @@ export async function generateMetadata({ params }: InstructorPageProps): Promise
   return {
     title: `${data.name} — Columbia Courses & Reviews | LionPlan`,
     description,
-    alternates: { canonical: `${SITE_ORIGIN}/instructor/${slug}` },
-    openGraph: { title: data.name, description, type: "profile", url: `${SITE_ORIGIN}/instructor/${slug}` },
+    alternates: { canonical: `${SITE_ORIGIN}/instructor/${data.slug}` },
+    openGraph: { title: data.name, description, type: "profile", url: `${SITE_ORIGIN}/instructor/${data.slug}` },
   };
 }
 
