@@ -16,6 +16,7 @@ import { pageIdentityContentClass } from "@/components/shell/page-hero-layout";
 import { PageContent } from "@/components/shell/page-content";
 import { CURRENT_TERM, termLabel } from "@/lib/constants";
 import { listInstructors, loadInstructorProfile } from "@/lib/data/instructors";
+import { SITE_ORIGIN } from "@/lib/marketing/site";
 import { getInstructorReputation } from "@/lib/db/reputation";
 
 /**
@@ -87,9 +88,10 @@ export async function generateMetadata({ params }: InstructorPageProps): Promise
   } in ${data.termLabel}${courses ? ` — ${courses}` : ""}. Sections, seats, meeting times and reviews.`;
 
   return {
-    title: `${data.name} — LionPlan`,
+    title: `${data.name} — Columbia Courses & Reviews | LionPlan`,
     description,
-    openGraph: { title: data.name, description, type: "profile" },
+    alternates: { canonical: `${SITE_ORIGIN}/instructor/${data.slug}` },
+    openGraph: { title: data.name, description, type: "profile", url: `${SITE_ORIGIN}/instructor/${data.slug}` },
   };
 }
 
