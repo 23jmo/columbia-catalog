@@ -785,7 +785,7 @@ export type MeetingInsert = Omit<MeetingRow, "meeting_id" | "created_at"> &
 
 export type EnrollmentSnapshotInsert = EnrollmentSnapshotRow;
 
-export type PlanInsert = Omit<PlanRow, "plan_id" | "created_at" | "updated_at"> &
+export type PlanInsert = Omit<PlanRow, "plan_id" | "created_at" | "updated_at" | "share_token"> &
   Partial<Pick<PlanRow, "plan_id" | "share_token" | "is_primary" | "name">>;
 
 export type CustomBlockInsert = Omit<CustomBlockRow, "block_id" | "created_at"> &
@@ -1582,6 +1582,11 @@ export type Database = {
       // client to drift out of sync with the schema.
       list_user_plans: { Args: { p_term_code?: string | null }; Returns: Json };
       replace_user_plans: { Args: { p_term_code: string; p_plans: Json }; Returns: Json };
+      // ── Schedule sharing (migration 0038) ─────────────────────────────────
+      share_primary_plan: { Args: { p_term_code: string; p_enabled: boolean }; Returns: string | null };
+      primary_plan_share_token: { Args: { p_term_code: string }; Returns: string | null };
+      /** Anonymous read of a shared schedule; the token is the credential. */
+      get_shared_schedule: { Args: { p_share_token: string }; Returns: Json };
       /**
        * Historical meeting pattern for sections that have none of their own
        * (migration 0014). `source_term` always travels with the times — see

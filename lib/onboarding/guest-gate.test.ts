@@ -24,6 +24,11 @@ describe("Search Console verification file", () => {
 });
 
 describe("isGuestAllowedPath", () => {
+  it("lets a guest see the landing redesign comparison", () => {
+    expect(isPublicMarketingPath("/landing-compare")).toBe(true);
+    expect(isGuestAllowedPath("/landing-compare")).toBe(true);
+  });
+
   it("lets a guest stay on onboarding, auth, and APIs", () => {
     expect(isGuestAllowedPath("/onboarding")).toBe(true);
     expect(isGuestAllowedPath("/onboarding/")).toBe(true);

@@ -90,8 +90,8 @@ const TOOL_LABELS: Record<string, string> = {
   check_conflicts: "Checking your schedule for clashes",
   check_requirements: "Checking this against your degree",
   get_my_schedule: "Reading your saved classes",
-  add_section: "Drafting a change to your plan",
-  remove_section: "Drafting a change to your plan",
+  add_to_schedule: "Adding to your schedule",
+  remove_from_schedule: "Removing from your schedule",
   watch_section: "Setting up a seat alert",
   list_watches: "Reading your seat alerts",
   list_bookmark_folders: "Reading your saved folders",
@@ -478,6 +478,7 @@ export type TurnBlock =
   | { kind: "campus_map"; artifact: CampusMapArtifact }
   | { kind: "instructor"; artifact: InstructorArtifact }
   | { kind: "onboarding"; artifact: OnboardingArtifact }
+  | { kind: "schedule_saved"; artifact: ScheduleSavedArtifact }
   | { kind: "feed"; cards: FeedCard[] };
 
 export function turnBlocks(
@@ -527,6 +528,10 @@ function visualBlock(payload: Payload, seen: Set<string>): TurnBlock | null {
   if (payload.kind === "onboarding_prompt") {
     const artifact = readOnboardingArtifact(payload);
     return artifact ? { kind: "onboarding", artifact } : null;
+  }
+  if (payload.kind === "schedule_saved") {
+    const artifact = readScheduleSavedArtifact(payload);
+    return artifact ? { kind: "schedule_saved", artifact } : null;
   }
 
   const cards: FeedCard[] = [];
@@ -588,6 +593,39 @@ function readScheduleArtifact(record: Payload): ScheduleArtifact | null {
       (id): id is string => typeof id === "string",
     ),
     unresolvedSectionIds: asArray(record.unresolvedSectionIds).filter((id): id is string => typeof id === "string"),
+  };
+}
+
+/**
+ * The confirmation the schedule write tools return. Only what the card needs:
+ * which way the change went, what it was, and whether anything moved.
+ */
+export interface ScheduleSavedArtifact {
+  kind: "schedule_saved";
+  action: "added" | "removed";
+  changed: boolean;
+  termCode: string;
+  sectionId: string;
+  courseId: string | null;
+  sectionCode: string | null;
+  title: string | null;
+}
+
+function readScheduleSavedArtifact(record: Payload): ScheduleSavedArtifact | null {
+  const action = asString(record.action);
+  const termCode = asString(record.termCode);
+  const section = asPayload(record.section);
+  const sectionId = section ? asString(section.sectionId) : null;
+  if ((action !== "added" && action !== "removed") || !termCode || !sectionId) return null;
+  return {
+    kind: "schedule_saved",
+    action,
+    changed: record.changed === true,
+    termCode,
+    sectionId,
+    courseId: section ? asString(section.courseId) : null,
+    sectionCode: section ? asString(section.sectionCode) : null,
+    title: section ? asString(section.title) : null,
   };
 }
 

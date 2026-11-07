@@ -131,7 +131,10 @@ export function isPublicMarketingPath(pathname: string): boolean {
     exactOrChild(pathname, "/faq") ||
     exactOrChild(pathname, "/privacy") ||
     exactOrChild(pathname, "/terms") ||
-    exactOrChild(pathname, "/programs")
+    exactOrChild(pathname, "/programs") ||
+    // Temporary: the before/after slider for the landing redesign. Marketing
+    // for a guest, exactly like `/`. Remove with `app/landing-compare`.
+    exactOrChild(pathname, "/landing-compare")
   );
 }
 
@@ -147,6 +150,8 @@ export function isGuestAllowedPath(pathname: string): boolean {
     // must not fall through the gate because it starts with the same word.
     pathname === "/search" ||
     pathname.startsWith("/course/") ||
+    // A shared schedule is a link handed to someone who may have no account.
+    pathname.startsWith("/schedule/s/") ||
     pathname.startsWith("/instructor/") ||
     pathname.startsWith("/api/") ||
     pathname.startsWith("/.well-known/")

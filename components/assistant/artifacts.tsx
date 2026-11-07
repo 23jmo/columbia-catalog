@@ -10,28 +10,27 @@ import type {
   ScheduleArtifact,
 } from "@/lib/agent/present";
 import type { OnboardingArtifact } from "@/lib/agent/present-onboarding";
+import type { ScheduleSavedArtifact } from "@/lib/agent/transcript";
 import { InstructorProfileHero } from "@/components/instructor/profile-hero";
 import { InstructorRating } from "@/components/instructor/rating-hero";
 import { weekdayListLabel } from "@/components/instructor/format";
 import { ButtonLink } from "@/components/base/buttons/button";
 import { termLabel } from "@/lib/constants";
 import { cx } from "@/utils/cx";
-import { RiGraduationCapLine } from "@remixicon/react";
+import { RiCalendarCheckLine, RiCalendarCloseLine, RiGraduationCapLine } from "@remixicon/react";
+import { refreshPlansFromServer } from "@/lib/db/plan-sync";
 
 /**
- * The calendar and map the present tools put on the thread.
+ * The calendar, the map, and the "done" card the tools put on the thread.
  *
- * Both components already exist — `CalendarWeekPreview` is the course-drawer
- * week canvas, `CampusCard` is the isometric campus pin. They are loaded
- * here through `next/dynamic` so the assistant's first paint does not pay
- * for three.js or the calendar CSS until a turn actually asked for them.
+ * `ScheduleWeek` is the same canvas as the schedule tab; `CampusCard` is the
+ * isometric campus pin. Both are loaded through `next/dynamic` so the
+ * assistant's first paint does not pay for three.js or the grid until a turn
+ * actually asked for them.
  */
 
-const CalendarWeekPreview = dynamic(
-  () =>
-    import("@/components/schedule/calendar-week-preview").then(
-      (mod) => mod.CalendarWeekPreview,
-    ),
+const ScheduleWeek = dynamic(
+  () => import("@/components/schedule/schedule-week").then((mod) => mod.ScheduleWeek),
   { ssr: false },
 );
 
@@ -62,14 +61,54 @@ export function ScheduleArtifactView({ artifact }: { artifact: ScheduleArtifact 
   return (
     <div ref={frameRef} className="flex w-full flex-col gap-2">
       <p className="text-caption-1-medium text-text-secondary">{caption}</p>
-      <CalendarWeekPreview
+      <ScheduleWeek
         blocks={artifact.blocks}
         weekdays={artifact.weekdays}
-        termCode={artifact.termCode}
         commitmentIds={new Set(artifact.commitmentIds)}
         compact={isNarrow}
+        dense
         className="w-full"
       />
+    </div>
+  );
+}
+
+/**
+ * The receipt for `add_to_schedule` / `remove_from_schedule`.
+ *
+ * The write already happened on the server by the time this renders, but the
+ * schedule tab reads from the local store, so the card pulls the server copy
+ * on mount — otherwise a student who taps "Open schedule" a second later sees
+ * the week as it was before they asked.
+ */
+export function ScheduleSavedArtifactView({ artifact }: { artifact: ScheduleSavedArtifact }) {
+  useEffect(() => {
+    void refreshPlansFromServer(artifact.termCode);
+  }, [artifact.termCode]);
+
+  const added = artifact.action === "added";
+  const verb = artifact.changed ? (added ? "Added to" : "Removed from") : added ? "Already on" : "Wasn't on";
+
+  return (
+    <div className="flex w-full max-w-md items-center gap-3 rounded-2xl border border-border-table bg-background-primary-default p-3 pl-4">
+      <span
+        className={cx(
+          "flex size-8 shrink-0 items-center justify-center rounded-full",
+          added ? "bg-status-lime-background text-status-lime-text" : "bg-background-secondary-default text-text-secondary",
+        )}
+      >
+        {added ? <RiCalendarCheckLine className="size-4" aria-hidden /> : <RiCalendarCloseLine className="size-4" aria-hidden />}
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="text-caption-1-regular text-text-secondary">{verb} your schedule</span>
+        <span className="truncate text-body-medium text-text-primary">
+          {artifact.courseId} <span className="text-text-tertiary">§{artifact.sectionCode}</span>
+          {artifact.title ? ` · ${artifact.title}` : ""}
+        </span>
+      </span>
+      <ButtonLink href="/schedule" size="small" variant="secondary" className="shrink-0">
+        Open
+      </ButtonLink>
     </div>
   );
 }

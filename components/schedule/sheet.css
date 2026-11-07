@@ -1,0 +1,34 @@
+/* Entrance and exit for `Sheet`. React Aria stamps `data-entering` /
+   `data-exiting` on the overlay and the modal; the keyframes live here
+   because `styles/**` is frozen and no animation utility exists in the theme. */
+
+@keyframes sheet-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes sheet-rise {
+  from { transform: translateY(24px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes sheet-pop {
+  from { transform: scale(0.97); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.sheet-overlay[data-entering] { animation: sheet-fade 200ms ease-out; }
+.sheet-overlay[data-exiting] { animation: sheet-fade 150ms ease-in reverse; }
+
+.sheet-panel[data-entering] { animation: sheet-rise 260ms cubic-bezier(0.32, 0.72, 0, 1); }
+.sheet-panel[data-exiting] { animation: sheet-rise 160ms ease-in reverse; }
+
+@media (min-width: 640px) {
+  .sheet-panel[data-entering] { animation: sheet-pop 200ms ease-out; }
+  .sheet-panel[data-exiting] { animation: sheet-pop 140ms ease-in reverse; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet-overlay[data-entering], .sheet-overlay[data-exiting],
+  .sheet-panel[data-entering], .sheet-panel[data-exiting] { animation: none; }
+}

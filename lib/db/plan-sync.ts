@@ -80,6 +80,40 @@ async function push(termCode: TermCode, plans: Plan[]): Promise<Plan[] | null> {
 let stopSync: (() => void) | null = null;
 
 /**
+ * Suppresses the push that our own `adoptRemote` would otherwise trigger.
+ * Module-level so `refreshPlansFromServer` and the sync closure share it.
+ */
+let applyingRemote = false;
+
+/**
+ * Pull the server's copy and adopt it, remote wins.
+ *
+ * The sync only reconciles on sign-in. That was enough while the browser was
+ * the only writer; now the chat can add a class from the server side
+ * (`lib/db/plan-writes.ts`), and a tab that keeps rendering its local cache
+ * would show a schedule missing the class the assistant just said it added.
+ * `/schedule` calls this on mount and the chat's confirmation card calls it
+ * when it renders. Returns true when a remote copy was adopted.
+ */
+export async function refreshPlansFromServer(termCode: TermCode = CURRENT_TERM): Promise<boolean> {
+  if (!isConfigured()) return false;
+  const client = getBrowserClient();
+  if (!client) return false;
+  const { data: session } = await client.auth.getSession();
+  if (!session.session?.user) return false;
+
+  const remote = await pull(termCode);
+  if (!remote || remote.length === 0) return false;
+  applyingRemote = true;
+  try {
+    adoptRemote(termCode, remote);
+  } finally {
+    applyingRemote = false;
+  }
+  return true;
+}
+
+/**
  * Starts write-through sync for the signed-in user and returns a stop function.
  *
  * Idempotent: calling it twice does not double-subscribe, so React strict mode
@@ -95,8 +129,6 @@ export function startPlanSync(termCode: TermCode = CURRENT_TERM): () => void {
   let active = true;
   let timer: ReturnType<typeof setTimeout> | null = null;
   let signedIn = false;
-  /** Suppresses the push that our own `adoptRemote` would otherwise trigger. */
-  let applyingRemote = false;
 
   const schedulePush = () => {
     if (!signedIn || applyingRemote) return;

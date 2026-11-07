@@ -3,10 +3,10 @@ import type { ComponentType } from "react";
 import {
   RiBookmarkLine,
   RiChat3Line,
-  RiCalendarScheduleLine,
   RiGraduationCapLine,
   RiHome5Line,
   RiSearchLine,
+  RiCalendarLine,
 } from "@remixicon/react";
 import { cx } from "@/utils/cx";
 
@@ -55,14 +55,13 @@ import { cx } from "@/utils/cx";
  * course page is a page of the catalog — and it is worth knowing that this
  * item owns four routes, not one.
  *
- * ── Nothing was deleted ────────────────────────────────────────────────────
+ * ── Schedule came back; Profile did not ────────────────────────────────────
  *
- * `/schedule` and `/profile` are untouched routes that still render, still
- * work, and are still linked to from inside the app — profile from the account
- * menu, schedule from a plan. `ShellNavKey` deliberately keeps their keys so
- * those pages can go on declaring `activeNav` without a cast: they are pages
- * you arrive at with a purpose, not places you browse to because the rail
- * suggested it.
+ * Schedule is the week itself — the thing the saved list turns into, and the
+ * page a student opens on their phone between classes — so it clears the bar
+ * for a rail item. `/profile` is still a route that renders and is linked from
+ * the account menu; `ShellNavKey` keeps its key so the page can declare
+ * `activeNav` without a cast.
  *
  * Putting one back is adding one object here. That is the whole cost, and it
  * should stay that cheap — but the bar is a page a student would go looking
@@ -137,6 +136,12 @@ export const SHELL_NAV_ITEMS: ShellNavItem[] = [
     label: "Saved",
     href: "/saved",
     icon: RiBookmarkLine,
+  },
+  {
+    key: "schedule",
+    label: "Schedule",
+    href: "/schedule",
+    icon: RiCalendarLine,
   },
 ];
 

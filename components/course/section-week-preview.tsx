@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { RiAlertLine } from "@remixicon/react";
 
-import { CalendarWeekPreview } from "@/components/schedule/calendar-week-preview";
+import { ScheduleWeek } from "@/components/schedule/schedule-week";
 import { ownerIdOf, toWeekGridBlocks } from "@/components/schedule/to-blocks";
 import { usePlans } from "@/hooks/use-plans";
 import { getSections } from "@/lib/data/catalog";
@@ -13,10 +13,10 @@ import { cx } from "@/utils/cx";
 /**
  * This section, dropped onto the reader's own week.
  *
- * Renders through `CalendarWeekPreview` — the same Nuxt calendar blocks and
- * tokens as the schedule tab — narrowed to this section's meeting days and
- * read-only. See that module for why the canvas is section-scoped rather than
- * a second schedule page.
+ * Renders through `ScheduleWeek` — the same canvas as the schedule tab —
+ * narrowed to this section's meeting days and read-only. The canvas is
+ * section-scoped rather than a second schedule page: the question here is
+ * "does this fit", and the answer is the days it touches.
  */
 
 /** Below this width the preview becomes an agenda list (spec §18). */
@@ -112,12 +112,12 @@ export function SectionWeekPreview({ section, termCode, className }: SectionWeek
         </p>
       ) : null}
 
-      <CalendarWeekPreview
+      <ScheduleWeek
         blocks={blocks}
         weekdays={meetingDays}
-        termCode={termCode}
         commitmentIds={commitmentIds}
         compact={isNarrow}
+        dense
         className="w-full"
       />
     </div>

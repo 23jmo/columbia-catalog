@@ -15,7 +15,8 @@
  *
  * The three engine additions are `get_courses_taken`, `get_unmet_requirements`,
  * and `recommend_courses`. Two more, in `present-tools.ts`, put existing UI on
- * the thread: `show_schedule` and `show_campus_map`.
+ * the thread: `show_schedule` and `show_campus_map`. `scheduleTools` below adds
+ * the one direct write: `add_to_schedule` / `remove_from_schedule`.
  *
  * ── The transcript is not logging ──────────────────────────────────────────
  *
@@ -44,6 +45,7 @@ import { presentTools } from "@/lib/agent/present-tools";
 import { buildOnboardingArtifact } from "@/lib/agent/present-onboarding";
 import { getCoursesByIds } from "@/lib/data/catalog";
 import { createSupabaseCandidateProvider } from "@/lib/db/candidate-source";
+import { addSectionToSchedule, removeSectionFromSchedule } from "@/lib/db/plan-writes";
 import { loadStudentProfile } from "@/lib/db/student-profile";
 import type { McpAuthInfo } from "@/lib/mcp/auth";
 import { mcpDeps } from "@/lib/mcp/server";
@@ -52,6 +54,7 @@ import { auditProfile, programsFor } from "@/lib/profile/audit";
 import { buildFeed } from "@/lib/recommend/feed";
 import { expandCandidatesForPrograms } from "@/lib/requirements/candidates";
 import { formatCourseId } from "@/lib/requirements/code";
+import { CURRENT_TERM } from "@/lib/constants";
 import type { CourseFacts } from "@/lib/requirements/evaluate";
 import type { CourseId } from "@/lib/requirements/code";
 import type { TermCode } from "@/lib/types";
@@ -137,8 +140,6 @@ const BRIDGED_MCP_TOOLS = [
   "check_conflicts",
   "check_requirements",
   "get_my_schedule",
-  "add_section",
-  "remove_section",
   "watch_section",
   "list_watches",
   "list_bookmark_folders",
@@ -262,6 +263,103 @@ async function loadCourseFacts(courseIds: string[]): Promise<Map<CourseId, Cours
  * and the home feed came to disagree about which vector source was in use. The
  * tool goes through the feed now; these went with it.
  */
+
+/* ==========================================================================
+ * The schedule — the one write the in-app agent makes directly
+ * ========================================================================== */
+
+/**
+ * `add_to_schedule` / `remove_from_schedule` write the student's schedule.
+ *
+ * Over MCP, `add_section` creates a PROPOSAL, because a third-party agent
+ * holding a scoped token is not the student. Here the caller is the student,
+ * in the app, having just typed "add it": the tap that accepts a proposal
+ * would be the tap they already made. So the in-app agent writes the same
+ * rows `/schedule` writes, through `lib/db/plan-writes.ts`, and the page
+ * re-pulls to show it. Proposals stay the rule for MCP.
+ *
+ * The output carries `kind: "schedule_saved"` so the thread renders a
+ * confirmation card with a link to the schedule, and the card is what tells
+ * the local plan store to refresh.
+ */
+function scheduleTools(context: AgentToolContext): ToolSet {
+  const emit = (payload: unknown): string => {
+    const text = JSON.stringify(payload, null, 2);
+    context.transcript.push(text);
+    return text;
+  };
+
+  const describe = async (sectionId: string) => {
+    const section = await context.mcp.deps.catalog.getSection(sectionId);
+    if (!section) return null;
+    const [course] = await getCoursesByIds([section.courseId], section.termCode);
+    return {
+      sectionId,
+      courseId: section.courseId,
+      sectionCode: section.sectionCode,
+      title: course?.title ?? section.title ?? section.courseId,
+      termCode: section.termCode,
+      meetingsKnown: section.meetings.length > 0,
+      meetings: section.meetings,
+    };
+  };
+
+  return {
+    add_to_schedule: tool({
+      description:
+        "Put a section on the student's schedule for this term. This WRITES the schedule " +
+        "immediately — the class appears on their /schedule page. Use it when they ask to add, " +
+        "save to schedule, put on my calendar, or take a class. You need a sectionId from " +
+        "get_sections or search_courses; if a course has several sections and they did not " +
+        "say which, ask before adding. Overlaps are allowed — report them, do not refuse.",
+      inputSchema: z.object({
+        sectionId: z.string().describe("A section id from get_sections, e.g. 20263COMS4111W001."),
+      }),
+      async execute({ sectionId }) {
+        const section = await describe(sectionId);
+        if (!section) {
+          return emit({ error: `No section with id ${sectionId}. Look it up with get_sections first.` });
+        }
+        const termCode = (section.termCode as TermCode) ?? CURRENT_TERM;
+        const result = await addSectionToSchedule(context.userId, sectionId, termCode);
+        return emit({
+          kind: "schedule_saved",
+          action: "added",
+          changed: result.changed,
+          termCode,
+          section,
+          scheduleSectionIds: result.sectionIds,
+          note: result.changed
+            ? "Added. It is on their schedule now."
+            : "It was already on their schedule; nothing changed.",
+        });
+      },
+    }),
+
+    remove_from_schedule: tool({
+      description:
+        "Take a section off the student's schedule for this term. Writes immediately. " +
+        "Use it when they ask to drop, remove, or take a class off their schedule.",
+      inputSchema: z.object({
+        sectionId: z.string().describe("The section id currently on the schedule."),
+      }),
+      async execute({ sectionId }) {
+        const section = await describe(sectionId);
+        const termCode = (section?.termCode as TermCode | undefined) ?? CURRENT_TERM;
+        const result = await removeSectionFromSchedule(context.userId, sectionId, termCode);
+        return emit({
+          kind: "schedule_saved",
+          action: "removed",
+          changed: result.changed,
+          termCode,
+          section: section ?? { sectionId },
+          scheduleSectionIds: result.sectionIds,
+          note: result.changed ? "Removed from their schedule." : "It was not on their schedule.",
+        });
+      },
+    }),
+  };
+}
 
 function engineTools(context: AgentToolContext): ToolSet {
   /** Record output for the grounding check and hand the model the same text. */
@@ -516,5 +614,5 @@ function engineTools(context: AgentToolContext): ToolSet {
 export function buildAgentTools(context: AgentToolContext): ToolSet {
   const tools: ToolSet = {};
   for (const name of BRIDGED_MCP_TOOLS) tools[name] = bridgeMcpTool(name, context);
-  return { ...tools, ...engineTools(context), ...presentTools(context) };
+  return { ...tools, ...scheduleTools(context), ...engineTools(context), ...presentTools(context) };
 }
