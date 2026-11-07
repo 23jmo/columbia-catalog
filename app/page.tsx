@@ -55,12 +55,13 @@ import {
   SOCIAL_IMAGE_ALT,
   SOCIAL_TITLE,
 } from "@/lib/marketing/social";
+import { SITE_ORIGIN } from "@/lib/marketing/site";
 import { getSessionUser } from "@/lib/db/auth";
 import { HOME_FEED_LIMIT, buildFeed } from "@/lib/recommend/feed";
 import { cx } from "@/utils/cx";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://lionplan.org"),
+  metadataBase: new URL(SITE_ORIGIN),
   /*
     These describe the LANDING page, not the feed.
     Every visitor who can see this metadata — a crawler, a link unfurler, a
@@ -69,15 +70,15 @@ export const metadata: Metadata = {
     definition arrived past the title tag. Describing the feed here advertised
     a page the audience for the description could not reach.
   */
-  title: "LionPlan — know what to take next, and why",
+  title: { absolute: SOCIAL_TITLE },
   description:
-    "A course planner for Columbia College, Columbia Engineering and Barnard College. Browse all 8,189 courses without an account, or set up once for a ranked list of the sections you can take next term.",
+    "Search the Columbia course catalog and plan your classes. All 8,189 Columbia College, Columbia Engineering and Barnard courses with sections, seats, prerequisites, instructors and reviews, plus a ranked list of what to take next term.",
   alternates: { canonical: "https://www.lionplan.org/" },
   robots: { index: true, follow: true },
   openGraph: {
     title: SOCIAL_TITLE,
     description: SOCIAL_DESCRIPTION,
-    url: "https://lionplan.org",
+    url: `${SITE_ORIGIN}/`,
     siteName: "LionPlan",
     type: "website",
     images: [

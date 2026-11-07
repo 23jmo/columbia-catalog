@@ -79,6 +79,9 @@ export function LandingHero() {
 
       <div className="mx-auto flex w-full max-w-[75rem] flex-col items-center px-5 pb-0 pt-28 sm:px-8 sm:pt-36">
         <div className="flex max-w-[52rem] flex-col items-center gap-6 text-center">
+          <p className="text-[0.8125rem] font-medium uppercase tracking-[0.14em] text-white/70">
+            Columbia course catalog &amp; planner
+          </p>
           <h1 className="text-balance font-[family-name:var(--font-display-serif)] text-[clamp(2.75rem,7vw,5rem)] font-medium leading-[0.96] tracking-[-0.015em] text-white">
             Know what to take next, and why
           </h1>

@@ -10,6 +10,8 @@ import { AppShell } from "@/components/shell/app-shell";
 import { pageIdentityContentClass } from "@/components/shell/page-hero-layout";
 import { PageContent } from "@/components/shell/page-content";
 import { CURRENT_TERM, termLabel } from "@/lib/constants";
+import { SITE_ORIGIN } from "@/lib/marketing/site";
+import { courseSitemapPath } from "@/lib/marketing/catalog-sitemap";
 
 import { CourseDetail } from "./course-detail";
 import { SectionDetail } from "./section-detail";
@@ -71,8 +73,8 @@ export async function generateMetadata({ params }: CoursePageProps): Promise<Met
    */
   const canonicalSection = sections.length === 1 ? sections[0] : null;
   const canonical = canonicalSection
-    ? `/course/${course.courseId}?section=${encodeURIComponent(canonicalSection.sectionCode)}`
-    : `/course/${course.courseId}`;
+    ? `${SITE_ORIGIN}${courseSitemapPath(course.courseId, canonicalSection.sectionCode)}`
+    : `${SITE_ORIGIN}${courseSitemapPath(course.courseId, null)}`;
   const description = course.description
     ? truncate(course.description, 180)
     : `${sections.length} section${sections.length === 1 ? "" : "s"} in ${termLabel(
@@ -80,13 +82,15 @@ export async function generateMetadata({ params }: CoursePageProps): Promise<Met
       )}. Seats, instructors, meeting times and reviews.`;
 
   return {
-    title: `${code} ${title} — LionPlan`,
+    title: `${code} ${title} — Columbia University | LionPlan`,
     description,
     alternates: { canonical },
     openGraph: {
       title: `${code} · ${title}`,
       description,
       type: "article",
+      url: canonical,
+      siteName: "LionPlan",
     },
   };
 }

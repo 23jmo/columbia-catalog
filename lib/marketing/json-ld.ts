@@ -11,13 +11,18 @@ export function organizationWebsiteGraph(): Record<string, unknown> {
     "@graph": [
       {
         "@type": "Organization",
+        "@id": `${SITE_ORIGIN}/#organization`,
         name: "LionPlan",
         url: SITE_ORIGIN,
+        logo: `${SITE_ORIGIN}/icon.png`,
       },
       {
         "@type": "WebSite",
+        "@id": `${SITE_ORIGIN}/#website`,
         name: "LionPlan",
+        alternateName: ["Columbia Course Catalog", "LionPlan Columbia Course Planner"],
         url: SITE_ORIGIN,
+        publisher: { "@id": `${SITE_ORIGIN}/#organization` },
       },
     ],
   };
@@ -32,7 +37,7 @@ export function softwareApplicationJsonLd(): Record<string, unknown> {
     applicationCategory: "EducationalApplication",
     operatingSystem: "Web",
     description:
-      "A Columbia course planner for Columbia College and Columbia Engineering. Tell it your school, major, and what you have taken, and it works out what you should take next.",
+      "A Columbia course catalog and planner for Columbia College, Columbia Engineering, and Barnard College. Tell it your school, major, and what you have taken, and it works out what you should take next.",
     offers: {
       "@type": "Offer",
       price: "0",

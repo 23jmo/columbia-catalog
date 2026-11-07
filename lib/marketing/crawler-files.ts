@@ -31,6 +31,8 @@ export function robotsTxt(): string {
     "/terms",
     "/programs",
     "/onboarding",
+    "/course/",
+    "/instructor/",
     "/llms.txt",
     "/llms-full.txt",
   ];
@@ -45,14 +47,25 @@ export function robotsTxt(): string {
   return lines.join("\n");
 }
 
-export function sitemapXml(): string {
-  const paths = [...SITEMAP_PATHS, ...programSitemapPaths()];
+function sitemapPriority(path: string): string {
+  if (path === "/") return "1.0";
+  if (path === "/about" || path === "/faq" || path === "/programs") return "0.8";
+  if (path.startsWith("/programs/") || path.startsWith("/course/")) return "0.6";
+  return "0.5";
+}
+
+function xmlEscape(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/** `catalogPaths` are course and instructor URLs; see `catalog-sitemap.ts`. */
+export function sitemapXml(catalogPaths: readonly string[] = []): string {
+  const paths = [...SITEMAP_PATHS, ...programSitemapPaths(), ...catalogPaths];
   const urls = paths.map((path) => {
-    const priority =
-      path === "/about" || path === "/faq" || path === "/programs" ? "0.8" : path.startsWith("/programs/") ? "0.6" : "0.5";
+    const priority = sitemapPriority(path);
     return [
       "  <url>",
-      `    <loc>${SITE_ORIGIN}${path}</loc>`,
+      `    <loc>${xmlEscape(`${SITE_ORIGIN}${path}`)}</loc>`,
       "    <changefreq>weekly</changefreq>",
       `    <priority>${priority}</priority>`,
       "  </url>",
