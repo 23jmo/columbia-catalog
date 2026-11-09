@@ -69,5 +69,32 @@ describe("onboarding feed gate layout", () => {
     expect(lastArticle).toBeGreaterThan(firstArticle);
     expect(signInAt).toBeGreaterThan(firstArticle);
     expect(signInAt).toBeLessThan(lastArticle);
+
+    // Tuck wash must not cover the Columbia panel — a full-box
+    // `bottom-0` dissolve painted a panel-sized blank between cards.
+    expect(html).toContain("h-24");
+    expect(html).not.toContain("inset-x-0 -top-16 bottom-0");
+    // Full-width like the cards (main): `max-w-md` left empty flanks at
+    // desktop. `z-10` keeps the panel above the tuck wash.
+    expect(html).toContain("relative z-10 flex w-full min-w-0");
+    expect(html).not.toContain("max-w-md flex-col items-center gap-4");
+  });
+
+  it("stacks cards evenly once the gate is unlocked", () => {
+    const html = renderToStaticMarkup(
+      <FeedPreviewGate
+        preview={EMPTY_PREVIEW}
+        signedIn
+        migration={{ status: "idle" }}
+        onSignIn={() => undefined}
+        onFinish={() => undefined}
+      />,
+    );
+    expect(html).not.toContain("Sign in with Columbia");
+    // Scroll-to-finish copy from FeedFinishControl — not the old button.
+    expect(html).toContain("Keep scrolling for your full feed");
+    // One list, not first-card + rest with a missing gate between them.
+    expect(html).not.toContain("-mt-6");
+    expect(html).toContain("flex min-w-0 flex-col gap-3.5");
   });
 });
